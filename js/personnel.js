@@ -652,6 +652,14 @@ window.ProtecPersonnel = {
       }
     });
 
+    // Abonnement flotte de téléphones professionnels (8 € / mois par ligne de service active)
+    const activePhones = (game.stations || []).reduce((sum, s) => sum + (s.stock?.telephone_garde || 0) + (s.stock?.phones || 0), 0) +
+      (game.vehicles || []).filter(veh => veh.onboardPhone || (Array.isArray(veh.loadedItems) && veh.loadedItems.some(it => it.id === 'telephone_garde'))).length;
+    if (activePhones > 0) {
+      const telecomCost = activePhones * 8;
+      totalMonthlyCharges += telecomCost;
+    }
+
     totalMonthlyCharges = Math.round(totalMonthlyCharges * 100) / 100;
 
     if (totalMonthlyCharges > 0 && game.clock.day === 1 && game.clock.hour === 9 && game.clock.minute === 0) {

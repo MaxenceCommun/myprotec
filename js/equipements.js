@@ -52,6 +52,9 @@ window.ProtecEquipements = {
     'images/equipements/rangers3.png',
     'images/equipements/telephone_garde.png',
     'images/equipements/phones.png',
+    'images/equipements/radio_analog.png',
+    'images/equipements/radio_lte.png',
+    'images/equipements/radio_analog_lte.png',
   ]),
 
   hasRealImage(path) {
@@ -61,6 +64,8 @@ window.ProtecEquipements = {
   getThumb(imagePath) {
     if (!imagePath) return '';
     if (imagePath.startsWith('images/equipements/') && !imagePath.includes('/thumbs/')) {
+      if (imagePath.includes('telephone') || imagePath.includes('phones')) return 'images/equipements/thumbs/phone.png';
+      if (imagePath.includes('tablette')) return 'images/equipements/thumbs/tablette.png';
       return imagePath.replace('images/equipements/', 'images/equipements/thumbs/');
     }
     if (imagePath.startsWith('images/vehicles/') && !imagePath.includes('/thumbs/')) {

@@ -11502,6 +11502,20 @@ class ProtecGame {
           if (hasServicePhone) {
             v.phoneProtected = true;
           }
+          // Usure progressive des Rangers selon leur qualité
+          if (v.rangersType) {
+            if (v.rangersCondition === undefined) v.rangersCondition = 100;
+            const isHeavyMission = ['crise', 'pompiers', 'inondation', 'tempete'].includes(mission.type) || (mission.title && /déblaiement|crue|tempête/i.test(mission.title));
+            let wearAmount = 2; // Rangers2 Bien par défaut
+            if (v.rangersType === 'rangers1') wearAmount = isHeavyMission ? 8 : 4; // Base : s'use plus vite
+            else if (v.rangersType === 'rangers2') wearAmount = isHeavyMission ? 4 : 2; // Bien : usure modérée
+            else if (v.rangersType === 'rangers3') wearAmount = isHeavyMission ? 1.5 : 0.8; // Super : haute résistance
+
+            v.rangersCondition = Math.max(0, Math.round((v.rangersCondition - wearAmount) * 10) / 10);
+            if (v.rangersCondition <= 0) {
+              v.rangersWornOut = true;
+            }
+          }
         });
 
         // Traitement spécifique des personnels photographes/vidéastes selon l'appareil photo possédé
@@ -22474,7 +22488,13 @@ class ProtecGame {
                           <span>•</span>
                           <span>Stock Tenues : <strong class="text-pc-blue dark:text-sky-400 font-mono">${stockTenues}</strong></span>
                           <span>•</span>
-                          <span>Rangers : <strong class="text-slate-800 dark:text-slate-200 font-mono">${totalRangers} paires</strong> (${stockR1} Base, ${stockR2} Bien, ${stockR3} Super)</span>
+                          <button type="button" onclick="window.ProtecPersonnel.equipAllVolunteersCollective(window.game)" class="px-2.5 py-1 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:brightness-110 text-white font-black text-[11px] shadow-xs cursor-pointer flex items-center gap-1.5 transition ml-2">
+                              <span>🦺</span>
+                              <span>Doter toute l'antenne (1 clic)</span>
+                            </button>
+                          </div>
+                          <div>
+                            <span>Rangers : <strong class="text-slate-800 dark:text-slate-200 font-mono">${totalRangers} paires</strong> (${stockR1} Base, ${stockR2} Bien, ${stockR3} Super)</span>
                         </div>
                       </div>
                     </div>
@@ -24798,6 +24818,59 @@ class ProtecGame {
   }
 
   // --- MODALE DES DÉTAILS D'UN VÉHICULE DE LA FLOTTE ---
+  // Armement facultatif de transmission dans un véhicule (Tablette TLO, Téléphone de service)
+  toggleVehicleEquipment(vehicleId, itemType, equip) {
+    const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+
+    const station = (this.stations || []).find(s => s.id === v.stationId || (Array.isArray(s.vehicles) && s.vehicles.includes(v.id))) || this.stations?.[0];
+    if (!station) return;
+    if (!station.stock) station.stock = {};
+    if (!Array.isArray(v.loadedItems)) v.loadedItems = [];
+
+    if (itemType === 'tablette_tlo') {
+      if (equip) {
+        if ((station.stock.tablette_tlo || 0) <= 0) {
+          this.showToast('Stock Insuffisant', 'Aucune Tablette TLO disponible dans le stock de cette antenne.', 'orange');
+          return;
+        }
+        station.stock.tablette_tlo--;
+        v.onboardTablet = true;
+        if (!v.loadedItems.some(it => it.id === 'tablette_tlo')) {
+          v.loadedItems.push({ id: 'tablette_tlo', name: 'Tablette TLO', shortName: 'Tablette TLO', slots: 0 });
+        }
+        this.showToast('Tablette Embarquée 📱', `Tablette TLO installée à bord de ${v.name}. Guidage GPS activé (-15% délai de trajet).`, 'green');
+      } else {
+        v.onboardTablet = false;
+        station.stock.tablette_tlo = (station.stock.tablette_tlo || 0) + 1;
+        v.loadedItems = v.loadedItems.filter(it => it.id !== 'tablette_tlo');
+        this.showToast('Tablette Débarquée', `Tablette TLO retirée de ${v.name} et restituée au stock de ${station.name}.`, 'blue');
+      }
+    } else if (itemType === 'telephone_garde') {
+      const stockKey = (station.stock.telephone_garde || 0) > 0 ? 'telephone_garde' : 'phones';
+      if (equip) {
+        if ((station.stock[stockKey] || 0) <= 0) {
+          this.showToast('Stock Insuffisant', 'Aucun Téléphone de service disponible dans le stock de cette antenne.', 'orange');
+          return;
+        }
+        station.stock[stockKey]--;
+        v.onboardPhone = true;
+        if (!v.loadedItems.some(it => it.id === 'telephone_garde')) {
+          v.loadedItems.push({ id: 'telephone_garde', name: 'Téléphone de service', shortName: 'Tél. Service', slots: 0 });
+        }
+        this.showToast('Téléphone de Service Embarqué 📞', `Téléphone professionnel installé dans ${v.name}. Forfaits personnels préservés (+8 Moral équipage).`, 'green');
+      } else {
+        v.onboardPhone = false;
+        station.stock.telephone_garde = (station.stock.telephone_garde || 0) + 1;
+        v.loadedItems = v.loadedItems.filter(it => it.id !== 'telephone_garde');
+        this.showToast('Téléphone Débarqué', `Téléphone de service retiré de ${v.name} et restitué au stock.`, 'blue');
+      }
+    }
+
+    this.saveGame();
+    this.openVehicleDetailsModal(vehicleId);
+  },
+
   openVehicleDetailsModal(vehicleId) {
     const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
     if (!v) return;
@@ -24970,6 +25043,67 @@ class ProtecGame {
             </div>
             <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
               <div class="h-full rounded-full transition-all duration-300 ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+            </div>
+          </div>
+
+          <!-- Transmissions & Informatique Embarquée (Armement Facultatif) -->
+          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                <i data-lucide="smartphone" class="w-4 h-4 text-indigo-600"></i>
+                <span>Transmissions Embarquées (Armement Facultatif)</span>
+              </span>
+              <span class="text-[10px] text-slate-400 font-bold">Options Flotte</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <!-- Tablette TLO -->
+              <div class="p-2.5 rounded-xl border ${v.onboardTablet ? 'bg-sky-50/70 border-sky-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-lg ${v.onboardTablet ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center">
+                    <i data-lucide="tablet" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-black text-slate-900">Tablette TLO</h5>
+                    <p class="text-[9.5px] text-slate-500 font-semibold">${v.onboardTablet ? 'Embarquée (-15% délai transit)' : 'Non installée'}</p>
+                  </div>
+                </div>
+                <div>
+                  ${v.onboardTablet ? `
+                    <button type="button" onclick="window.game.toggleVehicleEquipment('${v.id}', 'tablette_tlo', false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+                      Débarquer
+                    </button>
+                  ` : `
+                    <button type="button" onclick="window.game.toggleVehicleEquipment('${v.id}', 'tablette_tlo', true)" class="px-2 py-1 rounded-lg text-[10px] font-bold ${((station?.stock?.tablette_tlo || 0) > 0) ? 'text-sky-700 bg-sky-100 hover:bg-sky-200 border border-sky-300 cursor-pointer' : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'}" ${((station?.stock?.tablette_tlo || 0) <= 0) ? 'disabled title="Aucune tablette en stock"' : ''}>
+                      Armer ${(station?.stock?.tablette_tlo || 0) > 0 ? `(${station.stock.tablette_tlo})` : '(0)'}
+                    </button>
+                  `}
+                </div>
+              </div>
+
+              <!-- Téléphone de service -->
+              <div class="p-2.5 rounded-xl border ${v.onboardPhone ? 'bg-indigo-50/70 border-indigo-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <div class="w-8 h-8 rounded-lg ${v.onboardPhone ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center">
+                    <i data-lucide="smartphone" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h5 class="text-xs font-black text-slate-900">Téléphone de Service</h5>
+                    <p class="text-[9.5px] text-slate-500 font-semibold">${v.onboardPhone ? 'Embarqué (+8 Moral équipage)' : 'Non doté'}</p>
+                  </div>
+                </div>
+                <div>
+                  ${v.onboardPhone ? `
+                    <button type="button" onclick="window.game.toggleVehicleEquipment('${v.id}', 'telephone_garde', false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+                      Débarquer
+                    </button>
+                  ` : `
+                    <button type="button" onclick="window.game.toggleVehicleEquipment('${v.id}', 'telephone_garde', true)" class="px-2 py-1 rounded-lg text-[10px] font-bold ${(((station?.stock?.telephone_garde || 0) + (station?.stock?.phones || 0)) > 0) ? 'text-indigo-700 bg-indigo-100 hover:bg-indigo-200 border border-indigo-300 cursor-pointer' : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'}" ${(((station?.stock?.telephone_garde || 0) + (station?.stock?.phones || 0)) <= 0) ? 'disabled title="Aucun téléphone en stock"' : ''}>
+                      Armer ${((station?.stock?.telephone_garde || 0) + (station?.stock?.phones || 0)) > 0 ? `(${((station?.stock?.telephone_garde || 0) + (station?.stock?.phones || 0))})` : '(0)'}
+                    </button>
+                  `}
+                </div>
+              </div>
             </div>
           </div>
 

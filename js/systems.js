@@ -384,7 +384,15 @@ window.ProtecSystems = {
     const distUrbanKm = totalDistUrbanMeters / 1000;
 
     // Temps de trajet réel calculé par rapport à la distance avec la variable autoroute distincte
-    const calculatedDurationSec = totalTimeUrbanSec + totalTimeHighwaySec;
+    // Optimisation GPS & TLO embarquée : -15% temps de route si la Tablette TLO est équipée dans le véhicule
+    const hasTabletTlo = Boolean(
+      vehicle && (
+        vehicle.onboardTablet || 
+        (Array.isArray(vehicle.loadedItems) && vehicle.loadedItems.some(it => it.id === 'tablette_tlo'))
+      )
+    );
+    const tabletFactor = hasTabletTlo ? 0.85 : 1.0;
+    const calculatedDurationSec = (totalTimeUrbanSec + totalTimeHighwaySec) * tabletFactor;
     // Durée minimale garantie (minimum 60s en temps standard pour éviter tout déplacement trop rapide)
     const baseDurationSec = Math.max(60, Math.round(calculatedDurationSec));
     const timeScale = baseDurationSec / Math.max(1, calculatedDurationSec);

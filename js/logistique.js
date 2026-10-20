@@ -118,7 +118,7 @@ window.ProtecLogistique = {
       badge: 'Portée Locale (1-3 km)',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-200',
       icon: 'radio',
-      image: 'images/equipements/thumbs/radio_antares.png',
+      image: 'images/equipements/radio_analog.png',
       desc: 'Liaison directe entre binômes secouristes et chef de poste. Autonomie totale sans abonnement ni réseau.',
       advantages: [
         'Économique et robuste',
@@ -135,7 +135,7 @@ window.ProtecLogistique = {
       badge: 'Portée Illimitée 4G/5G',
       badgeColor: 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-300',
       icon: 'smartphone',
-      image: 'images/equipements/thumbs/radio_antares.png',
+      image: 'images/equipements/radio_lte.png',
       desc: 'Terminaux connectés sur réseau cellulaire national. Audio HD filtré, bouton détresse avec géolocalisation GPS en temps réel.',
       advantages: [
         'Portée nationale illimitée via 4G/5G',
@@ -152,7 +152,7 @@ window.ProtecLogistique = {
       badge: 'Bascule Auto & Homologuée Sécurité Civile',
       badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-400 dark:bg-indigo-950 dark:text-indigo-300',
       icon: 'shield-alert',
-      image: 'images/equipements/thumbs/radio_antares.png',
+      image: 'images/equipements/radio_analog_lte.png',
       desc: 'Le summum de la résilience : bascule automatique en analogique en sous-sol ou coupure 4G, et en LTE quand le réseau cellulaire est présent. Homologuée ANTARES / CODIS.',
       advantages: [
         'Infaillible : fonctionne partout (sous-sols, zones blanches, saturation)',
@@ -252,6 +252,8 @@ window.ProtecLogistique = {
   getThumb(imagePath) {
     if (!imagePath) return '';
     if (imagePath.startsWith('images/equipements/') && !imagePath.includes('/thumbs/')) {
+      if (imagePath.includes('telephone') || imagePath.includes('phones')) return 'images/equipements/thumbs/phone.png';
+      if (imagePath.includes('tablette')) return 'images/equipements/thumbs/tablette.png';
       return imagePath.replace('images/equipements/', 'images/equipements/thumbs/');
     }
     if (imagePath.startsWith('images/vehicles/') && !imagePath.includes('/thumbs/')) {
@@ -287,8 +289,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Réarmement',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700/60',
-      desc: 'Réapprovisionne à 100% les consommables d’un véhicule (VPSP, VTU) ou d’un lot de secours.',
-      usage: 'Recharge le matériel de secours à l’antenne ou en intervention.'
+      desc: 'Réapprovisionne les consommables sanitaires des véhicules et lots de secours.',
+      usage: 'Recharge le matériel de secours à l\'antenne.'
     },
 
     // --- 2. LOTS DE SECOURS A / B / C ---
@@ -306,8 +308,8 @@ window.ProtecLogistique = {
       isLot: true,
       badge: 'Poste Fixe',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Tente gonflable et équipement pour soigner jusqu’à 6 victimes sur les postes de secours.',
-      usage: 'Permet d’accueillir et soigner les victimes sur les DPS-ME, DPS-GE et festivals.'
+      desc: 'Tente et équipement pour soigner les victimes sur les postes fixes (DPS).',
+      usage: 'Indispensable pour les DPS-ME, DPS-GE et festivals.'
     },
     {
       id: 'lot_secours_b',
@@ -321,15 +323,15 @@ window.ProtecLogistique = {
       types: ['PS'],
       consumables: 100,
       isLot: true,
-      badge: 'Secours d’Urgence',
+      badge: 'Secours d\'Urgence',
       badgeColor: 'bg-blue-50 text-pc-blue border-blue-300',
-      desc: 'Sac d’urgence vitale avec oxygène et défibrillateur pour les interventions réflexes.',
-      usage: 'Armement obligatoire de base de tout VPSP et PAPS.'
+      desc: 'Sac d\'urgence avec oxygène et défibrillateur pour les interventions réflexes.',
+      usage: 'Dotation obligatoire de tout VPSP et PAPS.'
     },
     {
       id: 'lot_secours_c',
       category: 'lots_secours',
-      name: 'Lot C - Immobilisation & Brancardage',
+      name: 'Lot C - Brancardage & Immobilisation',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
       price: 1250,
@@ -340,8 +342,8 @@ window.ProtecLogistique = {
       isLot: true,
       badge: 'Immobilisation',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Matériel de relevage, brancard et matelas coquille pour les traumatismes et fractures.',
-      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates.'
+      desc: 'Matériel de relevage et matelas coquille pour les traumatismes et fractures.',
+      usage: 'Nécessaire pour le brancardage et les traumatismes sportifs.'
     },
 
     // --- 3. TECHNIQUE & CRISE ---
@@ -355,8 +357,8 @@ window.ProtecLogistique = {
       unit: 'lot complet',
       badge: 'Tempêtes',
       badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
-      desc: 'Tronçonneuses thermiques et protections pour dégager les voies après une tempête.',
-      usage: 'Dégage rapidement les arbres et obstacles tombés sur la chaussée.'
+      desc: 'Tronçonneuse et protections pour dégager les arbres et voies bloquées.',
+      usage: 'Dégagement d\'urgence (1 opérateur formé Tronc. requis).'
     },
     {
       id: 'remorque_groupe_electro',
@@ -371,8 +373,8 @@ window.ProtecLogistique = {
       requiresTowHitch: true,
       badge: 'Énergie de Crise',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
-      desc: 'Alimente en électricité un gymnase d’évacuation, un PMA ou l’antenne lors d’un black-out.',
-      usage: 'Tractée par tout véhicule avec attelage (VTU, VLHR, VTP, VL).'
+      desc: 'Alimente en électricité un gymnase, un PMA ou l\'antenne lors d\'un black-out.',
+      usage: 'Énergie de crise tractée par tout véhicule avec attelage.'
     },
     {
       id: 'remorque_motopompe',
@@ -387,8 +389,8 @@ window.ProtecLogistique = {
       requiresTowHitch: true,
       badge: 'Pompage Lourd',
       badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
-      desc: 'Pompe gros débit pour assécher les crues, sous-sols et parkings inondés.',
-      usage: 'Tractée par tout véhicule avec attelage (VTU, VLHR, VTP, VL).'
+      desc: 'Pompe lourd débit pour assécher crues, parkings et sous-sols inondés.',
+      usage: 'Pompage massif tracté par tout véhicule avec attelage.'
     },
     {
       id: 'drone_reco',
@@ -401,8 +403,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Vue Aérienne',
       badgeColor: 'bg-sky-50 text-sky-800 border-sky-300',
-      desc: 'Caméra 4K pour survoler et évaluer les crues ou grands rassemblements.',
-      usage: 'Surveillance et reconnaissance aérienne rapide de la zone de mission.'
+      desc: 'Caméra aérienne 4K pour survoler crues et grands rassemblements.',
+      usage: 'Reconnaissance aérienne rapide de la zone d\'intervention.'
     },
     {
       id: 'drone_thermique',
@@ -415,8 +417,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Recherche Nuit',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Caméra infrarouge pour localiser des personnes disparues, de jour comme de nuit.',
-      usage: 'Recherche de disparus en forêt et battues de nuit (+50% détection).'
+      desc: 'Caméra infrarouge pour localiser des personnes disparues de nuit.',
+      usage: 'Recherche de personnes égarées et battues nocturnes.'
     },
     {
       id: 'lot_pompage',
@@ -428,8 +430,8 @@ window.ProtecLogistique = {
       unit: 'lot complet',
       badge: 'Inondations',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
-      desc: 'Motopompes portatives pour vider les caves et habitations inondées.',
-      usage: 'Assèchement rapide des sous-sols et parkings inondés.'
+      desc: 'Pompes portatives pour vider caves et habitations inondées.',
+      usage: 'Assèchement rapide des sous-sols et parkings.'
     },
     {
       id: 'lot_eclairage',
@@ -441,8 +443,8 @@ window.ProtecLogistique = {
       unit: 'lot complet',
       badge: 'Nocturne',
       badgeColor: 'bg-yellow-50 text-yellow-800 border-yellow-300',
-      desc: 'Projecteurs et mâts pour éclairer les postes de secours et zones de recherche la nuit.',
-      usage: 'Illumination des postes médicaux avancés et recherches nocturnes.'
+      desc: 'Projecteurs sur mâts pour éclairer les postes et zones d\'intervention.',
+      usage: 'Éclairage autonome pour missions et recherches nocturnes.'
     },
     {
       id: 'lot_bachage',
@@ -454,8 +456,8 @@ window.ProtecLogistique = {
       unit: 'lot complet',
       badge: 'Intempéries',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Grandes bâches et fixations pour protéger d’urgence les toitures endommagées.',
-      usage: 'Mise hors d’eau rapide des habitations après de violentes intempéries.'
+      desc: 'Bâches renforcées pour protéger les toitures après une tempête.',
+      usage: 'Mise hors d\'eau d\'urgence des toitures endommagées.'
     },
 
     // --- 4. TENUES & ÉQUIPEMENTS EPI ---
@@ -470,8 +472,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Dotation Bénévole',
       badgeColor: 'bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
-      desc: 'Uniforme officiel obligatoire pour permettre à un secouriste de partir en mission.',
-      usage: 'Attribuée individuellement à chaque bénévole pour l’autoriser à partir sur le terrain.'
+      desc: 'Uniforme réglementaire pour équiper un secouriste sur le terrain.',
+      usage: 'Obligatoire pour autoriser un bénévole à partir en mission.'
     },
     {
       id: 'tenue_moto',
@@ -484,8 +486,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Pilote Moto',
       badgeColor: 'bg-sky-50 text-sky-900 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
-      desc: 'Équipement de protection homologué pour piloter les motos de secours.',
-      usage: 'Indispensable pour les motocyclistes en intervention rapide.'
+      desc: 'Protection renforcée homologuée pour piloter les motos de secours.',
+      usage: 'Équipement de sécurité pour les motocyclistes en intervention.'
     },
     {
       id: 'tenue_usar',
@@ -498,8 +500,8 @@ window.ProtecLogistique = {
       slots: 1,
       badge: 'Sauvetage-Déblaiement',
       badgeColor: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
-      desc: 'Tenue renforcée pour les interventions en décombres et structures effondrées.',
-      usage: 'Dotation des spécialistes déployés sur les effondrements et tremblements de terre.'
+      desc: 'Combinaison anti-abrasion pour interventions en décombres et sauvetage.',
+      usage: 'Protection pour interventions sur effondrements et séismes.'
     },
     {
       id: 'rangers1',
@@ -511,8 +513,8 @@ window.ProtecLogistique = {
       unit: 'paire',
       badge: 'Base',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Chaussures montantes réglementaires. Protection de base.',
-      usage: 'Dotation standard de base (+5 Moral & Motivation).',
+      desc: 'Chaussures montantes réglementaires (dotation de base).',
+      usage: 'Protection et confort de base (+5 Moral).',
       quality: 'base',
       rangersLevel: 1,
       moralBonus: 5
@@ -527,8 +529,8 @@ window.ProtecLogistique = {
       unit: 'paire',
       badge: 'Bien',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
-      desc: 'Semelle amortissante et cuir souple pour la marche prolongée.',
-      usage: 'Confort renforcé sur les postes (+12 Moral & Motivation).',
+      desc: 'Cuir souple et semelle amortissante pour la marche prolongée.',
+      usage: 'Bon confort sur les longues missions (+12 Moral).',
       quality: 'bien',
       rangersLevel: 2,
       moralBonus: 12
@@ -543,24 +545,11 @@ window.ProtecLogistique = {
       unit: 'paire',
       badge: 'Super',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
-      desc: 'Membrane respirante imperméable et maintien ergonomique optimal.',
-      usage: 'Confort haut de gamme et endurance maximale (+20 Moral & Motivation).',
+      desc: 'Membrane imperméable respirante et renforts ergonomiques.',
+      usage: 'Excellent confort et haute endurance (+20 Moral).',
       quality: 'super',
       rangersLevel: 3,
       moralBonus: 20
-    },
-    {
-      id: 'rangers_secours',
-      category: 'tenues_epi',
-      name: 'Rangers de sécurité',
-      lucideIcon: 'footprints',
-      image: 'images/equipements/rangers1.png',
-      price: 65,
-      unit: 'paire',
-      badge: 'Sécurité Pieds',
-      badgeColor: 'bg-slate-100 text-slate-900 border-slate-300',
-      desc: 'Chaussures montantes de sécurité protégeant les pieds des secouristes.',
-      usage: 'Protection sur les terrains boueux et intempéries.'
     },
 
     // --- 5. RAVITAILLEMENT & ACTION SOCIALE ---
@@ -578,8 +567,8 @@ window.ProtecLogistique = {
       isLot: true,
       badge: 'Accueil Sinistrés',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: 'Lits de camp et duvets pour équiper un centre d’accueil pour sinistrés.',
-      usage: 'Armement immédiat d’un gymnase ou centre d’hébergement communal.'
+      desc: 'Lits de camp et duvets pour équiper un centre d\'hébergement d\'urgence.',
+      usage: 'Armement d\'un gymnase communal pour sinistrés.'
     },
     {
       id: 'lot_ravitaillement',
@@ -591,8 +580,8 @@ window.ProtecLogistique = {
       unit: 'lot complet',
       badge: 'Soutien Troupes',
       badgeColor: 'bg-rose-50 text-rose-800 border-rose-300',
-      desc: 'Cuisine mobile et boissons chaudes pour restaurer les bénévoles et sinistrés.',
-      usage: 'Maintient l’énergie et le moral des intervenants sur les longues missions.'
+      desc: 'Cuisine mobile et boissons chaudes pour restaurer bénévoles et sinistrés.',
+      usage: 'Maintien de l\'énergie sur les interventions de longue durée.'
     },
     {
       id: 'lot_soutien_psy',
@@ -602,10 +591,10 @@ window.ProtecLogistique = {
       image: 'images/equipements/lot_cai.png',
       price: 1200,
       unit: 'lot complet',
-      badge: 'Cellule d’Accueil',
+      badge: 'Cellule d\'Accueil',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
-      desc: 'Espace d’accueil et réconfort pour les victimes et familles lors d’accidents collectifs.',
-      usage: 'Accueil et apaisement des impliqués lors de catastrophes et crises.'
+      desc: 'Espace d\'accueil et réconfort pour les impliqués et familles.',
+      usage: 'Centre d\'Accueil des Impliqués lors de crises.'
     },
 
     // --- 6. TRANSMISSIONS & RADIO ---
@@ -620,7 +609,7 @@ window.ProtecLogistique = {
       badge: 'Garde & DPS',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
       desc: 'Smartphone de service évitant d\'utiliser les téléphones personnels des secouristes.',
-      usage: 'Préserve la vie privée et les forfaits des bénévoles lors des gardes et DPS (+8 moral).'
+      usage: 'Préserve la vie privée lors des gardes et DPS (+8 moral).'
     },
     {
       id: 'radio_antares',
@@ -632,21 +621,21 @@ window.ProtecLogistique = {
       unit: 'portatif',
       badge: 'Réseau Secours',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Radio sécurisée pour communiquer entre équipes et coordonner les secours.',
-      usage: 'Liaison directe avec le CODIS, le SAMU et les chefs de dispositif.'
+      desc: 'Radio sécurisée pour les liaisons inter-équipes et le commandement.',
+      usage: 'Liaison avec le CODIS 18 et le SAMU 15.'
     },
     {
       id: 'tablette_tlo',
       category: 'transmissions',
-      name: 'Tablette d’engagement TLO',
+      name: 'Tablette TLO embarquée',
       lucideIcon: 'tablet',
       image: 'images/equipements/tablette_tlo.png',
       price: 550,
       unit: 'tablette',
       badge: 'Numérique',
       badgeColor: 'bg-sky-50 text-sky-800 border-sky-300',
-      desc: 'GPS et bilans numériques embarqués pour accélérer les interventions.',
-      usage: 'Accélère les départs et transmet les bilans directement au SAMU.'
+      desc: 'Tablette GPS et bilans numériques pour accélérer les départs et interventions.',
+      usage: 'Navigation GPS et bilans numériques en direct au SAMU.'
     },
     {
       id: 'chargeur_radios',
@@ -658,21 +647,21 @@ window.ProtecLogistique = {
       unit: 'chargeur 6 slots',
       badge: 'Base Antenne',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Station pour recharger jusqu’à 6 talkies-walkies simultanément à la base.',
-      usage: 'Garantit que toutes les radios sont chargées à 100% au départ.'
+      desc: 'Station de charge collective pour talkies-walkies à l\'antenne.',
+      usage: 'Maintient les radios chargées à 100% à la base.'
     },
     {
       id: 'lot_poste_commandement_mobile',
       category: 'transmissions',
-      name: 'Kit Poste de commandement',
+      name: 'Kit Poste de Commandement',
       lucideIcon: 'satellite',
       image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,
       unit: 'lot complet',
       badge: 'Commandement VLC',
       badgeColor: 'bg-indigo-50 text-indigo-900 border-indigo-300',
-      desc: 'Équipement informatique et radio pour transformer un véhicule en PC de crise.',
-      usage: 'Permet à un chef de dispositif de piloter les grandes opérations et crises.'
+      desc: 'Équipement informatique et radio pour transformer un véhicule en PC mobile.',
+      usage: 'Coordination des grands dispositifs et crises.'
     },
 
     // --- 7. KITS PÉDAGOGIQUES (FORMATIONS) ---
@@ -686,8 +675,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Grand Public',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: 'Mannequins et défibrillateur pour dispenser les formations premiers secours PSC.',
-      usage: 'Obligatoire pour ouvrir et dispenser les formations grand public GQS et PSC.'
+      desc: 'Mannequins et défibrillateur de formation pour le grand public.',
+      usage: 'Formations grand public GQS et PSC.'
     },
     {
       id: 'kit_pedago_sst',
@@ -699,8 +688,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Santé Travail',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
-      desc: 'Matériel officiel pour former les sauveteurs secouristes du travail en entreprise.',
-      usage: 'Indispensable pour dispenser les formations SST en entreprise.'
+      desc: 'Matériel officiel pour former les sauveteurs secouristes du travail.',
+      usage: 'Formations SST en entreprise.'
     },
     {
       id: 'kit_pedago_pse1',
@@ -712,8 +701,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Secouriste',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Matériel pour former et recycler les bénévoles au secourisme opérationnel (PSE1).',
-      usage: 'Requis pour former et certifier les bénévoles au rôle de Secouriste (PSE1).'
+      desc: 'Matériel pour former les secouristes opérationnels (PSE1).',
+      usage: 'Certifications et recyclages PSE1.'
     },
     {
       id: 'kit_pedago_pse2',
@@ -725,8 +714,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Équipier VPSP',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
-      desc: 'Matériel d’immobilisation pour former les équipiers secouristes en ambulance (PSE2).',
-      usage: 'Requis pour former les Équipiers Secouristes (PSE2).'
+      desc: 'Matériel d\'immobilisation pour équiper les équipiers en ambulance.',
+      usage: 'Formation des Équipiers Secouristes PSE2.'
     },
     {
       id: 'kit_pedago_extincteur',
@@ -738,8 +727,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Sécurité Incendie',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Bac à feu et extincteurs d’exercice pour animer les formations incendie pratiques.',
-      usage: 'Obligatoire pour les formations Manipulation Extincteurs en entreprise.'
+      desc: 'Bac à feu et extincteurs d\'exercice pour les formations incendie.',
+      usage: 'Initiations à la manipulation d\'extincteurs.'
     },
     {
       id: 'kit_pedago_picf',
@@ -751,8 +740,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Cadres Formateurs',
       badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
-      desc: 'Supports didactiques pour former les futurs formateurs de premiers secours.',
-      usage: 'Nécessaire pour animer les formations de formateurs PIC F.'
+      desc: 'Supports pédagogiques pour former les formateurs de secours.',
+      usage: 'Formations de formateurs PIC F.'
     },
     {
       id: 'kit_pedago_ssa',
@@ -764,8 +753,8 @@ window.ProtecLogistique = {
       unit: 'kit complet',
       badge: 'Aquatique',
       badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
-      desc: 'Mannequins et bouées de sauvetage pour les entraînements aquatiques.',
-      usage: 'Requis pour les entraînements de Surveillance et Sauvetage Aquatique (SSA).'
+      desc: 'Mannequins et bouées pour les entraînements aquatiques.',
+      usage: 'Formations et entraînements aquatiques SSA.'
     }
   ],
 
@@ -880,7 +869,7 @@ window.ProtecLogistique = {
 
   getSupplier(supplierId = null) {
     const id = supplierId || this.selectedSupplierId || 'fede_log';
-    return (this.SUPPLIERS || []).find(s => s.id === id) || (this.SUPPLIERS ? this.SUPPLIERS[0] : { name: 'Centrale Fédérale', deliveryDelaySec: 120, shippingCost: 0 });
+    return (this.SUPPLIERS || []).find(s => s.id === id) || (this.SUPPLIERS ? this.SUPPLIERS[0] : { name: 'Centrale Fédérale', deliveryDelaySec: 86400, shippingCost: 0 });
   },
 
   setSupplier(supplierId) {
@@ -913,7 +902,7 @@ window.ProtecLogistique = {
 
   getDeliveryDurationSeconds(supplierId = null) {
     const sup = this.getSupplier(supplierId);
-    return sup.deliveryDelaySec || 120;
+    return sup.deliveryDelaySec || 86400;
   },
 
   getActiveDeliveries(game) {
@@ -1259,7 +1248,7 @@ window.ProtecLogistique = {
     const activeDeliveries = this.getActiveDeliveries(game);
     activeDeliveries.forEach(d => {
       const remainingSec = Math.max(0, Math.ceil((d.etaTimestamp - Date.now()) / 1000));
-      const totalSec = d.durationSeconds || 120;
+      const totalSec = d.durationSeconds || 86400;
       const elapsed = Math.max(0, totalSec - remainingSec);
       const progress = Math.min(100, Math.round((elapsed / totalSec) * 100));
 
@@ -2025,7 +2014,7 @@ window.ProtecLogistique = {
               <div class="grid grid-cols-1 gap-3">
                 ${activeDeliveries.map(d => {
                   const remainingSec = Math.max(0, Math.ceil((d.etaTimestamp - now) / 1000));
-                  const totalSec = d.durationSeconds || 120;
+                  const totalSec = d.durationSeconds || 86400;
                   const elapsed = Math.max(0, totalSec - remainingSec);
                   const progress = Math.min(100, Math.round((elapsed / totalSec) * 100));
                   const m = Math.floor(remainingSec / 60);

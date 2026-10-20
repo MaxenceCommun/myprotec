@@ -1474,7 +1474,9 @@ window.ProtecRNMSC = {
           (v.skills || []).some(s => String(s).toLowerCase().includes('tronc'))
         ));
         if (troncOperators.length === 0) {
-          warnings.push("Opérateur Tronçonneuse : Pour utiliser les tronçonneuses (Lot Tronçonnage / Déblaiement), au moins 1 intervenant formé « Tronc. » par équipe est nécessaire (un seul par équipe suffit, le reste assurant le déblaiement).");
+          warnings.push("Opérateur Tronçonneuse manquant : Pour utiliser les tronçonneuses (Lot Tronçonnage / Déblaiement), 1 intervenant formé « Tronc. » par équipe est nécessaire (1 seul par équipe suffit, le reste assurant le déblaiement).");
+        } else if (troncOperators.length === totalCrew && totalCrew > 1) {
+          warnings.push("Composition Déblaiement Inappropriée : Une équipe de déblaiement ne doit pas être uniquement composée de personnels formés « Tronc. ». 1 opérateur coupe par équipe suffit, les autres équipiers doivent assurer le déblaiement des branches, le balisage de sécurité et les premiers secours.");
         }
       }
     }
@@ -1618,6 +1620,26 @@ if (numVehicles > 0 && totalCrew > 0) {
         if (this.isPse2Qualified(v) && v.rank !== 'Stagiaire') {
           rolesMap[v.id] = 'chef_equipe';
           assignedCE++;
+          unassigned.splice(i, 1);
+          i--;
+        }
+      }
+    }
+
+    // 3.3b Opérateur tronçonneuse unique (1 par équipe sur déblaiement)
+    const isDeblaiement = Boolean(
+      (mission.configuredLots || []).includes('lot_tronconnage') ||
+      (mission.assignedEquipment && mission.assignedEquipment.lot_tronconnage > 0) ||
+      /tronçonn|déblaiement|tempête|chute.*arbre|dégagement.*voie/i.test(mission.title || mission.name || '')
+    );
+    let assignedTronc = 0;
+    if (isDeblaiement) {
+      for (let i = 0; i < unassigned.length; i++) {
+        if (assignedTronc >= 1) break;
+        const v = unassigned[i];
+        if (game.hasVolunteerSkill && game.hasVolunteerSkill(v, 'tronc') || (v.skills || []).some(s => String(s).toLowerCase().includes('tronc'))) {
+          rolesMap[v.id] = 'operateur_tronc';
+          assignedTronc++;
           unassigned.splice(i, 1);
           i--;
         }
