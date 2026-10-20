@@ -3,7 +3,7 @@
  * 
  * 5 Canaux de communication :
  * 1. Convocations & Bénévoles (Interne Antenne : sollicitations, relances, ordres de mission)
- * 2. National (toute la communauté des directeurs d'antenne de France)
+ * 2. National (toute la communauté des responsables d’antenne de France)
  * 3. Régional (les 18 vraies régions administratives de France)
  * 4. Départemental (directeurs du département d'affectation)
  * 5. Messages Privés (MP) directs 1-à-1
@@ -20,20 +20,20 @@ window.ProtecMessaging = {
   DEFAULT_MP_RECIPIENTS: [
     {
       id: 'npc-luneville',
-      name: 'Directeur Julien Bertin',
+      name: 'Responsable Julien Bertin',
       stationName: 'Antenne de Lunéville',
       dept: '54',
       city: 'Lunéville',
-      role: 'Directeur Opérationnel',
+      role: 'Responsable Opérationnel',
       welcomeMsg: 'Salut confrère ! Belle progression sur ton antenne. Si tu as besoin d’un coup de main en soutien logistique ou d’un VPSP en double pour une grosse garde de week-end, fais-moi signe sur la radio !'
     },
     {
       id: 'npc-nancy',
-      name: 'Directeur Thomas Vasseur',
+      name: 'Responsable Thomas Vasseur',
       stationName: 'Antenne de Nancy',
       dept: '54',
       city: 'Nancy',
-      role: 'Directeur d’Antenne',
+      role: 'Responsable d’antenne',
       welcomeMsg: 'Bonjour camarade ! Je vois que tes équipes tournent bien. Pense à renouveler tes habilitations VPSP et tes DSA si tu prépares des gros DPS avec la préfecture. Amitiés secouristes !'
     },
     {
@@ -47,16 +47,16 @@ window.ProtecMessaging = {
     },
     {
       id: 'npc-lyon',
-      name: 'Directeur Maxime Roux',
+      name: 'Responsable Maxime Roux',
       stationName: 'Antenne du Rhône',
       dept: '69',
       city: 'Lyon',
-      role: 'Directeur d’Antenne',
+      role: 'Responsable d’antenne',
       welcomeMsg: 'Salut collègue ! On prépare un grand rassemblement régional le mois prochain. Tiens-moi au courant si tes secouristes sont disponibles pour du renfort zonal.'
     },
     {
       id: 'npc-marseille',
-      name: 'Directeur Paul Lambert',
+      name: 'Responsable Paul Lambert',
       stationName: 'Antenne Bouches-du-Rhône',
       dept: '13',
       city: 'Marseille',
@@ -65,11 +65,11 @@ window.ProtecMessaging = {
     },
     {
       id: 'npc-bordeaux',
-      name: 'Directeur Alexandre Mercier',
+      name: 'Responsable Alexandre Mercier',
       stationName: 'Antenne Gironde',
       dept: '33',
       city: 'Bordeaux',
-      role: 'Directeur d’Antenne',
+      role: 'Responsable d’antenne',
       welcomeMsg: 'Bonjour confrère ! La saison des festivals approche à grands pas, le réseau d’entraide entre antennes va tourner à plein régime !'
     },
     {
@@ -83,11 +83,11 @@ window.ProtecMessaging = {
     },
     {
       id: 'npc-strasbourg',
-      name: 'Directeur Lucas Schmitt',
+      name: 'Responsable Lucas Schmitt',
       stationName: 'Antenne Bas-Rhin',
       dept: '67',
       city: 'Strasbourg',
-      role: 'Directeur d’Antenne',
+      role: 'Responsable d’antenne',
       welcomeMsg: 'Bonjour ! Bravo pour la gestion de tes moyens. N’hésite pas si tu as des questions sur le protocole des postes de secours transfrontaliers.'
     },
     {
@@ -106,25 +106,25 @@ window.ProtecMessaging = {
     const seenIds = new Set();
     const myPlayerId = game?.player?.id || 'me';
 
-    // 1. Directeurs réels de l'alliance (stations enregistrées dans Supabase)
+    // 1. Responsables réels de l'alliance (stations enregistrées dans Supabase)
     if (Array.isArray(game?.allianceStations)) {
       game.allianceStations.forEach(st => {
         if (!st || !st.playerId || st.playerId === myPlayerId || seenIds.has(st.playerId)) return;
         seenIds.add(st.playerId);
         list.push({
           id: st.playerId,
-          name: st.playerName || `Directeur ${st.city || 'Confrère'}`,
+          name: st.playerName || `Responsable ${st.city || 'Confrère'}`,
           stationName: st.name || `Antenne Protection Civile ${st.deptCode || ''}`,
           dept: st.deptCode || 'ADPC',
           city: st.city || 'Partenaire',
-          role: 'Directeur d’Antenne Alliée',
+          role: 'Responsable d’antenne alliée',
           isRealPlayer: true,
           welcomeMsg: `Bonjour cher confrère ! Antenne ${st.name || 'alliée'} à l’écoute. Ravi d’échanger en direct avec vous.`
         });
       });
     }
 
-    // 2. Directeurs du réseau fédéral (confrères départementaux)
+    // 2. Responsables du réseau fédéral (confrères départementaux)
     this.DEFAULT_MP_RECIPIENTS.forEach(r => {
       if (!seenIds.has(r.id)) {
         seenIds.add(r.id);
@@ -215,7 +215,7 @@ window.ProtecMessaging = {
         sentiment: 'positif',
         badge: 'Agrément Opérationnel',
         subject: 'Maintien de l’Agrément National de Sécurité Civile',
-        text: 'Monsieur le Directeur, les services préfectoraux confirment la validité de l’agrément de votre antenne. Nous comptons sur votre réactivité pour les futurs dispositifs et réquisitions.',
+        text: 'Monsieur le Responsable d’antenne, les services préfectoraux confirment la validité de l’agrément de votre antenne. Nous comptons sur votre réactivité pour les futurs dispositifs et réquisitions.',
         date: 'Aujourd’hui',
         time: '08:30',
         read: true
@@ -447,10 +447,10 @@ window.ProtecMessaging = {
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     if (this.currentChannel === 'interne') {
-      // Consigne ou note de service envoyée par le Directeur d'Antenne aux bénévoles
+      // Consigne ou note de service envoyée par le Responsable d'antenne aux bénévoles
       this.logInternalMessage(game, {
         type: 'info',
-        senderName: `${game.player?.name || 'Directeur d’Antenne'} (Direction)`,
+        senderName: `${game.player?.name || 'Responsable d’antenne'} (Direction)`,
         recipientName: 'Tous les Bénévoles de l’Antenne',
         text: text
       });
@@ -473,11 +473,11 @@ window.ProtecMessaging = {
 
     if (this.currentChannel === 'mp') {
       if (!this.selectedMpRecipientId) {
-        game.showToast('Destinataire Requis', 'Veuillez sélectionner un directeur d’antenne pour envoyer un message privé.', 'orange');
+        game.showToast('Destinataire Requis', 'Veuillez sélectionner un responsable d’antenne pour envoyer un message privé.', 'orange');
         return;
       }
       const recipients = this.getAvailableRecipients(game);
-      const recipient = recipients.find(r => r.id === this.selectedMpRecipientId) || { name: 'Directeur Confrère', dept: deptCode, city: 'France' };
+      const recipient = recipients.find(r => r.id === this.selectedMpRecipientId) || { name: 'Responsable Confrère', dept: deptCode, city: 'France' };
       msgObj.recipientId = this.selectedMpRecipientId;
       if (!game.messagesHistory.mp[this.selectedMpRecipientId]) {
         game.messagesHistory.mp[this.selectedMpRecipientId] = [];
@@ -531,7 +531,7 @@ window.ProtecMessaging = {
         replyText = replies[Math.floor(Math.random() * replies.length)];
       }
 
-      // Simulation visuelle "Le directeur est en train d'écrire..."
+      // Simulation visuelle "Le responsable d'antenne est en train d'écrire..."
       this.isRecipientTyping = true;
       if (this.currentChannel === 'mp') this.renderModal(game);
 
@@ -890,7 +890,7 @@ window.ProtecMessaging = {
               </div>
               <div class="min-w-0">
                 <div class="flex items-center gap-2 flex-wrap">
-                  <h4 class="font-black text-white text-xs truncate">${currentRecipient ? currentRecipient.name : 'Directeur Confrère'}</h4>
+                  <h4 class="font-black text-white text-xs truncate">${currentRecipient ? currentRecipient.name : 'Responsable Confrère'}</h4>
                   <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-white/15 text-slate-200 border border-white/10">
                     Dept ${currentRecipient ? currentRecipient.dept : '54'}
                   </span>
@@ -1085,7 +1085,7 @@ window.ProtecMessaging = {
                 <span class="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce [animation-delay:0.15s]"></span>
                 <span class="w-1.5 h-1.5 rounded-full bg-slate-500 animate-bounce [animation-delay:0.3s]"></span>
               </div>
-              <span class="text-[11px] font-bold text-slate-600">${currentRecipient ? currentRecipient.name : 'Le directeur'} écrit...</span>
+              <span class="text-[11px] font-bold text-slate-600">${currentRecipient ? currentRecipient.name : 'Le responsable d’antenne'} écrit...</span>
             </div>
           ` : ''}
         </div>

@@ -114,7 +114,7 @@ window.MyProtecLanding = {
 
     if (isLoggedIn) {
       const activeUser = user || window.ProtecAuth?.currentUser || {};
-      const username = activeUser.username || 'Directeur';
+      const username = activeUser.username || 'Joueur';
       const safeName = (function(str) {
         return String(str || '').replace(/[&<>"']/g, m => ({
           '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
@@ -560,7 +560,7 @@ window.MyProtecLanding = {
             stationName = `Antenne de ${stationName}`;
           }
 
-          const directorName = pl?.username || st?.player_name || 'Directeur d’Antenne';
+          const directorName = pl?.username || st?.player_name || 'Responsable d’antenne';
           const city = pl?.city || st?.city || '';
           const dept = pl?.department_code || '';
           let deptLabel = 'Réseau National';
@@ -593,7 +593,7 @@ window.MyProtecLanding = {
             const stationName = lSave.stations?.[0]?.name || lSave.player?.stationName || 'Mon Antenne';
             const dept = lSave.stations?.[0]?.departmentCode || lSave.player?.departmentCode || '54';
             const city = lSave.stations?.[0]?.city || lSave.player?.city || 'Nancy';
-            const playerName = lSave.player?.name || 'Directeur';
+            const playerName = lSave.player?.name || 'Joueur';
 
             const badges = lEcussons.map(le => {
               const catItem = catalog.find(c => c.code === (le.code || le.id) || c.id === (le.id || le.code)) || {};

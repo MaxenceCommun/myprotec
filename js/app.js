@@ -43,7 +43,7 @@ class ProtecGame {
 
     this.player = {
       id: savedPlayerId,
-      name: (supaUser && supaUser.username) || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne',
+      name: (supaUser && supaUser.username) || localStorage.getItem('protec_player_name') || 'Responsable d’antenne',
       allianceId: initialAllianceId,
       departmentCode: userDept,
       deptRole: localStorage.getItem('protec_dept_role') || 'antenne_principale',
@@ -908,7 +908,7 @@ class ProtecGame {
             this.allianceStations = supaStations.map(st => ({
               id: st.id,
               playerId: st.player_id,
-              playerName: st.player_name || 'Directeur d’Antenne',
+              playerName: st.player_name || 'Responsable d’antenne',
               name: st.station_name,
               city: st.city,
               lat: st.lat,
@@ -979,7 +979,7 @@ class ProtecGame {
                   this.allianceStations.push({
                     id: st.id,
                     playerId: st.player_id,
-                    playerName: st.player_name || 'Directeur d’Antenne',
+                    playerName: st.player_name || 'Responsable d’antenne',
                     name: st.station_name,
                     city: st.city,
                     lat: st.lat,
@@ -1019,7 +1019,7 @@ class ProtecGame {
               this.allianceStations = supaStations.map(st => ({
                 id: st.id,
                 playerId: st.player_id,
-                playerName: st.player_name || 'Directeur d’Antenne',
+                playerName: st.player_name || 'Responsable d’antenne',
                 name: st.station_name,
                 city: st.city,
                 lat: st.lat,
@@ -1396,7 +1396,7 @@ class ProtecGame {
             <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #4f46e5;"></span>
             <strong style="color: #1e1b4b; font-size: 12px;">${st.name || 'Antenne Protection Civile'}</strong>
           </div>
-          <div style="color: #4338ca; font-weight: 800; font-size: 11px;">Directeur : ${st.playerName || 'Directeur d’Antenne'}</div>
+          <div style="color: #4338ca; font-weight: 800; font-size: 11px;">Directeur : ${st.playerName || 'Responsable d’antenne'}</div>
           <div style="color: #64748b; font-size: 10px; margin-top: 2px;">📍 ${st.city || 'Commune'} • 🚑 ${st.vehicles || 1} véhicule(s) • 👥 ${st.volunteers || 4} secouristes</div>
           <div style="margin-top: 4px; padding: 2px 6px; background: #e0e7ff; color: #3730a3; border-radius: 4px; font-weight: 700; font-size: 9px; text-align: center;">Cliquez pour voir l’antenne ou demander un renfort</div>
         </div>
@@ -1434,7 +1434,7 @@ class ProtecGame {
       <div class="space-y-4">
         <div class="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 space-y-2">
           <div class="flex items-center justify-between text-xs">
-            <span class="font-extrabold text-indigo-900">Directeur : ${st.playerName}</span>
+            <span class="font-extrabold text-indigo-900">Responsable : ${st.playerName}</span>
             <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Allié UFSC</span>
           </div>
           <p class="text-xs text-indigo-800">Antenne conventionnée avec l’Union Fédérale. Prête à déployer des renforts sur demande.</p>
@@ -1641,7 +1641,7 @@ class ProtecGame {
               this.allianceStations.push({
                 id: stId,
                 playerId: st.player_id,
-                playerName: st.player_name || 'Directeur d’Antenne',
+                playerName: st.player_name || 'Responsable d’antenne',
                 name: st.station_name,
                 city: st.city,
                 departmentCode: st.department_code,
@@ -3697,7 +3697,7 @@ class ProtecGame {
 
   startAntennaPlacement() {
     if (this.stations.length >= 1) {
-      this.showToast('Limite d’Antenne Atteinte', 'En tant que Directeur, vous gérez votre antenne unique d’affectation départementale.', 'orange');
+      this.showToast('Limite d’Antenne Atteinte', 'En tant que Responsable d’antenne, vous gérez votre antenne unique d’affectation départementale.', 'orange');
       return;
     }
     this.isPlacingAntenna = true;
@@ -6100,7 +6100,7 @@ class ProtecGame {
       sources.push({
         id: st.id,
         playerId: st.playerId,
-        playerName: st.playerName || 'Directeur Confrère',
+        playerName: st.playerName || 'Responsable Confrère',
         name: st.name || `Protection Civile de ${st.city}`,
         city: st.city || 'Antenne Alliée',
         departmentCode: st.departmentCode || myDept,
@@ -6195,7 +6195,7 @@ class ProtecGame {
             <div class="flex items-center gap-2.5">
               <span class="text-xl">📡</span>
               <div>
-                <div class="text-xs font-black text-blue-950 uppercase tracking-wide">Diffuser l'Appel à Tous les Directeurs Confrères</div>
+                <div class="text-xs font-black text-blue-950 uppercase tracking-wide">Diffuser l'Appel aux Responsables Confrères (Autres Joueurs)</div>
                 <div class="text-[11px] text-blue-800 font-medium">L'appel sera instantanément relayé aux antennes du département et de la zone de défense.</div>
               </div>
             </div>
@@ -6231,7 +6231,7 @@ class ProtecGame {
               <div class="text-2xl">🛰️</div>
               <div class="text-xs font-bold text-slate-700">Aucune antenne confrère connectée à proximité immédiate</div>
               <p class="text-[11px] text-slate-500 max-w-md mx-auto">
-                Utilisez le bouton d'appel réseau ci-dessus pour diffuser votre demande sur la fréquence fédérale. Les autres directeurs d'antennes recevront l'alerte dès leur connexion.
+                Utilisez le bouton d'appel réseau ci-dessus pour diffuser votre demande sur la fréquence fédérale. Les autres responsables d'antennes (joueurs) recevront l'alerte dès leur connexion.
               </p>
             </div>
           ` : sources.map(s => {
@@ -6243,7 +6243,7 @@ class ProtecGame {
                       ${s.badge}
                     </span>
                     <span class="text-xs font-black text-slate-900">${s.name}</span>
-                    <span class="text-[11px] font-bold text-slate-500">Directeur : ${s.playerName}</span>
+                    <span class="text-[11px] font-bold text-slate-500">Responsable : ${s.playerName}</span>
                   </div>
                   <div class="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
                     <span class="flex items-center gap-1">
@@ -6303,7 +6303,7 @@ class ProtecGame {
     const equipageUnit = equipageLabels[equipageType] || '1 Équipage de Renfort';
 
     const myPlayerId = this.player?.id || 'directeur-local';
-    const myPlayerName = this.player?.name || 'Directeur d’Antenne';
+    const myPlayerName = this.player?.name || 'Responsable d’antenne';
     const myStation = this.stations?.[0] || { name: 'Antenne Locale', departmentCode: '54' };
 
     const renfortData = {
@@ -6341,7 +6341,7 @@ class ProtecGame {
     this.saveGame();
 
     const targetDesc = peerStation 
-      ? `au directeur ${peerStation.playerName} (Antenne de ${peerStation.city})` 
+      ? `au responsable d'antenne ${peerStation.playerName} (Antenne de ${peerStation.city})` 
       : 'sur le réseau des antennes confrères';
     this.showToast('Demande Transmise', `Votre appel de renfort (${equipageType.toUpperCase()}) a été transmis ${targetDesc} !`, 'green');
 
@@ -7317,7 +7317,7 @@ class ProtecGame {
         missionId: devis.id,
         missionTitle: devis.eventName,
         type: 'relance',
-        senderName: `${this.player?.name || 'Directeur'} (Direction)`,
+        senderName: `${this.player?.name || 'Responsable d’antenne'} (Direction)`,
         recipientName: 'Équipe d’Antenne',
         text: `🔔 Relance #${devis.relancesCount} : Rappel d'effectif pour le DPS en prévisionnel « ${devis.eventName} ». Disponibilités actuelles : ${curVols} / ${reqVols} secouristes requis.`
       });
@@ -8100,7 +8100,7 @@ class ProtecGame {
         missionId: mission.id,
         missionTitle: mission.title,
         type: 'relance',
-        senderName: `${this.player?.name || 'Directeur'} (Direction)`,
+        senderName: `${this.player?.name || 'Responsable d’antenne'} (Direction)`,
         recipientName: 'Secouristes d’antenne',
         text: `📱 Appel de mobilisation SMS #${mission.relancesCount} transmis pour « ${mission.title} » : ${missing} poste(s) encore disponible(s). Répondez à la convocation !`
       });
@@ -8139,7 +8139,7 @@ class ProtecGame {
     const myId = this.player?.id || 'usr_local';
     if (isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId) {
       if (!silent) {
-        this.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut mobiliser par SMS.`, 'orange');
+        this.showToast('Commandement Exclusif', `Seul le responsable de crise (${mission.managerPlayerName}) peut mobiliser par SMS.`, 'orange');
       }
       return;
     }
@@ -8717,7 +8717,7 @@ class ProtecGame {
     const isCrisis = (targetMission.type === 'crise' || targetMission.isCrisis);
     const myId = this.player?.id || 'usr_local';
     if (isCrisis && targetMission.managerPlayerId && targetMission.managerPlayerId !== myId) {
-      this.showToast('Commandement Exclusif', `Seul le directeur de crise (${targetMission.managerPlayerName}) peut affecter des effectifs. Vous pouvez répondre aux demandes de renfort.`, 'orange');
+      this.showToast('Commandement Exclusif', `Seul le responsable de crise (${targetMission.managerPlayerName}) peut affecter des effectifs. Vous pouvez répondre aux demandes de renfort.`, 'orange');
       return;
     }
 
@@ -10481,7 +10481,7 @@ class ProtecGame {
     } else {
       this.showToast(
         `🟡 VEILLE CRISE DÉPARTEMENTALE`,
-        `« ${pick.title} » (${pick.authorityLabel}). Alerte adressée en priorité à l'antenne la plus proche (${newMission.targetPlayerName || 'Directeur'}).`,
+        `« ${pick.title} » (${pick.authorityLabel}). Alerte adressée en priorité à l'antenne la plus proche (${newMission.targetPlayerName || 'Responsable d’antenne'}).`,
         'amber',
         { type: 'crise', id: newMission.id, status: 'prealerte', departmentCode: newMission.departmentCode }
       );
@@ -10548,7 +10548,7 @@ class ProtecGame {
       // Crise déjà prise en main par un confrère
       this.showToast(
         `🛡️ CRISE DÉPARTEMENTALE ACTIVATE`,
-        `Sinistre « ${crisis.title} » coordonné par ${crisis.managerPlayerName || 'un Directeur'}. Vous pouvez envoyer des renforts.`,
+        `Sinistre « ${crisis.title} » coordonné par ${crisis.managerPlayerName || 'un Responsable d’antenne'}. Vous pouvez envoyer des renforts.`,
         'blue',
         { type: 'mission', id: crisis.id, departmentCode: crisisDept }
       );
@@ -10569,7 +10569,7 @@ class ProtecGame {
 
       const stageDesc = crisis.alertStage === 'targeted_nearest'
         ? "Vous êtes l'antenne la plus proche : prenez la main !"
-        : (crisis.alertStage === 'targeted_astreinte' ? "Vous êtes cadre d'astreinte : prenez le relais !" : "Appel général à tous les directeurs : prenez la main !");
+        : (crisis.alertStage === 'targeted_astreinte' ? "Vous êtes cadre d'astreinte : prenez le relais !" : "Appel général à tous les responsables d'antennes : prenez la main !");
 
       this.showToast(
         `🚨 ALERTE CRISE PRIORITAIRE [Dpt ${crisisDept}]`,
@@ -10581,7 +10581,7 @@ class ProtecGame {
       // Crise ciblée sur un autre directeur en priorité
       this.showToast(
         `🟡 CRISE DÉPARTEMENTALE [Dpt ${crisisDept}]`,
-        `« ${crisis.title} ». Alerte transmise en priorité à l'antenne la plus proche (${crisis.targetPlayerName || 'Directeur'}).`,
+        `« ${crisis.title} ». Alerte transmise en priorité à l'antenne la plus proche (${crisis.targetPlayerName || 'Responsable d’antenne'}).`,
         'amber',
         { type: 'mission', id: crisis.id, departmentCode: crisisDept }
       );
@@ -10635,7 +10635,7 @@ class ProtecGame {
       if (payload.managerPlayerId !== this.player?.id) {
         this.showToast(
           'Commandement Établi',
-          `Le Directeur ${payload.managerPlayerName || 'Allié'} a pris la main sur la gestion de crise.`,
+          `Le Responsable ${payload.managerPlayerName || 'Allié'} a pris la main sur la gestion de crise.`,
           'blue'
         );
       }
@@ -10808,7 +10808,7 @@ class ProtecGame {
     }
   }
 
-  // Prise de décision tactique par le Directeur d'Antenne pendant la préalerte
+  // Prise de décision tactique par le Responsable d'antenne pendant la préalerte
   setPrealertMobilisationMode(missionId, mode) {
     const cleanId = String(missionId).replace(/^(sncf-|evt-|dps-|alert-|prealert-)/, '');
     const mission = (this.missions || []).find(m => m.id === cleanId || m.id === missionId || m.id.endsWith(cleanId));
@@ -11607,7 +11607,7 @@ class ProtecGame {
               sentiment: 'negatif',
               badge: 'Avertissement Municipal',
               subject: `Manquements sur la manifestation « ${mission.title} »`,
-              text: `Monsieur le Directeur, les rapports de police municipale font état d'une carence de secouristes lors de « ${mission.title} ». Plusieurs élus déplorent ce sous-dimensionnement. Nous exigeons un rapport d'incident sous huitaine.`,
+              text: `Monsieur le Responsable d'antenne, les rapports de police municipale font état d'une carence de secouristes lors de « ${mission.title} ». Plusieurs élus déplorent ce sous-dimensionnement. Nous exigeons un rapport d'incident sous huitaine.`,
               missionTitle: mission.title,
               missionId: mission.id
             });
@@ -12953,7 +12953,7 @@ class ProtecGame {
     const isCrisis = (mission.type === 'crise' || mission.isCrisis);
     const myId = this.player?.id || 'usr_local';
     if (isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId) {
-      this.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut solliciter les effectifs.`, 'orange');
+      this.showToast('Commandement Exclusif', `Seul le responsable de crise (${mission.managerPlayerName}) peut solliciter les effectifs.`, 'orange');
       return;
     }
 
@@ -14007,7 +14007,7 @@ class ProtecGame {
 
     const myId = this.player?.id || 'usr_local';
     if (mission.managerPlayerId && mission.managerPlayerId !== myId) {
-      this.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut déployer des équipes.`, 'orange');
+      this.showToast('Commandement Exclusif', `Seul le responsable de crise (${mission.managerPlayerName}) peut déployer des équipes.`, 'orange');
       return;
     }
 
@@ -14184,7 +14184,7 @@ class ProtecGame {
 
     const myId = this.player?.id || 'usr_local';
     if (mission.managerPlayerId && mission.managerPlayerId !== myId) {
-      this.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut déployer les équipes.`, 'orange');
+      this.showToast('Commandement Exclusif', `Seul le responsable de crise (${mission.managerPlayerName}) peut déployer les équipes.`, 'orange');
       return;
     }
 
@@ -16684,11 +16684,11 @@ class ProtecGame {
                   <div class="w-6 h-6 rounded-lg bg-emerald-600/30 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
                     <i data-lucide="shield-check" class="w-4 h-4"></i>
                   </div>
-                  <span>Commandement Exclusif • Direction par ${mission.managerPlayerName || 'un autre directeur'} (Non disponible)</span>
+                  <span>Commandement Exclusif • Direction par ${mission.managerPlayerName || 'un autre responsable'} (Non disponible)</span>
                 </div>
                 <p class="text-xs text-slate-700 dark:text-slate-300">
-                  Cette crise est coordonnée par <strong>${mission.managerPlayerName || 'Directeur Allié'}</strong>.
-                  Seul le directeur aux commandes peut mobiliser du personnel et lancer des alertes d'intervention.
+                  Cette crise est coordonnée par <strong>${mission.managerPlayerName || 'Responsable Allié'}</strong>.
+                  Seul le responsable aux commandes peut mobiliser du personnel et lancer des alertes d'intervention.
                 </p>
                 <div class="pt-1 text-[11px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
                   <i data-lucide="info" class="w-3.5 h-3.5"></i>
@@ -17146,7 +17146,7 @@ class ProtecGame {
                             </span>
                           </div>
                           <p class="text-[11px] text-slate-600 font-medium">
-                            Sollicitez les directeurs des autres antennes réelles (autres joueurs) pour combler vos besoins en véhicules ou en secouristes qualifiés.
+                            Sollicitez les responsables des autres antennes (autres joueurs) pour combler vos besoins en véhicules ou en secouristes qualifiés.
                           </p>
                         </div>
                       </div>
@@ -17199,7 +17199,7 @@ class ProtecGame {
                             </div>
 
                             <p class="text-[11px] text-slate-500 italic">
-                              Cet appel est en cours sur le réseau. Dès qu'un directeur confrère engage son véhicule et ses secouristes, leur détachement sera acheminé sur votre mission.
+                              Cet appel est en cours sur le réseau. Dès qu'un responsable confrère engage son véhicule et ses secouristes, leur détachement sera acheminé sur votre mission.
                             </p>
 
                             <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
@@ -17231,7 +17231,7 @@ class ProtecGame {
                             <span class="text-[10px] font-bold text-slate-400">Prêt à émettre</span>
                           </div>
                           <p class="text-[11px] text-slate-600 leading-snug">
-                            Il vous manque des secouristes ou des véhicules ? Diffusez un appel aux directeurs des autres antennes (autres joueurs) du département ou de la zone de défense.
+                            Il vous manque des secouristes ou des véhicules ? Diffusez un appel aux responsables des autres antennes (autres joueurs) du département ou de la zone de défense.
                           </p>
                           <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
                             <button 
@@ -17287,7 +17287,7 @@ class ProtecGame {
                                     ${ext.vehicleName || 'Véhicule de Renfort'} • <span class="text-emerald-700 font-bold">${ext.volunteersCount || 0} secouriste(s)</span>
                                   </div>
                                   <div class="text-[10px] text-slate-500">
-                                    Dépêché par : <strong>${ext.contributorName || 'Directeur Confrère'}</strong> (${ext.stationName || 'Antenne Alliée'})
+                                    Dépêché par : <strong>${ext.contributorName || 'Responsable Confrère'}</strong> (${ext.stationName || 'Antenne Alliée'})
                                   </div>
                                 </div>
                                 <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
@@ -17322,7 +17322,7 @@ class ProtecGame {
                                 <span>Réseau FNPC en Veille Opérationnelle</span>
                               </div>
                               <p class="text-[11px] text-slate-500 leading-snug">
-                                Aucun autre joueur n'a d'antenne immédiatement connectée à proximité. En diffusant votre appel via le bouton ci-dessus, votre demande sera instantanément visible sur la fréquence fédérale et accessible à tout directeur d'antenne confrère qui se connecte.
+                                Aucun autre joueur n'a d'antenne immédiatement connectée à proximité. En diffusant votre appel via le bouton ci-dessus, votre demande sera instantanément visible sur la fréquence fédérale et accessible à tout responsable d'antenne confrère (joueur) qui se connecte.
                               </p>
                             </div>
                           `;
@@ -17330,7 +17330,7 @@ class ProtecGame {
 
                         return `
                           <div class="text-[11px] text-slate-500">
-                            Antennes d'autres directeurs (autres joueurs) connectées au réseau :
+                            Antennes des autres responsables (autres joueurs) connectées au réseau :
                           </div>
                           <div class="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
                             ${peerSources.slice(0, 6).map(st => `
@@ -17341,7 +17341,7 @@ class ProtecGame {
                                       ${st.badge}
                                     </span>
                                     <span class="text-xs font-black text-slate-900">${st.name}</span>
-                                    <span class="text-[11px] font-bold text-slate-500">Directeur : ${st.playerName}</span>
+                                    <span class="text-[11px] font-bold text-slate-500">Responsable : ${st.playerName}</span>
                                   </div>
                                   <div class="flex items-center gap-3 text-[11px] text-slate-500 pt-0.5 flex-wrap">
                                     <span>📍 <strong>${st.city}</strong> [${st.departmentCode}]</span>
@@ -18152,7 +18152,7 @@ class ProtecGame {
       id: `renf-${Date.now()}`,
       isMine: true,
       requesterPlayerId: this.player?.id || 'directeur-local',
-      requesterName: this.player?.name || 'Directeur d’Antenne',
+      requesterName: this.player?.name || 'Responsable d’antenne',
       allianceId: this.player?.allianceId,
       allianceTag: 'UFSC',
       missionId: mission.id,
@@ -18177,7 +18177,7 @@ class ProtecGame {
       this.mySentRenfortIds.add(saved.id);
       this.renforts.unshift(saved);
       this.sanitizeRenforts();
-      this.showToast('Appel à Renfort Diffusé', `Tous les directeurs d’antennes alliés ont reçu votre appel de détresse !`, 'green');
+      this.showToast('Appel à Renfort Diffusé', `Tous les responsables d’antennes alliés ont reçu votre appel !`, 'green');
       this.updateStatsUI();
     }).catch(() => {
       this.renforts.unshift(renfortData);
@@ -18310,7 +18310,7 @@ class ProtecGame {
           </div>
 
           <p class="text-[11px] text-slate-600 leading-relaxed">
-            Seuls les <strong>vrais directeurs d'antennes connectés</strong> peuvent détacher et faire rouler leurs véhicules et secouristes en renfort sur votre mission. <em>Aucun renfort fictif ni moyen inventé n'est généré.</em>
+            Seuls les <strong>responsables d'antennes (joueurs) connectés</strong> peuvent détacher et faire rouler leurs véhicules et secouristes en renfort sur votre mission. <em>Aucun renfort fictif ni moyen inventé n'est généré.</em>
           </p>
 
           <button 
@@ -19154,7 +19154,7 @@ class ProtecGame {
           </div>
           ${renfort.contributions && renfort.contributions.length > 0 ? `
             <div class="pt-1.5 border-t border-orange-200/80 text-[11px] text-slate-600">
-              <span class="font-bold text-slate-800">Autres directeurs déjà engagés :</span>
+              <span class="font-bold text-slate-800">Autres responsables déjà engagés :</span>
               <div class="mt-1 space-y-0.5 pl-2 border-l-2 border-orange-300">
                 ${renfort.contributions.map(c => `<div>• <strong>${c.playerName}</strong> : <strong>${c.volunteersCount}</strong> secouristes (${c.vehicleName || 'Véhicule'})</div>`).join('')}
               </div>
@@ -19234,7 +19234,7 @@ class ProtecGame {
           ${dispoVolunteers.length < availableSlots ? `
             <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2">
               <span>⚠️</span>
-              <span>Vous avez ${dispoVolunteers.length} secouriste(s) disponible(s). Les autres directeurs pourvoiront les places restantes.</span>
+              <span>Vous avez ${dispoVolunteers.length} secouriste(s) disponible(s). Les autres responsables pourvoiront les places restantes.</span>
             </div>
           ` : ''}
 
@@ -19269,7 +19269,7 @@ class ProtecGame {
         <!-- Simulation de Signature de l'Ordre de Mission -->
         <div class="space-y-1.5 pt-2 border-t border-slate-100">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-slate-800">3. Signature du Directeur d'Antenne :</span>
+            <span class="text-xs font-black text-slate-800">3. Signature du Responsable d’antenne :</span>
             <button 
               type="button" 
               onclick="window.game.clearRenfortSignatureCanvas()" 
@@ -19288,7 +19288,7 @@ class ProtecGame {
               onclick="window.game.autoSignRenfortOrder()" 
               class="text-[10px] font-bold text-slate-500 hover:text-orange-600 transition cursor-pointer"
             >
-              ✍️ Signer automatiquement « ${this.player?.name || 'Directeur'} »
+              ✍️ Signer automatiquement « ${this.player?.name || 'Responsable d’antenne'} »
             </button>
           </div>
         </div>
@@ -19384,7 +19384,7 @@ class ProtecGame {
 
     ctx.font = 'italic 28px "Caveat", "Brush Script MT", cursive, sans-serif';
     ctx.fillStyle = '#1e3a8a';
-    ctx.fillText(this.player?.name || 'Directeur Protection Civile', 40, 50);
+    ctx.fillText(this.player?.name || 'Responsable d’antenne Protection Civile', 40, 50);
 
     ctx.beginPath();
     ctx.moveTo(35, 58);
@@ -21538,7 +21538,7 @@ class ProtecGame {
               <div class="space-y-3">
                 <div class="p-3 rounded-2xl glass-card text-xs text-slate-600 flex items-center gap-2">
                   <i data-lucide="radio" class="w-4 h-4 text-indigo-600"></i>
-                  <span>Canal tactique inter-antennes de l’alliance. Tous les directeurs connectés reçoivent les messages.</span>
+                  <span>Canal tactique inter-antennes de l’alliance. Tous les responsables d'antennes connectés reçoivent les messages.</span>
                 </div>
 
                 <div id="alliance-chat-messages" class="h-64 overflow-y-auto space-y-2 p-2 glass-card rounded-2xl border border-white/60">
@@ -24384,7 +24384,7 @@ class ProtecGame {
           <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto text-xl">🏛️</div>
           <h4 class="text-sm font-black text-slate-800">Aucun autre joueur dans ce département</h4>
           <p class="text-xs text-slate-500 max-w-sm mx-auto">
-            Vous êtes le seul directeur installé dans le département ${deptCode}. Dès qu'un autre joueur créera une antenne départementale ici, vous pourrez lui léguer la direction principale.
+            Vous êtes le seul responsable installé dans le département ${deptCode}. Dès qu'un autre joueur créera une antenne départementale ici, vous pourrez lui léguer la responsabilité principale.
           </p>
         </div>
       `;
@@ -24395,7 +24395,7 @@ class ProtecGame {
             ⚠️ <strong>Transmission de commandement :</strong> En léguant l'Antenne Principale, le joueur choisi deviendra le nouveau titulaire départemental. Votre antenne deviendra une antenne départementale rattachée.
           </div>
 
-          <h5 class="text-xs font-black uppercase text-slate-600">Directeurs du département éligibles :</h5>
+          <h5 class="text-xs font-black uppercase text-slate-600">Responsables du département éligibles :</h5>
           <div class="space-y-2">
             ${otherAntennas.map(a => `
               <div class="p-3.5 rounded-2xl glass-card flex items-center justify-between text-xs">

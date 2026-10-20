@@ -190,7 +190,7 @@ window.ProtecHelp = {
               <span class="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-pc-blue text-white">Prise de Commandement</span>
               <h4 class="font-black text-slate-900 dark:text-slate-100 text-sm">Bienvenue à la tête de votre Antenne de la Protection Civile</h4>
               <p class="text-slate-600 dark:text-slate-300 text-xs">
-                En tant que Directeur d'Antenne, vous pilotez l'ensemble des dimensions de l'unité : ressources humaines bénévoles et salariées, flotte opérationnelle, pharmacie et stocks médicaux, relations institutionnelles avec le SAMU et les Sapeurs-Pompiers, santé financière et couverture sanitaire des événements de votre territoire.
+                En tant que Responsable d’antenne, vous pilotez l'ensemble des dimensions de l'unité : ressources humaines bénévoles et salariées, flotte opérationnelle, pharmacie et stocks médicaux, relations institutionnelles avec le SAMU et les Sapeurs-Pompiers, santé financière et couverture sanitaire des événements de votre territoire.
               </p>
             </div>
 
@@ -592,7 +592,7 @@ window.ProtecHelp = {
                 </h5>
                 <ul class="list-disc list-inside space-y-1 text-[11.5px] text-slate-600 dark:text-slate-300 font-medium pl-1">
                   <li><strong>Fierté et appartenance :</strong> Les insignes brodés matérialisent les heures d'engagement et les épreuves surmontées sur le terrain. Arborer un écusson de spécialité valorise le secouriste aux yeux de ses pairs.</li>
-                  <li><strong>Fraternité inter-antennes :</strong> La bourse d'échange de patchs favorise la convivialité entre directeurs de toute la France et renforce la cohésion nationale de la Protection Civile.</li>
+                  <li><strong>Fraternité inter-antennes :</strong> La bourse d'échange de patchs favorise la convivialité entre responsables d'antennes de toute la France et renforce la cohésion nationale de la Protection Civile.</li>
                 </ul>
               </div>
             </div>

@@ -1009,7 +1009,7 @@ window.ProtecSupabase = {
         .maybeSingle();
 
       if (existing) {
-        return { error: 'Ce nom de directeur est déjà utilisé. Veuillez en choisir un autre.' };
+        return { error: 'Ce nom de joueur est déjà utilisé. Veuillez en choisir un autre.' };
       }
 
       const clientIp = await this.getClientIp();
@@ -1710,7 +1710,7 @@ window.ProtecSupabase = {
       const payload = {
         id: stationKey,
         player_id: isUUID ? player.id : null,
-        player_name: player.name || player.username || 'Directeur d’Antenne',
+        player_name: player.name || player.username || 'Responsable d’antenne',
         station_name: station.name || 'Antenne Protection Civile',
         city: station.city || player.city || 'Paris',
         lat: stLat,
@@ -1787,7 +1787,7 @@ window.ProtecSupabase = {
                   stations.push({
                     id: stKey,
                     player_id: sv.user_id,
-                    player_name: sv.username || 'Directeur d’Antenne',
+                    player_name: sv.username || 'Responsable d’antenne',
                     station_name: st.name || 'Antenne Protection Civile',
                     city: st.city || 'Secteur Opérationnel',
                     lat: lat,

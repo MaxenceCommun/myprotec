@@ -503,7 +503,7 @@ window.ProtecMultiplayer = {
     const unitRequestedStr = `${requestedVols} secouriste(s)${selectedVehicles.length > 0 ? ' + ' + selectedVehicles.join(', ') : ''}`;
 
     const myPlayerId = game.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || 'directeur-local';
-    const myPlayerName = game.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || 'Directeur d’Antenne';
+    const myPlayerName = game.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || 'Responsable d’antenne';
 
     const renfortData = {
       id: `renf-${Date.now()}`,
@@ -729,7 +729,7 @@ window.ProtecMultiplayer = {
     const payload = {
       id: `form-spec-${Date.now()}`,
       organizerPlayerId: game.player?.id || 'directeur-local',
-      organizerName: game.player?.name || 'Directeur d’Antenne',
+      organizerName: game.player?.name || 'Responsable d’antenne',
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       allianceId: game.player?.allianceId || 'alliance-fnpc',
       title: `Stage Fédéral : ${optText.split(' - ')[0]}`,
@@ -868,7 +868,7 @@ window.ProtecMultiplayer = {
     form.registeredCandidates.push({
       volunteerId: volunteer.id,
       volunteerName: volunteer.name,
-      playerName: game.player?.name || 'Directeur d’Antenne'
+      playerName: game.player?.name || 'Responsable d’antenne'
     });
 
     const modal = document.getElementById('register-volunteer-formation-modal');
@@ -1266,7 +1266,7 @@ window.ProtecMultiplayer = {
     const newOffer = {
       id: `mkt-${Date.now()}`,
       sellerPlayerId: game.player?.id || 'directeur-local',
-      sellerPlayerName: game.player?.name || 'Directeur d’Antenne',
+      sellerPlayerName: game.player?.name || 'Responsable d’antenne',
       sellerDiscord: game.player?.discord || (window.ProtecAuth?.currentUser?.discord) || null,
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       category: cat,
@@ -2322,13 +2322,13 @@ window.ProtecMultiplayer = {
       desc: 'Rareté et modalité d’obtention fixées par l’administration lors de la validation.',
       eventName: title,
       obtainedAt: new Date().toLocaleDateString('fr-FR'),
-      originalOrganizer: game.player?.name || 'Directeur d’Antenne'
+      originalOrganizer: game.player?.name || 'Responsable d’antenne'
     };
 
     const newEvent = {
       id: `evt-comm-${Date.now()}`,
       organizerPlayerId: game.player?.id || 'directeur-local',
-      organizerPlayerName: game.player?.name || 'Directeur d’Antenne',
+      organizerPlayerName: game.player?.name || 'Responsable d’antenne',
       organizerDiscord: game.player?.discord || (window.ProtecAuth?.currentUser?.discord) || null,
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       title: title,
@@ -2574,7 +2574,7 @@ window.ProtecMultiplayer = {
               Grands Événements Communautaires & Écussons
             </h4>
             <p class="text-xs text-white/90">
-              Dispositifs créés par les directeurs d’antennes : soumis à validation des administrateurs puis ouverts aux alliés pour remporter des écussons commémoratifs uniques !
+              Dispositifs créés par les responsables d’antennes (joueurs) : soumis à validation des administrateurs puis ouverts aux alliés pour remporter des écussons commémoratifs uniques !
             </p>
           </div>
           <div class="flex items-center gap-2">
@@ -2588,9 +2588,9 @@ window.ProtecMultiplayer = {
                 Modération Admin
               </button>
             ` : ''}
-            <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-[11px] font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Les projets d'événements exceptionnels se déposent depuis votre Profil Directeur">
+            <button onclick="window.ProtecAuth.openAuthModal();" class="px-3.5 py-2 rounded-xl text-[11px] font-bold bg-white/20 hover:bg-white/30 text-white transition flex items-center gap-1.5 cursor-pointer flex-shrink-0" title="Les projets d'événements exceptionnels se déposent depuis votre Profil Joueur">
               <i data-lucide="user" class="w-3.5 h-3.5 text-amber-300"></i>
-              Profil Directeur (Dossiers)
+              Profil Joueur (Dossiers)
             </button>
           </div>
         </div>
@@ -2794,7 +2794,7 @@ window.ProtecMultiplayer = {
         </div>
 
         <p class="text-xs text-slate-600">
-          Transférez cet écusson de collection à un directeur d'antenne allié. Votre don solidaire vous rapportera <strong>+50 pts de réputation</strong> et <strong>+25 pts d'alliance</strong> !
+          Transférez cet écusson de collection à un responsable d'antenne allié. Votre don solidaire vous rapportera <strong>+50 pts de réputation</strong> et <strong>+25 pts d'alliance</strong> !
         </p>
 
         <div class="space-y-2 text-xs">
@@ -2804,7 +2804,7 @@ window.ProtecMultiplayer = {
           ` : `
             <select id="select-give-badge-recipient" class="w-full px-3 py-2 rounded-xl border border-slate-300 font-bold text-slate-800 bg-slate-50">
               ${allies.map(a => `
-                <option value="${a.id}">${a.name} (${a.playerName || 'Directeur'})</option>
+                <option value="${a.id}">${a.name} (${a.playerName || 'Responsable d’antenne'})</option>
               `).join('')}
             </select>
           `}
@@ -2917,7 +2917,7 @@ window.ProtecMultiplayer = {
     const offer = {
       id: `mkt-badge-${Date.now()}`,
       sellerPlayerId: game.player?.id || 'directeur-local',
-      sellerPlayerName: game.player?.name || 'Directeur d’Antenne',
+      sellerPlayerName: game.player?.name || 'Responsable d’antenne',
       stationName: game.stations?.[0]?.name || 'Antenne Locale',
       category: 'materiel',
       title: `Écusson de Collection : ${badge.name}`,

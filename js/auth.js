@@ -946,7 +946,7 @@ window.ProtecAuth = {
 
         this.updateHeaderUI();
         this.renderModalContent('profile');
-        const roleLabel = userData.role === 'admin' ? '👑 Administrateur' : (userData.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Directeur Standard');
+        const roleLabel = userData.role === 'admin' ? '👑 Administrateur' : (userData.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Joueur Standard');
         if (targetGame?.showToast) {
           targetGame.showToast('Rôles Discord Synchronisés', `Votre compte est configuré avec le statut : ${roleLabel}.`, 'green');
         }
@@ -1026,7 +1026,7 @@ window.ProtecAuth = {
 
     // Si déjà connecté et qu'on ne demande pas explicitement l'inscription, afficher le profil du Directeur
     if (this.currentUser && this.token && activeTab !== 'register') {
-      if (titleEl) titleEl.textContent = 'Profil Directeur';
+      if (titleEl) titleEl.textContent = 'Profil Joueur';
       if (subTitleEl) subTitleEl.textContent = 'Réseau Opérationnel Multijoueur';
 
       const syncDate = this.lastSyncTime ? this.lastSyncTime.toLocaleString('fr-FR') : 'Synchronisé';
@@ -1162,7 +1162,7 @@ window.ProtecAuth = {
                     </div>
                   </div>
                   <p class="text-[11px] text-slate-300 leading-relaxed">
-                    En tant que Directeur d'Antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile).
+                    En tant que Responsable d'antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile).
                   </p>
                   <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
                     <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
@@ -1190,7 +1190,7 @@ window.ProtecAuth = {
                   </div>
                   <div>
                     <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Programme de Parrainage</h5>
-                    <p class="text-[10px] text-slate-500">Recrutez de nouveaux directeurs d'antennes</p>
+                    <p class="text-[10px] text-slate-500">Invitez de nouveaux joueurs</p>
                   </div>
                 </div>
                 ${this.currentUser.referral_suspended ? `
@@ -1325,7 +1325,7 @@ window.ProtecAuth = {
             Connexion Joueur
           </button>
           <button onclick="window.ProtecAuth.renderModalContent('register', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'register' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            Nouveau Directeur
+            Nouveau Joueur
           </button>
         </div>
 
@@ -1348,7 +1348,7 @@ window.ProtecAuth = {
         ${activeTab === 'login' ? `
           <form onsubmit="window.ProtecAuth.handleLoginForm(event, window.game)" class="space-y-3">
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant Directeur</label>
+              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant Joueur</label>
               <div class="relative">
                 <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                 <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
@@ -1375,7 +1375,7 @@ window.ProtecAuth = {
           <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo du Directeur</label>
+                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo Joueur</label>
                 <div class="relative">
                   <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
                   <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Max_Lunéville" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />

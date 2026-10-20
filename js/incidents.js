@@ -880,7 +880,7 @@ window.ProtecIncidents = {
         </div>
 
         <div class="text-[11px] font-extrabold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-          Arbitrage du Directeur des Secours :
+          Arbitrage du Responsable des Secours :
         </div>
 
         <!-- Choix 1 : Annoncer et mettre immédiatement du renfort -->
@@ -917,7 +917,7 @@ window.ProtecIncidents = {
           </div>
         </button>
 
-        <!-- Choix 3 : Demande de Renforts aux autres directeurs réels (FNPC) -->
+        <!-- Choix 3 : Demande de Renforts aux autres responsables d'antennes (FNPC) -->
         <button onclick="window.ProtecIncidents.resolveUnderstaffChoice(window.game, '${mission.id}', 'alliance')"
           class="w-full text-left p-4 rounded-2xl border-2 border-blue-200 dark:border-blue-700 bg-blue-50/40 dark:bg-blue-950/40 hover:bg-blue-100/60 dark:hover:bg-blue-900/50 hover:border-blue-400 transition cursor-pointer group space-y-1.5 shadow-xs">
           <div class="flex items-center justify-between">
@@ -928,7 +928,7 @@ window.ProtecIncidents = {
             <i data-lucide="chevron-right" class="w-4 h-4 text-blue-400 group-hover:translate-x-1 transition flex-shrink-0"></i>
           </div>
           <div class="text-[11px] text-blue-900/90 dark:text-blue-300/90 pl-8 space-y-0.5">
-            <p>• Diffuse un appel en direct à tous les directeurs réels connectés (département / zone de défense).</p>
+            <p>• Diffuse un appel en direct à tous les responsables d'antennes (joueurs) connectés (département / zone de défense).</p>
             <p class="font-bold text-blue-700 dark:text-blue-300">🤝 Solidarité inter-antennes : seuls de vrais véhicules et confrères sont envoyés.</p>
             <p class="font-bold text-emerald-700 dark:text-emerald-400">🌐 Aucun renfort fictif : mobilisation transparente du réseau fédéral.</p>
           </div>
@@ -996,7 +996,7 @@ window.ProtecIncidents = {
         game.radioLogs.unshift({
           time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
           channel: 'TACTIQUE-1',
-          text: `[RADIO - RENFORT EN ROUTE] Directeur ➔ Chef de Dispositif « ${mission.title} » : Renforts confirmés et en transit immédiat. Tenez vos positions, le soutien arrive !`,
+          text: `[RADIO - RENFORT EN ROUTE] Responsable d’antenne ➔ Chef de Dispositif « ${mission.title} » : Renforts confirmés et en transit immédiat. Tenez vos positions, le soutien arrive !`,
           type: 'success'
         });
       }

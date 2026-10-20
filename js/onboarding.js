@@ -756,7 +756,7 @@ window.ProtecOnboarding = {
         <div style="font-family:inherit; font-size:11px; line-height:1.4; padding:2px;">
           <div style="font-weight:900; color:#1e1b4b; font-size:12px;">${st.station_name || st.name || 'Antenne Protection Civile'}</div>
           <div style="color:#4338ca; font-weight:700;">📍 Commune : ${st.city || 'Secteur Local'}</div>
-          <div style="color:#64748b; font-size:10px;">Directeur : ${st.player_name || st.playerName || 'Directeur d’Antenne'}</div>
+          <div style="color:#64748b; font-size:10px;">Responsable d'antenne : ${st.player_name || st.playerName || 'Responsable d’antenne'}</div>
           <div style="margin-top:4px; padding:2px 6px; background:#ffe4e6; color:#9f1239; border-radius:4px; font-weight:800; font-size:10px; text-align:center;">
             Zone d'exclusion : min. ${minKm} km
           </div>
@@ -1859,8 +1859,8 @@ window.ProtecOnboarding = {
                 </div>
                 ${this.fnpcSignatureDataUrl ? `
                   <div class="h-14 w-32 bg-white/90 dark:bg-slate-900 rounded-xl p-1.5 border border-emerald-300 dark:border-emerald-800 flex flex-col items-center justify-center shadow-xs">
-                    <img src="${this.fnpcSignatureDataUrl}" alt="Signature Directeur" class="max-h-full max-w-full object-contain" />
-                    <span class="text-[7.5px] font-mono text-slate-400 dark:text-slate-400 font-bold uppercase mt-0.5">Paraphe Directeur</span>
+                    <img src="${this.fnpcSignatureDataUrl}" alt="Signature Responsable d’antenne" class="max-h-full max-w-full object-contain" />
+                    <span class="text-[7.5px] font-mono text-slate-400 dark:text-slate-400 font-bold uppercase mt-0.5">Paraphe Responsable d’antenne</span>
                   </div>
                 ` : ''}
               </div>
@@ -1907,7 +1907,7 @@ window.ProtecOnboarding = {
     if (!container || !window.ProtecSignature) return;
 
     window.ProtecSignature.attachPad(container, {
-      title: 'Paraphe & Signature Officielle du Directeur d’Antenne :',
+      title: 'Paraphe & Signature Officielle du Responsable d’antenne :',
       subtitle: '✍️ Tracez votre signature avec votre souris ou votre doigt : elle valide automatiquement l’affiliation',
       placeholder: '✍️ Signez ici de votre main ou avec la souris...',
       height: 125,
