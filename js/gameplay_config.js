@@ -461,16 +461,16 @@
       default: 350
     },
     deliveryDurationSeconds: {
-      category: 'economie',
-      label: 'Délai d\'Acheminement de Livraison',
-      desc: 'Durée en secondes nécessaires pour que le colis soit préparé, transporté et entreposé au stock.',
-      type: 'number',
-      min: 10,
-      max: 600,
-      step: 10,
-      unit: 'sec',
-      default: 120
-    },
+    category: 'economie',
+    label: 'Délai d\'Acheminement Transporteur (24h standard)',
+    desc: 'Durée en secondes nécessaires pour le transport et la livraison du matériel.',
+    type: 'number',
+    min: 3600,
+    max: 259200,
+    step: 3600,
+    unit: 'sec',
+    default: 86400
+  },
 
     // --- 7. RÉPUTATION & NOTORIÉTÉ ---
     reputationGainMultiplier: {

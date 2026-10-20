@@ -32,8 +32,8 @@ window.ProtecLogistique = {
       badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950 dark:text-blue-300',
       icon: 'landmark',
       desc: 'Tournée logistique nationale mutualisée entre les antennes. Tarifs conventionnés.',
-      deliveryDelaySec: 300,
-      delayLabel: '5 min (Tournée groupée)',
+      deliveryDelaySec: 259200,
+      delayLabel: '72h (Tournée Fédérale FNPC)',
       shippingCost: 0,
       freeThreshold: 0,
       priceMultiplier: 1.0,
@@ -48,8 +48,8 @@ window.ProtecLogistique = {
       badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300',
       icon: 'zap',
       desc: 'Grossiste national leader en matériel de secours et télécommunications d\'urgence.',
-      deliveryDelaySec: 80,
-      delayLabel: '1 min 20 (Express 24h)',
+      deliveryDelaySec: 86400,
+      delayLabel: '24h (Express J+1)',
       shippingCost: 28,
       freeThreshold: 600,
       priceMultiplier: 0.98,
@@ -64,8 +64,8 @@ window.ProtecLogistique = {
       badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300',
       icon: 'radio',
       desc: 'Fabricant de réseaux tactiques de sécurité civile, terminaux LTE et ANTARES.',
-      deliveryDelaySec: 120,
-      delayLabel: '2 min (Messagerie Sécurisée)',
+      deliveryDelaySec: 172800,
+      delayLabel: '48h (Messagerie Standard)',
       shippingCost: 19,
       freeThreshold: 900,
       priceMultiplier: 1.05,
@@ -80,8 +80,8 @@ window.ProtecLogistique = {
       badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300',
       icon: 'tag',
       desc: 'Distributeur direct d\'usines spécialisé dans les packs analogiques et chargeurs multiples.',
-      deliveryDelaySec: 180,
-      delayLabel: '3 min (Acheminement Éco)',
+      deliveryDelaySec: 172800,
+      delayLabel: '48h (Acheminement Éco)',
       shippingCost: 14,
       freeThreshold: 450,
       priceMultiplier: 0.92,
@@ -96,13 +96,13 @@ window.ProtecLogistique = {
       badgeClass: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950 dark:text-rose-300',
       icon: 'clock',
       desc: 'Transporteur d\'urgence par coursier dédié. Réception express avant mission critique.',
-      deliveryDelaySec: 35,
-      delayLabel: '35 sec (Coursier Dédié)',
+      deliveryDelaySec: 86400,
+      delayLabel: '24h (Coursier Express)',
       shippingCost: 45,
       freeThreshold: 999999,
       priceMultiplier: 1.10,
       freeShippingAlways: false,
-      specialty: 'Arrivée éclair à l\'antenne en 35 secondes'
+      specialty: 'Livraison express garantie sous 24h'
     }
   ],
 
@@ -1123,10 +1123,10 @@ window.ProtecLogistique = {
     game.updateStatsUI();
     game.saveGame();
 
-    const minStr = Math.ceil(durationSec / 60);
+    const minStr = this.formatDeliveryTime(durationSec);
     game.showToast(
       '🚚 Commande Validée & Expédiée !', 
-      `Montant réglé : ${totalToPay.toLocaleString('fr-FR')} € ${shippingFee > 0 ? `(dont ${shippingFee} € de livraison)` : '(Livraison offerte)'}. Arrivée estimée dans ${minStr} min à ${station.name}.`, 
+      `Montant réglé : ${totalToPay.toLocaleString('fr-FR')} € ${shippingFee > 0 ? `(dont ${shippingFee} € de livraison)` : '(Livraison offerte)'}. Arrivée estimée sous ${minStr} à ${station.name}.`, 
       'green'
     );
 
@@ -1202,6 +1202,22 @@ window.ProtecLogistique = {
           this.updateLiveDeliveryTrackers(game);
         }
       }
+    }
+  },
+
+  formatDeliveryTime(remainingSec) {
+    if (remainingSec >= 86400) {
+      const d = Math.floor(remainingSec / 86400);
+      const h = Math.floor((remainingSec % 86400) / 3600);
+      return `${d}j ${String(h).padStart(2, '0')}h`;
+    } else if (remainingSec >= 3600) {
+      const h = Math.floor(remainingSec / 3600);
+      const m = Math.floor((remainingSec % 3600) / 60);
+      return `${h}h ${String(m).padStart(2, '0')}m`;
+    } else {
+      const m = Math.floor(remainingSec / 60);
+      const s = remainingSec % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
   },
 
@@ -1980,7 +1996,7 @@ window.ProtecLogistique = {
                   const progress = Math.min(100, Math.round((elapsed / totalSec) * 100));
                   const m = Math.floor(remainingSec / 60);
                   const s = remainingSec % 60;
-                  const timeFormatted = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+                  const timeFormatted = this.formatDeliveryTime(remainingSec);
                   const orderDate = new Date(d.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
                   return `
