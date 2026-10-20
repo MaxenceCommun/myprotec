@@ -150,12 +150,14 @@
       const hasSamu = Boolean(game.samuConvention && game.samuConvention.signed && game.samuGarde && game.samuGarde.active);
       const hasSdis = Boolean(game.sdisConvention && game.sdisConvention.signed && game.sdisGarde && game.sdisGarde.active);
       const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
+      const hasAnyVehicle = Array.isArray(game.vehicles) && game.vehicles.length > 0;
 
       game.missions = game.missions.filter(m => {
         if (!m) return false;
         if ((m.type === 'samu' || m.type === 'garde_samu') && !hasSamu) return false;
         if ((m.type === 'pompiers' || m.type === 'garde_sdis') && !hasSdis) return false;
         if (m.type === 'crise' && !hasAasc) return false;
+        if (m.isBackendIntervention && m.type === 'dps' && Array.isArray(m.requiredVehicles) && m.requiredVehicles.length > 0 && !hasAnyVehicle) return false;
         return true;
       });
     },
@@ -329,6 +331,21 @@
       if (missionType === 'crise') {
         const hasAascConv = Boolean(game.aascConvention && game.aascConvention.signed);
         if (!hasAascConv) {
+          if (existing) {
+            game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
+          }
+          return null;
+        }
+      }
+
+      // 4. Mission DPS / Renfort DPS : Exige la capacité matérielle minimale (au moins 1 véhicule adapté si requis)
+      if (missionType === 'dps') {
+        const playerVehicles = Array.isArray(game.vehicles) ? game.vehicles : [];
+        const needsVehicles = reqVehicles.length > 0;
+        const hasAnyVehicle = playerVehicles.length > 0;
+
+        if (needsVehicles && !hasAnyVehicle) {
+          // L'antenne n'a encore aucun véhicule dans son hangar pour honorer ce renfort DPS (VPSP / VL)
           if (existing) {
             game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
           }
