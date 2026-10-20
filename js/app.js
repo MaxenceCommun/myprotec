@@ -7710,7 +7710,8 @@ class ProtecGame {
     if (registered.includes(vol.id)) return false;
     if (registered.length >= (mission.requiredVolunteers || 1)) return false;
 
-    // 2. État physique et disponibilité opérationnelle
+    // 2. État physique, tenue réglementaire et disponibilité opérationnelle
+    if (vol.hasUniform === false) return false;
     if (vol.isBurnout) return false;
     if (vol.status === 'mission') return false;
     if (vol.energy !== undefined && vol.energy < 25) return false;
@@ -10837,6 +10838,21 @@ class ProtecGame {
     const waitDays = Math.max(0, currentDay - (cand.createdDay || currentDay));
     const waitPenalty = waitDays >= 2 ? Math.min(40, waitDays * 15) : 0;
 
+    // Dotation Tenue officielle Protection Civile
+    const targetStation = (this.stations || []).find(s => s.id === (stationId || this.stations[0]?.id)) || this.stations[0];
+    if (targetStation && !targetStation.stock) targetStation.stock = {};
+    const stockTenues = (targetStation?.stock?.tenue_pc || 0) + (targetStation?.stock?.tenue_f1 || 0);
+
+    let hasUniform = false;
+    if (stockTenues > 0) {
+      if (targetStation.stock.tenue_pc && targetStation.stock.tenue_pc > 0) {
+        targetStation.stock.tenue_pc--;
+      } else if (targetStation.stock.tenue_f1 && targetStation.stock.tenue_f1 > 0) {
+        targetStation.stock.tenue_f1--;
+      }
+      hasUniform = true;
+    }
+
     const newVol = {
       id: `vol-${Date.now()}`,
       name: cand.name,
@@ -10846,14 +10862,16 @@ class ProtecGame {
       contractType: 'benevole',
       status: 'dispo',
       stationId: stationId || this.stations[0]?.id,
+      hasUniform: hasUniform,
+      uniformEquippedAt: hasUniform ? Date.now() : null,
       isTrainer: !!cand.isTrainer,
       avatar: cand.avatar || '🙋',
       dispoType: cand.dispoType || 'bénévole',
       dispoJours: cand.dispoJours || ['Samedi', 'Dimanche'],
-      motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty),
+      motivation: Math.max(30, (cand.motivationGrade ? Math.min(100, parseInt(cand.motivationGrade) * 5) : (cand.motivationScore || 85)) - waitPenalty - (hasUniform ? 0 : 10)),
       skills: cand.skills || [initialRank],
       energy: Math.max(50, 90 - waitPenalty),
-      humeur: Math.max(30, 85 - waitPenalty),
+      humeur: Math.max(30, 85 - waitPenalty - (hasUniform ? 0 : 10)),
       commune: cand.commune,
       code_postal: cand.code_postal,
       adresse: cand.adresse,
@@ -10874,10 +10892,10 @@ class ProtecGame {
     if (typeof this.closeDrawer === 'function') this.closeDrawer();
     this.updateStatsUI();
     this.saveGame();
-    if (waitDays >= 2) {
-      this.showToast('Bénévole Intégré', `${cand.name} a signé sa charte après ${waitDays} jours d’attente et rejoint les effectifs.`, 'blue');
+    if (hasUniform) {
+      this.showToast('👕 Bénévole Équipé & Intégré !', `${cand.name} (${initialRank}) a reçu sa Tenue officielle Protection Civile et est immédiatement opérationnel(le) !`, 'green');
     } else {
-      this.showToast('Bénévole Intégré !', `${cand.name} (${initialRank}${cand.isTrainer ? ' • Formateur' : ''}) a signé sa charte d'engagement bénévole !`, 'green');
+      this.showToast('⚠️ Tenue Manquante !', `${cand.name} a signé sa charte mais n'a PAS de tenue officielle en stock ! Commandez-en une en Boutique pour l'équiper et éviter sa démotivation.`, 'orange');
     }
   }
 
@@ -21964,6 +21982,46 @@ class ProtecGame {
 
             <!-- Liste détaillée des secouristes en activité -->
             <div class="space-y-2 pt-2 border-t border-indigo-100/70">
+              <!-- Bandeau de Gestion & Dotation des Tenues Protection Civile -->
+              ${(() => {
+                const totalVols = (this.volunteers || []).length;
+                const waitingVols = (this.volunteers || []).filter(v => v.hasUniform === false).length;
+                const equippedVols = totalVols - waitingVols;
+                const primarySt = (this.stations || [])[0];
+                const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_f1 || 0);
+
+                return `
+                  <div class="p-3 rounded-2xl glass-card border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:to-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-3 shadow-xs">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-10 h-10 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/20 text-pc-blue flex items-center justify-center text-xl flex-shrink-0">
+                        👕
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-2">
+                          <h5 class="font-black text-slate-900 dark:text-white">Dotation des Tenues Protection Civile</h5>
+                          <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${waitingVols === 0 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'}">
+                            ${waitingVols === 0 ? '100% Équipés ✓' : `${waitingVols} en attente ⚠️`}
+                          </span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                          Équipés : <strong class="text-slate-800 dark:text-slate-200">${equippedVols}/${totalVols}</strong> • En stock réserve : <strong class="text-pc-blue dark:text-sky-400 font-mono">${stockTenues} tenue(s)</strong>
+                        </p>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                      ${waitingVols > 0 && stockTenues > 0 ? `
+                        <button type="button" onclick="window.ProtecPersonnel?.equipAllWaitingVolunteers(window.game); window.game.openModule('recrutement');" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                          <span>✨ Doter tous (${Math.min(waitingVols, stockTenues)})</span>
+                        </button>
+                      ` : ''}
+                      <button type="button" onclick="window.ProtecLogistique.selectedStationId='${primarySt?.id}'; window.game.openModule('logistique');" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                        <span>🛒 Commander Tenues (160 €)</span>
+                      </button>
+                    </div>
+                  </div>
+                `;
+              })()}
+
               <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <span class="text-[10px] font-black uppercase text-indigo-900 tracking-wider">Effectif Détaillé de l'Antenne (${this.volunteers.length})</span>
                 <div class="relative w-full sm:w-64">
@@ -21993,10 +22051,13 @@ class ProtecGame {
                   const contractLabel = isSalarie ? (v.contractType === 'CDD' ? 'Salarié CDD' : (v.contractType === 'CDI' ? 'Salarié CDI' : 'Salarié')) : (isServiceCivique ? 'Service Civique' : 'Bénévole');
                   const trait = window.ProtecPersonnel?.traits[v.trait] || { name: 'Secouriste standard' };
                   const roleInfo = window.ProtecPoles?.getVolunteerRoleInfo ? window.ProtecPoles.getVolunteerRoleInfo(v) : null;
-                  const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${roleInfo?.title || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')}`.toLowerCase();
+                  const isEquipped = v.hasUniform !== false;
+                  const station = (this.stations || []).find(s => s.id === v.stationId) || this.stations?.[0];
+                  const stTenues = (station?.stock?.tenue_pc || 0) + (station?.stock?.tenue_f1 || 0);
+                  const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${roleInfo?.title || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')} ${isEquipped ? 'équipé' : 'sans tenue'}`.toLowerCase();
 
                   return `
-                    <div class="volunteer-card p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : ''}" data-search-text="${searchText}">
+                    <div class="volunteer-card p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : (!isEquipped ? 'border-2 border-amber-300 dark:border-amber-700 bg-amber-50/30' : '')}" data-search-text="${searchText}">
                       <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           ${this.getVolunteerAvatarHTML(v, 'w-8 h-8')}
@@ -22012,9 +22073,24 @@ class ProtecGame {
                             ${this.getVolunteerSkillsPopoverHTML(v)}
                           </div>
                         </div>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${v.isBurnout ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-100 text-slate-700'}">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${v.isBurnout ? 'bg-red-600 text-white animate-pulse' : (v.status === 'retrait' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-700')}">
                           ${v.isBurnout ? 'BURNOUT / REPOS' : v.status.toUpperCase()}
                         </span>
+                      </div>
+
+                      <!-- Statut de la Tenue Protection Civile & Action Dotation -->
+                      <div class="p-1.5 rounded-xl border flex items-center justify-between gap-2 text-[10px] ${isEquipped ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200/80 text-blue-950 dark:text-blue-200' : 'bg-amber-100/80 dark:bg-amber-950/70 border-amber-300 text-amber-900 dark:text-amber-200 font-extrabold'}">
+                        <div class="flex items-center gap-1.5 truncate">
+                          <span>${isEquipped ? '👕' : '⚠️'}</span>
+                          <span class="truncate">${isEquipped ? 'Tenue Officielle PC Dotée' : 'Sans Tenue : Bloqué en mission'}</span>
+                        </div>
+                        ${!isEquipped ? `
+                          <button type="button" onclick="window.ProtecPersonnel?.equipVolunteer(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-1 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] shadow-xs transition flex items-center gap-1 cursor-pointer flex-shrink-0">
+                            <span>👕 Doter (${stTenues} dispo)</span>
+                          </button>
+                        ` : `
+                          <span class="text-[9px] font-black text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">✓ Prêt</span>
+                        `}
                       </div>
 
                       <div class="text-[10px] text-slate-500 flex items-center justify-between">

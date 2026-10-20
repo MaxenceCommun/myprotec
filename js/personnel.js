@@ -212,6 +212,10 @@ window.ProtecPersonnel = {
         v.motivation = v.moral;
         v.humeur = v.moral;
 
+        if (v.hasUniform === undefined) {
+          v.hasUniform = true; // Migration bienveillante : les secouristes déjà en poste possèdent leur tenue
+        }
+
         if (!v.trait) {
           const traitsKeys = Object.keys(this.traits);
           v.trait = traitsKeys[Math.floor(Math.random() * traitsKeys.length)];
@@ -252,6 +256,11 @@ window.ProtecPersonnel = {
 
   // Calcul du statut de disponibilité dynamique
   calculateAvailability(volunteer, game, mission = null) {
+    // Condition stricte : le secouriste doit avoir reçu sa Tenue officielle Protection Civile pour partir sur le terrain
+    if (volunteer.hasUniform === false) {
+      return { available: false, reason: 'Sans tenue d’intervention officielle (Dotation requise en stock pour partir sur le terrain)' };
+    }
+
     if (volunteer.isBurnout) {
       return { available: false, reason: 'Arrêt de travail / Burnout (surmenage)' };
     }
@@ -525,6 +534,21 @@ window.ProtecPersonnel = {
           v.moral = Math.min(100, (v.moral || 70) + moralPassiveGain);
           v.motivation = v.moral;
           v.humeur = v.moral;
+        }
+
+        // 0. ABSENCE DE TENUE OFFICIELLE PROTECTION CIVILE : Frustration & Démotivation
+        if (v.hasUniform === false) {
+          v.moral = Math.max(15, (v.moral || 65) - 3);
+          v.motivation = v.moral;
+          v.humeur = v.moral;
+          if (Math.random() < 0.04 && window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.addVolunteerMessage === 'function') {
+            window.ProtecAntenneMessages.addVolunteerMessage(
+              game,
+              v.id,
+              `Bonjour Chef, je suis toujours en attente de ma tenue officielle Protection Civile pour pouvoir partir sur le terrain avec l'équipe... Est-ce qu'une commande est prévue en logistique ?`,
+              { type: 'uniform_complaint', subject: 'Attente de Tenue Officielle' }
+            );
+          }
         }
 
         // 1. INACTIVITÉ PROLONGÉE (> 30 jours sans convocation) : décroissance du moral
@@ -3248,6 +3272,134 @@ window.ProtecPersonnel = {
     }
 
     return volunteers;
+  },
+
+  // Dotation individuelle d'une Tenue officielle Protection Civile
+  equipVolunteer(game, volunteerId) {
+    if (!game || !game.volunteers) return;
+    const vol = game.volunteers.find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    if (vol.hasUniform !== false) {
+      if (typeof game.showToast === 'function') {
+        game.showToast('Déjà Équipé(e)', `${vol.name} possède déjà sa tenue officielle Protection Civile.`, 'blue');
+      }
+      return;
+    }
+
+    const station = (game.stations || []).find(s => s.id === vol.stationId) || game.stations?.[0];
+    if (!station) return;
+    if (!station.stock) station.stock = {};
+
+    const stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_f1 || 0);
+
+    if (stockTenues > 0) {
+      if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
+        station.stock.tenue_pc--;
+      } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
+        station.stock.tenue_f1--;
+      }
+      vol.hasUniform = true;
+      vol.uniformEquippedAt = Date.now();
+      vol.moral = Math.min(100, (vol.moral || 50) + 15);
+      vol.motivation = vol.moral;
+      vol.humeur = vol.moral;
+
+      if (typeof game.showToast === 'function') {
+        game.showToast(
+          '👕 Tenue Officielle Dotée !',
+          `${vol.name} a reçu son Pack Tenue Protection Civile (+15 Moral) ! Il/Elle est désormais opérationnel(le) pour partir sur le terrain.`,
+          'green'
+        );
+      }
+      game.updateStatsUI();
+      game.saveGame();
+    } else {
+      // Proposer d'acheter une tenue immédiatement pour 160 €
+      const cost = 160;
+      if (game.resources.money >= cost) {
+        if (confirm(`Aucune tenue en stock à l'antenne. Acheter immédiatement 1 Pack Tenue Protection Civile pour ${cost} € et équiper ${vol.name} ?`)) {
+          game.resources.money -= cost;
+          vol.hasUniform = true;
+          vol.uniformEquippedAt = Date.now();
+          vol.moral = Math.min(100, (vol.moral || 50) + 15);
+          vol.motivation = vol.moral;
+          vol.humeur = vol.moral;
+
+          if (typeof game.showToast === 'function') {
+            game.showToast(
+              '👕 Tenue Achetée & Dotée !',
+              `${vol.name} a été équipé(e) pour 160 € (+15 Moral). Prêt(e) pour le terrain !`,
+              'green'
+            );
+          }
+          game.updateStatsUI();
+          game.saveGame();
+        }
+      } else {
+        if (typeof game.showToast === 'function') {
+          game.showToast(
+            'Stock Épuisé & Trésorerie Insuffisante',
+            `Aucune tenue en réserve et fonds insuffisants (160 € requis). Commandez des tenues dans la Centrale d'Achats.`,
+            'orange'
+          );
+        }
+      }
+    }
+  },
+
+  // Dotation groupée de tous les bénévoles en attente de tenue
+  equipAllWaitingVolunteers(game, stationId = null) {
+    if (!game || !game.volunteers) return;
+    const station = stationId ? ((game.stations || []).find(s => s.id === stationId) || game.stations?.[0]) : game.stations?.[0];
+    if (!station) return;
+    if (!station.stock) station.stock = {};
+
+    let stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_f1 || 0);
+    if (stockTenues <= 0) {
+      if (typeof game.showToast === 'function') {
+        game.showToast('Stock de Tenues Épuisé', 'Aucune tenue disponible en réserve. Commandez-en dans la boutique logistique.', 'orange');
+      }
+      return;
+    }
+
+    const waitingVols = game.volunteers.filter(v => 
+      (v.stationId === station.id || !v.stationId) && v.hasUniform === false
+    );
+
+    if (waitingVols.length === 0) {
+      if (typeof game.showToast === 'function') {
+        game.showToast('Tous Équipés ✓', 'Tous vos bénévoles possèdent déjà leur tenue officielle !', 'green');
+      }
+      return;
+    }
+
+    let count = 0;
+    while (stockTenues > 0 && waitingVols.length > 0) {
+      const vol = waitingVols.shift();
+      if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
+        station.stock.tenue_pc--;
+      } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
+        station.stock.tenue_f1--;
+      }
+      stockTenues--;
+      vol.hasUniform = true;
+      vol.uniformEquippedAt = Date.now();
+      vol.moral = Math.min(100, (vol.moral || 50) + 15);
+      vol.motivation = vol.moral;
+      vol.humeur = vol.moral;
+      count++;
+    }
+
+    if (typeof game.showToast === 'function') {
+      game.showToast(
+        '👕 Dotation Groupée Terminée !',
+        `${count} bénévole(s) ont reçu leur Tenue Protection Civile et sont désormais opérationnels (+15 Moral) !`,
+        'green'
+      );
+    }
+    game.updateStatsUI();
+    game.saveGame();
   }
 };
 

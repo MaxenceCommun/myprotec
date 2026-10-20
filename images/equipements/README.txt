@@ -11,6 +11,9 @@ FICHIERS ACTUELLEMENT INTÉGRÉS & ACTIFS :
 - lot_secours_a.png                 : Lot Secours A (PAPS, Sac d'urgence 1ers secours)
 - lot_secours_b.png                 : Lot Secours B (Réanimation, Oxygénothérapie, DSA, BAVU)
 - lot_secours_c.png                 : Lot Secours C (Poste de Secours, Tente gonflable, Brancardage)
+- caisse_rearmement.png             : Kit de Réarmement & Consommables PS (Caisse de Réassort)
+- tenue_pc.png                      : Pack Tenue Officielle Protection Civile (Dotation Bénévole)
+- lot_bachage.png                   : Lot Bâchage & Consolidation de Toitures (Grandes bâches, cordages)
 - lot_tronconnage.png               : Lot Tronçonnage & Dégagement d'Axes (Tronçonneuses thermiques, EPI)
 - lot_pompage.png                   : Lot Épuisement & Pompage Eaux Chargées (Motopompes thermiques)
 - lot_eclairage.png                 : Lot Éclairage de Crise & Mât Télescopique (LED 360°, Ballon Airstar)
@@ -21,9 +24,8 @@ FICHIERS ACTUELLEMENT INTÉGRÉS & ACTIFS :
 - drone_thermique.png               : Pack Drone Thermique Infrarouge (Recherche Nocturne FLIR)
 - prise_parametres.png / schiller.png : Moniteurs multiparamétriques & Schiller Touch7
 
-AUTRES LOTS PRÉVUS DANS LE CATALOGUE :
---------------------------------------
-- lot_bachage.png                   : Lot Bâchage & Consolidation de Toitures
+AUTRES ARTICLES EN CATALOGUE :
+------------------------------
 - lot_hebergement.png               : Lot Hébergement d'Urgence CHU / Gymnase
 - lot_ravitaillement.png            : Lot Ravitaillement & Cuisine de Crise
 - lot_soutien_psy.png               : Lot Soutien Psychologique CAI

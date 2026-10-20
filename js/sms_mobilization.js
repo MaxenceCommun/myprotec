@@ -210,7 +210,8 @@ window.ProtecSmsMobilization = {
     const availableVols = game.volunteers.filter(v => 
       !mission.registeredVolunteers.includes(v.id) &&
       v.status !== 'mission' &&
-      !v.isBurnout
+      !v.isBurnout &&
+      v.hasUniform !== false
     );
 
     title.textContent = isUpdate ? 'Évolution de Situation - Mise à Jour des Consignes' : 'Composition & Diffusion SMS d\'Alerte';
@@ -967,7 +968,8 @@ window.ProtecSmsMobilization = {
     const unassignedVols = game.volunteers.filter(v => 
       !mission.registeredVolunteers.includes(v.id) &&
       v.status !== 'mission' &&
-      !v.isBurnout
+      !v.isBurnout &&
+      v.hasUniform !== false
     );
 
     if (unassignedVols.length === 0) {

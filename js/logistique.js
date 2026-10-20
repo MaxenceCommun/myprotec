@@ -24,12 +24,18 @@ window.ProtecLogistique = {
     'images/equipements/lot_tronconnage.png',
     'images/equipements/lot_pompage.png',
     'images/equipements/lot_eclairage.png',
+    'images/equipements/lot_bachage.png',
+    'images/equipements/lot_bache.png',
     'images/equipements/lot_poste_commandement_mobile.png',
     'images/equipements/remorque_groupe_electro.png',
     'images/equipements/remorque_motopompe.png',
     'images/equipements/groupe_electrogene.png',
     'images/equipements/drone.png',
     'images/equipements/drone_thermique.png',
+    'images/equipements/caisse_rearmement.png',
+    'images/equipements/caisse_reassort.png',
+    'images/equipements/tenue_pc.png',
+    'images/equipements/tenue_f1.png',
     'images/equipements/prise_parametres.png',
     'images/equipements/schiller.png'
   ]),
@@ -59,7 +65,7 @@ window.ProtecLogistique = {
       category: 'pharmacie',
       name: 'Kit de Réarmement & Consommables PS (Caisse de Réassort)',
       lucideIcon: 'archive',
-      image: 'images/equipements/woundKits.png',
+      image: 'images/equipements/caisse_rearmement.png',
       price: 60,
       unit: 'caisse (100% réassort)',
       slots: 1,
@@ -120,19 +126,6 @@ window.ProtecLogistique = {
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
       desc: 'Sac d’intervention avec brancard pliant renforcé, matelas immobilisateur à dépression avec pompe, plan dur adulte/enfant, sangles araignée et chaise de transport.',
       usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Embarquable dans un véhicule LOG (2 slots).'
-    },
-    {
-      id: 'sac_pedestre',
-      category: 'lots_secours',
-      name: 'Sacoche Binôme Secouriste Pédestre',
-      lucideIcon: 'backpack',
-      image: 'images/equipements/sac_pedestre.png',
-      price: 320,
-      unit: 'sacoche',
-      badge: 'Mobilité Foule',
-      badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
-      desc: 'Sac d’épaule ultra-léger avec pansements, DAE compact de poche et garrot pour patrouilles.',
-      usage: 'Équipe les secouristes en patrouille à pied dans les foules denses.'
     },
 
     // --- 3. TECHNIQUE & CRISE ---
@@ -251,30 +244,18 @@ window.ProtecLogistique = {
 
     // --- 4. TENUES & ÉQUIPEMENTS EPI ---
     {
-      id: 'tenue_f1',
+      id: 'tenue_pc',
       category: 'tenues_epi',
-      name: 'Pack Tenue F1 Homologuée (Parka, Pantalon, Polo)',
+      name: 'Pack Tenue Officielle Protection Civile (Dotation Bénévole)',
       lucideIcon: 'shirt',
-      image: 'images/equipements/tenue_f1.png',
+      image: 'images/equipements/tenue_pc.png',
       price: 160,
-      unit: 'pack tenue',
-      badge: 'Identité Fédérale',
-      badgeColor: 'bg-blue-50 text-blue-900 border-blue-300',
-      desc: 'Ensemble textile officiel bleu marine et orange fluo avec bandes rétro-réfléchissantes de classe 3.',
-      usage: 'Équipe vos nouveaux bénévoles et augmente le moral et la fierté d’appartenance.'
-    },
-    {
-      id: 'casque_f2',
-      category: 'tenues_epi',
-      name: 'Casque de Secours F2 avec Visière Intégrée',
-      lucideIcon: 'hard-hat',
-      image: 'images/equipements/casque_f2.png',
-      price: 120,
-      unit: 'casque',
-      badge: 'Protection Chocs',
-      badgeColor: 'bg-amber-50 text-amber-900 border-amber-300',
-      desc: 'Casque de protection pour sauvetage déblaiement et secours routier avec lunettes-masque.',
-      usage: 'Protège les équipiers engagés sur les interventions techniques et accidents.'
+      unit: 'pack tenue complète',
+      slots: 1,
+      badge: 'Dotation Bénévole Obligatoire',
+      badgeColor: 'bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
+      desc: 'Ensemble textile officiel bleu marine et orange fluo réglementaire (Parka haute visibilité classe 3, Pantalon d’intervention, Polo). Indispensable pour doter chaque bénévole et l’autoriser à partir en mission.',
+      usage: 'Attribuée individuellement à chaque bénévole. Sans tenue, le secouriste est bloqué à la base, frustré et démotivé.'
     },
     {
       id: 'rangers_secours',
