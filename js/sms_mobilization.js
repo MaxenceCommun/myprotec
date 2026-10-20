@@ -670,8 +670,12 @@ window.ProtecSmsMobilization = {
         if (parsedDelay === 0 || d.rallyMinutes <= parsedDelay) {
           // Pleinement admissible désormais
           recoveredCount++;
-          if (!mission.registeredVolunteers.includes(d.volunteerId)) {
-            mission.registeredVolunteers.push(d.volunteerId);
+          if (typeof game.registerVolunteerToMission === 'function') {
+            game.registerVolunteerToMission(mission, d.volunteerId, true);
+          } else {
+            if (!mission.registeredVolunteers.includes(d.volunteerId)) {
+              mission.registeredVolunteers.push(d.volunteerId);
+            }
           }
           if (mission.smsConsigne?.consigne === 'base_immediat') {
             game.initVolunteerCrisisTransit(mission, d.volunteerId);
@@ -743,9 +747,13 @@ window.ProtecSmsMobilization = {
     const vol = (game.volunteers || []).find(v => v.id === volunteerId);
     if (!vol) return;
 
-    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
-    if (!mission.registeredVolunteers.includes(vol.id)) {
-      mission.registeredVolunteers.push(vol.id);
+    if (typeof game.registerVolunteerToMission === 'function') {
+      game.registerVolunteerToMission(mission, vol.id, true);
+    } else {
+      if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+      if (!mission.registeredVolunteers.includes(vol.id)) {
+        mission.registeredVolunteers.push(vol.id);
+      }
     }
 
     // Mettre à jour la réponse SMS dans la liste
@@ -1061,8 +1069,12 @@ window.ProtecSmsMobilization = {
         if (!Array.isArray(currentMission.smsResponses)) currentMission.smsResponses = [];
 
         if (willAccept) {
-          if (!currentMission.registeredVolunteers.includes(vol.id)) {
-            currentMission.registeredVolunteers.push(vol.id);
+          if (typeof game.registerVolunteerToMission === 'function') {
+            game.registerVolunteerToMission(currentMission, vol.id, true);
+          } else {
+            if (!currentMission.registeredVolunteers.includes(vol.id)) {
+              currentMission.registeredVolunteers.push(vol.id);
+            }
           }
 
           let replyMsg = consigneObj.volunteerReply;

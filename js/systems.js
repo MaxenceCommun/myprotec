@@ -711,8 +711,14 @@ window.ProtecSystems = {
         this.playRadioChirp();
         if (t.statusTarget === 2) {
           if (t.vehicle) t.vehicle.status = 'sur_les_lieux';
-          this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} ».`);
-          game.showToast('Arrivée sur les lieux', `${t.vehicle.name} est au contact. Statut 3 activé.`, 'green');
+          const delayMin = t.mission?.departureDelayMinutes || 0;
+          if (delayMin > 0) {
+            this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} » (Prise de poste avec ${delayMin} min de retard suite au ralliement).`);
+            game.showToast('Arrivée sur les lieux (Retard)', `${t.vehicle.name} est au contact. Dispositif pris avec ${delayMin} min de retard. Statut 3 activé.`, 'orange');
+          } else {
+            this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} ».`);
+            game.showToast('Arrivée sur les lieux', `${t.vehicle.name} est au contact. Statut 3 activé.`, 'green');
+          }
         } else if (t.statusTarget === 4) {
           const hospName = t.evacData?.hospital?.name || t.mission?.evacHospitalData?.hospital?.name || 'Urgences Hospitalières';
           if (t.vehicle) t.vehicle.status = 'urgences_chu';

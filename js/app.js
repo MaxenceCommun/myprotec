@@ -699,6 +699,192 @@ class ProtecGame {
     };
   }
 
+  // =========================================================================
+  // GESTION RÉALISTE DU TRAJET DES BÉNÉVOLES & DÉCALAGE DE DÉPART (RETARD)
+  // RÈGLE MÉTIER : Si le temps de ralliement d'un bénévole engagé dépasse le délai
+  // avant l'heure de RDV/départ à la base, le véhicule part avec ce retard et
+  // arrivera donc sur les lieux avec ce même retard (peu importe la mission).
+  // =========================================================================
+
+  getVolunteerRallyMinutes(volunteer) {
+    if (!volunteer) return 12;
+    if (volunteer.onBase || volunteer.status === 'sdis_caserne' || volunteer.status === 'poste') return 0;
+    if (volunteer.temps_ralliement_minutes !== undefined && volunteer.temps_ralliement_minutes !== null) {
+      return Number(volunteer.temps_ralliement_minutes);
+    }
+    if (volunteer.temps_trajet_base_minutes !== undefined && volunteer.temps_trajet_base_minutes !== null) {
+      return Number(volunteer.temps_trajet_base_minutes);
+    }
+    if (volunteer.travelTimeToStationMin !== undefined && volunteer.travelTimeToStationMin !== null) {
+      return Number(volunteer.travelTimeToStationMin);
+    }
+    const distKm = volunteer.distance_base_km || 4;
+    return Math.max(4, Math.round(distKm * 2.2));
+  }
+
+  getMissionDepartureAndArrivalSchedule(mission, customNow = null) {
+    if (!mission) {
+      const dNow = new Date();
+      return {
+        plannedStartDate: dNow,
+        transitMinutes: 10,
+        advanceMinutes: 10,
+        nominalRdvDate: dNow,
+        effectiveDepartureDate: dNow,
+        effectiveStartDate: dNow,
+        departureDelayMinutes: 0,
+        isDelayed: false,
+        delayedVolunteers: [],
+        volunteersSchedule: [],
+        maxVolArrivalBaseTs: dNow.getTime()
+      };
+    }
+
+    const now = customNow || (this.clock && this.clock.hour !== undefined
+      ? new Date(this.clock.year || 2026, (this.clock.month !== undefined ? this.clock.month : 9), this.clock.day || 1, this.clock.hour || 14, this.clock.minute || 0, this.clock.second || 0)
+      : new Date());
+    const currentTime = now.getTime();
+
+    // 1. Calcul de l'heure prévue du début de la mission / poste
+    const targetHour = mission.startHour !== undefined ? mission.startHour : (mission.eventDate?.hour !== undefined ? mission.eventDate.hour : 14);
+    const targetMinute = mission.startMinute !== undefined ? mission.startMinute : (mission.eventDate?.minute !== undefined ? mission.eventDate.minute : 0);
+    const plannedStartDate = new Date(
+      mission.eventDate?.year || now.getFullYear(),
+      mission.eventDate?.month !== undefined ? mission.eventDate.month : now.getMonth(),
+      mission.eventDate?.day || now.getDate(),
+      targetHour,
+      targetMinute,
+      0
+    );
+
+    // 2. Trajet Base -> Lieu de mission
+    const station = (this.stations && this.stations.length > 0) ? this.stations[0] : { lat: 48.8566, lng: 2.3522 };
+    const destLat = mission.lat || station.lat;
+    const destLng = mission.lng || station.lng;
+    const dLat = (destLat - station.lat) * 111;
+    const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
+    const rawDist = Math.hypot(dLat, dLng);
+    const distKm = Math.max(1.2, Math.round(rawDist * 1.25 * 10) / 10);
+    const isUrgency = ['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche';
+    const assignedVehicles = (mission.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
+    const hasBeacon = assignedVehicles.length > 0
+      ? assignedVehicles.every(v => v.type === 'VPSP' || v.hasLedBar || v.hasBeacon || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /gyrophare|rampe led|led/i.test(o))))
+      : (mission.type === 'samu' || mission.type === 'pompiers');
+    const speedKmh = (isUrgency && hasBeacon) ? 48 : 35;
+    const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
+    const advanceMinutes = Math.max(5, Math.ceil(transitMinutes / 5) * 5);
+    const nominalRdvDate = new Date(plannedStartDate.getTime() - advanceMinutes * 60 * 1000);
+    const nominalRdvTs = nominalRdvDate.getTime();
+
+    // 3. Trajets individuels des bénévoles engagés
+    const registeredVols = (mission.registeredVolunteers || [])
+      .map(vid => (this.volunteers || []).find(v => v.id === vid))
+      .filter(Boolean);
+
+    let maxVolArrivalBaseTs = nominalRdvTs;
+    const delayedVolunteers = [];
+    const volunteersSchedule = [];
+
+    registeredVols.forEach(vol => {
+      const rallyMin = this.getVolunteerRallyMinutes(vol);
+      if (rallyMin === 0) {
+        volunteersSchedule.push({ vol, rallyMin: 0, arrivalBaseAt: nominalRdvTs, isDelayed: false, delayMinutes: 0 });
+        return;
+      }
+
+      let arrivalBaseAt = mission.volunteerTransit?.[vol.id]?.arrivalBaseAt;
+
+      if (!arrivalBaseAt) {
+        const joinedAt = mission.volunteerJoinedAt?.[vol.id];
+        if (joinedAt) {
+          arrivalBaseAt = joinedAt + (rallyMin * 60 * 1000);
+        } else {
+          // Si inscription antérieure à l'organisation (pré-inscrit au planning des heures/jours avant)
+          // Le bénévole part de chez lui à l'avance et arrive à l'heure nominale du RDV
+          arrivalBaseAt = nominalRdvTs;
+        }
+      }
+
+      const isDelayed = arrivalBaseAt > nominalRdvTs;
+      const volDelayMin = isDelayed ? Math.ceil((arrivalBaseAt - nominalRdvTs) / (60 * 1000)) : 0;
+
+      if (isDelayed) {
+        delayedVolunteers.push({ vol, rallyMin, arrivalBaseAt, delayMinutes: volDelayMin });
+      }
+      volunteersSchedule.push({ vol, rallyMin, arrivalBaseAt, isDelayed, delayMinutes: volDelayMin });
+
+      if (arrivalBaseAt > maxVolArrivalBaseTs) {
+        maxVolArrivalBaseTs = arrivalBaseAt;
+      }
+    });
+
+    // 4. Calcul du retard de départ de l'engin et de l'heure d'arrivée effective sur site
+    const departureDelayMinutes = Math.max(0, Math.ceil((maxVolArrivalBaseTs - nominalRdvTs) / (60 * 1000)));
+    const effectiveDepartureDate = new Date(nominalRdvTs + (departureDelayMinutes * 60 * 1000));
+    const effectiveStartDate = new Date(plannedStartDate.getTime() + (departureDelayMinutes * 60 * 1000));
+
+    // Mémorisation sur l'objet mission pour lecture directe dans toute l'application
+    mission.departureDelayMinutes = departureDelayMinutes;
+    mission.effectiveDepartureDate = effectiveDepartureDate;
+    mission.effectiveStartDate = effectiveStartDate;
+    mission.nominalRdvDate = nominalRdvDate;
+
+    return {
+      plannedStartDate,
+      transitMinutes,
+      advanceMinutes,
+      nominalRdvDate,
+      effectiveDepartureDate,
+      effectiveStartDate,
+      departureDelayMinutes,
+      isDelayed: departureDelayMinutes > 0,
+      delayedVolunteers,
+      volunteersSchedule,
+      maxVolArrivalBaseTs
+    };
+  }
+
+  registerVolunteerToMission(mission, volunteerId, notifyDelay = true) {
+    if (!mission || !volunteerId) return false;
+    if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
+
+    if (!mission.registeredVolunteers.includes(volunteerId)) {
+      mission.registeredVolunteers.push(volunteerId);
+    }
+
+    if (!mission.volunteerJoinedAt || typeof mission.volunteerJoinedAt !== 'object') {
+      mission.volunteerJoinedAt = {};
+    }
+    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+    if (!mission.volunteerJoinedAt[volunteerId]) {
+      mission.volunteerJoinedAt[volunteerId] = nowTs;
+    }
+
+    const vol = (this.volunteers || []).find(v => v.id === volunteerId);
+    const schedule = this.getMissionDepartureAndArrivalSchedule(mission);
+
+    if (notifyDelay && vol && schedule.isDelayed) {
+      const volSchedule = schedule.volunteersSchedule.find(s => s.vol.id === volunteerId);
+      if (volSchedule && volSchedule.isDelayed) {
+        const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+        const rdvStr = formatH(schedule.nominalRdvDate);
+        const arrStr = formatH(new Date(volSchedule.arrivalBaseAt));
+        const newDepartStr = formatH(schedule.effectiveDepartureDate);
+        const newPosteStr = formatH(schedule.effectiveStartDate);
+
+        this.showToast(
+          '⏱️ Départ Décalé (Temps de Trajet)',
+          `${vol.name} a ${volSchedule.rallyMin} min de trajet domicile ➔ base (RDV initial à ${rdvStr}). Arrivée à la base estimée à ${arrStr}. Son véhicule partira avec ${schedule.departureDelayMinutes} min de retard (${newDepartStr}) et arrivera sur site avec ${schedule.departureDelayMinutes} min de retard (${newPosteStr}).`,
+          'orange'
+        );
+      }
+    }
+
+    return true;
+  }
+
+
+
   // --- INITIALISATION DU MULTIJOUEUR ---
   initMultiplayer() {
     this.isBackendOnline = false;
@@ -10994,6 +11180,22 @@ class ProtecGame {
       return;
     }
 
+    // Contrôle du temps de trajet des secouristes : L'engin ne peut pas partir si un secouriste est encore en route vers la base !
+    const schedule = this.getMissionDepartureAndArrivalSchedule(mission);
+    const serverNow = Date.now() + (this.serverTimeOffset || 0);
+
+    if (serverNow < schedule.effectiveDepartureDate.getTime()) {
+      const minsLeft = Math.max(1, Math.ceil((schedule.effectiveDepartureDate.getTime() - serverNow) / 60000));
+      const lateVols = (schedule.delayedVolunteers || []).map(d => `${d.vol.name} (~${Math.max(1, Math.ceil((d.arrivalBaseAt - serverNow) / 60000))} min)`).join(', ') || 'un secouriste';
+      const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+      this.showToast(
+        'Ralliement Équipage en Cours ⏱️',
+        `Départ impossible : tout l'équipage n'est pas encore réuni à la base (${lateVols} en route). L'engin partira dès l'arrivée au complet à ${formatH(schedule.effectiveDepartureDate)} (dans ~${minsLeft} min, avec ${schedule.departureDelayMinutes} min de retard).`,
+        'orange'
+      );
+      return;
+    }
+
     // Contrôle de l'équipe médicale requise (courses, crises, événements dangereux)
     const medStatus = this.getMissionMedicalStatus(mission);
     if (medStatus.required) {
@@ -11223,7 +11425,7 @@ class ProtecGame {
         window.ProtecAPI.updateInterventionStatut(bId, 'engagee');
       }
     }
-    const serverNow = Date.now() + (this.serverTimeOffset || 0);
+    serverNow = Date.now() + (this.serverTimeOffset || 0);
     mission.startedAt = serverNow;
     if (!mission.durationSeconds) {
       if (mission.type === 'samu') mission.durationSeconds = 25 * 60; // 25 min réelles
@@ -11282,7 +11484,17 @@ class ProtecGame {
     // Fermeture du drawer pour laisser le joueur observer le véhicule rouler sur la carte
     this.closeDrawer();
     const vehNames = assignedVehicles.map(v => v.name).join(', ') || 'Véhicule d’intervention';
-    this.showToast('Départ en Mission 🚑', `L'équipage et ${vehNames} font route vers « ${mission.title} ». Suivez leur déplacement sur la carte !`, 'blue');
+    const scheduleAtDeparture = this.getMissionDepartureAndArrivalSchedule(mission);
+    const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+    if (scheduleAtDeparture.departureDelayMinutes > 0) {
+      this.showToast(
+        'Départ en Mission 🚑 (Retard)',
+        `L'équipage et ${vehNames} partent avec ${scheduleAtDeparture.departureDelayMinutes} min de retard (ralliement secouriste tardif). Arrivée sur site estimée à ${formatH(scheduleAtDeparture.effectiveStartDate)} au lieu de ${formatH(scheduleAtDeparture.plannedStartDate)}.`,
+        'orange'
+      );
+    } else {
+      this.showToast('Départ en Mission 🚑', `L'équipage et ${vehNames} font route vers « ${mission.title} ». Suivez leur déplacement sur la carte !`, 'blue');
+    }
   }
 
   completeMission(mission) {
@@ -15060,15 +15272,13 @@ class ProtecGame {
     const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
     const rawDist = Math.hypot(dLat, dLng);
     const distKm = Math.max(1, Math.round(rawDist * 10) / 10);
-    const isUrgency = ['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche';
-    const assignedVehicles = (mission.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
-    const hasBeacon = assignedVehicles.length > 0
-      ? assignedVehicles.every(v => v.type === 'VPSP' || v.hasLedBar || v.hasBeacon || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /gyrophare|rampe led|led/i.test(o))))
-      : (mission.type === 'samu' || mission.type === 'pompiers');
-    const speedKmh = (isUrgency && hasBeacon) ? 48 : 35;
-    const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
-    const advanceMinutes = Math.max(5, Math.ceil(transitMinutes / 5) * 5);
-    const rdvBaseDate = new Date(startDate.getTime() - advanceMinutes * 60 * 1000);
+    const schedule = this.getMissionDepartureAndArrivalSchedule(mission);
+    const transitMinutes = schedule.transitMinutes;
+    const advanceMinutes = schedule.advanceMinutes;
+    const rdvBaseDate = schedule.effectiveDepartureDate;
+    const nominalRdvDate = schedule.nominalRdvDate;
+    const effectiveStartDate = schedule.effectiveStartDate;
+    const departureDelayMinutes = schedule.departureDelayMinutes;
 
     const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
     
@@ -15078,10 +15288,10 @@ class ProtecGame {
     const isImmediateMobilisation = mission.status === 'ongoing' || 
                                    mission.status === 'declenche' || 
                                    mission.status === 'prealerte' || 
-                                   isUrgency || 
+                                   (['samu', 'pompiers', 'crise'].includes(mission.type) || ['critique', 'haute'].includes(mission.urgency) || mission.status === 'declenche') || 
                                    isPastRdv;
-    const rdvBaseStr = isImmediateMobilisation ? 'Immédiat' : formatH(rdvBaseDate);
-    const debutEventStr = formatH(startDate);
+    const rdvBaseStr = isImmediateMobilisation ? 'Immédiat' : (departureDelayMinutes > 0 ? `${formatH(rdvBaseDate)} (+${departureDelayMinutes}m)` : formatH(rdvBaseDate));
+    const debutEventStr = (departureDelayMinutes > 0 ? `${formatH(effectiveStartDate)} (+${departureDelayMinutes}m)` : formatH(startDate));
 
     // RÈGLE MÉTIER : Sur les alertes, pas d'heure de fin prédéterminée si situation évolutive.
     // On ne l'affiche qu'une fois presque terminée (phase de repli / stabilisation).
@@ -15608,15 +15818,31 @@ class ProtecGame {
 
               <!-- 3 Horaires Clés indispensables (eProtec / eBrigade) -->
               <div class="grid grid-cols-3 gap-2 text-center text-xs pt-0.5">
-                <div class="p-2.5 rounded-xl bg-amber-50/80 border border-amber-200 shadow-2xs">
+                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 ? 'bg-amber-100/90 border-amber-300 ring-1 ring-amber-400' : 'bg-amber-50/80 border-amber-200'} shadow-2xs">
                   <span class="text-[9px] uppercase font-black text-amber-800 block">${term.rdvLabel}</span>
-                  <strong class="text-xs font-black text-amber-950 block my-0.5">${rdvBaseStr}</strong>
-                  <span class="text-[8px] text-amber-700 block">Départ Antenne (~${transitMinutes} min route)</span>
+                  ${departureDelayMinutes > 0 ? `
+                    <div class="my-0.5">
+                      <span class="text-[10px] text-slate-400 line-through mr-1">${formatH(nominalRdvDate)}</span>
+                      <strong class="text-xs font-black text-amber-950 inline-block">${formatH(schedule.effectiveDepartureDate)}</strong>
+                    </div>
+                    <span class="text-[8px] font-bold text-amber-700 block">Départ différé (+${departureDelayMinutes} min)</span>
+                  ` : `
+                    <strong class="text-xs font-black text-amber-950 block my-0.5">${rdvBaseStr}</strong>
+                    <span class="text-[8px] text-amber-700 block">Départ Antenne (~${transitMinutes} min route)</span>
+                  `}
                 </div>
-                <div class="p-2.5 rounded-xl bg-sky-50/80 border border-sky-200 shadow-2xs">
-                  <span class="text-[9px] uppercase font-black text-sky-800 block">${term.startLabel}</span>
-                  <strong class="text-xs font-black text-sky-950 block my-0.5">${debutEventStr}</strong>
-                  <span class="text-[8px] text-sky-700 block">Sur site</span>
+                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 ? 'bg-orange-100/90 border-orange-300 ring-1 ring-orange-400' : 'bg-sky-50/80 border-sky-200'} shadow-2xs">
+                  <span class="text-[9px] uppercase font-black ${departureDelayMinutes > 0 ? 'text-orange-900' : 'text-sky-800'} block">${term.startLabel}</span>
+                  ${departureDelayMinutes > 0 ? `
+                    <div class="my-0.5">
+                      <span class="text-[10px] text-slate-400 line-through mr-1">${formatH(schedule.plannedStartDate)}</span>
+                      <strong class="text-xs font-black text-orange-950 inline-block">${formatH(schedule.effectiveStartDate)}</strong>
+                    </div>
+                    <span class="text-[8px] font-bold text-orange-700 block">Arrivée retardée (+${departureDelayMinutes} min)</span>
+                  ` : `
+                    <strong class="text-xs font-black text-sky-950 block my-0.5">${debutEventStr}</strong>
+                    <span class="text-[8px] text-sky-700 block">Sur site</span>
+                  `}
                 </div>
                 <div class="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200 shadow-2xs">
                   <span class="text-[9px] uppercase font-black text-indigo-800 block">${term.endLabel}</span>
@@ -15624,6 +15850,18 @@ class ProtecGame {
                   <span class="text-[8px] text-indigo-700 block">${finEventSub}</span>
                 </div>
               </div>
+
+              ${departureDelayMinutes > 0 ? `
+                <div class="p-3 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 text-xs flex items-center gap-2.5 shadow-2xs animate-in fade-in">
+                  <i data-lucide="clock" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                  <div class="leading-tight">
+                    <span class="font-black text-amber-900 block">Départ et Arrivée différés de +${departureDelayMinutes} min :</span>
+                    <span class="text-[11px] text-amber-800">
+                      ${schedule.delayedVolunteers.map(d => `<strong>${d.vol.name}</strong> a ${d.rallyMin} min de trajet (arrivée base : ${formatH(new Date(d.arrivalBaseAt))})`).join(', ')}. L'engin attendra son arrivée complète avant de quitter la base.
+                    </span>
+                  </div>
+                </div>
+              ` : ''}
 
               <!-- Lieu / Adresse -->
               <div onclick="window.game.centerMapOnMission('${mission.id}')" class="flex items-center justify-between gap-2 text-xs text-slate-800 font-bold bg-sky-50/80 hover:bg-sky-100 p-2.5 rounded-xl border border-sky-200 cursor-pointer transition shadow-2xs group" title="Cliquer pour centrer la carte sur cette adresse">
@@ -16421,11 +16659,20 @@ class ProtecGame {
                                 `;
                               }
 
-                              // Mission programmée (DPS, Garde SAMU, Garde SDIS) : la gestion du départ vers la base se fait automatiquement pour être présent à l'heure du RDV
+                              // Mission programmée : prise en compte du trajet individuel de chaque secouriste
+                              const volSched = (schedule.volunteersSchedule || []).find(s => s.vol.id === v.id);
+                              if (volSched && volSched.isDelayed) {
+                                return `
+                                  <span class="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1" title="Secouriste engagé avec ${volSched.rallyMin} min de trajet : arrivée base estimée à ${formatH(new Date(volSched.arrivalBaseAt))} (+ ${volSched.delayMinutes} min retard pour l'équipage)">
+                                    <i data-lucide="clock" class="w-3 h-3 text-amber-700"></i>
+                                    <span>Trajet : ~${volSched.rallyMin}m • Base : ${formatH(new Date(volSched.arrivalBaseAt))} (+${volSched.delayMinutes}m)</span>
+                                  </span>
+                                `;
+                              }
                               return `
-                                <span class="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1" title="Départ automatique pour être présent à la base à l'heure du RDV (${rdvBaseStr})">
+                                <span class="px-2 py-1 rounded-lg text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1" title="Départ automatique pour être présent à la base à l'heure du RDV (${formatH(schedule.effectiveDepartureDate)})">
                                   <i data-lucide="clock" class="w-3 h-3 text-emerald-600"></i>
-                                  <span>RDV Base : ${rdvBaseStr}</span>
+                                  <span>RDV Base : ${formatH(schedule.effectiveDepartureDate)}</span>
                                 </span>
                               `;
                             })()}
@@ -17447,9 +17694,9 @@ class ProtecGame {
           `
         ) : (
           isComplete ? `
-            <div class="flex-1 min-w-[160px] px-3.5 py-2.5 rounded-xl text-center text-xs font-black bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="L'équipage est au complet. Le départ aura lieu automatiquement à l'heure du RDV Base (${rdvBaseStr}) pour arriver sur site à ${debutEventStr}.">
-              <i data-lucide="clock" class="w-4 h-4 text-emerald-600 shrink-0"></i>
-              <span>Équipe Complète • Départ auto à ${rdvBaseStr}</span>
+            <div class="flex-1 min-w-[160px] px-3.5 py-2.5 rounded-xl text-center text-xs font-black ${departureDelayMinutes > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'} shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="${departureDelayMinutes > 0 ? `L'équipage est au complet mais en cours de ralliement. Départ du véhicule prévu à ${formatH(schedule.effectiveDepartureDate)} (+${departureDelayMinutes} min) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.` : `L'équipage est au complet. Le départ aura lieu automatiquement à l'heure du RDV Base (${formatH(schedule.effectiveDepartureDate)}) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.`}">
+              <i data-lucide="clock" class="w-4 h-4 ${departureDelayMinutes > 0 ? 'text-amber-600' : 'text-emerald-600'} shrink-0"></i>
+              <span>Équipe Complète • ${departureDelayMinutes > 0 ? `Départ retardé à ${formatH(schedule.effectiveDepartureDate)} (+${departureDelayMinutes}m)` : `Départ auto à ${formatH(schedule.effectiveDepartureDate)}`}</span>
             </div>
           ` : `
             ${(mission.isRenfort || mission.isOptionalRenfort) && !mission.willProvideRenfort ? `
@@ -26110,23 +26357,13 @@ class ProtecGame {
             const plannedStartDate = new Date(m.eventDate?.year || now.getFullYear(), m.eventDate?.month !== undefined ? m.eventDate.month : now.getMonth(), m.eventDate?.day || now.getDate(), targetHour, targetMinute, 0);
             const plannedEndDate = new Date(plannedStartDate.getTime() + (durHours * 3600 * 1000));
 
-            // Calcul précis du temps de trajet et de l'arrondi supérieur à 5 minutes pour le RDV Base
-            const station = this.stations && this.stations.length > 0 ? this.stations[0] : { lat: 48.8566, lng: 2.3522 };
-            const destLat = m.lat || station.lat;
-            const destLng = m.lng || station.lng;
-            const dLat = (destLat - station.lat) * 111;
-            const dLng = (destLng - station.lng) * 111 * Math.cos(station.lat * Math.PI / 180);
-            const rawDist = Math.hypot(dLat, dLng);
-            const distKm = Math.max(1.2, Math.round(rawDist * 1.25 * 10) / 10);
-            const isUrgency = ['samu', 'pompiers', 'crise'].includes(m.type) || ['critique', 'haute'].includes(m.urgency) || m.status === 'declenche';
-            const assignedVehicles = (m.registeredVehicles || []).map(vId => (this.vehicles || []).find(v => v.id === vId)).filter(Boolean);
-            const hasBeacon = assignedVehicles.length > 0
-              ? assignedVehicles.every(v => v.type === 'VPSP' || v.hasLedBar || v.hasBeacon || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /gyrophare|rampe led|led/i.test(o))))
-              : (m.type === 'samu' || m.type === 'pompiers');
-            const speedKmh = (isUrgency && hasBeacon) ? 48 : 35;
-            const transitMinutes = Math.max(5, Math.round((distKm / speedKmh) * 60));
-            const advanceMinutes = Math.max(5, Math.ceil(transitMinutes / 5) * 5);
-            const departureDate = new Date(plannedStartDate.getTime() - advanceMinutes * 60 * 1000);
+            // Ordonnancement réaliste prenant en compte le trajet de chaque secouriste engagé
+            const schedule = this.getMissionDepartureAndArrivalSchedule(m, now);
+            const transitMinutes = schedule.transitMinutes;
+            const advanceMinutes = schedule.advanceMinutes;
+            const departureDate = schedule.effectiveDepartureDate;
+            const nominalRdvDate = schedule.nominalRdvDate;
+            const effectiveStartDate = schedule.effectiveStartDate;
             const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
 
             const term = this.getMissionTerminology(m);
@@ -26183,20 +26420,19 @@ class ProtecGame {
                 }
               }, 6000);
             } else {
-              // Déclenchement automatique dès l'heure de départ (RDV Base) atteinte
+              // Déclenchement automatique dès l'heure de départ effective atteinte (après ralliement des secouristes)
               const isDepartureReached = currentTime >= departureDate.getTime();
-              const isPosteHourReached = currentTime >= plannedStartDate.getTime();
+              const isPosteHourReached = currentTime >= effectiveStartDate.getTime();
 
               if (isDepartureReached) {
                 const registered = m.registeredVolunteers?.length || 0;
                 if (registered >= m.requiredVolunteers && !m.autoLaunched) {
                   m.autoLaunched = true;
                   this.launchScheduledMission(m.id);
-                  this.showToast('Départ en Mission 🚑', term.departureToast(formatH(departureDate)), 'blue');
                 } else if (registered < m.requiredVolunteers) {
                   if (isPosteHourReached && !m.alertLateShown) {
                     m.alertLateShown = true;
-                    this.showToast(term.lateTitle, term.lateMsg(formatH(plannedStartDate), registered, m.requiredVolunteers), 'orange');
+                    this.showToast(term.lateTitle, term.lateMsg(formatH(effectiveStartDate), registered, m.requiredVolunteers), 'orange');
                   } else if (!isPosteHourReached && !m.alertDepartureLateShown) {
                     m.alertDepartureLateShown = true;
                     this.showToast(term.lateDepartureTitle, term.departureLateMsg(formatH(departureDate), registered, m.requiredVolunteers), 'orange');
