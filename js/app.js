@@ -20120,11 +20120,12 @@ class ProtecGame {
       'pompiers': 'missions',
       'social': 'missions',
       'crise': 'missions',
+      'subventions': 'missions',
 
       'recrutement': 'rh',
       'formation': 'rh',
       'poles': 'rh',
-      'communication': 'liaisons',
+      'communication': 'rh',
       'competences': 'rh',
 
       'base': 'antenne',
@@ -20142,14 +20143,22 @@ class ProtecGame {
       'occasion': 'antenne',
       'antenne_messages': 'antenne',
       'messages': 'antenne',
+      'boutiques': 'antenne',
+      'boutique': 'antenne',
+      'magasin': 'antenne',
+      'magasins': 'antenne',
+      'equipements': 'antenne',
+      'equipement': 'antenne',
 
       'tchat': 'liaisons',
       'messagerie': 'liaisons',
       'alliance': 'liaisons',
       'meteo': 'liaisons',
+      'apc': 'liaisons',
+      'ecussons': 'liaisons',
+      'evenements': 'liaisons',
 
-      'finances': 'finances',
-      'subventions': 'finances'
+      'finances': 'finances'
     };
     return categories[moduleKey] || null;
   }
@@ -20226,13 +20235,13 @@ class ProtecGame {
         { key: 'samu', label: 'SAMU 15', icon: 'activity', count: samuCount },
         { key: 'pompiers', label: 'Garde SDIS', icon: 'flame', count: sdisCount },
         { key: 'social', label: 'Action Sociale', icon: 'heart-handshake', count: socialCount },
-
         { key: 'crise', label: 'Crise NOVI', icon: 'siren', count: criseCount }
       ],
       antenne: [
         { key: 'antenne_messages', label: 'Messages', icon: 'message-square', count: window.ProtecAntenneMessages ? window.ProtecAntenneMessages.getUnreadCount(this) : 0 },
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
+        { key: 'boutiques', label: 'Boutiques & Magasins', icon: 'shopping-bag' },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
         { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
@@ -20241,24 +20250,22 @@ class ProtecGame {
         { key: 'antenne_messages', label: 'Messages', icon: 'message-square', count: window.ProtecAntenneMessages ? window.ProtecAntenneMessages.getUnreadCount(this) : 0 },
         { key: 'locaux', label: 'Bâtiment (Plan 2D)', icon: 'layout-grid' },
         { key: 'flotte', label: 'Flotte (Véhicules)', icon: 'truck', count: this.vehicles?.length || 0 },
+        { key: 'boutiques', label: 'Boutiques & Magasins', icon: 'shopping-bag' },
         { key: 'logistique', label: 'Logistique & Stocks', icon: 'package-check' },
         { key: 'specialites', label: 'Spécialités', icon: 'crosshair' },
         { key: 'marche_occasion', label: 'Marché Occasion', icon: 'tag' }
       ],
       rh: [
         { key: 'recrutement', label: 'Bénévoles & Équipe', icon: 'users', count: this.volunteers?.length || 0 },
-        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' }
+        { key: 'poles', label: 'Pôles d\'Antenne', icon: 'layers' },
+        { key: 'communication', label: 'Communication & Notoriété', icon: 'megaphone' }
       ],
       liaisons: [
         { key: 'tchat', label: 'Messagerie & MP', icon: 'message-square' },
         { key: 'alliance', label: 'Alliances', icon: 'handshake', count: this.renforts?.filter(r => r.status === 'open').length || 0 },
-        { key: 'communication', label: 'Communication & Médias', icon: 'megaphone' },
+        { key: 'apc', label: 'APC Départementale', icon: 'landmark' },
+        { key: 'ecussons', label: 'Écussons', icon: 'shield' },
         { key: 'meteo', label: 'Météo-France', icon: 'cloud-sun' }
-      ],
-      finances: [
-        { key: 'finances', label: 'Trésorerie & Bilan', icon: 'wallet' },
-        { key: 'subventions', label: 'Subventions Publiques', icon: 'landmark' },
-        { key: 'conventions', label: 'Conventions', icon: 'file-text' }
       ]
     };
 
@@ -20276,7 +20283,16 @@ class ProtecGame {
     subnavEl.innerHTML = `
       <div class="flex items-center gap-2 flex-nowrap min-w-max py-0.5">
         ${unlockedItems.map(item => {
-          const isActive = item.key === currentModuleKey;
+          let isActive = item.key === currentModuleKey;
+          if (currentModuleKey === 'planning') {
+            if (this.activePlanningTab === 'devis') {
+              isActive = item.key === 'devis';
+            } else {
+              isActive = item.key === 'planning';
+            }
+          } else if (currentModuleKey === 'subventions') {
+            isActive = item.key === 'social';
+          }
           return `
             <button onclick="window.game.openModule('${item.key}')" 
               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${isActive 
