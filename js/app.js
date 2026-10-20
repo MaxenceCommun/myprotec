@@ -2583,16 +2583,26 @@ class ProtecGame {
     // 3. Effacement TOTAL sur Cloud Supabase (Sauvegarde, Antenne multijoueur, Profil joueur)
     try {
       if (window.ProtecSupabase && window.ProtecSupabase.client && playerId) {
-        // A. Supprimer la sauvegarde cloud du joueur
-        await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', playerId);
-        // B. Supprimer la position de l'antenne sur la carte multijoueur
-        await window.ProtecSupabase.client.from('alliance_stations').delete().eq('player_id', playerId);
-        // C. Réinitialiser le profil joueur : nom de l'antenne, département et commune effacés
-        await window.ProtecSupabase.client.from('players').update({
-          station_name: null,
-          department_code: null,
-          city: null
-        }).eq('id', playerId);
+        const isUUID = typeof playerId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(playerId);
+        if (isUUID) {
+          // A. Supprimer la sauvegarde cloud du joueur
+          await window.ProtecSupabase.client.from('game_saves').delete().eq('user_id', playerId);
+          // B. Supprimer la position de l'antenne sur la carte multijoueur
+          await window.ProtecSupabase.client.from('alliance_stations').delete().eq('player_id', playerId);
+          // C. Réinitialiser le profil joueur : nom de l'antenne, département et commune effacés
+          await window.ProtecSupabase.client.from('players').update({
+            station_name: null,
+            department_code: null,
+            city: null
+          }).eq('id', playerId);
+        } else {
+          await window.ProtecSupabase.client.from('game_saves').delete().eq('username', playerId);
+          await window.ProtecSupabase.client.from('players').update({
+            station_name: null,
+            department_code: null,
+            city: null
+          }).eq('username', playerId);
+        }
       }
     } catch (e) {
       console.warn('Erreur purge Cloud Supabase:', e);
@@ -18479,6 +18489,10 @@ class ProtecGame {
     const body = document.getElementById('drawer-body');
     const footer = document.getElementById('drawer-footer');
 
+    if (!drawer) return;
+    const isAlreadyOpen = !drawer.classList.contains('hidden');
+    const savedScrollTop = (isAlreadyOpen && body) ? body.scrollTop : 0;
+
     catBadge.textContent = 'ANTENNE OPÉRATIONNELLE';
     title.textContent = station.name;
     if (!Array.isArray(station.vehicles)) station.vehicles = [];
@@ -24176,8 +24190,16 @@ class ProtecGame {
       title.textContent = 'Récompenses & Défis';
       subtitle.textContent = 'Bonus quotidiens et objectifs d\'antenne';
       icon.setAttribute('data-lucide', 'gift');
-      if (window.ProtecAdvanced && window.ProtecAdvanced.updateTasksProgress) {
-        window.ProtecAdvanced.updateTasksProgress(this);
+      if (window.ProtecAdvanced) {
+        if (typeof window.ProtecAdvanced.injectAdvancedState === 'function') {
+          window.ProtecAdvanced.injectAdvancedState(this);
+        }
+        if (typeof window.ProtecAdvanced.syncAdaptiveTasks === 'function') {
+          window.ProtecAdvanced.syncAdaptiveTasks(this);
+        }
+        if (typeof window.ProtecAdvanced.updateTasksProgress === 'function') {
+          window.ProtecAdvanced.updateTasksProgress(this);
+        }
       }
       if (window.ProtecAdvancedModals) {
         body.innerHTML = window.ProtecAdvancedModals.renderRewards(this);

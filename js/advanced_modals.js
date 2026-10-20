@@ -5,10 +5,28 @@
 window.ProtecAdvancedModals = {
   // --- 1. MODAL RÉCOMPENSES & DÉFIS ---
   renderRewards(game) {
-    if (window.ProtecAdvanced && window.ProtecAdvanced.updateTasksProgress) {
-      window.ProtecAdvanced.updateTasksProgress(game);
+    if (window.ProtecAdvanced) {
+      if (typeof window.ProtecAdvanced.injectAdvancedState === 'function') {
+        window.ProtecAdvanced.injectAdvancedState(game);
+      }
+      if (typeof window.ProtecAdvanced.syncAdaptiveTasks === 'function') {
+        window.ProtecAdvanced.syncAdaptiveTasks(game);
+      }
+      if (typeof window.ProtecAdvanced.updateTasksProgress === 'function') {
+        window.ProtecAdvanced.updateTasksProgress(game);
+      }
     }
-    const r = game.rewards || { streakDays: 1, dailyTasks: [], weeklyTasks: [] };
+    const currentTier = window.ProtecAdvanced?.detectAntennaTier?.(game) || 1;
+    if (!game.rewards) {
+      game.rewards = { streakDays: 1, dailyTasks: [], weeklyTasks: [] };
+    }
+    if (!Array.isArray(game.rewards.dailyTasks) || game.rewards.dailyTasks.length === 0) {
+      game.rewards.dailyTasks = window.ProtecAdvanced?.getTasksForTier?.(currentTier, false) || [];
+    }
+    if (!Array.isArray(game.rewards.weeklyTasks) || game.rewards.weeklyTasks.length === 0) {
+      game.rewards.weeklyTasks = window.ProtecAdvanced?.getTasksForTier?.(currentTier, true) || [];
+    }
+    const r = game.rewards;
     const streakInfo = window.ProtecAdvanced && typeof window.ProtecAdvanced.getStreakInfo === 'function'
       ? window.ProtecAdvanced.getStreakInfo(game)
       : { streakDays: Number(r.streakDays) || 1, targetClaimDay: 1, canClaim: true, alreadyClaimedToday: false, isBroken: false, hasAntenna: true };

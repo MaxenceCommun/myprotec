@@ -1031,27 +1031,31 @@ window.ProtecAdvanced = {
     // Tentative de restauration locale immédiate de secours
     this.loadRewardsLocally(game);
 
+    const currentTier = this.detectAntennaTier(game);
+    const todayKey = this.getTodayDateKey(game);
+    const curDayNum = game.clock ? game.clock.day : new Date().getDate();
+
     if (!game.rewards) {
       game.rewards = {
         streakDays: 1,
-        tier: 1,
+        tier: currentTier,
         lastDailyClaimDay: null,
         lastDailyClaimDate: null,
         lastDailyClaimTimestamp: 0,
-        lastDailyTaskResetDate: this.getTodayDateKey(game),
-        lastDailyTaskResetDay: game.clock ? game.clock.day : new Date().getDate(),
-        dailyTasks: this.getTasksForTier(1, false),
-        weeklyTasks: this.getTasksForTier(1, true)
+        lastDailyTaskResetDate: todayKey,
+        lastDailyTaskResetDay: curDayNum,
+        dailyTasks: this.getTasksForTier(currentTier, false),
+        weeklyTasks: this.getTasksForTier(currentTier, true)
       };
     } else {
-      if (!game.rewards.tier) game.rewards.tier = this.detectAntennaTier(game);
-      if (!game.rewards.lastDailyTaskResetDate) game.rewards.lastDailyTaskResetDate = this.getTodayDateKey(game);
-      const hasAntenna = game.stations && game.stations.length > 0;
-      if (!hasAntenna && (!game.rewards.dailyTasks || game.rewards.dailyTasks.length === 0)) {
-        game.rewards.tier = 1;
-        game.rewards.dailyTasks = this.getTasksForTier(1, false);
-        game.rewards.weeklyTasks = this.getTasksForTier(1, true);
-        if (game.grants) game.grants.totalVolunteerHours = 0;
+      if (!game.rewards.tier) game.rewards.tier = currentTier;
+      if (!game.rewards.lastDailyTaskResetDate) game.rewards.lastDailyTaskResetDate = todayKey;
+      if (!game.rewards.lastDailyTaskResetDay) game.rewards.lastDailyTaskResetDay = curDayNum;
+      if (!Array.isArray(game.rewards.dailyTasks) || game.rewards.dailyTasks.length === 0) {
+        game.rewards.dailyTasks = this.getTasksForTier(game.rewards.tier || currentTier, false);
+      }
+      if (!Array.isArray(game.rewards.weeklyTasks) || game.rewards.weeklyTasks.length === 0) {
+        game.rewards.weeklyTasks = this.getTasksForTier(game.rewards.tier || currentTier, true);
       }
     }
 
@@ -1572,7 +1576,17 @@ window.ProtecAdvanced = {
 
   // Calcul dynamique de la progression réelle des objectifs
   updateTasksProgress(game) {
-    if (!game.rewards) return;
+    if (!game) return;
+    if (!game.rewards) {
+      this.injectAdvancedState(game);
+    }
+    const currentTier = this.detectAntennaTier(game);
+    if (!Array.isArray(game.rewards.dailyTasks) || game.rewards.dailyTasks.length === 0) {
+      game.rewards.dailyTasks = this.getTasksForTier(game.rewards.tier || currentTier, false);
+    }
+    if (!Array.isArray(game.rewards.weeklyTasks) || game.rewards.weeklyTasks.length === 0) {
+      game.rewards.weeklyTasks = this.getTasksForTier(game.rewards.tier || currentTier, true);
+    }
 
     const hasAntenna = game.stations && game.stations.length > 0;
     if (!hasAntenna) {
