@@ -20327,6 +20327,12 @@ class ProtecGame {
       'occasion': 'marche_occasion',
       'marche_occasion': 'marche_occasion',
       'formations': 'formation',
+      'boutique': 'boutiques',
+      'boutiques': 'boutiques',
+      'magasin': 'boutiques',
+      'magasins': 'boutiques',
+      'shopping': 'boutiques',
+      'courses': 'boutiques',
       'boutique_vehicules': 'boutique_vehicules',
       'boutique_vehicule': 'boutique_vehicules',
       'achat_vehicule': 'boutique_vehicules',
@@ -23289,6 +23295,12 @@ class ProtecGame {
       // Le module Radio PC permanent a été retiré (la gestion de crise assure la main courante lors des sinistres)
       this.openModule('tchat', isBackNavigation);
       return;
+    } else if (moduleKey === 'boutiques' || moduleKey === 'boutique' || moduleKey === 'magasins' || moduleKey === 'shopping') {
+      if (window.ProtecBoutiques) {
+        window.ProtecBoutiques.renderModal(this);
+      } else if (window.ProtecLogistique) {
+        window.ProtecLogistique.renderModal(this);
+      }
     } else if (moduleKey === 'logistique') {
       if (window.ProtecLogistique) {
         window.ProtecLogistique.renderModal(this);

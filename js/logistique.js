@@ -10,7 +10,7 @@
  */
 
 window.ProtecLogistique = {
-  activeTab: 'boutique', // 'boutique', 'stock', 'flotte'
+  activeTab: 'stock', // 'stock', 'livraisons', 'flotte', 'radios'
   selectedCategory: 'all',
   selectedStationId: null,
   searchQuery: '',
@@ -1230,10 +1230,9 @@ window.ProtecLogistique = {
 
           <!-- Onglets Principaux [ Boutique | Livraisons | Stock | Flotte ] -->
           <div class="flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200 text-xs font-black self-start md:self-auto flex-wrap">
-            <button onclick="window.ProtecLogistique.setTab('boutique')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'boutique' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+            <button onclick="window.game.openModule('boutiques')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 bg-gradient-to-r from-pc-blue to-indigo-600 text-white shadow-xs hover:brightness-110">
               <i data-lucide="shopping-bag" class="w-4 h-4"></i>
-              <span>Boutique en Ligne</span>
-              ${cartCount > 0 ? `<span class="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-400 text-slate-900 font-black">${cartCount}</span>` : ''}
+              <span>Ouvrir les Boutiques (Galeries)</span>
             </button>
             <button onclick="window.ProtecLogistique.setTab('radios')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'radios' ? 'bg-indigo-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
               <i data-lucide="radio" class="w-4 h-4"></i>
