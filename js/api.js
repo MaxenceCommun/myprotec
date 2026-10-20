@@ -150,14 +150,13 @@
       const hasSamu = Boolean(game.samuConvention && game.samuConvention.signed && game.samuGarde && game.samuGarde.active);
       const hasSdis = Boolean(game.sdisConvention && game.sdisConvention.signed && game.sdisGarde && game.sdisGarde.active);
       const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
-      const hasAnyVehicle = Array.isArray(game.vehicles) && game.vehicles.length > 0;
 
       game.missions = game.missions.filter(m => {
         if (!m) return false;
         if ((m.type === 'samu' || m.type === 'garde_samu') && !hasSamu) return false;
         if ((m.type === 'pompiers' || m.type === 'garde_sdis') && !hasSdis) return false;
         if (m.type === 'crise' && !hasAasc) return false;
-        if (m.isBackendIntervention && m.type === 'dps' && Array.isArray(m.requiredVehicles) && m.requiredVehicles.length > 0 && !hasAnyVehicle) return false;
+        // Aucun verrou sur les DPS : chaque antenne reçoit régulièrement ses demandes de DPS
         return true;
       });
     },
@@ -178,10 +177,12 @@
         try { game.playSound('alert'); } catch (e) {}
       }
 
-      // Notification visuelle Push & Toasts
+      // Notification visuelle Push & Toasts (titre assaini, aucun faux 'Renfort DPS' généré automatiquement)
+      const rawTitle = intervention.titre || 'Intervention';
+      const cleanTitle = rawTitle.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\brenfort\s+poste\b/gi, 'Poste').replace(/\brenfort\s+/gi, '').trim();
       const severityUpper = (intervention.gravite || 'Urgence').toUpperCase();
       const title = `🚨 NOUVELLE INTERVENTION (${severityUpper})`;
-      const desc = `${intervention.titre || 'Intervention'} à ${intervention.commune || 'Secteur'}. Moyens : ${(intervention.vehicules_requis || []).join(', ') || 'Véhicules requis'}`;
+      const desc = `${cleanTitle} à ${intervention.commune || 'Secteur'}. Moyens : ${(intervention.vehicules_requis || []).join(', ') || 'Équipe de secours'}`;
 
       if (window.ProtecNotifications && typeof window.ProtecNotifications.notifyCategory === 'function') {
         window.ProtecNotifications.notifyCategory('alert', title, desc, `interv-${intervention.id}`);
@@ -273,10 +274,16 @@
       if (interv.statut === 'engagee') clientStatus = 'ongoing';
       else if (interv.statut === 'terminee') clientStatus = 'completed';
 
+      // Assainissement : la notion de "renfort" n'est jamais générée automatiquement pour les DPS (réservée aux demandes manuelles entre joueurs)
+      const rawTitle = interv.titre || 'Intervention Opérationnelle';
+      const sanitizedTitle = rawTitle.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\brenfort\s+poste\b/gi, 'Poste de secours').replace(/\brenfort\s+/gi, '').trim();
+      const rawDesc = interv.description || 'Intervention déclenchée par le centre opérationnel.';
+      const sanitizedDesc = rawDesc.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\ben\s+renfort\s+dps\b/gi, 'en poste de secours').trim();
+
       // Détermination rigoureuse du type de mission
       let missionType = 'pompiers';
-      const titleLower = (interv.titre || '').toLowerCase();
-      if (/dps|renfort dps|poste de secours|sportif|course|trail|match|stade/i.test(titleLower)) {
+      const titleLower = sanitizedTitle.toLowerCase();
+      if (/dps|poste de secours|sportif|course|trail|match|stade/i.test(titleLower)) {
         missionType = 'dps';
       } else if (/hébergement|soutien logistique|crise|inondation|évacuation|plan blanc|novi/i.test(titleLower)) {
         missionType = 'crise';
@@ -338,24 +345,12 @@
         }
       }
 
-      // 4. Mission DPS / Renfort DPS : Exige la capacité matérielle minimale (au moins 1 véhicule adapté si requis)
-      if (missionType === 'dps') {
-        const playerVehicles = Array.isArray(game.vehicles) ? game.vehicles : [];
-        const needsVehicles = reqVehicles.length > 0;
-        const hasAnyVehicle = playerVehicles.length > 0;
-
-        if (needsVehicles && !hasAnyVehicle) {
-          // L'antenne n'a encore aucun véhicule dans son hangar pour honorer ce renfort DPS (VPSP / VL)
-          if (existing) {
-            game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
-          }
-          return null;
-        }
-      }
+      // 4. Mission DPS : Aucun verrou matériel préalable.
+      // Chaque antenne reçoit régulièrement ses demandes de DPS. Les renforts sont gérés manuellement par les joueurs.
 
       if (existing) {
-        existing.title = interv.titre || existing.title;
-        existing.desc = interv.description || existing.desc;
+        existing.title = sanitizedTitle || existing.title;
+        existing.desc = sanitizedDesc || existing.desc;
         existing.commune = interv.commune || existing.commune;
         existing.city = interv.commune || existing.city;
         existing.address = interv.commune ? `${interv.commune} (Secteur d'intervention)` : existing.address;
@@ -366,6 +361,7 @@
         existing.backendStatut = interv.statut;
         existing.status = clientStatus;
         existing.type = missionType;
+        existing.isRenfort = false;
         existing.requiredVehicles = reqVehicles;
         existing.requiredVolunteers = reqVolunteers;
         existing.urgency = interv.gravite || existing.urgency;
@@ -377,8 +373,9 @@
         id: missionId,
         backendId: interv.id,
         isBackendIntervention: true,
-        title: interv.titre || 'Intervention Opérationnelle',
-        desc: interv.description || 'Intervention déclenchée par le centre opérationnel.',
+        isRenfort: false,
+        title: sanitizedTitle,
+        desc: sanitizedDesc,
         commune: interv.commune || 'Secteur d’intervention',
         city: interv.commune || 'Secteur d’intervention',
         address: interv.commune ? `${interv.commune} (Secteur d'intervention)` : 'Sur secteur',
