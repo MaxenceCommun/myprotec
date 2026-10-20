@@ -357,7 +357,7 @@ window.ProtecPWA = {
               <span class="text-base">🚀</span> Accès direct en 1 clic
             </div>
             <div class="p-2.5 rounded-2xl bg-emerald-50/80 border border-emerald-100 flex items-center gap-2">
-              <span class="text-base">📶</span> Fonctionne hors-ligne
+              <span class="text-base">⚡</span> Chargement instantané
             </div>
             <div class="p-2.5 rounded-2xl bg-amber-50/80 border border-amber-100 flex items-center gap-2">
               <span class="text-base">🔔</span> Alertes d'urgence réelles
