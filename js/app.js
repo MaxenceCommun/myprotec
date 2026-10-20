@@ -6070,15 +6070,15 @@ class ProtecGame {
     this.saveGame();
   }
 
-  // Récupère les antennes secondaires réelles du joueur pouvant fournir des renforts en moyens propres
+  // Récupère les antennes des autres joueurs réels du réseau FNPC pouvant fournir des renforts
   getAvailableReinforcementSources(mission, equipageType = 'vpsp') {
     const sources = [];
     if (!mission) return sources;
 
     const missionLat = mission.lat || (this.stations?.[0]?.lat) || 48.8566;
     const missionLng = mission.lng || (this.stations?.[0]?.lng) || 2.3522;
-    const myPrimaryStation = this.stations?.[0] || { city: 'Nancy', departmentCode: '54', lat: missionLat, lng: missionLng };
-    const myDept = mission.departmentCode || myPrimaryStation.departmentCode || '54';
+    const myStation = this.stations?.[0] || { city: 'Lunéville', departmentCode: '54', lat: missionLat, lng: missionLng };
+    const myDept = mission.departmentCode || myStation.departmentCode || '54';
 
     const calcDist = (lat, lng) => {
       if (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function') {
@@ -6087,102 +6087,43 @@ class ProtecGame {
       return Math.hypot((missionLat - lat) * 111, (missionLng - lng) * 111 * Math.cos(missionLat * Math.PI / 180));
     };
 
-    // Antennes secondaires réelles appartenant au joueur
-    if (Array.isArray(this.stations) && this.stations.length > 1) {
-      this.stations.forEach((st, idx) => {
-        if (idx === 0) return; // Antenne principale hôte
-        const dist = calcDist(st.lat, st.lng);
-        const cleanType = (equipageType || 'vpsp').toLowerCase();
+    // Antennes des autres directeurs d'antennes (autres joueurs réels)
+    const peerStations = Array.isArray(this.allianceStations) ? this.allianceStations : [];
+    peerStations.forEach(st => {
+      if (!st || !st.id) return;
+      if (st.playerId === this.player?.id) return; // Ne pas s'inclure soi-même
+      if (this.stations.some(s => s.id === st.id)) return; // Ne pas inclure sa propre base
 
-        // Véhicules réels présents et disponibles
-        const availableVehs = (this.vehicles || []).filter(v => 
-          v.stationId === st.id && 
-          (v.status === 'dispo' || v.status === 'disponible') &&
-          (!cleanType || (v.type || '').toLowerCase() === cleanType)
-        );
+      const dist = calcDist(st.lat || missionLat, st.lng || missionLng);
+      const isSameDept = String(st.departmentCode || '') === String(myDept);
 
-        // Bénévoles réels disponibles
-        const availableVols = (this.volunteers || []).filter(v => 
-          v.stationId === st.id && 
-          (v.status === 'disponible' || v.status === 'dispo')
-        );
-
-        // Vérification de l'adéquation de l'équipage
-        let isCrewReady = false;
-        let reason = '';
-        if (availableVehs.length === 0) {
-          reason = `Aucun ${cleanType.toUpperCase()} disponible au garage`;
-        } else if (cleanType === 'vpsp') {
-          const hasCE = availableVols.some(v => v.rank === 'CE' || v.role === "Chef d'équipe" || (v.skills || []).includes('ce'));
-          const hasPSE2 = availableVols.some(v => v.rank === 'PSE2' || (v.skills || []).includes('pse2'));
-          const hasDriver = availableVols.some(v => (v.skills || []).includes('permis_b') || (v.skills || []).includes('permis_vpsp') || (v.skills || []).includes('pse1'));
-          if (availableVols.length < 3) {
-            reason = `Effectif insuffisant (${availableVols.length}/3 secouristes disponibles)`;
-          } else if (!hasCE) {
-            reason = `Aucun Chef d'Équipe (CE) disponible`;
-          } else if (!hasPSE2) {
-            reason = `Aucun PSE2 disponible`;
-          } else if (!hasDriver) {
-            reason = `Aucun chauffeur disponible`;
-          } else {
-            isCrewReady = true;
-          }
-        } else if (cleanType === 'vtu') {
-          if (availableVols.length < 2) {
-            reason = `Effectif insuffisant (${availableVols.length}/2 logisticiens disponibles)`;
-          } else {
-            isCrewReady = true;
-          }
-        } else if (cleanType === 'vtp') {
-          if (availableVols.length < 3) {
-            reason = `Effectif insuffisant (${availableVols.length}/3-6 secouristes disponibles)`;
-          } else {
-            isCrewReady = true;
-          }
-        } else if (cleanType === 'vl') {
-          if (availableVols.length < 1) {
-            reason = `Aucun cadre ou secouriste disponible`;
-          } else {
-            isCrewReady = true;
-          }
-        } else {
-          isCrewReady = availableVehs.length > 0 && availableVols.length >= 2;
-        }
-
-        sources.push({
-          id: st.id,
-          name: st.name || `Antenne de ${st.city}`,
-          city: st.city || 'Antenne Secondaire',
-          departmentCode: st.departmentCode || myDept,
-          category: 'player_secondary',
-          badge: 'Mon Antenne Secondaire',
-          badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-          lat: st.lat,
-          lng: st.lng,
-          distanceKm: parseFloat(dist.toFixed(1)),
-          cost: 0,
-          icon: 'building',
-          availableVehiclesCount: availableVehs.length,
-          availableVolunteersCount: availableVols.length,
-          firstVehicle: availableVehs[0] || null,
-          isCrewReady: isCrewReady,
-          reason: reason
-        });
+      sources.push({
+        id: st.id,
+        playerId: st.playerId,
+        playerName: st.playerName || 'Directeur Confrère',
+        name: st.name || `Protection Civile de ${st.city}`,
+        city: st.city || 'Antenne Alliée',
+        departmentCode: st.departmentCode || myDept,
+        isSameDept: isSameDept,
+        category: 'other_player',
+        badge: isSameDept ? 'Antenne Départementale (Autre Joueur)' : 'Antenne Zonale / Alliée',
+        badgeColor: isSameDept ? 'bg-sky-100 text-sky-800 border-sky-300' : 'bg-indigo-100 text-indigo-800 border-indigo-200',
+        lat: st.lat,
+        lng: st.lng,
+        distanceKm: parseFloat(dist.toFixed(1)),
+        vehiclesCount: st.vehicles || 2,
+        volunteersCount: st.volunteers || 6,
+        transitMinutes: Math.max(8, Math.round((dist / 50) * 60)),
+        level: st.level || 1
       });
-    }
+    });
 
     // Tri par distance géographique croissante
     sources.sort((a, b) => a.distanceKm - b.distanceKm);
-
-    // Calcul du délai routier estimé (vitesse moyenne 50 km/h avec avertisseurs)
-    sources.forEach(s => {
-      s.transitMinutes = Math.max(8, Math.round((s.distanceKm / 50) * 60));
-    });
-
     return sources;
   }
 
-  // Ouverture du sélecteur d'antenne pour un renfort opérationnel réel
+  // Ouverture du sélecteur d'antenne confrère (autre joueur) pour un renfort
   openReinforcementStationSelectorModal(missionId, equipageType = 'vpsp') {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
@@ -6236,8 +6177,8 @@ class ProtecGame {
             </div>
             <div>
               <div class="flex items-center gap-2">
-                <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 tracking-wider">Renfort Réel Inter-Antennes</span>
-                <span class="text-xs font-semibold text-slate-400">Doctrine FNPC</span>
+                <span class="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 tracking-wider">Renfort Réseau Inter-Antennes</span>
+                <span class="text-xs font-semibold text-slate-400">Autres Joueurs</span>
               </div>
               <h3 class="text-base sm:text-lg font-black text-slate-900">${cfg.title}</h3>
               <p class="text-xs text-slate-500">Pour le dispositif : <span class="font-bold text-slate-700">« ${mission.title} »</span></p>
@@ -6248,21 +6189,21 @@ class ProtecGame {
           </button>
         </div>
 
-        <!-- Appel Réseau Inter-Antennes -->
+        <!-- Appel Réseau Inter-Antennes Général -->
         <div class="my-3 p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 shrink-0 space-y-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">📡</span>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl">📡</span>
               <div>
-                <div class="text-xs font-black text-blue-950 uppercase tracking-wide">Solliciter d'Autres Antennes Réelles (Réseau FNPC)</div>
-                <div class="text-[11px] text-blue-800 font-medium">Aucun véhicule ni personnel n'est généré par le joueur : la demande est diffusée sur le réseau aux directeurs confrères.</div>
+                <div class="text-xs font-black text-blue-950 uppercase tracking-wide">Diffuser l'Appel à Tous les Directeurs Confrères</div>
+                <div class="text-[11px] text-blue-800 font-medium">L'appel sera instantanément relayé aux antennes du département et de la zone de défense.</div>
               </div>
             </div>
             <button
               type="button"
               onclick="document.getElementById('${modalId}').remove(); window.game.requestAllianceRenfortForMission('${mission.id}');"
-              class="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95">
-              <span>Lancer Appel Réseau</span>
+              class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-95">
+              <span>Diffuser sur le Réseau</span>
               <span class="text-sm">→</span>
             </button>
           </div>
@@ -6270,45 +6211,43 @@ class ProtecGame {
 
         <!-- Récapitulatif composition attendue -->
         <div class="mb-3 p-3 rounded-2xl bg-slate-50 border border-slate-200/80 shrink-0">
-          <div class="text-xs font-bold text-slate-700 mb-1">Composition de l'équipage requis :</div>
+          <div class="text-xs font-bold text-slate-700 mb-1">Composition de l'équipage sollicité :</div>
           <p class="text-xs text-slate-600 mb-1.5">${cfg.crewDesc}</p>
           <div class="flex flex-wrap gap-1.5">
             ${cfg.badges.map(b => `<span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-white text-indigo-700 border border-indigo-200/60 shadow-2xs">${b}</span>`).join('')}
           </div>
         </div>
 
-        <!-- Titre liste antennes secondaires -->
-        <div class="text-xs font-black uppercase tracking-wider text-slate-500 mb-2 shrink-0">
-          Détacher depuis mes antennes secondaires propres (${sources.length} disponible${sources.length > 1 ? 's' : ''}) :
+        <!-- Titre liste antennes confrères -->
+        <div class="text-xs font-black uppercase tracking-wider text-slate-500 mb-2 shrink-0 flex items-center justify-between">
+          <span>Antennes des autres joueurs à portée (${sources.length}) :</span>
+          <span class="text-[10px] text-slate-400 font-normal">Triées par distance</span>
         </div>
 
-        <!-- Liste des antennes secondaires -->
+        <!-- Liste des antennes confrères -->
         <div class="overflow-y-auto space-y-2.5 pr-1 flex-1 min-h-0 custom-scrollbar">
           ${sources.length === 0 ? `
             <div class="p-6 rounded-2xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-2">
-              <div class="text-2xl">🏢</div>
-              <div class="text-xs font-bold text-slate-700">Aucune antenne secondaire enregistrée</div>
+              <div class="text-2xl">🛰️</div>
+              <div class="text-xs font-bold text-slate-700">Aucune antenne confrère connectée à proximité immédiate</div>
               <p class="text-[11px] text-slate-500 max-w-md mx-auto">
-                Vous ne disposez actuellement d'aucune antenne secondaire avec des moyens propres. Pour obtenir du soutien sur cette mission, utilisez le bouton d'appel réseau ci-dessus pour solliciter d'autres antennes réelles.
+                Utilisez le bouton d'appel réseau ci-dessus pour diffuser votre demande sur la fréquence fédérale. Les autres directeurs d'antennes recevront l'alerte dès leur connexion.
               </p>
             </div>
           ` : sources.map(s => {
             return `
-              <div class="p-3.5 rounded-2xl bg-white border ${s.isCrewReady ? 'border-slate-200 hover:border-indigo-300' : 'border-slate-200 bg-slate-50/60'} transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="p-3.5 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div class="space-y-1">
                   <div class="flex items-center gap-2 flex-wrap">
                     <span class="px-2 py-0.5 rounded text-[10px] font-black border ${s.badgeColor}">
                       ${s.badge}
                     </span>
                     <span class="text-xs font-black text-slate-900">${s.name}</span>
-                    ${s.isCrewReady 
-                      ? '<span class="px-2 py-0.2 rounded text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">✓ Véhicule & Équipage Prêts</span>'
-                      : `<span class="px-2 py-0.2 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">⚠️ ${s.reason}</span>`
-                    }
+                    <span class="text-[11px] font-bold text-slate-500">Directeur : ${s.playerName}</span>
                   </div>
                   <div class="flex items-center gap-3 text-[11px] text-slate-500 flex-wrap">
                     <span class="flex items-center gap-1">
-                      <span class="font-bold text-slate-700">📍 Ville :</span> ${s.city}
+                      <span class="font-bold text-slate-700">📍 Ville :</span> ${s.city} [${s.departmentCode}]
                     </span>
                     <span class="flex items-center gap-1">
                       <span class="font-bold text-slate-700">📏 Distance :</span> ${s.distanceKm} km
@@ -6317,24 +6256,14 @@ class ProtecGame {
                       <span class="font-bold text-indigo-700">⏱️ Acheminement :</span> ~${s.transitMinutes} min
                     </span>
                   </div>
-                  ${s.firstVehicle ? `
-                    <div class="text-[11px] text-slate-600 pt-0.5">
-                      Véhicule mobilisé : <strong class="text-slate-800">${s.firstVehicle.name}</strong> (${s.availableVolunteersCount} secouriste(s) dispo sur place)
-                    </div>
-                  ` : ''}
                 </div>
 
                 <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                   <button
                     type="button"
-                    ${!s.isCrewReady ? 'disabled' : ''}
-                    onclick="window.game.dispatchReinforcementFromStation('${mission.id}', '${equipageType}', '${s.id}')"
-                    class="px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 shadow-xs active:scale-95 ${
-                      !s.isCrewReady 
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200' 
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200'
-                    }">
-                    <span>${s.isCrewReady ? 'Détacher ce Renfort Réel' : 'Moyens Indisponibles'}</span>
+                    onclick="window.game.requestRenfortFromPeerStation('${mission.id}', '${equipageType}', '${s.id}')"
+                    class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition cursor-pointer flex items-center gap-1.5 active:scale-95">
+                    <span>Solliciter ce Confrère</span>
                     <span class="text-sm">→</span>
                   </button>
                 </div>
@@ -6348,24 +6277,93 @@ class ProtecGame {
           <button 
             type="button" 
             onclick="document.getElementById('${modalId}').remove()" 
-            class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
             Fermer
           </button>
         </div>
       </div>
     `;
-
-    if (window.lucide && typeof window.lucide.createIcons === 'function') {
-      window.lucide.createIcons();
-    }
   }
 
-  // Envoi et acheminement physique d'un renfort réel depuis une antenne secondaire du joueur
+  // Envoi d'une demande de renfort ciblée à l'antenne d'un confrère (autre joueur)
+  requestRenfortFromPeerStation(missionId, equipageType = 'vpsp', peerStationId = null) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+
+    const modal = document.getElementById('modal-renfort-station-selector');
+    if (modal) modal.remove();
+
+    const peerStation = (this.allianceStations || []).find(s => s.id === peerStationId);
+    const equipageLabels = {
+      vpsp: '1 VPSP Sanitaire (3 secouristes)',
+      vtu: '1 VTU Logistique (2 équipiers)',
+      vtp: '1 VTP avec section d\'intervention (3-6 secouristes)',
+      vl: '1 VL Cadre d\'intervention'
+    };
+    const equipageUnit = equipageLabels[equipageType] || '1 Équipage de Renfort';
+
+    const myPlayerId = this.player?.id || 'directeur-local';
+    const myPlayerName = this.player?.name || 'Directeur d’Antenne';
+    const myStation = this.stations?.[0] || { name: 'Antenne Locale', departmentCode: '54' };
+
+    const renfortData = {
+      id: `renf-${Date.now()}`,
+      isMine: true,
+      requesterPlayerId: myPlayerId,
+      requesterName: myPlayerName,
+      stationName: myStation.name,
+      departmentCode: String(mission.departmentCode || myStation.departmentCode || '54'),
+      missionId: mission.id,
+      missionTitle: mission.title,
+      missionLat: mission.lat || null,
+      missionLng: mission.lng || null,
+      missionAddress: mission.address || mission.city || 'Secteur Opérationnel',
+      allianceId: this.player?.allianceId || 'alliance-fnpc',
+      allianceTag: 'UFSC',
+      targetStationId: peerStation ? peerStation.id : null,
+      targetStationName: peerStation ? (peerStation.name || peerStation.city) : null,
+      targetPlayerName: peerStation ? peerStation.playerName : null,
+      zone: peerStation && peerStation.departmentCode === myStation.departmentCode ? 'departemental' : 'regional',
+      zoneLabel: peerStation ? `Antenne de ${peerStation.city} (${peerStation.playerName})` : 'Réseau FNPC',
+      title: `Renfort pour ${mission.title}`,
+      desc: `Demande d'appui adressée à ${peerStation ? (peerStation.name || peerStation.city) : 'l\'antenne confrère'} : besoin de ${equipageUnit}.`,
+      unitRequested: equipageUnit,
+      equipageType: equipageType,
+      indemnite: equipageType === 'vpsp' ? 250 : equipageType === 'vtu' ? 180 : 150,
+      createdAt: new Date().toISOString(),
+      status: 'open'
+    };
+
+    if (!this.mySentRenfortIds) this.mySentRenfortIds = new Set();
+    this.mySentRenfortIds.add(renfortData.id);
+    this.renforts.unshift(renfortData);
+    this.sanitizeRenforts();
+    this.saveGame();
+
+    const targetDesc = peerStation 
+      ? `au directeur ${peerStation.playerName} (Antenne de ${peerStation.city})` 
+      : 'sur le réseau des antennes confrères';
+    this.showToast('Demande Transmise', `Votre appel de renfort (${equipageType.toUpperCase()}) a été transmis ${targetDesc} !`, 'green');
+
+    // Diffusion serveur / Supabase
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastRenfortRequest === 'function') {
+      window.ProtecSupabase.broadcastRenfortRequest(renfortData).catch(() => {});
+    }
+    fetch('/api/alliances/renfort/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(renfortData)
+    }).catch(() => {});
+
+    this.openMissionDetails(mission.id);
+  }
+
+  // Rétrocompatibilité : acheminement d'un renfort
   async dispatchReinforcementFromStation(missionId, equipageType, stationId) {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
-    // Vérifier que la station source est bien une antenne secondaire réelle du joueur
+    // Vérifier que la station source est bien une antenne valide
     const sourceStation = (this.stations || []).find(s => s.id === stationId);
     if (!sourceStation) {
       this.showToast('Erreur d\'acheminement', 'L\'antenne sélectionnée est introuvable.', 'red');
@@ -17131,134 +17129,236 @@ class ProtecGame {
                   <!-- 2-bis. ARMEMENT & CHARGEMENT LOGISTIQUE (LOTS, CAISSES, VÉLOS) -->
                   ${window.ProtecLogistique && typeof window.ProtecLogistique.renderLogisticsArmamentSection === 'function' ? window.ProtecLogistique.renderLogisticsArmamentSection(this, mission) : ''}
 
-                  <!-- 3. EN BAS : RENFORTS D'ÉQUIPAGES RÉELS (INTER-ANTENNES & RÉSEAU FNPC) -->
-                  <div class="p-3.5 rounded-xl bg-gradient-to-r from-indigo-50/80 to-purple-50/80 border border-indigo-200/80 space-y-3">
-                    <div class="flex items-start justify-between gap-2">
-                      <div class="flex items-center gap-2">
-                        <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
-                          <i data-lucide="radio" class="w-4 h-4"></i>
+                  <!-- 3. EN BAS : GESTION DES DEMANDES DE RENFORTS (AUTRES ANTENNES = AUTRES JOUEURS) -->
+                  <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/70 border border-indigo-200 shadow-xs space-y-3.5">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-xs shrink-0">
+                          <i data-lucide="radio" class="w-5 h-5"></i>
                         </div>
                         <div>
-                          <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wide">
-                            Renforts Opérationnels Réels (Inter-Antennes & Réseau FNPC)
-                          </h4>
-                          <p class="text-[10px] text-indigo-800 font-medium">
-                            Doctrine FNPC : aucun véhicule ni secouriste n'est généré par le joueur. Les renforts proviennent exclusivement de vos antennes secondaires réelles ou d'autres antennes via le réseau.
+                          <div class="flex items-center gap-2">
+                            <h4 class="text-xs sm:text-sm font-black text-indigo-950 uppercase tracking-wide">
+                              Demandes de Renforts (Autres Antennes = Autres Joueurs)
+                            </h4>
+                            <span class="px-2 py-0.5 rounded text-[9px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">
+                              Réseau FNPC
+                            </span>
+                          </div>
+                          <p class="text-[11px] text-slate-600 font-medium">
+                            Sollicitez les directeurs des autres antennes réelles (autres joueurs) pour combler vos besoins en véhicules ou en secouristes qualifiés.
                           </p>
                         </div>
                       </div>
                       <button 
                         type="button" 
                         onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" 
-                        class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer active:scale-95 shrink-0">
-                        <i data-lucide="radio" class="w-3 h-3"></i>
-                        <span>Fréquence Réseau</span>
+                        class="px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer active:scale-95 shrink-0">
+                        <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+                        <span>Lancer Appel Réseau</span>
                       </button>
                     </div>
 
-                    <!-- Carte 1 : Diffusion Appel Réseau Inter-Antennes -->
-                    <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2">
+                    <!-- Carte 1 : État de la Demande Réseau pour ce Dispositif -->
+                    <div class="p-3.5 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2.5">
                       ${(() => {
                         const activeRenf = (this.renforts || []).find(r => r.missionId === mission.id && r.status === 'open');
                         if (activeRenf) {
                           return `
-                            <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center justify-between gap-2 flex-wrap">
                               <div class="flex items-center gap-2">
-                                <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                                <span class="text-xs font-black text-slate-900">📡 Appel en Cours sur le Réseau (${activeRenf.zoneLabel || 'Département'})</span>
+                                <span class="relative flex h-3 w-3">
+                                  <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                  <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                                </span>
+                                <span class="text-xs font-black text-slate-900">📡 Appel Actif sur le Réseau FNPC</span>
+                                <span class="text-[10px] font-black px-2 py-0.5 rounded bg-sky-100 text-sky-800 border border-sky-200">
+                                  ${activeRenf.zoneLabel || 'Départemental'}
+                                </span>
                               </div>
-                              <span class="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-200">En Veille</span>
+                              <span class="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                En Attente de Réponse Confrère
+                              </span>
                             </div>
-                            <p class="text-[11px] text-slate-600 leading-snug">
-                              Demande transmise : <strong class="text-slate-800">${activeRenf.unitRequested || 'Renforts'}</strong>. Les directeurs des antennes alliées du réseau peuvent engager leurs effectifs réels.
+
+                            <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                              <div class="flex items-center justify-between">
+                                <span class="text-slate-500 font-semibold">Moyens Sollicités :</span>
+                                <span class="font-black text-slate-900">${activeRenf.unitRequested || 'Renforts Opérationnels'}</span>
+                              </div>
+                              <div class="flex items-center justify-between">
+                                <span class="text-slate-500 font-semibold">Indemnité Proposée :</span>
+                                <span class="font-black text-emerald-700 font-mono">+${activeRenf.indemnite || 200} €</span>
+                              </div>
+                              ${activeRenf.targetStationName ? `
+                                <div class="flex items-center justify-between">
+                                  <span class="text-slate-500 font-semibold">Antenne Confrère Ciblée :</span>
+                                  <span class="font-bold text-indigo-700">${activeRenf.targetStationName} ${activeRenf.targetPlayerName ? '(' + activeRenf.targetPlayerName + ')' : ''}</span>
+                                </div>
+                              ` : ''}
+                            </div>
+
+                            <p class="text-[11px] text-slate-500 italic">
+                              Cet appel est en cours sur le réseau. Dès qu'un directeur confrère engage son véhicule et ses secouristes, leur détachement sera acheminé sur votre mission.
                             </p>
-                            <div class="flex justify-end pt-1">
+
+                            <div class="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
                               <button 
                                 type="button" 
-                                onclick="window.game.openModule('alliance');" 
-                                class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer">
-                                Suivre sur la fréquence alliance →
+                                onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" 
+                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 transition cursor-pointer flex items-center gap-1">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                <span>Reconfigurer la Demande</span>
+                              </button>
+                              <button 
+                                type="button" 
+                                onclick="window.game.cancelRenfort('${activeRenf.id}', '${mission.id}')" 
+                                class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition cursor-pointer flex items-center gap-1">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                <span>Annuler l'Appel Réseau</span>
                               </button>
                             </div>
                           `;
                         }
+
+                        const needed = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
                         return `
                           <div class="flex items-center justify-between">
-                            <span class="text-xs font-black text-slate-900">📡 Solliciter le Réseau des Antennes Confrères</span>
-                            <span class="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">Réseau FNPC</span>
+                            <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                              <span>📡</span>
+                              <span>Aucune Demande de Renfort Active sur ce Dispositif</span>
+                            </span>
+                            <span class="text-[10px] font-bold text-slate-400">Prêt à émettre</span>
                           </div>
                           <p class="text-[11px] text-slate-600 leading-snug">
-                            Publiez une demande sur les canaux départemental, zonal ou national. Les directeurs des autres antennes recevront l'appel et pourront dépêcher leurs propres véhicules et secouristes réels.
+                            Il vous manque des secouristes ou des véhicules ? Diffusez un appel aux directeurs des autres antennes (autres joueurs) du département ou de la zone de défense.
                           </p>
+                          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                            <button 
+                              type="button" 
+                              onclick="window.game.requestAllianceRenfortForMission('${mission.id}', { vpsp: 1, volunteersCount: 3 })" 
+                              class="p-2.5 rounded-xl bg-indigo-50/80 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95">
+                              <span>🚑 1 VPSP (3 pers.)</span>
+                            </button>
+                            <button 
+                              type="button" 
+                              onclick="window.game.requestAllianceRenfortForMission('${mission.id}', { vtu: 1, volunteersCount: 2 })" 
+                              class="p-2.5 rounded-xl bg-sky-50/80 hover:bg-sky-100 border border-sky-200 text-sky-900 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95">
+                              <span>🚐 1 VTU (2 pers.)</span>
+                            </button>
+                            <button 
+                              type="button" 
+                              onclick="window.game.requestAllianceRenfortForMission('${mission.id}', { volunteersCount: ${needed} })" 
+                              class="p-2.5 rounded-xl bg-purple-50/80 hover:bg-purple-100 border border-purple-200 text-purple-900 text-xs font-black transition flex items-center justify-center gap-1.5 cursor-pointer text-center active:scale-95">
+                              <span>👥 Secouristes (${needed})</span>
+                            </button>
+                          </div>
                           <button 
                             type="button" 
                             onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" 
-                            class="w-full py-2 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-95">
-                            <i data-lucide="send" class="w-3.5 h-3.5"></i>
-                            <span>Diffuser un Appel à Renfort sur le Réseau</span>
+                            class="w-full py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition flex items-center justify-center gap-2 cursor-pointer shadow-xs active:scale-95">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                            <span>Personnaliser & Diffuser un Appel à Renfort Réseau</span>
                           </button>
                         `;
                       })()}
                     </div>
 
-                    <!-- Carte 2 : Moyens Propres des Antennes Secondaires -->
-                    <div class="p-3 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2">
+                    <!-- Carte 2 : Détachements & Renforts Reçus de Confrères -->
+                    ${(() => {
+                      const incomingOrArrived = Array.isArray(mission.externalReinforcements) ? mission.externalReinforcements : [];
+                      if (incomingOrArrived.length === 0) return '';
+                      return `
+                        <div class="p-3.5 rounded-xl bg-emerald-50/80 border border-emerald-200 shadow-2xs space-y-2">
+                          <div class="flex items-center justify-between">
+                            <span class="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+                              <span>Renforts Engagés par d'Autres Joueurs (${incomingOrArrived.length})</span>
+                            </span>
+                            <span class="text-[10px] font-black px-2 py-0.5 rounded bg-emerald-200 text-emerald-900">
+                              Appui Confrère Opérationnel
+                            </span>
+                          </div>
+                          <div class="space-y-1.5">
+                            ${incomingOrArrived.map(ext => `
+                              <div class="p-2.5 rounded-lg bg-white border border-emerald-100 flex items-center justify-between text-xs">
+                                <div>
+                                  <div class="font-black text-slate-800">
+                                    ${ext.vehicleName || 'Véhicule de Renfort'} • <span class="text-emerald-700 font-bold">${ext.volunteersCount || 0} secouriste(s)</span>
+                                  </div>
+                                  <div class="text-[10px] text-slate-500">
+                                    Dépêché par : <strong>${ext.contributorName || 'Directeur Confrère'}</strong> (${ext.stationName || 'Antenne Alliée'})
+                                  </div>
+                                </div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                  ✓ Sur Place
+                                </span>
+                              </div>
+                            `).join('')}
+                          </div>
+                        </div>
+                      `;
+                    })()}
+
+                    <!-- Carte 3 : Radar des Antennes Confrères (Autres Joueurs Réels) -->
+                    <div class="p-3.5 rounded-xl bg-white border border-indigo-100 shadow-2xs space-y-2.5">
                       <div class="flex items-center justify-between">
-                        <span class="text-xs font-black text-slate-900">🏢 Moyens de vos Antennes Secondaires</span>
-                        <span class="text-[9px] font-bold text-slate-500">Moyens propres réels</span>
+                        <span class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                          <i data-lucide="map-pin" class="w-4 h-4 text-indigo-600"></i>
+                          <span>Radar des Antennes Confrères (Autres Joueurs)</span>
+                        </span>
+                        <span class="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                          Réseau FNPC Direct
+                        </span>
                       </div>
+
                       ${(() => {
-                        const secStations = (this.stations || []).slice(1);
-                        if (secStations.length === 0) {
+                        const peerSources = this.getAvailableReinforcementSources(mission);
+                        if (peerSources.length === 0) {
                           return `
-                            <div class="text-[11px] text-slate-500 italic py-1">
-                              Vous ne possédez actuellement aucune antenne secondaire (base unique : ${this.stations?.[0]?.name || 'Base Principale'}). Pour recevoir des renforts, diffusez un appel réseau ci-dessus.
+                            <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-xs space-y-1">
+                              <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                                <span>🛰️</span>
+                                <span>Réseau FNPC en Veille Opérationnelle</span>
+                              </div>
+                              <p class="text-[11px] text-slate-500 leading-snug">
+                                Aucun autre joueur n'a d'antenne immédiatement connectée à proximité. En diffusant votre appel via le bouton ci-dessus, votre demande sera instantanément visible sur la fréquence fédérale et accessible à tout directeur d'antenne confrère qui se connecte.
+                              </p>
                             </div>
                           `;
                         }
-                        return `
-                          <div class="space-y-2 pt-1">
-                            ${secStations.map(st => {
-                              const availVehs = (this.vehicles || []).filter(v => v.stationId === st.id && (v.status === 'dispo' || v.status === 'disponible'));
-                              const availVols = (this.volunteers || []).filter(v => v.stationId === st.id && (v.status === 'disponible' || v.status === 'dispo'));
-                              const hasVpsp = availVehs.some(v => (v.type || '').toUpperCase() === 'VPSP');
-                              const hasVtu = availVehs.some(v => (v.type || '').toUpperCase() === 'VTU');
 
-                              return `
-                                <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                                  <div>
-                                    <div class="text-xs font-black text-slate-800">${st.name || st.city}</div>
-                                    <div class="text-[10px] text-slate-500">
-                                      Disponibles : <strong>${availVehs.length}</strong> véhicule(s), <strong>${availVols.length}</strong> secouriste(s)
-                                    </div>
+                        return `
+                          <div class="text-[11px] text-slate-500">
+                            Antennes d'autres directeurs (autres joueurs) connectées au réseau :
+                          </div>
+                          <div class="space-y-2 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                            ${peerSources.slice(0, 6).map(st => `
+                              <div class="p-2.5 rounded-xl bg-slate-50/80 hover:bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 transition">
+                                <div>
+                                  <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="px-1.5 py-0.2 rounded text-[9px] font-black border ${st.badgeColor}">
+                                      ${st.badge}
+                                    </span>
+                                    <span class="text-xs font-black text-slate-900">${st.name}</span>
+                                    <span class="text-[11px] font-bold text-slate-500">Directeur : ${st.playerName}</span>
                                   </div>
-                                  <div class="flex items-center gap-1.5 shrink-0 flex-wrap">
-                                    <button 
-                                      type="button" 
-                                      ${!hasVpsp || availVols.length < 3 ? 'disabled' : ''}
-                                      onclick="window.game.dispatchReinforcementFromStation('${mission.id}', 'vpsp', '${st.id}')"
-                                      class="px-2 py-1 rounded text-[10px] font-black transition cursor-pointer ${
-                                        hasVpsp && availVols.length >= 3 
-                                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs' 
-                                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                      }">
-                                      Détacher VPSP
-                                    </button>
-                                    <button 
-                                      type="button" 
-                                      ${!hasVtu || availVols.length < 2 ? 'disabled' : ''}
-                                      onclick="window.game.dispatchReinforcementFromStation('${mission.id}', 'vtu', '${st.id}')"
-                                      class="px-2 py-1 rounded text-[10px] font-black transition cursor-pointer ${
-                                        hasVtu && availVols.length >= 2 
-                                          ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-2xs' 
-                                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                                      }">
-                                      Détacher VTU
-                                    </button>
+                                  <div class="flex items-center gap-3 text-[11px] text-slate-500 pt-0.5 flex-wrap">
+                                    <span>📍 <strong>${st.city}</strong> [${st.departmentCode}]</span>
+                                    <span>📏 <strong>${st.distanceKm} km</strong></span>
+                                    <span class="text-indigo-700 font-bold">⏱️ ~${st.transitMinutes} min de route</span>
                                   </div>
                                 </div>
-                              `;
-                            }).join('')}
+                                <div class="flex items-center gap-1.5 shrink-0">
+                                  <button 
+                                    type="button" 
+                                    onclick="window.game.openReinforcementStationSelectorModal('${mission.id}', 'vpsp')" 
+                                    class="px-2.5 py-1.5 rounded-lg text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition cursor-pointer shadow-2xs active:scale-95">
+                                    Solliciter →
+                                  </button>
+                                </div>
+                              </div>
+                            `).join('')}
                           </div>
                         `;
                       })()}
@@ -18041,9 +18141,9 @@ class ProtecGame {
     this.openSelectSalarieModal(missionId);
   }
 
-  requestAllianceRenfortForMission(missionId) {
+    requestAllianceRenfortForMission(missionId, preset = {}) {
     if (window.ProtecMultiplayer) {
-      window.ProtecMultiplayer.openRenfortZoneModal(this, missionId);
+      window.ProtecMultiplayer.openRenfortZoneModal(this, missionId, preset);
       return;
     }
     const mission = this.missions.find(m => m.id === missionId);
@@ -18690,7 +18790,7 @@ class ProtecGame {
     });
   }
 
-  cancelRenfort(renfortId) {
+  cancelRenfort(renfortId, missionId = null) {
     if (!renfortId) return;
     this.renforts = (this.renforts || []).filter(r => r && r.id !== renfortId);
     this.saveGame();
@@ -18700,7 +18800,11 @@ class ProtecGame {
       body: JSON.stringify({ renfortId })
     }).catch(() => {});
     this.showToast('Appel Annulé', 'Votre demande de renfort a été retirée du réseau.', 'blue');
-    this.openModule('alliance');
+    if (missionId) {
+      this.openMissionDetails(missionId);
+    } else {
+      this.openModule('alliance');
+    }
   }
 
   // --- RENFORTS EXTRA-DÉPARTEMENTAUX (MAQUETTE OFFICIELLE FNPC) ---

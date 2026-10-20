@@ -206,13 +206,21 @@ window.ProtecMultiplayer = {
     };
   },
 
-  openRenfortZoneModal(game, missionId) {
+  openRenfortZoneModal(game, missionId, preset = {}) {
     const mission = game.missions.find(m => m.id === missionId);
     if (!mission) return;
 
     this.injectState(game);
     const eligibility = this.checkMissionZoneEligibility(game, mission);
-    const needed = Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+    const needed = (preset && typeof preset.volunteersCount === 'number')
+      ? preset.volunteersCount
+      : Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+
+    const initVpsp = (preset && typeof preset.vpsp === 'number')
+      ? preset.vpsp
+      : ((mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? 1 : 0);
+    const initVtu = (preset && typeof preset.vtu === 'number') ? preset.vtu : 0;
+    const initVl = (preset && typeof preset.vl === 'number') ? preset.vl : 0;
 
     // Création ou récupération de la modale
     let modal = document.getElementById('renfort-zone-modal');
@@ -273,7 +281,7 @@ window.ProtecMultiplayer = {
               <span class="font-bold text-slate-800 truncate mr-2">🚑 VPSP (Secours d’Urgence)</span>
               <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-veh-vpsp-count" value="${(mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? '1' : '0'}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <input type="number" id="renfort-veh-vpsp-count" value="${initVpsp}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
               </div>
             </div>
@@ -283,7 +291,7 @@ window.ProtecMultiplayer = {
               <span class="font-bold text-slate-800 truncate mr-2">🚐 Véhicule Tout Usage (VTU)</span>
               <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vtu-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-veh-vtu-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <input type="number" id="renfort-veh-vtu-count" value="${initVtu}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vtu-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
               </div>
             </div>
@@ -293,7 +301,7 @@ window.ProtecMultiplayer = {
               <span class="font-bold text-slate-800 truncate mr-2">🚗 Véhicule Léger (VL)</span>
               <div class="flex items-center gap-1.5 shrink-0">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vl-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-veh-vl-count" value="0" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <input type="number" id="renfort-veh-vl-count" value="${initVl}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
                 <button type="button" onclick="const el=document.getElementById('renfort-veh-vl-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
               </div>
             </div>
