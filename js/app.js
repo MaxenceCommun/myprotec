@@ -14438,6 +14438,96 @@ class ProtecGame {
     }
   }
 
+
+  // Bloc d'affichage Télémétrie & Données cachées (Mode Debug Admin)
+  getMissionDebugDataHTML(mission) {
+    if (!window.ProtecAdmin || typeof window.ProtecAdmin.isDebugModeActive !== 'function' || !window.ProtecAdmin.isDebugModeActive()) {
+      return '';
+    }
+    if (!mission) return '';
+
+    const now = (this.clock && this.clock.hour !== undefined)
+      ? new Date(this.clock.year || 2026, (this.clock.month || 1) - 1, this.clock.day || 1, this.clock.hour || 14, this.clock.minute || 0, this.clock.second || 0)
+      : new Date();
+    const currentTime = now.getTime();
+
+    const plannedStart = mission.eventDate 
+      ? new Date(mission.eventDate.year || now.getFullYear(), mission.eventDate.month !== undefined ? mission.eventDate.month : now.getMonth(), mission.eventDate.day || now.getDate(), mission.startHour || 14, mission.startMinute || 0)
+      : new Date();
+    const durHours = mission.durationHours || 4;
+    const plannedEnd = new Date(plannedStart.getTime() + (durHours * 3600 * 1000));
+    const carenceLimit = new Date(plannedEnd.getTime() + (15 * 60 * 1000));
+    const msLeft = carenceLimit.getTime() - currentTime;
+    const minLeft = Math.round(msLeft / 60000);
+    const isPassed = msLeft <= 0;
+    const isTerminated = this.isMissionTerminated(mission);
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const carenceTimeStr = `${pad(carenceLimit.getHours())}:${pad(carenceLimit.getMinutes())}`;
+    const plannedEndTimeStr = `${pad(plannedEnd.getHours())}:${pad(plannedEnd.getMinutes())}`;
+
+    const authority = mission.authorityLabel || (mission.type === 'samu' ? 'SAMU 15' : (mission.type === 'pompiers' ? 'SDIS 18' : (mission.type === 'crise' ? 'Préfecture' : 'Organisateur Privé')));
+    const repScore = this.reputationScore !== undefined ? this.reputationScore : 100;
+    const authRep = (this.authorityReputations && this.authorityReputations[mission.type] !== undefined) ? this.authorityReputations[mission.type] : repScore;
+
+    return `
+      <div class="p-3.5 rounded-2xl bg-slate-900 border-2 border-red-500/80 text-white shadow-xl space-y-2 font-mono text-xs">
+        <div class="flex items-center justify-between border-b border-red-500/40 pb-1.5 font-sans">
+          <div class="flex items-center gap-1.5 text-red-400 font-black uppercase text-[11px] tracking-wide">
+            <span class="animate-pulse">🛠️</span>
+            <span>Mode Debug Admin • Télémétrie Cachée</span>
+          </div>
+          <span class="px-2 py-0.5 rounded text-[10px] font-black ${isTerminated ? 'bg-slate-800 text-slate-400' : (isPassed ? 'bg-red-600 text-white animate-pulse' : (minLeft <= 30 ? 'bg-amber-600 text-white' : 'bg-slate-800 text-emerald-400'))}">
+            ${isTerminated ? 'MISSION CLÔTURÉE' : (isPassed ? 'DÉPASSEMENT CARENCE' : (minLeft <= 30 ? 'CRITIQUE CARENCE' : 'DANS LES DÉLAIS'))}
+          </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-sans">
+          <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Compte à Rebours Carence</div>
+            <div class="flex items-baseline justify-between">
+              <span class="text-slate-300">Temps restant :</span>
+              <span class="font-black text-sm ${isPassed && !isTerminated ? 'text-red-400' : 'text-emerald-400'} font-mono">
+                ${isTerminated ? 'Clôturée' : (isPassed ? 'Expiré (-35 Rép)' : `${minLeft} min (${Math.floor(msLeft/3600000)}h ${pad(Math.floor((msLeft%3600000)/60000))}m)`)}
+              </span>
+            </div>
+            <div class="text-[10px] text-slate-400 flex justify-between">
+              <span>Fin prévue : <strong>${plannedEndTimeStr}</strong></span>
+              <span>Limite (+15m) : <strong class="text-amber-300 font-mono">${carenceTimeStr}</strong></span>
+            </div>
+          </div>
+
+          <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+            <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Commanditaire & Réputation</div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-300">Autorité :</span>
+              <span class="font-bold text-sky-300">${authority}</span>
+            </div>
+            <div class="flex items-center justify-between text-[10px]">
+              <span class="text-slate-400">Pénalité carence :</span>
+              <span class="font-bold text-red-400">-35 Réputation</span>
+            </div>
+            <div class="flex items-center justify-between text-[10px]">
+              <span class="text-slate-400">Réputation autorité :</span>
+              <span class="font-bold text-amber-300 font-mono">${authRep} / 100</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="p-2 rounded-xl bg-slate-800/60 border border-slate-700/60 text-[10px] text-slate-300 flex items-center justify-between flex-wrap gap-2 font-sans">
+          <div>
+            <span>ID Technique : <code class="text-amber-400 font-mono">${mission.id}</code></span>
+            <span class="mx-1 text-slate-600">|</span>
+            <span>Statut : <span class="font-bold text-white uppercase">${mission.status || 'inconnu'}</span></span>
+          </div>
+          <div>
+            <span>Requis : <strong class="text-sky-300">${mission.requiredVolunteers || 1} pers.</strong> / <strong class="text-sky-300">${(mission.requiredVehicles || []).length} véh.</strong></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   openMissionDetails(missionId) {
     try {
       this._lastMarkerClickTime = Date.now();
@@ -14753,6 +14843,9 @@ class ProtecGame {
 
     body.innerHTML = `
       <div class="space-y-3">
+        <!-- ENCART DEBUG ADMIN TÉLÉMÉTRIE -->
+        ${this.getMissionDebugDataHTML(mission)}
+
         <!-- BREADCRUMB & ENTÊTE EPROTEC -->
         <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
           <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 truncate">
@@ -22164,6 +22257,38 @@ class ProtecGame {
                             <span class="font-extrabold ${(v.workQualityMultiplier || 1.0) >= 1.15 ? 'text-emerald-700' : ((v.workQualityMultiplier || 1.0) < 1.0 ? 'text-amber-700' : 'text-slate-700')}">
                               ${(v.workQualityMultiplier || 1.0) >= 1.25 ? '⭐ Cadre d’Excellence (+25%)' : ((v.workQualityMultiplier || 1.0) >= 1.15 ? '✨ Très Performant (+15%)' : ((v.workQualityMultiplier || 1.0) >= 1.05 ? '👍 Bon (+5%)' : ((v.workQualityMultiplier || 1.0) < 1.0 ? '⚠️ Sous-payé (-10%)' : 'Standard')))}
                             </span>
+                          </div>
+                        </div>
+                      ` : ''}
+
+                      
+                      ${(window.ProtecAdmin && typeof window.ProtecAdmin.isDebugModeActive === 'function' && window.ProtecAdmin.isDebugModeActive()) ? `
+                        <div class="p-2 rounded-xl bg-slate-900 border border-red-500/60 text-white text-[10px] space-y-1 font-mono">
+                          <div class="flex items-center justify-between text-red-400 font-bold text-[9px] uppercase tracking-wider font-sans">
+                            <span>🛠️ DEBUG TÉLÉMÉTRIE PSYCHO</span>
+                            <span>${v.id}</span>
+                          </div>
+                          <div class="grid grid-cols-2 gap-1 text-[10px] font-sans">
+                            <div class="flex justify-between">
+                              <span class="text-slate-400">Motivation :</span>
+                              <strong class="${(v.motivation || 80) < 30 ? 'text-red-400' : 'text-emerald-400'} font-mono">${v.motivation !== undefined ? v.motivation : 80}/100</strong>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="text-slate-400">Humeur :</span>
+                              <strong class="${(v.humeur || 80) < 30 ? 'text-red-400' : 'text-sky-400'} font-mono">${v.humeur !== undefined ? v.humeur : 80}/100</strong>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="text-slate-400">Fatigue :</span>
+                              <strong class="${(v.fatigue || 0) > 75 ? 'text-red-400' : 'text-slate-200'} font-mono">${v.fatigue !== undefined ? v.fatigue : 0}/100</strong>
+                            </div>
+                            <div class="flex justify-between">
+                              <span class="text-slate-400">Énergie :</span>
+                              <strong class="text-slate-200 font-mono">${energy}/100</strong>
+                            </div>
+                          </div>
+                          <div class="pt-1 border-t border-slate-800 flex items-center justify-between text-[9px] font-sans">
+                            <span class="text-slate-400">Tenue : <strong class="${isEquipped ? 'text-emerald-400' : 'text-red-400'}">${isEquipped ? 'OUI' : 'MANQUANTE'}</strong></span>
+                            <span class="text-slate-400">Burnout : <strong class="${v.isBurnout ? 'text-red-400' : 'text-slate-300'}">${v.isBurnout ? 'OUI' : 'NON'}</strong></span>
                           </div>
                         </div>
                       ` : ''}

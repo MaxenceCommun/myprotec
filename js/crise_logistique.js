@@ -4264,6 +4264,74 @@ window.ProtecCriseLogistique = {
               }
             })()}
 
+            <!-- ENCART MODE DEBUG ADMIN TÉLÉMÉTRIE CRISE NOVI -->
+            ${(window.ProtecAdmin && typeof window.ProtecAdmin.isDebugModeActive === 'function' && window.ProtecAdmin.isDebugModeActive()) ? `
+              <div class="p-3.5 rounded-2xl bg-slate-900 border-2 border-red-500/80 text-white shadow-xl space-y-2 text-xs font-mono">
+                <div class="flex items-center justify-between border-b border-red-500/40 pb-1.5 font-sans">
+                  <span class="text-red-400 font-black uppercase text-[11px] flex items-center gap-1.5">
+                    <span class="animate-pulse">🛠️</span>
+                    <span>MODE DEBUG ADMIN • TÉLÉMÉTRIE CRISE NOVI</span>
+                  </span>
+                  <span class="px-2 py-0.5 rounded text-[10px] font-mono bg-red-950 text-red-300 border border-red-800">
+                    ID: ${crisis.id}
+                  </span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] font-sans">
+                  <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Phasage & Évolution</div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-300">Phase active :</span>
+                      <span class="font-bold text-white font-mono">${crisis.currentPhaseIndex + 1} / ${crisis.phases.length}</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-slate-400">Prochaine phase :</span>
+                      <span class="font-bold text-amber-300 truncate max-w-[170px]" title="${crisis.phases[crisis.currentPhaseIndex + 1]?.nom || 'Achèvement Crise'}">${crisis.phases[crisis.currentPhaseIndex + 1]?.nom || 'Achèvement Crise (Victoire)'}</span>
+                    </div>
+                    ${crisis.phases[crisis.currentPhaseIndex + 1]?.ordre_radio ? `
+                      <div class="text-[9px] text-slate-400 italic line-clamp-1">Prochain ordre : « ${crisis.phases[crisis.currentPhaseIndex + 1].ordre_radio} »</div>
+                    ` : ''}
+                  </div>
+
+                  <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
+                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Économie & Réputation Masquées</div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-300">Prime Réussite :</span>
+                      <span class="font-bold text-emerald-400 font-mono">+${(crisis.recompenses?.subvention || 5000).toLocaleString()} € / +${crisis.recompenses?.reputation || 15} Rép</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="text-slate-300">Pénalité Échec :</span>
+                      <span class="font-bold text-red-400 font-mono">-${crisis.penalites?.reputation || 25} Rép</span>
+                    </div>
+                    <div class="flex justify-between text-[10px]">
+                      <span class="text-slate-400">Escalade alerte :</span>
+                      <span class="font-bold text-sky-300">${crisis.alertStage || 'standard'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Progression des sous-missions de la phase en cours -->
+                <div class="space-y-1 pt-1 font-sans">
+                  <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Temps restant sous-missions de phase :</div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px]">
+                    ${(currentPhase.sous_missions || []).map(s => {
+                      const pct = Math.round(s.progression || 0);
+                      const totalSec = s.duree_estimee_sec || 1800;
+                      const secLeft = Math.max(0, Math.round(totalSec * (1 - (pct / 100))));
+                      const minLeft = Math.ceil(secLeft / 60);
+                      return `
+                        <div class="p-1.5 rounded-lg bg-slate-800/60 border border-slate-700/60 flex items-center justify-between">
+                          <span class="truncate max-w-[150px] text-slate-200" title="${s.titre}">${s.titre}</span>
+                          <span class="font-mono font-bold ${s.statut === 'termine' ? 'text-emerald-400' : 'text-amber-400'}">
+                            ${s.statut === 'termine' ? '✓ FAIT' : `${minLeft}m (${pct}%)`}
+                          </span>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+
             <!-- Bannière de la Phase Courante -->
             <div class="p-4 rounded-2xl bg-gradient-to-br from-slate-800/90 to-slate-850 border border-slate-700/60 shadow-md">
               <div class="flex items-center justify-between mb-1.5">

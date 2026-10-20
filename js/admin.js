@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PROTEC LIVE - PANEL ADMINISTRATEUR (GESTION DE TOUS LES JOUEURS)
  * Permet à l'administrateur de superviser la base de données,
  * modifier les trésoreries, réinitialiser des mots de passe,
@@ -18,6 +18,75 @@ window.ProtecAdmin = {
   equipmentFilter: '',
   badgesFilter: '',
   isAnalyticsCollapsed: false,
+  debugMode: localStorage.getItem('protec_admin_debug_mode') === 'true',
+
+  isDebugModeActive() {
+    return Boolean(this.debugMode && (this.isCurrentUserAdmin() || this.isCurrentUserGestionnaireOnly()));
+  },
+
+  toggleDebugMode() {
+    this.debugMode = !this.debugMode;
+    localStorage.setItem('protec_admin_debug_mode', this.debugMode ? 'true' : 'false');
+    this.updateDebugFloatingPill();
+
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast(
+        this.debugMode ? '🛠️ Mode Debug ACTIVÉ' : '🛠️ Mode Debug DÉSACTIVÉ',
+        this.debugMode 
+          ? 'Données cachées (timers de carence, crises, probabilités, moral bénévoles) visibles en jeu.'
+          : 'Les données cachées sont désormais masquées pour les joueurs.',
+        this.debugMode ? 'amber' : 'slate'
+      );
+    }
+
+    if (window.game) {
+      if (typeof window.game.renderMissions === 'function') window.game.renderMissions();
+      if (typeof window.game.updateStatsUI === 'function') window.game.updateStatsUI();
+      if (window.game.selectedMissionId && typeof window.game.refreshMissionDetailsIfOpen === 'function') {
+        window.game.refreshMissionDetailsIfOpen(window.game.selectedMissionId);
+      }
+    }
+
+    const modal = document.getElementById('admin-modal');
+    if (modal && !modal.classList.contains('hidden')) {
+      const toggleBtn = document.getElementById('admin-debug-toggle-btn');
+      if (toggleBtn) {
+        toggleBtn.className = `px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${this.isDebugModeActive() ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-md ring-2 ring-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'}`;
+        toggleBtn.innerHTML = `
+          <span class="w-2.5 h-2.5 rounded-full ${this.isDebugModeActive() ? 'bg-slate-950 animate-ping' : 'bg-slate-400'}"></span>
+          <span>Mode Debug : <strong>${this.isDebugModeActive() ? 'ACTIVÉ ✓' : 'DÉSACTIVÉ'}</strong></span>
+        `;
+      }
+      if (this.activeTab === 'debug') {
+        this.renderDebugDashboard();
+      }
+    }
+  },
+
+  updateDebugFloatingPill() {
+    let pill = document.getElementById('admin-debug-floating-pill');
+    if (this.isDebugModeActive()) {
+      if (!pill) {
+        pill = document.createElement('div');
+        pill.id = 'admin-debug-floating-pill';
+        pill.className = 'fixed bottom-20 right-4 z-[9999] px-3.5 py-1.5 rounded-full bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs shadow-xl border-2 border-amber-500 flex items-center gap-2 cursor-pointer transition transform hover:scale-105 active:scale-95 animate-pulse';
+        pill.innerHTML = `
+          <span class="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping"></span>
+          <span>🛠️ DEBUG : Données Cachées</span>
+          <button onclick="event.stopPropagation(); window.ProtecAdmin.toggleDebugMode();" class="ml-1 text-slate-700 hover:text-black font-extrabold text-[10px] p-0.5 hover:bg-amber-500 rounded" title="Désactiver le mode debug">✕</button>
+        `;
+        pill.onclick = () => {
+          this.openAdminModal(window.game);
+          this.switchTab('debug');
+        };
+        document.body.appendChild(pill);
+      } else {
+        pill.classList.remove('hidden');
+      }
+    } else {
+      if (pill) pill.remove();
+    }
+  },
 
   getAuthHeaders() {
     const token = localStorage.getItem('protec_auth_token') || '';
@@ -172,6 +241,7 @@ window.ProtecAdmin = {
     const tabReferralsBtn = document.getElementById('admin-tab-referrals-btn');
     const tabBalancingBtn = document.getElementById('admin-tab-balancing-btn');
     const tabResetBtn = document.getElementById('admin-tab-reset-btn');
+    const tabDebugBtn = document.getElementById('admin-tab-debug-btn');
 
     const viewPlayers = document.getElementById('admin-view-players');
     const viewAnnouncements = document.getElementById('admin-view-announcements');
@@ -185,6 +255,7 @@ window.ProtecAdmin = {
     const viewReferrals = document.getElementById('admin-view-referrals');
     const viewBalancing = document.getElementById('admin-view-balancing');
     const viewReset = document.getElementById('admin-view-reset');
+    const viewDebug = document.getElementById('admin-view-debug');
 
     const defaultClass = 'px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer';
     const activeClass = 'px-3 py-1.5 rounded-xl text-xs font-black bg-indigo-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer';
@@ -200,6 +271,7 @@ window.ProtecAdmin = {
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
     if (tabReferralsBtn) tabReferralsBtn.className = (tab === 'parrainages' ? activeClass : defaultClass);
     if (tabBalancingBtn) tabBalancingBtn.className = (tab === 'balancing' ? activeClass : defaultClass);
+    if (tabDebugBtn) tabDebugBtn.className = (tab === 'debug' ? activeClass : defaultClass);
     if (tabResetBtn) tabResetBtn.className = (tab === 'reset' ? 'px-3 py-1.5 rounded-xl text-xs font-black bg-rose-600 text-white shadow-sm transition flex items-center gap-1.5 cursor-pointer ml-auto' : 'px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer ml-auto');
 
     if (viewPlayers) viewPlayers.classList.toggle('hidden', tab !== 'joueurs');
@@ -214,6 +286,7 @@ window.ProtecAdmin = {
     if (viewReferrals) viewReferrals.classList.toggle('hidden', tab !== 'parrainages');
     if (viewBalancing) viewBalancing.classList.toggle('hidden', tab !== 'balancing');
     if (viewReset) viewReset.classList.toggle('hidden', tab !== 'reset');
+    if (viewDebug) viewDebug.classList.toggle('hidden', tab !== 'debug');
 
     if (tab === 'archives') {
       this.loadResetArchives();
@@ -3774,6 +3847,330 @@ window.ProtecAdmin = {
     this.awardBadgeToPlayer(this.currentBadgeTargetUserId, sel.value, qty);
   },
 
+
+  // =========================================================================
+  // TABLEAU DE BORD TÉLÉMÉTRIE & DONNÉES CACHÉES (MODE DEBUG ADMIN)
+  // =========================================================================
+  renderDebugDashboard() {
+    const container = document.getElementById('admin-view-debug');
+    if (!container) return;
+    const game = window.game;
+    if (!game) {
+      container.innerHTML = `<div class="p-8 text-center text-slate-500 font-bold bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">Aucune partie active en mémoire.</div>`;
+      return;
+    }
+
+    const now = (game.clock && game.clock.hour !== undefined) 
+      ? new Date(game.clock.year || 2026, (game.clock.month || 1) - 1, game.clock.day || 1, game.clock.hour || 14, game.clock.minute || 0, game.clock.second || 0)
+      : new Date();
+    const currentTime = now.getTime();
+    const formatH = (dt) => `${dt.getHours().toString().padStart(2, '0')}:${dt.getMinutes().toString().padStart(2, '0')}`;
+
+    // 1. Carences et Expirations de Missions
+    const activeMissions = (game.missions || []).filter(m => !game.isMissionTerminated(m));
+    const missionsData = activeMissions.map(m => {
+      const plannedStart = m.eventDate 
+        ? new Date(m.eventDate.year || now.getFullYear(), m.eventDate.month !== undefined ? m.eventDate.month : now.getMonth(), m.eventDate.day || now.getDate(), m.startHour || 14, m.startMinute || 0)
+        : new Date();
+      const durHours = m.durationHours || 4;
+      const plannedEnd = new Date(plannedStart.getTime() + (durHours * 3600 * 1000));
+      const carenceLimit = new Date(plannedEnd.getTime() + (15 * 60 * 1000));
+      const msLeft = carenceLimit.getTime() - currentTime;
+      const minLeft = Math.round(msLeft / 60000);
+      const isUrgent = msLeft <= 30 * 60 * 1000;
+      const isPassed = msLeft <= 0;
+
+      return {
+        m,
+        plannedStart,
+        plannedEnd,
+        carenceLimit,
+        msLeft,
+        minLeft,
+        isUrgent,
+        isPassed
+      };
+    });
+
+    // 2. Crises NOVI
+    const crises = (game.missions || []).filter(m => m.isCrisis || m.type === 'crise' || m.scenarioKey);
+
+    // 3. Probabilités d'alertes & Opportunités
+    const pendingDevis = (game.devis || []).filter(d => d.status === 'pending');
+    const sentDevis = (game.devis || []).filter(d => d.status === 'sent');
+    const socialVis = game.socialMedia?.visibilityScore ?? 75;
+    let devisChance = 0.15;
+    if (socialVis >= 75) devisChance += 0.08;
+    else if (socialVis >= 50) devisChance += 0.04;
+    const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
+    devisChance *= dpsMult;
+
+    let candChance = 0.03;
+    if (game.resources?.campaigns?.social) candChance += 0.20;
+    if (game.resources?.campaigns?.posters) candChance += 0.12;
+    if (socialVis >= 80) candChance += 0.15;
+    else if (socialVis >= 50) candChance += 0.06;
+    const candMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidatureChanceMultiplier', 1.0) : 1.0;
+    candChance *= candMult;
+
+    // 4. Bénévoles
+    const vols = game.volunteers || [];
+    const volsWithLowUniform = vols.filter(v => v.hasUniform === false);
+    const volsBurnout = vols.filter(v => v.isBurnout);
+    const primarySt = (game.stations || [])[0];
+    const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_f1 || 0);
+
+    container.innerHTML = `
+      <div class="space-y-4">
+        
+        <!-- BANDEAU TOGGLE MASTER DEBUG -->
+        <div class="p-4 rounded-3xl bg-gradient-to-r from-amber-500/20 via-slate-900 to-indigo-950 border-2 border-amber-400 text-slate-100 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-2xl bg-amber-400 text-slate-950 flex items-center justify-center text-2xl font-black shadow-lg shadow-amber-400/30">
+              🛠️
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h4 class="text-base font-black text-white">Mode Debug : Affichage des Données Cachées</h4>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${this.isDebugModeActive() ? 'bg-amber-400 text-slate-950 animate-pulse' : 'bg-slate-700 text-slate-300'}">
+                  ${this.isDebugModeActive() ? 'ACTIF SUR LES ÉCRANS DU JEU' : 'MASQUÉ POUR LES JOUEURS'}
+                </span>
+              </div>
+              <p class="text-xs text-slate-300 mt-0.5">Injecte les chronomètres de carence, délais de crise, probabilités d'alertes et jauges de psychologie sur les interfaces.</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="window.ProtecAdmin.toggleDebugMode()" class="px-4 py-2.5 rounded-2xl font-black text-xs transition flex items-center gap-2 shadow-md cursor-pointer ${this.isDebugModeActive() ? 'bg-amber-400 text-slate-950 hover:bg-amber-300' : 'bg-indigo-600 text-white hover:bg-indigo-500'}">
+              <span>${this.isDebugModeActive() ? 'Désactiver le Mode Debug' : 'Activer le Mode Debug'}</span>
+            </button>
+            <button onclick="window.ProtecAdmin.renderDebugDashboard()" class="p-2.5 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Actualiser la télémétrie en direct">
+              🔄
+            </button>
+          </div>
+        </div>
+
+        <!-- STATS CLÉS DU DEBUG -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span class="text-[10px] font-black uppercase text-slate-400 block">Missions Sous Chrono</span>
+            <span class="text-lg font-black text-pc-blue font-mono">${missionsData.length}</span>
+            <span class="text-[10px] text-slate-500 block mt-0.5">${missionsData.filter(m => m.isUrgent).length} proche(s) de carence</span>
+          </div>
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span class="text-[10px] font-black uppercase text-slate-400 block">Crises NOVI en Cours</span>
+            <span class="text-lg font-black text-rose-600 font-mono">${crises.length}</span>
+            <span class="text-[10px] text-slate-500 block mt-0.5">${crises.filter(c => c.status === 'prealerte').length} préalerte(s)</span>
+          </div>
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span class="text-[10px] font-black uppercase text-slate-400 block">Bénévoles Sans Tenue</span>
+            <span class="text-lg font-black text-amber-600 font-mono">${volsWithLowUniform.length}</span>
+            <span class="text-[10px] text-slate-500 block mt-0.5">${stockTenues} tenue(s) en réserve</span>
+          </div>
+          <div class="p-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs">
+            <span class="text-[10px] font-black uppercase text-slate-400 block">Réputation Globale</span>
+            <span class="text-lg font-black text-emerald-600 font-mono">${game.resources?.reputationScore || 50}/100</span>
+            <span class="text-[10px] text-slate-500 block mt-0.5">Convention SAMU: ${game.samuConvention?.signed ? 'Signée ✓' : 'Non signée'}</span>
+          </div>
+        </div>
+
+        <!-- SECTION 1 : CHRONOMÈTRES DE CARENCE & EXPIRATIONS DE MISSIONS -->
+        <div class="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <span>⏱️ Carences Opérationnelles & Délais de Forclusion</span>
+                <span class="px-2 py-0.2 rounded-full text-[9px] bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-300 font-mono">${missionsData.length} missions</span>
+              </h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Temps exact avant que l'autorité n'annule la mission ou n'applique une carence opérationnelle (-35 réputation).</p>
+            </div>
+          </div>
+
+          ${missionsData.length === 0 ? `
+            <p class="p-4 text-center text-xs text-slate-400 italic">Aucune mission avec compte à rebours actif actuellement.</p>
+          ` : `
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase font-black text-slate-400">
+                    <th class="py-2 px-2">Mission</th>
+                    <th class="py-2 px-2">Autorité / Type</th>
+                    <th class="py-2 px-2">Départ prévu</th>
+                    <th class="py-2 px-2">Heure Carence</th>
+                    <th class="py-2 px-2">Temps Restant</th>
+                    <th class="py-2 px-2">Pénalité Carence</th>
+                    <th class="py-2 px-2 text-right">Actions Debug</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                  ${missionsData.map(item => `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                      <td class="py-2.5 px-2 font-bold text-slate-800 dark:text-slate-100">
+                        <div class="flex items-center gap-1.5">
+                          <span>${item.m.title}</span>
+                          <span class="text-[9px] font-mono text-slate-400">#${item.m.id}</span>
+                        </div>
+                      </td>
+                      <td class="py-2.5 px-2">
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.m.type === 'samu' ? 'bg-orange-100 text-orange-900' : (item.m.type === 'pompiers' ? 'bg-red-100 text-red-900' : (item.m.type === 'crise' ? 'bg-purple-100 text-purple-900' : 'bg-blue-100 text-blue-900'))}">
+                          ${item.m.type?.toUpperCase()}
+                        </span>
+                      </td>
+                      <td class="py-2.5 px-2 font-mono text-[11px] text-slate-600 dark:text-slate-300">
+                        ${formatH(item.plannedStart)}
+                      </td>
+                      <td class="py-2.5 px-2 font-mono text-[11px] font-bold text-rose-600">
+                        ${formatH(item.carenceLimit)}
+                      </td>
+                      <td class="py-2.5 px-2 font-mono font-black">
+                        <span class="px-2 py-0.5 rounded text-[11px] ${item.isPassed ? 'bg-rose-600 text-white animate-pulse' : (item.isUrgent ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-100 text-emerald-900')}">
+                          ${item.isPassed ? 'Expiré (Carence)' : `${item.minLeft} min`}
+                        </span>
+                      </td>
+                      <td class="py-2.5 px-2 text-[10px] text-rose-700 dark:text-rose-400 font-bold">
+                        -35 rép • 0 € indemnités
+                      </td>
+                      <td class="py-2.5 px-2 text-right">
+                        <button onclick="window.game.openMissionDetails('${item.m.id}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold transition">
+                          Ouvrir Mission
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
+        </div>
+
+        <!-- SECTION 2 : ÉVOLUTION DES CRISES NOVI & SCÉNARIOS -->
+        <div class="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <span>🚨 Scénarios & Crises NOVI en Cours (${crises.length})</span>
+              </h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Délai d'escalade, phase active et ordre radio planifié.</p>
+            </div>
+          </div>
+
+          ${crises.length === 0 ? `
+            <p class="p-4 text-center text-xs text-slate-400 italic">Aucune crise active sur la carte.</p>
+          ` : `
+            <div class="space-y-3">
+              ${crises.map(c => `
+                <div class="p-3.5 rounded-2xl bg-purple-50/70 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-xs space-y-2">
+                  <div class="flex items-center justify-between">
+                    <span class="font-black text-purple-950 dark:text-purple-200">${c.title}</span>
+                    <span class="px-2 py-0.5 rounded font-black text-[10px] bg-purple-200 dark:bg-purple-900 text-purple-900 dark:text-purple-100">
+                      Phase ${(c.currentPhaseIndex || 0) + 1} / ${c.phases?.length || 1}
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-purple-900 dark:text-purple-300">
+                    <strong>Phase Courante :</strong> ${c.phase_courante || 'Phase 1 : Déploiement'}
+                  </div>
+                  ${c.phases && c.phases[c.currentPhaseIndex || 0]?.ordre_radio ? `
+                    <div class="p-2 rounded-xl bg-white/80 dark:bg-slate-900/80 border border-purple-200 dark:border-purple-900 font-mono text-[10px] text-purple-900 dark:text-purple-200">
+                      📻 Ordre Radio : « ${c.phases[c.currentPhaseIndex || 0].ordre_radio} »
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- SECTION 3 : CHRONOMÈTRES & PROBABILITÉS D'ALERTES CACHÉES -->
+        <div class="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+            🎲 Probabilités Cachées du Moteur de Jeu
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400">Génération Opportunités DPS</span>
+              <div class="text-sm font-black text-pc-blue font-mono">${Math.round(devisChance * 100)}% par cycle</div>
+              <p class="text-[10px] text-slate-500">Plafond : ${pendingDevis.length} / 6 opportunités simultanées en attente.</p>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400">Recrutement Spontané</span>
+              <div class="text-sm font-black text-indigo-600 font-mono">${Math.round(candChance * 100)}% par heure in-game</div>
+              <p class="text-[10px] text-slate-500">Candidatures en attente : ${(game.candidatures || []).length} candidat(s).</p>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-1">
+              <span class="text-[10px] uppercase font-bold text-slate-400">Délibération Devis Envoyés</span>
+              <div class="text-sm font-black text-emerald-600 font-mono">${sentDevis.length} devis en délibération</div>
+              <p class="text-[10px] text-slate-500">Délai standard : 4h de réflexion organisateur avant validation.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECTION 4 : TÉLÉMÉTRIE PSYCHOLOGIQUE DES BÉNÉVOLES -->
+        <div class="p-4 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+            <div>
+              <h4 class="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <span>🧠 Psychologie & Télémétrie Complète des Bénévoles (${vols.length})</span>
+              </h4>
+              <p class="text-[11px] text-slate-500 dark:text-slate-400">Valeurs mathématiques exactes masquées : Moral, Fatigue, Motivation et Risque de Retrait associatif.</p>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto max-h-[380px]">
+            <table class="w-full text-left text-xs">
+              <thead class="sticky top-0 bg-white dark:bg-slate-900">
+                <tr class="border-b border-slate-200 dark:border-slate-800 text-[10px] uppercase font-black text-slate-400">
+                  <th class="py-2 px-2">Bénévole</th>
+                  <th class="py-2 px-2">Moral (0-100)</th>
+                  <th class="py-2 px-2">Motivation (0-100)</th>
+                  <th class="py-2 px-2">Fatigue (0-100)</th>
+                  <th class="py-2 px-2">Tenue Dotée</th>
+                  <th class="py-2 px-2">Sans Mission</th>
+                  <th class="py-2 px-2">Burnout</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 dark:divide-slate-800 font-mono">
+                ${vols.map(v => {
+                  const hoursWithout = Math.round(((game.clock?.day || 1) * 24) - (v.lastMissionHoursElapsed || 0));
+                  return `
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition">
+                      <td class="py-2 px-2 font-sans font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span>${v.avatar || '🙋'}</span>
+                        <span>${v.name}</span>
+                        <span class="text-[9px] text-slate-400 font-normal">(${v.rank})</span>
+                      </td>
+                      <td class="py-2 px-2 font-bold ${(v.moral || 80) < 30 ? 'text-rose-600' : 'text-emerald-600'}">
+                        ${v.moral || 80} / 100
+                      </td>
+                      <td class="py-2 px-2 font-bold ${(v.motivation || 80) < 30 ? 'text-rose-600' : 'text-pc-blue'}">
+                        ${v.motivation || 80} / 100
+                      </td>
+                      <td class="py-2 px-2 font-bold ${(v.fatigue || 0) > 75 ? 'text-rose-600' : 'text-slate-700 dark:text-slate-300'}">
+                        ${v.fatigue || 0} / 100
+                      </td>
+                      <td class="py-2 px-2 font-sans">
+                        ${v.hasUniform !== false 
+                          ? '<span class="text-emerald-600 font-bold text-[10px]">✓ Dotée</span>' 
+                          : '<span class="text-rose-600 font-black text-[10px] animate-pulse">⚠️ MANQUANTE</span>'}
+                      </td>
+                      <td class="py-2 px-2 text-[10px] ${hoursWithout > 500 ? 'text-amber-600 font-bold' : 'text-slate-400'}">
+                        ${hoursWithout}h ${hoursWithout > 720 ? '(Critique)' : ''}
+                      </td>
+                      <td class="py-2 px-2 font-sans">
+                        ${v.isBurnout ? '<span class="px-1.5 py-0.2 rounded bg-rose-600 text-white font-black text-[9px]">BURNOUT</span>' : '<span class="text-slate-400 text-[10px]">Non</span>'}
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    `;
+  },
+
   createAdminModalDOM() {
     if (document.getElementById('admin-modal')) return;
     const div = document.createElement('div');
@@ -3793,7 +4190,12 @@ window.ProtecAdmin = {
               <p id="admin-modal-subtitle" class="text-xs text-indigo-600 font-bold">Gestion globale des Directeurs & Antennes</p>
             </div>
           </div>
-          <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+          <div class="flex items-center gap-2">
+            <button id="admin-debug-toggle-btn" onclick="window.ProtecAdmin.toggleDebugMode()" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ">
+              <span class="w-2.5 h-2.5 rounded-full "></span>
+              <span>Mode Debug (Données Cachées) : <strong></strong></span>
+            </button>
+            <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
