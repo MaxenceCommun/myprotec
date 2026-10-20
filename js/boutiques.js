@@ -104,26 +104,22 @@ window.ProtecBoutiques = {
       id: 'concessionnaire_flotte',
       name: 'Concessionnaire Flotte Secours',
       shortName: 'Concessionnaire Véhicules',
-      slogan: 'Vente directe constructeur de véhicules d’urgence neufs et carrossés',
-      badge: 'Véhicules Homologués',
+      slogan: 'Showroom officiel de véhicules de secours neufs, carrossés et équipés',
+      badge: 'Dotation Immédiate • Garage Antenne',
       badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300',
       icon: 'truck',
       bannerGradient: 'from-emerald-950 via-slate-900 to-teal-950',
       accentColor: 'text-emerald-400',
-      deliveryDelaySec: 150,
-      delayLabel: '2 min 30 (Convoyage Usine)',
+      deliveryDelaySec: 0,
+      delayLabel: 'Dotation Immédiate au Garage',
       shippingCost: 0,
       freeThreshold: 0,
       freeShippingAlways: true,
       priceMultiplier: 1.0,
-      specialty: 'Livraison par convoyeur direct dans le garage de votre antenne',
-      desc: 'Le showroom de la flotte opérationnelle. Commandez vos Véhicules de Premiers Secours (VPSP), VTU fret, Véhicules Légers (VL), Véhicules Tout-Terrain (VLHR 4x4), Poids Lourds, TRM, FLIT, ainsi que la flotte légère (Bateaux ERS, Quads, Motos, Vélos).',
+      specialty: 'Affectation directe au hangar avec immatriculation officielle et indicatif radio',
+      desc: 'Le showroom officiel de la flotte opérationnelle de Sécurité Civile. Commandez vos Véhicules de Premiers Secours (VPSP), VTU fret, Véhicules Légers (VL), Tout-Terrain (VLHR 4x4), Poids Lourds, FLIT, TRM 2000, Bateaux, Quads et Motos. Configuration sur-mesure (châssis, cubes sanitaires, rampe LED, attelage, climatisation).',
       rayons: [
-        { id: 'all', label: 'Tous les véhicules', icon: 'layout-grid' },
-        { id: 'vpsp', label: 'Ambulances VPSP', icon: 'heart-pulse' },
-        { id: 'logistique', label: 'Fret, TRM & Poids Lourds', icon: 'truck' },
-        { id: 'commandement', label: 'VL, VLHR & Commandement', icon: 'car' },
-        { id: 'mobilite', label: 'Bateaux, Quads & Motos', icon: 'navigation' }
+        { id: 'all', label: 'Toute la flotte', icon: 'layout-grid' }
       ]
     },
     {
@@ -214,6 +210,9 @@ window.ProtecBoutiques = {
 
   setStation(stationId) {
     this.selectedStationId = stationId;
+    if (window.game) {
+      window.game.selectedStationId = stationId;
+    }
     this.renderModal(window.game);
   },
 
@@ -233,6 +232,13 @@ window.ProtecBoutiques = {
   // =========================================================================
 
   addToCart(itemId, qty = 1, customData = null) {
+    if (customData?.isVehicle || itemId?.startsWith('veh_new_')) {
+      if (window.game) {
+        window.game.showToast('Showroom Véhicules', 'Les véhicules sont commandés directement via le showroom pour une dotation immédiate au hangar de l\'antenne.', 'blue');
+      }
+      return;
+    }
+
     const cur = this.cart[itemId] || { qty: 0 };
     cur.qty += qty;
     cur.shopId = customData?.shopId || this.activeShopId;
@@ -278,6 +284,13 @@ window.ProtecBoutiques = {
     let subtotal = 0;
     let itemsCount = 0;
     const items = [];
+
+    // Assainissement : ignorer d'éventuels résidus d'articles véhicules
+    Object.keys(this.cart).forEach(id => {
+      if (id.startsWith('veh_new_') || this.cart[id]?.customData?.isVehicle) {
+        delete this.cart[id];
+      }
+    });
 
     Object.entries(this.cart).forEach(([itemId, entry]) => {
       const qty = entry.qty;
@@ -541,36 +554,15 @@ window.ProtecBoutiques = {
       }
 
     } else if (shop.id === 'concessionnaire_flotte') {
-      // 4. Concessionnaire Flotte : VPSP, Fret, VL, Mobilité
+      // 4. Concessionnaire Flotte : Showroom officiel des véhicules opérationnels
+      const chassisList = window.ProtecAdvanced?.chassisModels || [];
       const catalog = window.ProtecAdvanced?.vehicleCatalog || [];
-      list = catalog.map(v => {
-        let rayonTag = 'mobilite';
-        if (v.type === 'VPSP') rayonTag = 'vpsp';
-        else if (['VTU', 'TRM', 'FLIT', 'PL'].includes(v.type)) rayonTag = 'logistique';
-        else if (['VL', 'VLHR', 'PCM'].includes(v.type)) rayonTag = 'commandement';
-
-        return {
-          id: `veh_new_${v.type}`,
-          shopId: shop.id,
-          name: v.name,
-          category: v.type,
-          rayonTag,
-          price: v.cost,
-          unit: 'véhicule neuf',
-          badge: `${v.type} • Neuf d’Usine`,
-          badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-          image: v.image,
-          lucideIcon: 'truck',
-          desc: v.desc || `Véhicule opérationnel d'intervention ${v.name}.`,
-          usage: `Capacité : ${v.seats || 2} secouristes. Vitesse : ${v.speedKmH || 80} km/h.`,
-          isVehicle: true,
-          vehicleType: v.type
-        };
+      let totalCount = 0;
+      chassisList.forEach(c => {
+        totalCount += (c.variants || []).length;
       });
-
-      if (rayon && rayon !== 'all') {
-        list = list.filter(it => it.rayonTag === rayon);
-      }
+      totalCount += catalog.length;
+      list = new Array(totalCount > 0 ? totalCount : 22).fill({ shopId: shop.id });
 
     } else if (shop.id === 'social_humanitaire') {
       // 5. Social & Hébergement : Lits picots, ravitaillement, soutien psycho
@@ -640,6 +632,15 @@ window.ProtecBoutiques = {
     const shop = this.getActiveShop();
     const products = this.getProductsForActiveShop();
     const cartSummary = this.getCartSummary();
+
+    const isConcessionnaire = (shop.id === 'concessionnaire_flotte');
+    const maxGarageSlots = window.ProtecLocaux?.getGarageCapacity?.(game, station?.id)
+      || window.ProtecAdvanced?.getGarageCapacity?.(game, station?.id)
+      || 2;
+    const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === station?.id || (Array.isArray(station?.vehicles) && station.vehicles.includes(v.id))));
+    const usedGarageSlots = stationVehicles.length;
+    const isGarageFull = usedGarageSlots >= maxGarageSlots;
+    const freeSlots = Math.max(0, maxGarageSlots - usedGarageSlots);
 
     body.innerHTML = `
       <div class="space-y-4">
@@ -748,213 +749,256 @@ window.ProtecBoutiques = {
           </div>
         </div>
 
-        <!-- 4. BARRE DES RAYONS THÉMATIQUES & RECHERCHE RAPIDE -->
-        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <!-- Rayons -->
-          <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar">
-            ${(shop.rayons || []).map(r => `
-              <button onclick="window.ProtecBoutiques.setRayon('${r.id}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.activeRayonId === r.id ? 'bg-pc-blue text-white shadow-xs' : 'bg-white hover:bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'}">
-                <i data-lucide="${r.icon}" class="w-3.5 h-3.5"></i>
-                <span>${r.label}</span>
-              </button>
-            `).join('')}
-          </div>
-
-          <!-- Moteur de recherche -->
-          <div class="relative w-full sm:w-60 flex-shrink-0">
-            <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
-            <input type="text" value="${this.searchQuery}" oninput="window.ProtecBoutiques.setSearch(this.value)" placeholder="Rechercher dans ce magasin..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-pc-blue" />
-          </div>
-        </div>
-
-        <!-- 5. CORPS PRINCIPAL : GRILLE D'ARTICLES + PANIER FLOTTANT MULTI-BOUTIQUES -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-
-          <!-- COLONNE GAUCHE (2/3) : RAYON DU MAGASIN -->
-          <div class="lg:col-span-2 space-y-3">
-            <div class="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
-              <span>Rayon : <strong>${(shop.rayons.find(r => r.id === this.activeRayonId) || { label: 'Tout' }).label}</strong> (${products.length} articles)</span>
-              <span>Tarifs officiels ${shop.shortName}</span>
-            </div>
-
-            ${products.length === 0 ? `
-              <div class="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
-                <i data-lucide="package-search" class="w-10 h-10 mx-auto text-slate-400 stroke-1 block"></i>
-                <h4 class="text-xs font-black text-slate-700 dark:text-slate-200">Aucun produit ne correspond à cette recherche.</h4>
-                <p class="text-[11px] text-slate-400">Essayez un autre mot-clé ou visitez un autre rayon du magasin.</p>
-              </div>
-            ` : `
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                ${products.map(item => {
-                  const currentStock = station?.stock?.[item.id] || 0;
-                  const inCartQty = this.cart[item.id]?.qty || 0;
-
-                  return `
-                    <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 dark:bg-slate-900 dark:border-slate-800 hover:border-pc-blue/60 shadow-xs hover:shadow-md transition flex flex-col justify-between gap-2.5 group">
-                      <div>
-                        <!-- Vignette PNG optimisée ou Icône Lucide vectorielle -->
-                        <div class="relative w-full h-32 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center overflow-hidden mb-2.5 group-hover:border-pc-blue/30 transition">
-                          ${(item.image && window.ProtecLogistique?.hasRealImage(item.image)) ? `
-                            <img src="${window.ProtecLogistique.getThumb(item.image)}" 
-                                 alt="${item.name}" 
-                                 loading="lazy"
-                                 onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
-                                 class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105" />
-                          ` : `
-                            <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
-                              <i data-lucide="${item.lucideIcon || 'package'}" class="w-9 h-9 text-pc-blue stroke-[1.75]"></i>
-                              <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${item.unit || ''}</span>
-                            </div>
-                          `}
-                          <span class="px-2 py-0.5 rounded text-[9.5px] font-black border backdrop-blur-md shadow-xs absolute top-2 left-2 ${item.badgeColor || 'bg-slate-100 text-slate-800'}">
-                            ${item.badge || shop.shortName}
-                          </span>
-                          <span class="absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900/80 border border-slate-700/80 text-slate-100 shadow-xs backdrop-blur-xs">
-                            En stock : ${currentStock}
-                          </span>
-                        </div>
-
-                        <!-- Titre & Description -->
-                        <h5 class="text-xs font-black text-slate-900 dark:text-white leading-snug group-hover:text-pc-blue transition">${item.name}</h5>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2">${item.desc || ''}</p>
-                        
-                        ${item.usage ? `
-                          <p class="text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 p-1.5 rounded-lg mt-2 font-medium flex items-center gap-1.5">
-                            <i data-lucide="info" class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"></i>
-                            <span>${item.usage}</span>
-                          </p>
-                        ` : ''}
-                      </div>
-
-                      <!-- Bas de carte : Prix & Panier -->
-                      <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                        <div>
-                          <div class="text-xs font-black text-slate-900 dark:text-white font-mono">${(item.price || 0).toLocaleString('fr-FR')} €</div>
-                          <span class="text-[9.5px] text-slate-400">par ${item.unit || 'lot'}</span>
-                        </div>
-
-                        <div class="flex items-center gap-1.5">
-                          ${inCartQty > 0 ? `
-                            <div class="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 p-0.5">
-                              <button onclick="window.ProtecBoutiques.updateCartQty('${item.id}', ${inCartQty - 1})" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs flex items-center justify-center transition">−</button>
-                              <span class="w-7 text-center font-mono font-black text-xs text-pc-blue">${inCartQty}</span>
-                              <button onclick="window.ProtecBoutiques.updateCartQty('${item.id}', ${inCartQty + 1})" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs flex items-center justify-center transition">+</button>
-                            </div>
-                          ` : `
-                            <button onclick="window.ProtecBoutiques.addToCart('${item.id}', 1, { name: '${item.name.replace(/'/g, "\\'")}', price: ${item.price}, unit: '${item.unit || 'lot'}', icon: '${item.lucideIcon || 'package'}', image: '${item.image || ''}', shopId: '${shop.id}', radioTech: '${item.radioTech || ''}', radioCount: ${item.radioCount || 0} })" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer">
-                              <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                              <span>Ajouter</span>
-                            </button>
-                          `}
-                        </div>
-                      </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            `}
-          </div>
-
-          <!-- COLONNE DROITE (1/3) : PANIER D'ACHATS DU CENTRE COMMERCIAL -->
-          <div class="lg:col-span-1 p-4 rounded-3xl bg-slate-50 border border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-4 lg:sticky lg:top-4">
+        ${isConcessionnaire ? `
+          <!-- 4. ESPACE CONCESSIONNAIRE & SHOWROOM OFFICIEL DES VÉHICULES -->
+          <div class="space-y-4">
             
-            <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
-              <div class="flex items-center gap-2">
-                <i data-lucide="shopping-cart" class="w-4 h-4 text-pc-blue"></i>
-                <div>
-                  <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">Mon Panier de Courses</h4>
-                  <span class="text-[10px] text-slate-500 dark:text-slate-400">Expédié par <strong>${shop.shortName}</strong></span>
+            <!-- Bandeau de statut du Hangar & Capacité de l'antenne sélectionnée -->
+            <div class="p-4 rounded-3xl ${isGarageFull ? 'bg-amber-500/10 border-amber-300 dark:border-amber-700/50' : 'bg-emerald-500/10 border-emerald-300 dark:border-emerald-700/50'} border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${isGarageFull ? 'bg-amber-100 text-amber-900 border border-amber-300 dark:bg-amber-950 dark:text-amber-200' : 'bg-emerald-100 text-emerald-900 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-200'}">
+                    ${isGarageFull ? '⚠️ Garage Saturé' : '✓ Garage Opérationnel'}
+                  </span>
+                  <span class="font-extrabold text-slate-800 dark:text-slate-200">
+                    Hangar d'antenne : <strong>${station?.name || 'Antenne Principale'}</strong>
+                  </span>
                 </div>
+                <p class="text-[11px] text-slate-600 dark:text-slate-400">
+                  ${isGarageFull 
+                    ? `Votre hangar a atteint sa capacité maximale (<strong>${usedGarageSlots} / ${maxGarageSlots} places</strong>). Agrandissez le hangar dans l'aménagement du local pour commander un nouveau véhicule ou sélectionnez une autre antenne ci-dessus.`
+                    : `Capacité du Hangar : <strong class="text-emerald-600 dark:text-emerald-400 font-mono">${usedGarageSlots} / ${maxGarageSlots} véhicules</strong> • <strong>${freeSlots} place(s) disponible(s)</strong> pour une dotation immédiate.`
+                  }
+                </p>
               </div>
-              <span class="px-2 py-0.5 rounded-full text-xs font-black bg-blue-600 text-white font-mono">
-                ${cartSummary.itemsCount}
-              </span>
+
+              <div class="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
+                <button onclick="window.game.openModule('locaux')" class="px-3.5 py-2 rounded-xl bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-white font-black text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i data-lucide="warehouse" class="w-3.5 h-3.5 text-pc-blue"></i>
+                  <span>Aménagement Hangar</span>
+                </button>
+                <button onclick="window.game.openModule('marche_occasion')" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs transition flex items-center gap-1.5 shadow-2xs cursor-pointer">
+                  <i data-lucide="tag" class="w-3.5 h-3.5"></i>
+                  <span>Occasion 🏷️</span>
+                </button>
+              </div>
             </div>
 
-            <!-- Liste des articles -->
-            <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
-              ${cartSummary.itemsCount === 0 ? `
-                <div class="py-8 text-center space-y-2 text-slate-500 dark:text-slate-400">
-                  <i data-lucide="shopping-bag" class="w-9 h-9 mx-auto text-slate-300 dark:text-slate-600 stroke-1 block opacity-70"></i>
-                  <p class="text-xs font-bold">Votre panier de courses est vide.</p>
-                  <p class="text-[10.5px] text-slate-400 dark:text-slate-500">Ajoutez des articles depuis n'importe quel magasin de la galerie.</p>
-                </div>
-              ` : cartSummary.items.map(it => `
-                <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 text-xs">
-                  <div class="min-w-0 flex-1">
-                    <div class="font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">${it.name}</div>
-                    <div class="text-[10px] text-slate-400 font-mono">${it.price.toLocaleString('fr-FR')} € × ${it.qty} = <strong class="text-emerald-600 dark:text-emerald-400">${it.lineTotal.toLocaleString('fr-FR')} €</strong></div>
-                  </div>
+            <!-- Showroom Véhicules officiel (Deux modes : Par Modèle & Carrosserie ou Par Rôle, Choix Aménagements, Sérigraphies, Options d'usine) -->
+            <div id="concessionnaire-showroom-container" class="space-y-4">
+              ${window.ProtecAdvancedModals ? window.ProtecAdvancedModals.renderVehicleShop(game, station?.id) : '<p class="text-xs text-slate-500 p-8 text-center">Chargement du Concessionnaire...</p>'}
+            </div>
 
-                  <div class="flex items-center gap-1.5 flex-shrink-0">
-                    <div class="flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-300 dark:border-slate-700">
-                      <button onclick="window.ProtecBoutiques.updateCartQty('${it.id}', ${it.qty - 1})" class="w-5 h-5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center justify-center font-black">−</button>
-                      <span class="w-5 text-center font-mono font-bold text-[11px] text-slate-800 dark:text-white">${it.qty}</span>
-                      <button onclick="window.ProtecBoutiques.updateCartQty('${it.id}', ${it.qty + 1})" class="w-5 h-5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center justify-center font-black">+</button>
-                    </div>
-                    <button onclick="window.ProtecBoutiques.removeFromCart('${it.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition" title="Supprimer">
-                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                    </button>
-                  </div>
-                </div>
+          </div>
+        ` : `
+          <!-- 4. BARRE DES RAYONS THÉMATIQUES & RECHERCHE RAPIDE -->
+          <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 dark:bg-slate-900 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <!-- Rayons -->
+            <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 custom-scrollbar">
+              ${(shop.rayons || []).map(r => `
+                <button onclick="window.ProtecBoutiques.setRayon('${r.id}')" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 flex-shrink-0 cursor-pointer ${this.activeRayonId === r.id ? 'bg-pc-blue text-white shadow-xs' : 'bg-white hover:bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700'}">
+                  <i data-lucide="${r.icon}" class="w-3.5 h-3.5"></i>
+                  <span>${r.label}</span>
+                </button>
               `).join('')}
             </div>
 
-            <!-- Récapitulatif financier & Transporteur -->
-            <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2 text-xs">
-              <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
-                <span>Sous-total articles :</span>
-                <span class="font-mono font-bold text-slate-800 dark:text-slate-200">${cartSummary.subtotal.toLocaleString('fr-FR')} €</span>
-              </div>
-
-              <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
-                <span>Frais de livraison (${shop.shortName}) :</span>
-                ${cartSummary.shippingFee === 0 ? `
-                  <span class="font-black text-emerald-600 flex items-center gap-1">
-                    <i data-lucide="gift" class="w-3 h-3"></i> OFFERTS (0 €)
-                  </span>
-                ` : `
-                  <span class="font-black text-amber-600 font-mono">+${cartSummary.shippingFee} €</span>
-                `}
-              </div>
-
-              <div class="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
-                <i data-lucide="clock" class="w-3 h-3 text-pc-blue"></i>
-                <span>Délai transporteur : <strong>${shop.delayLabel}</strong></span>
-              </div>
-
-              <div class="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-slate-800 text-sm font-black">
-                <span>Total à régler :</span>
-                <span class="text-base text-emerald-600 dark:text-emerald-400 font-mono">${cartSummary.grandTotal.toLocaleString('fr-FR')} €</span>
-              </div>
-
-              <div class="flex justify-between text-[10.5px] ${game.resources.money < cartSummary.grandTotal ? 'text-rose-500 font-bold' : 'text-slate-500 dark:text-slate-400'}">
-                <span>Trésorerie restante :</span>
-                <span class="font-mono font-bold">${Math.max(0, game.resources.money - cartSummary.grandTotal).toLocaleString('fr-FR')} €</span>
-              </div>
+            <!-- Moteur de recherche -->
+            <div class="relative w-full sm:w-60 flex-shrink-0">
+              <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2"></i>
+              <input type="text" value="${this.searchQuery}" oninput="window.ProtecBoutiques.setSearch(this.value)" placeholder="Rechercher dans ce magasin..." class="w-full pl-8 pr-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-800 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-pc-blue" />
             </div>
+          </div>
 
-            <!-- Validation commande -->
-            <div class="space-y-2 pt-1">
-              ${cartSummary.itemsCount > 0 ? `
-                <button onclick="window.ProtecBoutiques.checkout(window.game)" class="w-full py-3 rounded-2xl ${game.resources.money >= cartSummary.grandTotal ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg cursor-pointer' : 'bg-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed'} font-black text-xs transition flex items-center justify-center gap-2 active:scale-95" ${game.resources.money < cartSummary.grandTotal ? 'disabled' : ''}>
-                  <i data-lucide="truck" class="w-4 h-4"></i>
-                  <span>${game.resources.money >= cartSummary.grandTotal ? `Régler et Expédier (${cartSummary.grandTotal.toLocaleString('fr-FR')} €)` : 'Trésorerie Insuffisante'}</span>
-                </button>
+          <!-- 5. CORPS PRINCIPAL : GRILLE D'ARTICLES + PANIER FLOTTANT MULTI-BOUTIQUES -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
 
-                <button onclick="window.ProtecBoutiques.clearCart()" class="w-full py-1.5 rounded-xl text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
-                  Vider le panier de courses
-                </button>
+            <!-- COLONNE GAUCHE (2/3) : RAYON DU MAGASIN -->
+            <div class="lg:col-span-2 space-y-3">
+              <div class="flex items-center justify-between text-xs font-bold text-slate-500 dark:text-slate-400 px-1">
+                <span>Rayon : <strong>${(shop.rayons.find(r => r.id === this.activeRayonId) || { label: 'Tout' }).label}</strong> (${products.length} articles)</span>
+                <span>Tarifs officiels ${shop.shortName}</span>
+              </div>
+
+              ${products.length === 0 ? `
+                <div class="p-12 text-center rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-2">
+                  <i data-lucide="package-search" class="w-10 h-10 mx-auto text-slate-400 stroke-1 block"></i>
+                  <h4 class="text-xs font-black text-slate-700 dark:text-slate-200">Aucun produit ne correspond à cette recherche.</h4>
+                  <p class="text-[11px] text-slate-400">Essayez un autre mot-clé ou visitez un autre rayon du magasin.</p>
+                </div>
               ` : `
-                <button disabled class="w-full py-3 rounded-2xl bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold text-xs cursor-not-allowed text-center">
-                  Panier vide
-                </button>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  ${products.map(item => {
+                    const currentStock = station?.stock?.[item.id] || 0;
+                    const inCartQty = this.cart[item.id]?.qty || 0;
+
+                    return `
+                      <div class="p-3.5 rounded-2xl bg-white border border-slate-200/90 dark:bg-slate-900 dark:border-slate-800 hover:border-pc-blue/60 shadow-xs hover:shadow-md transition flex flex-col justify-between gap-2.5 group">
+                        <div>
+                          <!-- Vignette PNG optimisée ou Icône Lucide vectorielle -->
+                          <div class="relative w-full h-32 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center overflow-hidden mb-2.5 group-hover:border-pc-blue/30 transition">
+                            ${(item.image && window.ProtecLogistique?.hasRealImage(item.image)) ? `
+                              <img src="${window.ProtecLogistique.getThumb(item.image)}" 
+                                   alt="${item.name}" 
+                                   loading="lazy"
+                                   onerror="if (!this.dataset.fallback) { this.dataset.fallback='1'; this.src='${item.image}'; }"
+                                   class="w-full h-full object-contain p-2 transition-transform duration-300 group-hover:scale-105" />
+                            ` : `
+                              <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
+                                <i data-lucide="${item.lucideIcon || 'package'}" class="w-9 h-9 text-pc-blue stroke-[1.75]"></i>
+                                <span class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">${item.unit || ''}</span>
+                              </div>
+                            `}
+                            <span class="px-2 py-0.5 rounded text-[9.5px] font-black border backdrop-blur-md shadow-xs absolute top-2 left-2 ${item.badgeColor || 'bg-slate-100 text-slate-800'}">
+                              ${item.badge || shop.shortName}
+                            </span>
+                            <span class="absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900/80 border border-slate-700/80 text-slate-100 shadow-xs backdrop-blur-xs">
+                              En stock : ${currentStock}
+                            </span>
+                          </div>
+
+                          <!-- Titre & Description -->
+                          <h5 class="text-xs font-black text-slate-900 dark:text-white leading-snug group-hover:text-pc-blue transition">${item.name}</h5>
+                          <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2">${item.desc || ''}</p>
+                          
+                          ${item.usage ? `
+                            <p class="text-[10px] text-emerald-800 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/80 p-1.5 rounded-lg mt-2 font-medium flex items-center gap-1.5">
+                              <i data-lucide="info" class="w-3.5 h-3.5 text-emerald-600 flex-shrink-0"></i>
+                              <span>${item.usage}</span>
+                            </p>
+                          ` : ''}
+                        </div>
+
+                        <!-- Bas de carte : Prix & Panier -->
+                        <div class="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                          <div>
+                            <div class="text-xs font-black text-slate-900 dark:text-white font-mono">${(item.price || 0).toLocaleString('fr-FR')} €</div>
+                            <span class="text-[9.5px] text-slate-400">par ${item.unit || 'lot'}</span>
+                          </div>
+
+                          <div class="flex items-center gap-1.5">
+                            ${inCartQty > 0 ? `
+                              <div class="flex items-center rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 p-0.5">
+                                <button onclick="window.ProtecBoutiques.updateCartQty('${item.id}', ${inCartQty - 1})" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs flex items-center justify-center transition">−</button>
+                                <span class="w-7 text-center font-mono font-black text-xs text-pc-blue">${inCartQty}</span>
+                                <button onclick="window.ProtecBoutiques.updateCartQty('${item.id}', ${inCartQty + 1})" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs flex items-center justify-center transition">+</button>
+                              </div>
+                            ` : `
+                              <button onclick="window.ProtecBoutiques.addToCart('${item.id}', 1, { name: '${item.name.replace(/'/g, "\\'")}', price: ${item.price}, unit: '${item.unit || 'lot'}', icon: '${item.lucideIcon || 'package'}', image: '${item.image || ''}', shopId: '${shop.id}', radioTech: '${item.radioTech || ''}', radioCount: ${item.radioCount || 0} })" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                <span>Ajouter</span>
+                              </button>
+                            `}
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
               `}
             </div>
 
-          </div>
+            <!-- COLONNE DROITE (1/3) : PANIER D'ACHATS DU CENTRE COMMERCIAL -->
+            <div class="lg:col-span-1 p-4 rounded-3xl bg-slate-50 border border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-4 lg:sticky lg:top-4">
+              
+              <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                <div class="flex items-center gap-2">
+                  <i data-lucide="shopping-cart" class="w-4 h-4 text-pc-blue"></i>
+                  <div>
+                    <h4 class="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">Mon Panier de Courses</h4>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400">Expédié par <strong>${shop.shortName}</strong></span>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-xs font-black bg-blue-600 text-white font-mono">
+                  ${cartSummary.itemsCount}
+                </span>
+              </div>
 
-        </div>
+              <!-- Liste des articles -->
+              <div class="space-y-2 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                ${cartSummary.itemsCount === 0 ? `
+                  <div class="py-8 text-center space-y-2 text-slate-500 dark:text-slate-400">
+                    <i data-lucide="shopping-bag" class="w-9 h-9 mx-auto text-slate-300 dark:text-slate-600 stroke-1 block opacity-70"></i>
+                    <p class="text-xs font-bold">Votre panier de courses est vide.</p>
+                    <p class="text-[10.5px] text-slate-400 dark:text-slate-500">Ajoutez des articles depuis n'importe quel magasin de la galerie.</p>
+                  </div>
+                ` : cartSummary.items.map(it => `
+                  <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 text-xs">
+                    <div class="min-w-0 flex-1">
+                      <div class="font-bold text-slate-800 dark:text-slate-200 truncate leading-tight">${it.name}</div>
+                      <div class="text-[10px] text-slate-400 font-mono">${it.price.toLocaleString('fr-FR')} € × ${it.qty} = <strong class="text-emerald-600 dark:text-emerald-400">${it.lineTotal.toLocaleString('fr-FR')} €</strong></div>
+                    </div>
+
+                    <div class="flex items-center gap-1.5 flex-shrink-0">
+                      <div class="flex items-center rounded-lg bg-slate-100 dark:bg-slate-900 p-0.5 border border-slate-300 dark:border-slate-700">
+                        <button onclick="window.ProtecBoutiques.updateCartQty('${it.id}', ${it.qty - 1})" class="w-5 h-5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center justify-center font-black">−</button>
+                        <span class="w-5 text-center font-mono font-bold text-[11px] text-slate-800 dark:text-white">${it.qty}</span>
+                        <button onclick="window.ProtecBoutiques.updateCartQty('${it.id}', ${it.qty + 1})" class="w-5 h-5 rounded text-slate-600 dark:text-slate-300 hover:text-slate-900 flex items-center justify-center font-black">+</button>
+                      </div>
+                      <button onclick="window.ProtecBoutiques.removeFromCart('${it.id}')" class="text-slate-400 hover:text-rose-500 p-1 transition" title="Supprimer">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                      </button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Récapitulatif financier & Transporteur -->
+              <div class="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2 text-xs">
+                <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
+                  <span>Sous-total articles :</span>
+                  <span class="font-mono font-bold text-slate-800 dark:text-slate-200">${cartSummary.subtotal.toLocaleString('fr-FR')} €</span>
+                </div>
+
+                <div class="flex justify-between text-slate-500 dark:text-slate-400 text-[11px]">
+                  <span>Frais de livraison (${shop.shortName}) :</span>
+                  ${cartSummary.shippingFee === 0 ? `
+                    <span class="font-black text-emerald-600 flex items-center gap-1">
+                      <i data-lucide="gift" class="w-3 h-3"></i> OFFERTS (0 €)
+                    </span>
+                  ` : `
+                    <span class="font-black text-amber-600 font-mono">+${cartSummary.shippingFee} €</span>
+                  `}
+                </div>
+
+                <div class="flex items-center gap-1.5 text-[10px] text-slate-500 dark:text-slate-400 pt-0.5">
+                  <i data-lucide="clock" class="w-3 h-3 text-pc-blue"></i>
+                  <span>Délai transporteur : <strong>${shop.delayLabel}</strong></span>
+                </div>
+
+                <div class="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-slate-800 text-sm font-black">
+                  <span>Total à régler :</span>
+                  <span class="text-base text-emerald-600 dark:text-emerald-400 font-mono">${cartSummary.grandTotal.toLocaleString('fr-FR')} €</span>
+                </div>
+
+                <div class="flex justify-between text-[10.5px] ${game.resources.money < cartSummary.grandTotal ? 'text-rose-500 font-bold' : 'text-slate-500 dark:text-slate-400'}">
+                  <span>Trésorerie restante :</span>
+                  <span class="font-mono font-bold">${Math.max(0, game.resources.money - cartSummary.grandTotal).toLocaleString('fr-FR')} €</span>
+                </div>
+              </div>
+
+              <!-- Validation commande -->
+              <div class="space-y-2 pt-1">
+                ${cartSummary.itemsCount > 0 ? `
+                  <button onclick="window.ProtecBoutiques.checkout(window.game)" class="w-full py-3 rounded-2xl ${game.resources.money >= cartSummary.grandTotal ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg cursor-pointer' : 'bg-slate-300 text-slate-500 dark:bg-slate-800 dark:text-slate-500 cursor-not-allowed'} font-black text-xs transition flex items-center justify-center gap-2 active:scale-95" ${game.resources.money < cartSummary.grandTotal ? 'disabled' : ''}>
+                    <i data-lucide="truck" class="w-4 h-4"></i>
+                    <span>${game.resources.money >= cartSummary.grandTotal ? `Régler et Expédier (${cartSummary.grandTotal.toLocaleString('fr-FR')} €)` : 'Trésorerie Insuffisante'}</span>
+                  </button>
+
+                  <button onclick="window.ProtecBoutiques.clearCart()" class="w-full py-1.5 rounded-xl text-[10.5px] text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition">
+                    Vider le panier de courses
+                  </button>
+                ` : `
+                  <button disabled class="w-full py-3 rounded-2xl bg-slate-200 text-slate-400 dark:bg-slate-800 dark:text-slate-500 font-bold text-xs cursor-not-allowed text-center">
+                    Panier vide
+                  </button>
+                `}
+              </div>
+
+            </div>
+
+          </div>
+        `}
 
         <!-- 6. PIED DE PAGE : FLÂNER VERS LE MAGASIN SUIVANT -->
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-slate-100 via-white to-slate-100 dark:from-slate-900 dark:via-slate-850 dark:to-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs">

@@ -328,14 +328,30 @@ window.ProtecAdvancedModals = {
     }
   },
 
+  refreshVehicleShop(stationId, shouldFocusSearch = false) {
+    if (!window.game) return;
+    const showroom = document.getElementById('concessionnaire-showroom-container');
+    if (showroom) {
+      showroom.innerHTML = this.renderVehicleShop(window.game, stationId);
+    } else {
+      const body = document.getElementById('modal-body');
+      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
+    }
+    if (shouldFocusSearch) {
+      const input = document.getElementById('vehicle-search-input');
+      if (input) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+      }
+    }
+    if (window.lucide) window.lucide.createIcons();
+  },
+
   toggleVehicleOption(targetKey, optionKey, stationId) {
     if (!this.selectedVehicleOptions) this.selectedVehicleOptions = {};
     if (!this.selectedVehicleOptions[targetKey]) this.selectedVehicleOptions[targetKey] = {};
     this.selectedVehicleOptions[targetKey][optionKey] = !this.selectedVehicleOptions[targetKey][optionKey];
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   getVehicleSelectedOptions(targetKey) {
@@ -344,59 +360,34 @@ window.ProtecAdvancedModals = {
 
   setVehicleShopMode(mode, stationId) {
     this.shopMode = mode;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   setVehicleSearch(searchKey, stationId) {
     this.vehicleSearch = searchKey;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) {
-        body.innerHTML = this.renderVehicleShop(window.game, stationId);
-        const input = document.getElementById('vehicle-search-input');
-        if (input) {
-          input.focus();
-          input.setSelectionRange(input.value.length, input.value.length);
-        }
-      }
-    }
+    this.refreshVehicleShop(stationId, true);
   },
 
   setVehicleFilter(filterKey, stationId) {
     this.vehicleFilter = filterKey;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   setVehicleSort(sortKey, stationId) {
     this.vehicleSort = sortKey;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   selectModelVariant(modelId, variantId, stationId) {
     if (!this.selectedVariants) this.selectedVariants = {};
     this.selectedVariants[modelId] = variantId;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   selectTypeSerigraphie(groupKey, variantId, stationId) {
     if (!this.selectedSerigraphies) this.selectedSerigraphies = {};
     this.selectedSerigraphies[groupKey] = variantId;
-    if (window.game) {
-      const body = document.getElementById('modal-body');
-      if (body) body.innerHTML = this.renderVehicleShop(window.game, stationId);
-    }
+    this.refreshVehicleShop(stationId);
   },
 
   buyConfiguredVariant(stationId, vehicleType, modelId, variantId) {
