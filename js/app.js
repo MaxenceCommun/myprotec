@@ -85,7 +85,7 @@ class ProtecGame {
       money: 40000,
       reputationScore: 0,
       reputationLevel: 1,
-      followers: 140,
+      followers: 20,
       alliancePoints: 50,
       campaigns: {
         social: false,
@@ -261,7 +261,7 @@ class ProtecGame {
         _money: 40000,
         reputationScore: 0,
         reputationLevel: 1,
-        followers: 140,
+        followers: 20,
         alliancePoints: 50,
         campaigns: { social: false, posters: false },
         agrements: { D: true, A: false, B: false, C: false }
@@ -3915,6 +3915,14 @@ class ProtecGame {
         this.resources.budget = 40000;
         this.resources.funds = 40000;
         this.resources._money = 40000;
+      }
+
+      // Reset propre et cohérent des réseaux sociaux et avis pour la nouvelle antenne
+      if (this.resources) {
+        this.resources.followers = 20; // 20 abonnés locaux fondateurs
+      }
+      if (window.ProtecCommunication && typeof window.ProtecCommunication.resetForNewAntenna === 'function') {
+        window.ProtecCommunication.resetForNewAntenna(this);
       }
 
       // 3. CONVENTION FONDATRICE AASC (Octroyée dès l'affiliation FNPC lors du tutoriel)
@@ -11794,6 +11802,10 @@ class ProtecGame {
             source: 'dps'
           });
         }
+
+        // Croissance naturelle de la communauté : le public et l'organisateur suivent l'antenne
+        const newDpsFollowers = Math.floor(6 + Math.random() * 12);
+        this.resources.followers = (this.resources.followers || 0) + newDpsFollowers;
 
         // Bon retour occasionnel des partenaires (~40% de chance, "de temps en temps")
         if (Math.random() < 0.40 && window.ProtecMessaging?.logInstitutionalFeedback) {

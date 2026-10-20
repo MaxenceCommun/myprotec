@@ -204,40 +204,14 @@ window.ProtecCommunication = {
     }
 
     if (!game.socialMedia) {
-      const now = Date.now();
       game.socialMedia = {
-        visibilityScore: 15,        // Score de visibilité initial (nécessite des actions de com pour décoller)
-        lastPostTimestamp: now - 3600000 * 4,
-        totalPosts: 2,
-        totalLikes: 248,
-        totalShares: 42,
+        visibilityScore: 5,        // Score de visibilité naissant d'une nouvelle antenne
+        lastPostTimestamp: 0,
+        totalPosts: 0,
+        totalLikes: 0,
+        totalShares: 0,
         autoPilotSalarieId: null,   // Salarié délégué en Community Manager
-        feed: [
-          {
-            id: 'post-init-1',
-            timestamp: now - 3600000 * 18,
-            themeId: 'materiel',
-            authorName: 'Antenne Protection Civile',
-            authorRole: 'Direction d’Antenne',
-            text: 'Prise de garde opérationnelle ! Notre VPSP est armé et prêt à intervenir sur toute sollicitation de la Préfecture et du SAMU.',
-            likes: 112,
-            shares: 19,
-            commentsCount: 6,
-            topComment: 'Merci d’être toujours présents pour nous veiller ! 🙏'
-          },
-          {
-            id: 'post-init-2',
-            timestamp: now - 3600000 * 6,
-            themeId: 'dps',
-            authorName: 'Antenne Protection Civile',
-            authorRole: 'Équipe de terrain',
-            text: 'Dispositif Prévisionnel de Secours réussi sur le tournoi omnisports municipal. Félicitations à nos équipiers secouristes pour leur réactivité !',
-            likes: 136,
-            shares: 23,
-            commentsCount: 9,
-            topComment: 'Superbe prise en charge de ma cheville foulée, merci les secouristes ! 👍'
-          }
-        ]
+        feed: []
       };
     }
 
@@ -251,14 +225,45 @@ window.ProtecCommunication = {
 
     if (!game.antenneWebsite) {
       game.antenneWebsite = {
-        freshness: 90,                  // Fraîcheur du site (0 à 100%) - Facteur N°1 d'attribution des devis DPS !
-        lastUpdatedTimestamp: Date.now() - 3600000 * 8,
-        totalVisits: 1420,
-        quotesRequestedOnline: 12,
+        freshness: 100,                  // Site flambant neuf inauguré
+        lastUpdatedTimestamp: Date.now(),
+        totalVisits: 8,                  // Quelques visites de curieux locaux
+        quotesRequestedOnline: 0,
         autoPilotSalarieId: null,       // Salarié délégué à la maintenance du site
         onlineQuoteFormActive: true,
         showTrainingSchedule: true
       };
+    }
+
+    // Assainissement dynamique : si l'antenne est toute nouvelle (0 mission terminée),
+    // purger les anciens faux posts et faux avis fictifs d'exemple
+    const completedMissionsCount = (game.missions || []).filter(m => m.status === 'completed').length;
+    if (completedMissionsCount === 0) {
+      if (game.socialMedia && Array.isArray(game.socialMedia.feed)) {
+        const hasMockPosts = game.socialMedia.feed.some(p => p.id === 'post-init-1' || p.id === 'post-init-2');
+        if (hasMockPosts) {
+          game.socialMedia.feed = game.socialMedia.feed.filter(p => p.id !== 'post-init-1' && p.id !== 'post-init-2');
+          game.socialMedia.totalPosts = game.socialMedia.feed.length;
+          game.socialMedia.totalLikes = game.socialMedia.feed.reduce((sum, p) => sum + (p.likes || 0), 0);
+          game.socialMedia.totalShares = game.socialMedia.feed.reduce((sum, p) => sum + (p.shares || 0), 0);
+          if (game.socialMedia.feed.length === 0) {
+            game.socialMedia.visibilityScore = Math.min(10, game.socialMedia.visibilityScore || 5);
+          }
+        }
+      }
+
+      if (Array.isArray(game.publicReviews)) {
+        game.publicReviews = game.publicReviews.filter(r => !String(r.id).startsWith('rev-init-'));
+      }
+
+      if (game.resources && (!game.resources.followers || game.resources.followers === 140)) {
+        game.resources.followers = 20; // 20 abonnés locaux fondateurs
+      }
+
+      if (game.antenneWebsite && (game.antenneWebsite.totalVisits >= 1400 || game.antenneWebsite.quotesRequestedOnline >= 10)) {
+        game.antenneWebsite.totalVisits = 8;
+        game.antenneWebsite.quotesRequestedOnline = 0;
+      }
     }
   },
 
@@ -296,67 +301,153 @@ window.ProtecCommunication = {
     this.renderModal(game);
   },
 
-  // Statistiques et calcul de la Note Avis sur 5 étoiles (Notoriété de l'antenne)
+  // Réinitialisation dédiée lors du lancement officiel d'une nouvelle antenne
+  resetForNewAntenna(game) {
+    if (!game) game = window.game;
+    if (game.resources) {
+      game.resources.followers = 20; // 20 abonnés locaux fondateurs
+    }
+    game.socialMedia = {
+      visibilityScore: 5,
+      lastPostTimestamp: 0,
+      totalPosts: 0,
+      totalLikes: 0,
+      totalShares: 0,
+      autoPilotSalarieId: null,
+      feed: []
+    };
+    game.publicReviews = [];
+    game.photoFolders = [];
+    game.antenneWebsite = {
+      freshness: 100,
+      lastUpdatedTimestamp: Date.now(),
+      totalVisits: 8,
+      quotesRequestedOnline: 0,
+      autoPilotSalarieId: null,
+      onlineQuoteFormActive: true,
+      showTrainingSchedule: true
+    };
+  },
+
+  // Système dynamique de Paliers de Communauté (La Commu & Followers)
+  getCommunityTier(game) {
+    if (!game) game = window.game;
+    const followers = Math.max(0, (game.resources && game.resources.followers) || 0);
+
+    if (followers < 100) {
+      const progress = Math.min(100, Math.round((followers / 100) * 100));
+      return {
+        level: 1,
+        title: 'Cercle Proche & Bénévoles',
+        badge: 'Portée Faible (Lancement)',
+        badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
+        reachMultiplier: 0.20 + (followers / 100) * 0.15, // 0.20 à 0.35 (faible portée)
+        followers: followers,
+        nextTierAt: 100,
+        progressPct: progress,
+        desc: 'Page naissante vue uniquement par une poignée de proches et bénévoles. Vos publications ont peu d’impact direct mais font grandir votre communauté.',
+        likesMin: 1,
+        likesMax: Math.max(2, Math.floor(followers * 0.15)),
+        sharesChance: 0.10,
+        newFollowersRange: [3, 8],
+        opportunityChance: 0.05
+      };
+    } else if (followers < 500) {
+      const progress = Math.min(100, Math.round(((followers - 100) / 400) * 100));
+      return {
+        level: 2,
+        title: 'Rayonnement Communal Émergent',
+        badge: 'Portée Locale',
+        badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
+        reachMultiplier: 0.40 + ((followers - 100) / 400) * 0.30, // 0.40 à 0.70
+        followers: followers,
+        nextTierAt: 500,
+        progressPct: progress,
+        desc: 'Les habitants et associations de votre commune suivent votre actualité. Vos publications génèrent des interactions régulières.',
+        likesMin: 6,
+        likesMax: Math.floor(12 + (followers * 0.06)),
+        sharesChance: 0.35,
+        newFollowersRange: [8, 18],
+        opportunityChance: 0.25
+      };
+    } else if (followers < 2000) {
+      const progress = Math.min(100, Math.round(((followers - 500) / 1500) * 100));
+      return {
+        level: 3,
+        title: 'Communauté Territoriale Affirmée',
+        badge: 'Forte Portée',
+        badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+        reachMultiplier: 0.75 + ((followers - 500) / 1500) * 0.45, // 0.75 à 1.20
+        followers: followers,
+        nextTierAt: 2000,
+        progressPct: progress,
+        desc: 'Voix reconnue sur le bassin de vie. Vos publications suscitent l’intérêt d’organisateurs d’événements et de candidats bénévoles.',
+        likesMin: 25,
+        likesMax: Math.floor(35 + (followers * 0.04)),
+        sharesChance: 0.65,
+        newFollowersRange: [18, 45],
+        opportunityChance: 0.55
+      };
+    } else if (followers < 6000) {
+      const progress = Math.min(100, Math.round(((followers - 2000) / 4000) * 100));
+      return {
+        level: 4,
+        title: 'Grande Notoriété Départementale',
+        badge: 'Très Forte Portée',
+        badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
+        reachMultiplier: 1.25 + ((followers - 2000) / 4000) * 0.55, // 1.25 à 1.80
+        followers: followers,
+        nextTierAt: 6000,
+        progressPct: progress,
+        desc: 'Rayonnement majeur à l’échelle départementale. Vos alertes et reportages déclenchent des vagues de dons et d’adhésions.',
+        likesMin: 80,
+        likesMax: Math.floor(100 + (followers * 0.03)),
+        sharesChance: 0.90,
+        newFollowersRange: [35, 90],
+        opportunityChance: 0.75
+      };
+    } else {
+      return {
+        level: 5,
+        title: 'Institution & Référence Régionale',
+        badge: 'Portée Maximale',
+        badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
+        reachMultiplier: 2.0,
+        followers: followers,
+        nextTierAt: null,
+        progressPct: 100,
+        desc: 'Page incontournable suivie par les élus, les médias régionaux et des milliers de citoyens. Chaque publication a un impact massif.',
+        likesMin: 200,
+        likesMax: Math.floor(240 + (followers * 0.025)),
+        sharesChance: 1.0,
+        newFollowersRange: [60, 150],
+        opportunityChance: 0.90
+      };
+    }
+  },
+
+  // Statistiques et calcul de la Note Avis sur 5 étoiles (Notoriété réelle méritée)
   getReviewsStats(game) {
     if (!game) game = window.game;
     this.injectState(game);
 
-    // Initialisation avec avis d'historique représentatifs si vide
-    if (!game.publicReviews || game.publicReviews.length === 0) {
-      const rep = (game.resources && game.resources.reputationScore) || 50;
-      const initialReviews = [
-        {
-          id: 'rev-init-1',
-          author: 'M. Dufresne • Marathon / Course Solidaire',
-          role: 'Président du Comité d’Organisation',
-          rating: 5,
-          date: 'Il y a 3 jours',
-          text: 'Une équipe de secouristes remarquable de professionnalisme. Dispositif de secours sans la moindre faille, bénévoles bienveillants et efficaces.',
-          source: 'dps',
-          likes: 14
-        },
-        {
-          id: 'rev-init-2',
-          author: 'Sophie L. • Mairie Locale',
-          role: 'Responsable Événements & Domaine Public',
-          rating: 5,
-          date: 'Il y a 1 semaine',
-          text: 'Partenariat exemplaire avec l’antenne de la Protection Civile. Présence rassurante lors des manifestations communales.',
-          source: 'commune',
-          likes: 22
-        },
-        {
-          id: 'rev-init-3',
-          author: 'Alexandre G. • Citoyen',
-          role: 'Stagiaire Formation PSC 1',
-          rating: 5,
-          date: 'Il y a 2 semaines',
-          text: 'Formation premiers secours passionnante et vivante. On repart avec les bons réflexes pour agir face à un arrêt cardiaque !',
-          source: 'formation',
-          likes: 9
-        }
-      ];
+    const reviews = Array.isArray(game.publicReviews) ? game.publicReviews : [];
+    const totalCount = reviews.length;
 
-      if (rep < 30) {
-        initialReviews.push({
-          id: 'rev-init-4',
-          author: 'Comité de Quartier',
-          role: 'Organisateur Local',
-          rating: 3,
-          date: 'Il y a 3 semaines',
-          text: 'Équipe un peu juste en effectif sur la fin de journée mais secouristes de bonne volonté.',
-          source: 'dps',
-          likes: 2
-        });
-      }
-
-      game.publicReviews = initialReviews;
+    if (totalCount === 0) {
+      return {
+        average: 0,
+        formattedAvg: '—',
+        totalCount: 0,
+        reputationLabel: 'Antenne en Lancement',
+        reputationDesc: 'Aucun avis recueilli pour l’instant. Réalisez des DPS et formations pour obtenir vos premières évaluations.',
+        counts: { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 },
+        reviews: []
+      };
     }
 
-    const reviews = game.publicReviews;
-    const totalCount = reviews.length;
     const sumStars = reviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0);
-    const avgScore = totalCount > 0 ? (sumStars / totalCount) : 4.8;
+    const avgScore = sumStars / totalCount;
     const roundedAvg = Math.round(avgScore * 10) / 10;
 
     const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
@@ -374,6 +465,7 @@ window.ProtecCommunication = {
 
     return {
       average: roundedAvg,
+      formattedAvg: roundedAvg.toFixed(1),
       totalCount: totalCount,
       reputationLabel: reputationLabel,
       counts: counts,
@@ -637,33 +729,61 @@ window.ProtecCommunication = {
     const photoBonusRatio = photoDef?.stats?.comImpactBonus || 0.10;
     const photoTitle = photoDef ? photoDef.title : 'Smartphone Basique';
 
-    // Gains immédiats de visibilité et notoriété bonifiés par la qualité des photos
-    const oldScore = game.socialMedia.visibilityScore || 50;
+    // 1. Analyse dynamique de la communauté actuelle (La Commu)
+    const commu = this.getCommunityTier(game);
+    const reachMult = commu.reachMultiplier;
+    const effMultiplier = reachMult * (1 + photoBonusRatio);
+
+    // 2. Gains réels de visibilité proportionnels à l'audience (au lancement la portée est très faible)
+    const oldScore = game.socialMedia.visibilityScore || 5;
     const baseGain = theme.visibilityGain || 20;
-    const gain = Math.round(baseGain * (1 + photoBonusRatio));
+    const gain = Math.max(2, Math.round(baseGain * effMultiplier));
     const newScore = Math.min(100, oldScore + gain);
     game.socialMedia.visibilityScore = newScore;
     game.socialMedia.lastPostTimestamp = now;
     game.socialMedia.totalPosts = (game.socialMedia.totalPosts || 0) + 1;
 
-    // Réputation d'antenne bonifiée par l'appareil photo
+    // 3. Réputation d'antenne bonifiée par l'audience
     const baseRep = theme.repGain || 10;
-    const repGain = Math.round(baseRep * (1 + photoBonusRatio));
+    const repGain = Math.max(1, Math.round(baseRep * effMultiplier));
     game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
 
-    // Simulation de l'impact social bonifié (Likes, partages, commentaires)
-    const postLikes = Math.floor((45 + Math.random() * 85) * (1 + photoBonusRatio * 1.5));
-    const postShares = Math.floor((6 + Math.random() * 20) * (1 + photoBonusRatio * 1.5));
+    // 4. Croissance de la communauté : chaque post fait grandir la commu !
+    const [minNewF, maxNewF] = commu.newFollowersRange;
+    const newFollowers = Math.max(1, Math.floor((minNewF + Math.random() * (maxNewF - minNewF + 1)) * (1 + photoBonusRatio)));
+    game.resources.followers = (game.resources.followers || 0) + newFollowers;
+
+    // 5. Interactions réalistes (Likes et partages calqués sur la commu réelle)
+    const postLikes = Math.max(commu.likesMin, Math.floor((commu.likesMin + Math.random() * (commu.likesMax - commu.likesMin + 1)) * (1 + photoBonusRatio)));
+    const hasShares = Math.random() < commu.sharesChance;
+    const postShares = hasShares ? Math.max(1, Math.floor(postLikes * 0.18)) : 0;
     game.socialMedia.totalLikes = (game.socialMedia.totalLikes || 0) + postLikes;
     game.socialMedia.totalShares = (game.socialMedia.totalShares || 0) + postShares;
 
-    const citizenComments = [
-      'Bravo pour votre engagement sans faille ! 👏',
-      'Merci la Protection Civile, on se sent en sécurité avec vous ! 🧡💙',
-      'Des bénévoles au top, toujours souriants et très professionnels.',
-      'Fier de voir nos jeunes s’investir autant pour la commune !',
-      'Merci pour vos précieux conseils de secourisme !'
-    ];
+    let citizenComments = [];
+    if (commu.level === 1) {
+      citizenComments = [
+        'Bravo pour le lancement de l’antenne ! 🧡💙',
+        'Félicitations pour cette création de poste local !',
+        'Courage aux premiers bénévoles engagés ! 👏',
+        'On suivra vos actions sur la commune !'
+      ];
+    } else if (commu.level === 2) {
+      citizenComments = [
+        'Super initiative pour notre commune !',
+        'Bravo pour votre engagement sans faille ! 👏',
+        'Merci d’être là pour nous veiller !',
+        'Très utile d’avoir cette équipe de secours chez nous.'
+      ];
+    } else {
+      citizenComments = [
+        'Bravo pour votre engagement sans faille ! 👏',
+        'Merci la Protection Civile, on se sent en sécurité avec vous ! 🧡💙',
+        'Des bénévoles au top, toujours souriants et très professionnels.',
+        'Fier de voir nos jeunes s’investir autant pour la commune !',
+        'Merci pour vos précieux conseils de secourisme !'
+      ];
+    }
     const pickedComment = citizenComments[Math.floor(Math.random() * citizenComments.length)];
 
     // Enregistrement dans le feed
@@ -677,7 +797,8 @@ window.ProtecCommunication = {
       text: postText,
       likes: postLikes,
       shares: postShares,
-      commentsCount: Math.floor(3 + Math.random() * 8),
+      newFollowers: newFollowers,
+      commentsCount: Math.max(1, Math.floor(postLikes * 0.15)),
       topComment: pickedComment,
       isAutoPilot: false
     };
@@ -685,30 +806,31 @@ window.ProtecCommunication = {
     game.socialMedia.feed.unshift(newPost);
     if (game.socialMedia.feed.length > 20) game.socialMedia.feed.pop();
 
-    // Retombées concrètes aléatoires sur l'activité
+    // 6. Retombées concrètes sur l'activité (calibrées sur la commu)
     let impactDetail = '';
     const roll = Math.random();
-    if (roll < 0.35) {
-      // Don citoyen direct
-      const donation = 45 + Math.floor(Math.random() * 65);
-      game.resources.money += donation;
-      if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, donation, `Micro-dons citoyens en ligne (Publication : ${theme.title})`, 'dons');
+    if (roll < commu.opportunityChance) {
+      const subRoll = Math.random();
+      if (subRoll < 0.35) {
+        const donation = Math.round((25 + Math.floor(Math.random() * 45)) * (commu.level >= 3 ? 2 : 1));
+        game.resources.money += donation;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(game, donation, `Micro-dons citoyens en ligne (Publication : ${theme.title})`, 'dons');
+        }
+        impactDetail = ` 🪙 +${donation} € de dons citoyens en ligne récoltés !`;
+      } else if (subRoll < 0.70 && typeof game.generateRandomCandidature === 'function') {
+        game.generateRandomCandidature();
+        impactDetail = ' 🤝 Un citoyen inspiré a postulé pour devenir bénévole !';
+      } else if (typeof game.generateRandomDevisOpportunity === 'function') {
+        game.generateRandomDevisOpportunity();
+        impactDetail = ' 📋 Un organisateur local a vu le post et dépose un devis de DPS !';
       }
-      impactDetail = ` +${donation} € de dons citoyens en ligne récoltés !`;
-    } else if (roll < 0.60 && typeof game.generateRandomCandidature === 'function') {
-      // Nouvelle candidature spontanée de bénévole
-      game.generateRandomCandidature();
-      impactDetail = ' Un citoyen inspiré a postulé pour devenir bénévole !';
-    } else if (roll < 0.80 && typeof game.generateRandomDevisOpportunity === 'function') {
-      // Un organisateur d'événement a vu le post et dépose un devis
-      game.generateRandomDevisOpportunity();
-      impactDetail = ' Un organisateur local vous a sollicité pour un devis de DPS !';
     }
 
+    const reachLabel = commu.level === 1 ? 'Portée naissante (début d’antenne)' : `Portée ${Math.round(reachMult * 100)}% (${commu.followers} abonnés)`;
     game.showToast(
       'Publication Publiée ! 📱 (0 €)',
-      `Votre post sur « ${theme.title} » est en ligne (visuels : ${photoTitle}) ! +${gain}% de visibilité et +${repGain} réputation.${impactDetail}`,
+      `Votre post sur « ${theme.title} » est en ligne (${reachLabel}) : +${gain}% visibilité, 👥 +${newFollowers} nouveaux abonnés, ❤️ ${postLikes} j'aime.${impactDetail}`,
       'purple'
     );
 
@@ -995,36 +1117,36 @@ window.ProtecCommunication = {
     body.innerHTML = `
       <div class="space-y-6">
 
-        <!-- En-tête : Visibilité Réseaux Sociaux & Note Avis Notoriété 5 étoiles -->
+        <!-- En-tête : 3 Piliers (Visibilité, Communauté & Portée d'Audience, Avis Notoriété) -->
         <div class="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-purple-950 via-indigo-950 to-slate-900 text-white shadow-xl space-y-4">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
             
             <!-- Colonne 1 : Visibilité & Rayonnement Numérique -->
             <div class="space-y-3 bg-white/5 p-4 rounded-2xl border border-white/10 flex flex-col justify-between">
               <div>
-                <div class="flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-xl shrink-0">
+                <div class="flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-purple-500/20 border border-purple-400/30 flex items-center justify-center text-lg shrink-0">
                       📱
                     </div>
                     <div>
-                      <div class="flex items-center gap-2">
-                        <h4 class="text-sm font-black">Visibilité Réseaux Sociaux</h4>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${visColor} border">
+                      <div class="flex items-center gap-1.5">
+                        <h4 class="text-xs font-black">Visibilité</h4>
+                        <span class="px-1.5 py-0.2 rounded text-[9.5px] font-black ${visColor} border">
                           ${visibility}%
                         </span>
                       </div>
-                      <p class="text-[11px] text-slate-300">Affecte le rythme des sollicitations et devis</p>
+                      <p class="text-[10px] text-slate-300">Activité opérationnelle</p>
                     </div>
                   </div>
 
                   ${autoPilotSalarie ? `
-                    <span class="px-2 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-[10px] font-black text-emerald-300 flex items-center gap-1 shrink-0">
+                    <span class="px-1.5 py-0.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-[9px] font-black text-emerald-300 flex items-center gap-1 shrink-0">
                       <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
                       CM Salarié
                     </span>
                   ` : `
-                    <span class="px-2 py-1 rounded-lg bg-white/10 text-[10px] font-bold text-slate-300 shrink-0">
+                    <span class="px-1.5 py-0.5 rounded-lg bg-white/10 text-[9px] font-bold text-slate-300 shrink-0">
                       Manuel
                     </span>
                   `}
@@ -1032,76 +1154,130 @@ window.ProtecCommunication = {
 
                 <!-- Jauge Visibilité -->
                 <div class="space-y-1 mt-3">
-                  <div class="flex items-center justify-between text-[11px] text-slate-300">
-                    <span class="font-bold">${visLabel}</span>
+                  <div class="flex items-center justify-between text-[10px] text-slate-300">
+                    <span class="font-bold truncate max-w-[130px]">${visLabel}</span>
                     <span class="font-mono font-black text-white">${visibility} / 100</span>
                   </div>
-                  <div class="w-full bg-white/10 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/10">
+                  <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
                     <div class="h-full rounded-full transition-all duration-500 ${visBarColor}" style="width: ${visibility}%"></div>
                   </div>
                 </div>
               </div>
 
               <!-- Mini KPIs sociaux -->
-              <div class="grid grid-cols-3 gap-1.5 pt-2 border-t border-white/10 text-center text-xs">
+              <div class="grid grid-cols-3 gap-1 pt-2 border-t border-white/10 text-center text-xs">
                 <div>
-                  <span class="text-[9px] uppercase text-slate-400 font-bold block">Publications</span>
-                  <strong class="text-white mono-num">${soc.totalPosts || 0}</strong>
+                  <span class="text-[8.5px] uppercase text-slate-400 font-bold block">Posts</span>
+                  <strong class="text-white mono-num text-[11px]">${soc.totalPosts || 0}</strong>
                 </div>
                 <div>
-                  <span class="text-[9px] uppercase text-slate-400 font-bold block">J'aime</span>
-                  <strong class="text-pink-400 mono-num">❤️ ${soc.totalLikes || 0}</strong>
+                  <span class="text-[8.5px] uppercase text-slate-400 font-bold block">J'aime</span>
+                  <strong class="text-pink-400 mono-num text-[11px]">❤️ ${soc.totalLikes || 0}</strong>
                 </div>
                 <div>
-                  <span class="text-[9px] uppercase text-slate-400 font-bold block">Partages</span>
-                  <strong class="text-cyan-400 mono-num">🔁 ${soc.totalShares || 0}</strong>
+                  <span class="text-[8.5px] uppercase text-slate-400 font-bold block">Partages</span>
+                  <strong class="text-cyan-400 mono-num text-[11px]">🔁 ${soc.totalShares || 0}</strong>
                 </div>
               </div>
             </div>
 
-            <!-- Colonne 2 : Note Avis Notoriété Citoyenne (sur 5 étoiles) -->
+            <!-- Colonne 2 : La Communauté & Portée d'Audience (Moteur dynamique) -->
+            ${(() => {
+              const commu = this.getCommunityTier(game);
+              return `
+              <div class="space-y-3 bg-gradient-to-br from-indigo-500/15 via-white/5 to-purple-500/10 p-4 rounded-2xl border border-indigo-400/25 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                      <div class="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-lg shrink-0">
+                        👥
+                      </div>
+                      <div>
+                        <div class="flex items-center gap-1.5">
+                          <h4 class="text-xs font-black">Communauté</h4>
+                          <span class="px-1.5 py-0.2 rounded text-[9.5px] font-black bg-indigo-400/20 text-indigo-200 border border-indigo-400/30">
+                            ${commu.followers} abonnés
+                          </span>
+                        </div>
+                        <p class="text-[10px] text-indigo-200 font-medium">${commu.badge}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Jauge vers palier suivant -->
+                  <div class="mt-3 p-2 rounded-xl bg-black/25 border border-white/10 space-y-1">
+                    <div class="flex items-center justify-between text-[10px]">
+                      <span class="text-indigo-200 font-bold">Portée posts : <strong>${Math.round(commu.reachMultiplier * 100)}%</strong></span>
+                      <span class="text-slate-300 mono-num">${commu.nextTierAt ? `Prochain : ${commu.nextTierAt}` : 'Max'}</span>
+                    </div>
+                    <div class="w-full bg-white/10 h-1.5 rounded-full overflow-hidden border border-white/10">
+                      <div class="h-full rounded-full bg-gradient-to-r from-indigo-400 to-purple-400" style="width: ${commu.progressPct}%"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="pt-2 border-t border-white/10 text-[10px] text-slate-300 flex items-center justify-between">
+                  <span class="truncate">${commu.title}</span>
+                  <span class="text-indigo-300 font-bold text-[9.5px]">Niveau ${commu.level}</span>
+                </div>
+              </div>
+              `;
+            })()}
+
+            <!-- Colonne 3 : Notoriété & Avis Publics Mérités -->
             <div class="space-y-3 bg-gradient-to-br from-amber-500/15 via-white/5 to-purple-500/10 p-4 rounded-2xl border border-amber-400/25 flex flex-col justify-between">
               <div>
                 <div class="flex items-start justify-between gap-2">
-                  <div class="flex items-center gap-2.5">
-                    <div class="w-10 h-10 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-xl shrink-0">
+                  <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-400/30 flex items-center justify-center text-lg shrink-0">
                       ⭐
                     </div>
                     <div>
-                      <div class="flex items-center gap-2">
-                        <h4 class="text-sm font-black">Notoriété & Avis Public</h4>
-                        <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-400/20 text-amber-200 border border-amber-400/30">
-                          ${reviewsStats.average} / 5
+                      <div class="flex items-center gap-1.5">
+                        <h4 class="text-xs font-black">Avis & Notoriété</h4>
+                        <span class="px-1.5 py-0.2 rounded text-[9.5px] font-black ${reviewsStats.totalCount > 0 ? 'bg-amber-400/20 text-amber-200 border border-amber-400/30' : 'bg-slate-500/20 text-slate-300 border border-slate-400/30'}">
+                          ${reviewsStats.totalCount > 0 ? `${reviewsStats.formattedAvg} / 5` : 'En attente'}
                         </span>
                       </div>
-                      <p class="text-[11px] text-slate-300">Évaluation par les organisateurs, mairies et stagiaires</p>
+                      <p class="text-[10px] text-slate-300">Évaluation des partenaires</p>
                     </div>
                   </div>
                 </div>
 
                 <!-- Étoiles dorées et libellé -->
-                <div class="mt-3 p-2.5 rounded-xl bg-black/25 border border-white/10 flex items-center justify-between gap-3">
-                  <div class="flex items-center gap-1 text-amber-400 text-lg leading-none">
-                    ${Array.from({ length: 5 }, (_, i) => {
-                      const filled = (i + 1) <= Math.round(reviewsStats.average);
-                      return `<span>${filled ? '★' : '☆'}</span>`;
-                    }).join('')}
-                    <span class="text-sm font-black text-white ml-1.5 mono-num">${reviewsStats.average}</span>
-                  </div>
-                  <div class="text-right">
-                    <span class="text-xs font-bold text-amber-200 block">${reviewsStats.reputationLabel}</span>
-                    <span class="text-[10px] text-slate-400">${reviewsStats.totalCount} avis recueillis</span>
-                  </div>
+                <div class="mt-3 p-2 rounded-xl bg-black/25 border border-white/10 flex items-center justify-between gap-2">
+                  ${reviewsStats.totalCount > 0 ? `
+                    <div class="flex items-center gap-0.5 text-amber-400 text-sm leading-none">
+                      ${Array.from({ length: 5 }, (_, i) => {
+                        const filled = (i + 1) <= Math.round(reviewsStats.average);
+                        return `<span>${filled ? '★' : '☆'}</span>`;
+                      }).join('')}
+                      <span class="text-xs font-black text-white ml-1 mono-num">${reviewsStats.formattedAvg}</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[11px] font-bold text-amber-200 block truncate max-w-[120px]">${reviewsStats.reputationLabel}</span>
+                      <span class="text-[9px] text-slate-400">${reviewsStats.totalCount} avis recueilli(s)</span>
+                    </div>
+                  ` : `
+                    <div class="flex items-center gap-0.5 text-slate-500 text-sm leading-none">
+                      <span>☆</span><span>☆</span><span>☆</span><span>☆</span><span>☆</span>
+                      <span class="text-[10px] text-slate-400 ml-1">0 avis</span>
+                    </div>
+                    <div class="text-right">
+                      <span class="text-[11px] font-bold text-amber-300 block">Lancement</span>
+                      <span class="text-[9px] text-slate-400">En attente de DPS</span>
+                    </div>
+                  `}
                 </div>
               </div>
 
               <!-- Accès direct à l'onglet avis -->
-              <div class="flex items-center justify-between pt-2 border-t border-white/10 text-[11px]">
-                <span class="text-slate-300 italic">Mesure réelle de votre réputation</span>
+              <div class="flex items-center justify-between pt-2 border-t border-white/10 text-[10px]">
+                <span class="text-slate-300 italic truncate">${reviewsStats.totalCount > 0 ? 'Note méritée' : 'Aucun avis'}</span>
                 <button
                   onclick="window.ProtecCommunication.currentTab = 'reviews'; window.ProtecCommunication.renderModal(window.game);"
-                  class="font-black text-amber-300 hover:text-amber-100 hover:underline flex items-center gap-1 cursor-pointer">
-                  <span>Voir tous les avis (${reviewsStats.totalCount})</span> ➜
+                  class="font-black text-amber-300 hover:text-amber-100 hover:underline flex items-center gap-1 cursor-pointer shrink-0">
+                  <span>Avis (${reviewsStats.totalCount})</span> ➜
                 </button>
               </div>
             </div>
@@ -1468,10 +1644,17 @@ window.ProtecCommunication = {
               </div>
 
               <div class="space-y-2 pt-2 border-t border-slate-100">
-                <div class="flex items-center justify-between text-[10px] font-bold text-slate-600">
-                  <span class="${isEligible ? 'text-emerald-700' : 'text-slate-400'} font-bold">+${theme.visibilityGain}% visibilité</span>
-                  <span class="${isEligible ? 'text-purple-700' : 'text-slate-400'} font-bold">+${theme.repGain} pts</span>
-                </div>
+                ${(() => {
+                  const commu = this.getCommunityTier(game);
+                  const actualVisGain = Math.max(2, Math.round(theme.visibilityGain * commu.reachMultiplier));
+                  const [minF, maxF] = commu.newFollowersRange;
+                  return `
+                  <div class="flex items-center justify-between text-[10px] font-bold text-slate-600">
+                    <span class="${isEligible ? 'text-emerald-700' : 'text-slate-400'} font-bold">+${actualVisGain}% visibilité</span>
+                    <span class="${isEligible ? 'text-indigo-700' : 'text-slate-400'} font-bold">👥 +${minF} à +${maxF} abonnés</span>
+                  </div>
+                  `;
+                })()}
                 ${isEligible ? `
                   <button
                     onclick="window.ProtecCommunication.publishManualPost(window.game, '${theme.id}')"
@@ -1503,7 +1686,19 @@ window.ProtecCommunication = {
         </div>
 
         <div class="space-y-3 max-h-96 overflow-y-auto pr-1">
-          ${(soc.feed || []).map(post => `
+          ${(!soc.feed || soc.feed.length === 0) ? `
+            <div class="p-8 rounded-2xl bg-white border border-slate-200 text-center space-y-3 shadow-2xs">
+              <div class="w-14 h-14 mx-auto rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center text-2xl border border-purple-200">
+                📱
+              </div>
+              <div class="space-y-1">
+                <h6 class="text-sm font-black text-slate-800">Aucune publication pour le moment</h6>
+                <p class="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+                  Votre page d'antenne officielle vient d’être créée. Choisissez l'une des thématiques ci-dessus pour publier votre premier post et commencer à bâtir votre communauté !
+                </p>
+              </div>
+            </div>
+          ` : (soc.feed || []).map(post => `
             <div class="p-4 rounded-2xl glass-card border border-slate-100 hover:border-purple-200 transition space-y-2.5 bg-white">
               
               <!-- Auteur et Date -->
@@ -1535,13 +1730,18 @@ window.ProtecCommunication = {
               <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[11px] text-slate-500">
                 <div class="flex items-center gap-3">
                   <span class="flex items-center gap-1 font-bold text-pink-600">
-                    <span>❤️</span> ${post.likes}
+                    <span>❤️</span> ${post.likes || 0}
                   </span>
                   <span class="flex items-center gap-1 font-bold text-slate-600">
-                    <span>🔁</span> ${post.shares}
+                    <span>🔁</span> ${post.shares || 0}
                   </span>
-                  <span class="flex items-center gap-1 font-bold text-slate-600">
-                    <span>💬</span> ${post.commentsCount || 4}
+                  ${post.newFollowers ? `
+                    <span class="flex items-center gap-1 text-indigo-600 font-bold">
+                      <span>👥</span> +${post.newFollowers}
+                    </span>
+                  ` : ''}
+                  <span class="flex items-center gap-1 text-slate-400">
+                    <span>💬</span> ${post.commentsCount || 1}
                   </span>
                 </div>
 
@@ -1574,14 +1774,14 @@ window.ProtecCommunication = {
             <div class="flex items-center gap-4">
               <div class="text-center p-3 rounded-2xl bg-amber-500/10 border border-amber-400/30 shrink-0 min-w-[100px]">
                 <div class="text-3xl font-black text-amber-950 mono-num leading-none">
-                  ${reviewsStats.average}
+                  ${reviewsStats.totalCount > 0 ? reviewsStats.formattedAvg : '—'}
                 </div>
                 <div class="text-[10px] uppercase font-bold text-amber-700 mt-1">sur 5.0</div>
                 <div class="flex items-center justify-center gap-0.5 text-amber-500 text-sm mt-1">
-                  ${Array.from({ length: 5 }, (_, i) => {
+                  ${reviewsStats.totalCount > 0 ? Array.from({ length: 5 }, (_, i) => {
                     const filled = (i + 1) <= Math.round(reviewsStats.average);
                     return `<span>${filled ? '★' : '☆'}</span>`;
-                  }).join('')}
+                  }).join('') : '<span class="text-slate-400">☆☆☆☆☆</span>'}
                 </div>
               </div>
 
@@ -1593,7 +1793,7 @@ window.ProtecCommunication = {
                   ${reviewsStats.reputationLabel}
                 </h4>
                 <p class="text-xs text-slate-600 mt-1">
-                  Basé sur <strong>${reviewsStats.totalCount} avis vérifiés</strong> émis par les comités d'organisation, services municipaux et stagiaires.
+                  ${reviewsStats.totalCount > 0 ? `Basé sur <strong>${reviewsStats.totalCount} avis vérifié(s)</strong> émis par les comités d'organisation, services municipaux et stagiaires.` : 'Votre antenne vient d\'ouvrir ses portes. Aucun avis n\'a encore été recueilli.'}
                 </p>
               </div>
             </div>
@@ -1602,7 +1802,7 @@ window.ProtecCommunication = {
             <div class="w-full md:w-64 space-y-1 text-xs">
               ${[5, 4, 3, 2, 1].map(star => {
                 const count = counts[star] || 0;
-                const pct = Math.round((count / total) * 100);
+                const pct = reviewsStats.totalCount > 0 ? Math.round((count / total) * 100) : 0;
                 return `
                   <div class="flex items-center gap-2 text-[11px]">
                     <span class="w-6 font-bold text-slate-600 mono-num">${star} ★</span>
@@ -1623,9 +1823,9 @@ window.ProtecCommunication = {
             <div>
               <strong class="text-amber-950 font-black">Baromètre officiel de votre notoriété :</strong>
               <p class="text-[11px] text-slate-600 mt-0.5 leading-relaxed">
-                Cette note sur 5 étoiles est le seul moyen direct pour vous d’évaluer la notoriété de l’antenne.
+                Cette note sur 5 étoiles est le baromètre direct de satisfaction du public et des collectivités.
                 Chaque dispositif de secours (DPS) réussi avec l’encadrement requis et chaque session de formation certifiée vous rapportent des avis 5 étoiles élogieux.
-                À l’inverse, les dispositifs sous-dimensionnés provoquent des réclamations négatives qui dégradent votre note.
+                À l’inverse, les dispositifs sous-dimensionnés provoquent des réclamations qui dégradent votre note.
               </p>
             </div>
           </div>
@@ -1637,56 +1837,75 @@ window.ProtecCommunication = {
             <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
               <span>💬</span> Derniers Avis et Retours d'Expérience (${reviewsStats.reviews.length})
             </h5>
-            <span class="text-[11px] text-slate-400">Classés par ordre chronologique</span>
+            <span class="text-[11px] text-slate-400">${reviewsStats.totalCount > 0 ? 'Classés par ordre chronologique' : 'En attente de vos premières missions'}</span>
           </div>
 
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            ${reviewsStats.reviews.map(rev => {
-              const r = Number(rev.rating) || 5;
-              const isPositive = r >= 4;
-              const sourceBadge = rev.source === 'formation'
-                ? { label: 'Formation Premiers Secours', bg: 'bg-emerald-100 text-emerald-800' }
-                : (rev.source === 'commune'
-                  ? { label: 'Collectivité & Mairie', bg: 'bg-blue-100 text-blue-800' }
-                  : { label: 'Dispositif de Secours (DPS)', bg: 'bg-purple-100 text-purple-800' });
+          ${reviewsStats.totalCount === 0 ? `
+            <div class="p-8 rounded-3xl bg-white border border-amber-200 text-center space-y-3 shadow-2xs">
+              <div class="w-16 h-16 mx-auto rounded-3xl bg-amber-50 border border-amber-200 flex items-center justify-center text-3xl">
+                ⭐
+              </div>
+              <div class="space-y-1">
+                <h4 class="text-base font-black text-slate-900">Aucun avis public pour le moment</h4>
+                <p class="text-xs text-slate-600 max-w-md mx-auto leading-relaxed">
+                  Votre antenne est en phase de lancement. Vos premières évaluations seront déposées par les <strong>organisateurs d'événements sportifs et culturels</strong> (DPS), les <strong>mairies</strong> et les <strong>stagiaires formés</strong> au fur et à mesure de la clôture de vos dispositifs.
+                </p>
+              </div>
+              <div class="pt-2">
+                <button onclick="window.ProtecCommunication.currentTab = 'social_media'; window.ProtecCommunication.renderModal(window.game);" class="px-4 py-2 rounded-xl text-xs font-black bg-pc-blue hover:bg-blue-700 text-white shadow-xs transition cursor-pointer">
+                  Aller aux Réseaux Sociaux & Publications ➜
+                </button>
+              </div>
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+              ${reviewsStats.reviews.map(rev => {
+                const r = Number(rev.rating) || 5;
+                const isPositive = r >= 4;
+                const sourceBadge = rev.source === 'formation'
+                  ? { label: 'Formation Premiers Secours', bg: 'bg-emerald-100 text-emerald-800' }
+                  : (rev.source === 'commune'
+                    ? { label: 'Collectivité & Mairie', bg: 'bg-blue-100 text-blue-800' }
+                    : { label: 'Dispositif de Secours (DPS)', bg: 'bg-purple-100 text-purple-800' });
 
-              return `
-                <div class="p-4 rounded-2xl glass-card border ${isPositive ? 'border-slate-200 hover:border-amber-300' : 'border-rose-200 bg-rose-50/20'} transition-all bg-white flex flex-col justify-between space-y-3 shadow-2xs">
-                  <div class="space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="flex items-center gap-0.5 text-amber-400 text-sm">
-                        ${Array.from({ length: 5 }, (_, i) => `<span>${(i + 1) <= r ? '★' : '☆'}</span>`).join('')}
-                        <span class="text-xs font-black ${isPositive ? 'text-slate-800' : 'text-rose-700'} ml-1 mono-num">${r}.0</span>
+                return `
+                  <div class="p-4 rounded-2xl glass-card border ${isPositive ? 'border-slate-200 hover:border-amber-300' : 'border-rose-200 bg-rose-50/20'} transition-all bg-white flex flex-col justify-between space-y-3 shadow-2xs">
+                    <div class="space-y-2">
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-0.5 text-amber-400 text-sm">
+                          ${Array.from({ length: 5 }, (_, i) => `<span>${(i + 1) <= r ? '★' : '☆'}</span>`).join('')}
+                          <span class="text-xs font-black ${isPositive ? 'text-slate-800' : 'text-rose-700'} ml-1 mono-num">${r}.0</span>
+                        </div>
+                        <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${sourceBadge.bg}">
+                          ${sourceBadge.label}
+                        </span>
                       </div>
-                      <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase ${sourceBadge.bg}">
-                        ${sourceBadge.label}
-                      </span>
+
+                      <div>
+                        <h6 class="text-xs font-black text-slate-900 leading-snug">
+                          ${rev.author}
+                        </h6>
+                        <span class="text-[10px] text-slate-400 font-medium block">
+                          ${rev.role} • ${rev.date || 'Récemment'}
+                        </span>
+                      </div>
+
+                      <p class="text-xs text-slate-700 italic leading-relaxed bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
+                        « ${rev.text} »
+                      </p>
                     </div>
 
-                    <div>
-                      <h6 class="text-xs font-black text-slate-900 leading-snug">
-                        ${rev.author}
-                      </h6>
-                      <span class="text-[10px] text-slate-400 font-medium block">
-                        ${rev.role} • ${rev.date || 'Récemment'}
+                    <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-400">
+                      <span>Avis certifié</span>
+                      <span class="flex items-center gap-1 font-bold text-slate-600">
+                        <span>👍</span> Utile (${rev.likes || 4})
                       </span>
                     </div>
-
-                    <p class="text-xs text-slate-700 italic leading-relaxed bg-slate-50/70 p-2.5 rounded-xl border border-slate-100">
-                      « ${rev.text} »
-                    </p>
                   </div>
-
-                  <div class="flex items-center justify-between pt-2 border-t border-slate-100 text-[10px] text-slate-400">
-                    <span>Avis certifié</span>
-                    <span class="flex items-center gap-1 font-bold text-slate-600">
-                      <span>👍</span> Utile (${rev.likes || 4})
-                    </span>
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
+                `;
+              }).join('')}
+            </div>
+          `}
         </div>
       </div>
     `;
