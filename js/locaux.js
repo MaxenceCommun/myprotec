@@ -5024,6 +5024,48 @@ window.ProtecLocaux = {
       }
     });
 
+    // 7-bis. Présence des secouristes en faction / repos au local
+    const availableVolunteers = (window.game && window.game.volunteers) ? window.game.volunteers.filter(v => v.status === 'dispo' || v.status === 'sdis_caserne') : [];
+    if (availableVolunteers.length > 0) {
+      // Représentation de secouristes dans les pièces conviviales ou de commandement
+      model.rooms.forEach((rm, rIdx) => {
+        if (rm.type === 'foyer' || (rm.name && rm.name.includes('Foyer'))) {
+          const v1 = availableVolunteers[0];
+          if (v1) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.35) * scale, oy + (rm.y + rm.h * 0.45) * scale, v1.name);
+          const v2 = availableVolunteers[1];
+          if (v2) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.65) * scale, oy + (rm.y + rm.h * 0.60) * scale, v2.name);
+        } else if (rm.type === 'pc_radio' || (rm.name && rm.name.includes('Radio'))) {
+          const vOp = availableVolunteers.find(x => ['CE', 'CD', 'Cadre'].includes(x.rank)) || availableVolunteers[0];
+          if (vOp) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.50) * scale, oy + (rm.y + rm.h * 0.50) * scale, vOp.name, 'Opérateur');
+        }
+      });
+    }
+
+    // 7-ter. Badge d'ambiance temporelle & statut base en haut à droite
+    ctx.save();
+    const statusText = isNightMode ? `🌙 Nuit (${curH}h00) • ${isGardeActive ? 'Garde SAMU 15 Active 🚑' : 'Veille Nocturne'}` : `☀️ Journée (${curH}h00) • Base Opérationnelle Active`;
+    ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+    const bW = ctx.measureText(statusText).width + 20;
+    const bH = 24;
+    const bX = width - bW - 14;
+    const bY = 14;
+
+    ctx.fillStyle = isNightMode ? 'rgba(15, 23, 42, 0.90)' : 'rgba(255, 255, 255, 0.92)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bX, bY, bW, bH, 8);
+    else ctx.rect(bX, bY, bW, bH);
+    ctx.fill();
+
+    ctx.strokeStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#475569') : '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#e2e8f0') : '#1e293b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(statusText, bX + bW / 2, bY + bH / 2);
+    ctx.restore();
+
     // 8. Tracé du mobilier en vue de dessus détaillée (style Les Sims)
     (model.furniture || []).forEach(item => {
       const ix = ox + item.x * scale;
