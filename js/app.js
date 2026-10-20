@@ -16702,6 +16702,9 @@ class ProtecGame {
                               `;
                             })()}
                             ${mission.status === 'planifie' || (isUrgentOrPrealert && !isTeamDeployed) ? `
+                              <button type="button" onclick="window.ProtecPersonnel?.openReassignVolunteerModal(window.game, '${v.id}', '${mission.id}')" class="p-1.5 rounded-lg hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 font-bold transition cursor-pointer" title="Demander à décaler ce bénévole vers une autre mission">
+                                <i data-lucide="arrow-right-left" class="w-3.5 h-3.5"></i>
+                              </button>
                               <button onclick="window.game.unregisterVolunteerFromMission('${mission.id}', '${v.id}')" class="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 hover:text-rose-700 font-bold transition cursor-pointer" title="Désinscrire ce bénévole">
                                 <i data-lucide="x" class="w-3.5 h-3.5"></i>
                               </button>

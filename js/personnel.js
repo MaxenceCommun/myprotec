@@ -3699,6 +3699,347 @@ window.ProtecPersonnel = {
     }
     game.updateStatsUI();
     game.saveGame();
-  }
-};
+  },
 
+  // =========================================================================
+  // GESTION DU DÉCALAGE / TRANSFERT DE BÉNÉVOLE D'UNE MISSION À UNE AUTRE
+  // =========================================================================
+
+  // Récupère les infos horaires d'une mission
+  getMissionScheduleInfo(mission) {
+    if (!mission) return { day: 1, month: 0, year: 2026, startHour: 14, endHour: 18, durationHours: 4, dateStr: 'Date inconnue', timeStr: '14h - 18h' };
+    const dateObj = mission.eventDate || mission.plannedDate || {};
+    const day = dateObj.day || 1;
+    const month = dateObj.month || 0;
+    const year = dateObj.year || 2026;
+    const startHour = mission.startHour !== undefined ? mission.startHour : (dateObj.hour !== undefined ? dateObj.hour : 14);
+    const durationHours = mission.durationHours || Math.max(1, Math.round((mission.durationSeconds || (mission.duration * 60) || 14400) / 3600));
+    const endHour = mission.endHour !== undefined ? mission.endHour : (startHour + durationHours);
+
+    const monthNames = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+    const dateStr = `${day} ${monthNames[month] || ''} ${year}`;
+    const timeStr = `${String(startHour).padStart(2, '0')}h00 - ${String(endHour).padStart(2, '0')}h00 (${durationHours}h)`;
+
+    return { day, month, year, startHour, endHour, durationHours, dateStr, timeStr };
+  },
+
+  // Calcule la compatibilité horaire et la probabilité d'acceptation du bénévole
+  calculateTransferCompatibility(missionA, missionB, volunteer) {
+    const schedA = this.getMissionScheduleInfo(missionA);
+    const schedB = this.getMissionScheduleInfo(missionB);
+
+    const sameDay = (schedA.day === schedB.day && schedA.month === schedB.month && schedA.year === schedB.year);
+    const hourDelta = Math.abs(schedA.startHour - schedB.startHour);
+
+    let baseChance = 50;
+    let label = '';
+    let badgeClass = '';
+
+    if (sameDay) {
+      if (hourDelta <= 1) {
+        // Créneau quasi-identique le même jour : presque aucune chance de refus
+        baseChance = 96;
+        label = 'Même période & horaires identiques (Presque aucune chance de refus)';
+        badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-300';
+      } else if (hourDelta <= 3) {
+        baseChance = 75;
+        label = `Même jour, léger décalage de ${hourDelta}h (Forte chance d'accord)`;
+        badgeClass = 'bg-teal-100 text-teal-900 border-teal-300';
+      } else if (hourDelta <= 6) {
+        baseChance = 50;
+        label = `Même jour, décalage de ${hourDelta}h (Chance moyenne d'accord)`;
+        badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
+      } else {
+        baseChance = 35;
+        label = `Même jour, horaires très décalés (${hourDelta}h d'écart)`;
+        badgeClass = 'bg-orange-100 text-orange-900 border-orange-300';
+      }
+    } else {
+      const dayDiff = Math.abs(schedA.day - schedB.day);
+      if (dayDiff === 1) {
+        baseChance = 35;
+        label = 'Jour consécutif (Mobilisation week-end incertaine)';
+        badgeClass = 'bg-orange-100 text-orange-900 border-orange-300';
+      } else {
+        baseChance = 20;
+        label = 'Jour totalement différent (Faible chance de disponibilité)';
+        badgeClass = 'bg-rose-100 text-rose-900 border-rose-300';
+      }
+    }
+
+    // Modulateurs individuels du bénévole
+    let mod = 0;
+    const motivation = volunteer.motivation !== undefined ? volunteer.motivation : 75;
+    if (motivation >= 85) mod += 8;
+    else if (motivation < 40) mod -= 15;
+
+    if (volunteer.trait === 'devoue') mod += 12;
+    if (volunteer.trait === 'mobile') mod += 8;
+    if (volunteer.profilSocial === 'parent' && !sameDay) mod -= 15;
+    if ((volunteer.fatigue || 0) > 70) mod -= 15;
+
+    const finalChance = Math.max(5, Math.min(98, Math.round(baseChance + mod)));
+
+    return {
+      chancePct: finalChance,
+      sameDay,
+      hourDelta,
+      label,
+      badgeClass,
+      schedA,
+      schedB
+    };
+  },
+
+  // Ouvre la modale interactive de réaffectation
+  openReassignVolunteerModal(game, volunteerId, sourceMissionId = null) {
+    if (!game) game = window.game;
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    if (!vol) return;
+
+    // Trouver les missions où le bénévole est actuellement inscrit
+    const assignedMissions = (game.missions || []).filter(m => 
+      (m.status === 'planifie' || m.status === 'prealerte') &&
+      (m.registeredVolunteers || []).includes(vol.id)
+    );
+
+    if (assignedMissions.length === 0) {
+      game.showToast('Aucune Mission Assignée', `${vol.name} n'est actuellement inscrit(e) sur aucune mission planifiée.`, 'blue');
+      return;
+    }
+
+    const currentSourceMission = sourceMissionId 
+      ? (assignedMissions.find(m => m.id === sourceMissionId) || assignedMissions[0])
+      : assignedMissions[0];
+
+    // Trouver les missions cibles potentielles (incomplètes)
+    const targetCandidates = (game.missions || []).filter(m => 
+      m.id !== currentSourceMission.id &&
+      (m.status === 'planifie' || m.status === 'prealerte') &&
+      (m.registeredVolunteers || []).length < (m.requiredVolunteers || 1)
+    );
+
+    // Supprimer ancienne modale si existante
+    const existing = document.getElementById('reassign-volunteer-modal');
+    if (existing) existing.remove();
+
+    const schedA = this.getMissionScheduleInfo(currentSourceMission);
+
+    const modal = document.createElement('div');
+    modal.id = 'reassign-volunteer-modal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in select-none';
+
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-white/80 space-y-5 animate-scale-up">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b border-slate-200/80 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 text-pc-blue flex items-center justify-center text-xl font-black">
+              🔄
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Réaffectation de Mission</h3>
+              <p class="text-xs text-slate-500 font-semibold">Proposer à un bénévole de basculer sur une autre mission</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Profil du Secouriste -->
+        <div class="p-3 rounded-2xl bg-slate-50/90 border border-slate-200 flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2.5">
+            ${game.getVolunteerAvatarHTML(vol, 'w-9 h-9')}
+            <div>
+              <div class="font-black text-slate-900">${vol.name} <span class="text-[10px] text-slate-500 font-bold">• ${vol.rank}</span></div>
+              <div class="text-[10px] text-slate-500">Profil : <strong>${vol.dispoType || 'Secouriste'}</strong> • Motivation : ${vol.motivation || 80}%</div>
+            </div>
+          </div>
+          <span class="px-2 py-1 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+            Libre de dire Oui ou Non
+          </span>
+        </div>
+
+        <!-- Mission Actuelle Source -->
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-amber-800">
+            <span>Mission d'Origine Actuelle</span>
+            <span class="px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-mono text-[9px]">${schedA.dateStr}</span>
+          </div>
+          <h4 class="text-xs font-black text-slate-900">${currentSourceMission.title}</h4>
+          <div class="text-[11px] text-slate-600 font-semibold flex items-center gap-1.5 pt-0.5">
+            <span>⏱️ ${schedA.timeStr}</span>
+            <span>•</span>
+            <span class="truncate max-w-[200px]">📍 ${currentSourceMission.address || 'Lieu prévu'}</span>
+          </div>
+        </div>
+
+        <!-- Choix de la Nouvelle Mission Cible -->
+        <div class="space-y-2">
+          <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black">
+            Sélectionner la Nouvelle Mission de Destination
+          </label>
+          ${targetCandidates.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-100 text-center text-xs text-slate-500 italic">
+              Aucune autre mission planifiée n'a de place disponible actuellement.
+            </div>
+          ` : `
+            <select id="reassign-target-mission-id" onchange="window.ProtecPersonnel.updateTransferPreview('${vol.id}', '${currentSourceMission.id}', this.value)" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pc-blue">
+              ${targetCandidates.map((tm, idx) => {
+                const compat = window.ProtecPersonnel.calculateTransferCompatibility(currentSourceMission, tm, vol);
+                const sB = compat.schedB;
+                return `<option value="${tm.id}" ${idx === 0 ? 'selected' : ''}>[${compat.chancePct}% accord] ${tm.title} (${sB.dateStr} ${sB.timeStr.split(' ')[0]})</option>`;
+              }).join('')}
+            </select>
+          `}
+        </div>
+
+        <!-- Panneau Prévisionnel de Réponse du Bénévole -->
+        <div id="transfer-preview-box" class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+          <!-- Rempli dynamiquement -->
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="pt-3 border-t border-slate-200/80 flex items-center justify-end gap-2.5">
+          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            Annuler
+          </button>
+          ${targetCandidates.length > 0 ? `
+            <button onclick="window.ProtecPersonnel.processReassignVolunteerDecision(window.game, '${vol.id}', '${currentSourceMission.id}')" class="px-5 py-2.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Envoyer la demande à ${vol.name.split(' ')[0]}</span>
+            </button>
+          ` : ''}
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (window.lucide) window.lucide.createIcons();
+
+    if (targetCandidates.length > 0) {
+      this.updateTransferPreview(vol.id, currentSourceMission.id, targetCandidates[0].id);
+    }
+  },
+
+  // Mise à jour de l'aperçu dynamique du transfert
+  updateTransferPreview(volunteerId, sourceMissionId, targetMissionId) {
+    const game = window.game;
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    const missionA = (game.missions || []).find(m => m.id === sourceMissionId);
+    const missionB = (game.missions || []).find(m => m.id === targetMissionId);
+    const box = document.getElementById('transfer-preview-box');
+    if (!vol || !missionA || !missionB || !box) return;
+
+    const compat = this.calculateTransferCompatibility(missionA, missionB, vol);
+
+    box.className = `p-3.5 rounded-2xl border space-y-1.5 ${compat.chancePct >= 75 ? 'bg-emerald-50 border-emerald-200 text-emerald-950' : (compat.chancePct >= 45 ? 'bg-amber-50 border-amber-200 text-amber-950' : 'bg-rose-50 border-rose-200 text-rose-950')}`;
+
+    box.innerHTML = `
+      <div class="flex items-center justify-between text-xs font-black">
+        <span class="flex items-center gap-1.5">
+          <span>🎯 Probabilité d'acceptation estimée :</span>
+        </span>
+        <span class="text-sm font-black mono-num ${compat.chancePct >= 75 ? 'text-emerald-700' : (compat.chancePct >= 45 ? 'text-amber-700' : 'text-rose-700')}">
+          ${compat.chancePct}%
+        </span>
+      </div>
+      <p class="text-[11px] font-semibold leading-relaxed">
+        ${compat.label}.
+      </p>
+      <div class="w-full bg-black/10 rounded-full h-1.5 overflow-hidden">
+        <div class="h-full rounded-full transition-all duration-300 ${compat.chancePct >= 75 ? 'bg-emerald-600' : (compat.chancePct >= 45 ? 'bg-amber-500' : 'bg-rose-500')}" style="width: ${compat.chancePct}%"></div>
+      </div>
+    `;
+  },
+
+  // Traitement et exécution de la décision du bénévole
+  async processReassignVolunteerDecision(game, volunteerId, sourceMissionId) {
+    const targetSelect = document.getElementById('reassign-target-mission-id');
+    const targetMissionId = targetSelect?.value;
+    if (!targetMissionId) return;
+
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    const missionA = (game.missions || []).find(m => m.id === sourceMissionId);
+    const missionB = (game.missions || []).find(m => m.id === targetMissionId);
+    if (!vol || !missionA || !missionB) return;
+
+    const modal = document.getElementById('reassign-volunteer-modal');
+    if (modal) modal.remove();
+
+    const compat = this.calculateTransferCompatibility(missionA, missionB, vol);
+    const roll = Math.floor(Math.random() * 100) + 1; // 1 à 100
+    const accepted = roll <= compat.chancePct;
+
+    const firstName = vol.name.split(' ')[0] || vol.name;
+
+    if (accepted) {
+      // 1. Retirer de la mission A
+      missionA.registeredVolunteers = (missionA.registeredVolunteers || []).filter(id => id !== vol.id);
+      if (missionA.volunteerRoles && missionA.volunteerRoles[vol.id]) {
+        delete missionA.volunteerRoles[vol.id];
+      }
+
+      // 2. Ajouter sur la mission B
+      if (!Array.isArray(missionB.registeredVolunteers)) missionB.registeredVolunteers = [];
+      if (!missionB.registeredVolunteers.includes(vol.id)) {
+        missionB.registeredVolunteers.push(vol.id);
+      }
+
+      // Bonus de moral pour la flexibilité
+      vol.moral = Math.min(100, (vol.moral || 75) + 5);
+      vol.motivation = vol.moral;
+
+      game.saveGame();
+      game.updateStatsUI();
+
+      const acceptQuotes = [
+        `« Pas de problème chef ! Comme j'avais déjà bloqué mon créneau pour l'antenne, je bascule sur « ${missionB.title} » avec plaisir ! »`,
+        `« Ça marche, je réorganise mon créneau pour vous dépanner sur cette mission ! Comptez sur moi. »`,
+        `« Bien reçu ! Je me rendrai directement sur « ${missionB.title} » à la place. Bonne coordination ! »`
+      ];
+      const quote = acceptQuotes[Math.floor(Math.random() * acceptQuotes.length)];
+
+      await window.ProtecDialog.alert(
+        `ACCORD DE ${vol.name.toUpperCase()} :\n\n${quote}\n\n✅ Le bénévole a été transféré avec succès vers « ${missionB.title} ».`,
+        'Demande de Transfert Acceptée !'
+      );
+
+      game.showToast(
+        'Transfert Validé ✓',
+        `${vol.name} a accepté de basculer sur « ${missionB.title} » !`,
+        'green'
+      );
+    } else {
+      const declineQuotes = [
+        `« Désolé chef, j'avais bloqué mes disponibilités uniquement pour « ${missionA.title} », mes impératifs personnels ne me permettent pas de changer d'horaires. »`,
+        `« Malheureusement j'ai un engagement familial sur ce créneau et je ne pourrai pas me libérer pour cette autre mission. Je reste sur le poste initial. »`,
+        `« Navré, ce changement d'horaires ne colle pas avec mes obligations. Je préfère maintenir ma présence sur « ${missionA.title} ». »`
+      ];
+      const quote = declineQuotes[Math.floor(Math.random() * declineQuotes.length)];
+
+      await window.ProtecDialog.alert(
+        `REFUS DE ${vol.name.toUpperCase()} :\n\n${quote}\n\nℹ️ Le bénévole reste inscrit sur son dispositif d'origine « ${missionA.title} ».`,
+        'Transfert Décliné'
+      );
+
+      game.showToast(
+        'Transfert Décliné',
+        `${vol.name} n'est pas disponible pour changer de créneau et reste sur sa mission.`,
+        'orange'
+      );
+    }
+
+    // Rafraîchir les vues ouvertes
+    if (typeof game.renderMissions === 'function') game.renderMissions();
+    if (game.currentModalKey === 'volunteers') {
+      game.openModule('volunteers', true);
+    } else if (game.selectedMissionId) {
+      game.openMissionDetails(game.selectedMissionId);
+    }
+  },
+
+};
