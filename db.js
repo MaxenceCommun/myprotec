@@ -614,56 +614,9 @@ class Database {
       };
     }
 
-    // Cas 3 : Nouveau joueur arrivant via Discord -> Création automatique
-    let baseUsername = (discordGlobalName || discordUsername).replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 16);
-    if (!baseUsername || baseUsername.length < 3) baseUsername = 'Dir_' + discordUsername.replace(/[^a-zA-Z0-9_\-]/g, '').slice(0, 12);
-    if (baseUsername.length < 3) baseUsername = 'Directeur_' + discordId.slice(-4);
-
-    let finalUsername = baseUsername;
-    let counter = 1;
-    while (this.data.users[finalUsername.toLowerCase()]) {
-      finalUsername = `${baseUsername.slice(0, 12)}_${counter}`;
-      counter++;
-    }
-
-    const regResult = this.registerUser(
-      finalUsername,
-      'discord_' + crypto.randomBytes(16).toString('hex'), // Mot de passe aléatoire sécurisé
-      `Antenne ${finalUsername}`,
-      'Paris',
-      '75',
-      null,
-      clientIpRaw
-    );
-
-    if (regResult.error) {
-      return { error: regResult.error };
-    }
-
-    const newUser = this.data.users[finalUsername.toLowerCase()];
-    if (newUser) {
-      newUser.discord = discordData;
-      if (computedRole === 'admin' || computedRole === 'gestionnaire') {
-        newUser.role = computedRole;
-        newUser.promotedViaDiscord = true;
-      }
-      newUser.isAdmin = (newUser.role === 'admin');
-      newUser.isGestionnaire = (newUser.role === 'gestionnaire');
-      this.save();
-      regResult.user.discord = discordData;
-      regResult.user.role = newUser.role;
-      regResult.user.isAdmin = newUser.isAdmin;
-      regResult.user.isGestionnaire = newUser.isGestionnaire;
-      if (regResult.token && this.data.sessions[regResult.token]) {
-        this.data.sessions[regResult.token].role = newUser.role;
-      }
-    }
-
+    // Cas 3 : Aucun compte lié -> Refus de connexion automatique
     return {
-      success: true,
-      action: 'registered',
-      token: regResult.token,
-      user: regResult.user
+      error: `Le compte Discord @${discordUsername} n'est associé à aucun compte joueur Protec Live. Veuillez vous inscrire ou vous connecter avec vos identifiants classiques pour lier votre compte Discord.`
     };
   }
 

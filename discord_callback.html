@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Connexion Discord • MyProtec</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     @keyframes pulse-glow {
       0%, 100% { opacity: 0.6; transform: scale(1); }
@@ -20,7 +21,7 @@
     
     <!-- Logo Discord / MyProtec -->
     <div class="relative flex items-center justify-center">
-      <div class="w-16 h-16 rounded-2xl bg-[#5865F2] flex items-center justify-center shadow-lg shadow-[#5865F2]/30 glow-effect">
+      <div id="icon-container" class="w-16 h-16 rounded-2xl bg-[#5865F2] flex items-center justify-center shadow-lg shadow-[#5865F2]/30 glow-effect transition-colors duration-300">
         <svg class="w-9 h-9 fill-current text-white" viewBox="0 0 127.14 96.36">
           <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.91,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.91,96.12,53,91.08,65.69,84.69,65.69Z"></path>
         </svg>
@@ -30,7 +31,7 @@
     <!-- Titre et sous-titre -->
     <div class="space-y-1">
       <h3 class="text-lg font-black text-white" id="status-title">Connexion Discord en cours...</h3>
-      <p class="text-xs text-slate-400" id="status-desc">Synchronisation de votre compte avec votre antenne MyProtec.</p>
+      <div class="text-xs text-slate-400 leading-relaxed" id="status-desc">Vérification de votre compte avec votre antenne MyProtec.</div>
     </div>
 
     <!-- Spinner de chargement -->
@@ -38,8 +39,8 @@
       <div class="w-7 h-7 border-3 border-slate-700 border-t-[#5865F2] rounded-full animate-spin"></div>
     </div>
 
-    <div id="action-area" class="hidden pt-2">
-      <button onclick="window.close()" class="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
+    <div id="action-area" class="hidden pt-2 flex flex-col items-center gap-2">
+      <button onclick="window.close()" class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition">
         Fermer la fenêtre
       </button>
     </div>
@@ -51,153 +52,44 @@
       const descEl = document.getElementById('status-desc');
       const spinnerEl = document.getElementById('spinner');
       const actionEl = document.getElementById('action-area');
+      const iconContainer = document.getElementById('icon-container');
 
-      // 1. Extraction des données (hash #access_token=... pour implicit flow, ou query ?code=...)
-      const hashParams = new URLSearchParams(window.location.hash.substring(1));
-      const queryParams = new URLSearchParams(window.location.search);
+      function showError(title, messageHtml, rawText) {
+        titleEl.textContent = title;
+        descEl.innerHTML = messageHtml;
+        titleEl.classList.remove('text-emerald-400');
+        titleEl.classList.add('text-rose-400');
+        if (iconContainer) {
+          iconContainer.classList.remove('bg-[#5865F2]', 'shadow-[#5865F2]/30');
+          iconContainer.classList.add('bg-rose-600', 'shadow-rose-600/30');
+        }
+        spinnerEl.classList.add('hidden');
+        actionEl.classList.remove('hidden');
 
-      const accessToken = hashParams.get('access_token');
-      const tokenType = hashParams.get('token_type') || 'Bearer';
-      const code = queryParams.get('code');
-      const state = hashParams.get('state') || queryParams.get('state') || '';
-      const isLinkMode = state.startsWith('link');
-
-      let discordUser = null;
-
-      let discordRoles = [];
-      let inGuild = false;
-
-      // Cas 1 : Token OAuth2 reçu directement (Implicit Flow - 100% compatible hébergement statique sans backend)
-      if (accessToken) {
-        try {
-          const res = await fetch('https://discord.com/api/v10/users/@me', {
-            headers: { Authorization: `${tokenType} ${accessToken}` }
-          });
-          if (res.ok) {
-            discordUser = await res.json();
-          } else {
-            throw new Error('Erreur de validation du jeton Discord (' + res.status + ')');
-          }
-
-          // Récupération des rôles sur le serveur officiel Protection Civile (Guild ID : 1480571890543235122)
+        if (window.opener && !window.opener.closed) {
           try {
-            const guildRes = await fetch('https://discord.com/api/v10/users/@me/guilds/1480571890543235122/member', {
-              headers: { Authorization: `${tokenType} ${accessToken}` }
-            });
-            if (guildRes.ok) {
-              const guildData = await guildRes.json();
-              inGuild = true;
-              discordRoles = Array.isArray(guildData.roles) ? guildData.roles : [];
-            }
-          } catch (gErr) {
-            console.warn('Impossible de récupérer le statut guilde Discord :', gErr);
-          }
-        } catch (err) {
-          console.error('Erreur API Discord /users/@me:', err);
+            window.opener.postMessage({
+              type: 'DISCORD_AUTH_ERROR',
+              message: rawText || messageHtml.replace(/<[^>]*>/g, '')
+            }, '*');
+          } catch (e) {}
+          // Laisser un temps de lecture suffisant avant fermeture automatique
+          setTimeout(() => {
+            try { window.close(); } catch (e) {}
+          }, 3500);
         }
       }
-
-      // Cas 2 : Code d'autorisation reçu (Authorization Code Flow si backend disponible)
-      if (!discordUser && code) {
-        try {
-          const redirectUri = window.location.origin + window.location.pathname;
-          const apiBase = (window.opener && window.opener.ProtecAPI && window.opener.ProtecAPI.API_URL) ? window.opener.ProtecAPI.API_URL : '';
-          const exchangeUrl = apiBase ? `${apiBase}/api/auth/discord/exchange` : '/api/auth/discord/exchange';
-          const res = await fetch(exchangeUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, redirectUri })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.user) {
-              finishAuth(data.token, data.user, isLinkMode ? 'linked' : 'login');
-              return;
-            }
-          }
-        } catch (err) {
-          console.warn('Backend exchange non disponible, repli sur profil client:', err);
-        }
-      }
-
-      // 2. Traitement du profil Discord récupéré
-      if (discordUser) {
-        const avatarUrl = discordUser.avatar
-          ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=128`
-          : `https://cdn.discordapp.com/embed/avatars/${parseInt(discordUser.discriminator || '0', 10) % 5}.png`;
-
-        // Calcul dynamique du rôle Discord :
-        // Admin : 1561701759733465128 | Gestionnaire : 1561702120732758077
-        let computedRole = 'user';
-        if (discordRoles.includes('1561701759733465128')) {
-          computedRole = 'admin';
-        } else if (discordRoles.includes('1561702120732758077')) {
-          computedRole = 'gestionnaire';
-        }
-
-        const discordProfile = {
-          id: discordUser.id,
-          username: discordUser.username,
-          global_name: discordUser.global_name || discordUser.username,
-          avatar: discordUser.avatar,
-          avatarUrl: avatarUrl,
-          email: discordUser.email || null,
-          discriminator: discordUser.discriminator,
-          roles: discordRoles,
-          inGuild: inGuild,
-          accessToken: accessToken || null,
-          linkedAt: new Date().toISOString()
-        };
-
-        // Récupération de l'utilisateur existant ou création d'un nouveau profil
-        let existingUser = null;
-        try {
-          if (window.opener && window.opener.ProtecAuth && window.opener.ProtecAuth.currentUser) {
-            existingUser = window.opener.ProtecAuth.currentUser;
-          } else {
-            existingUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
-          }
-        } catch (e) {}
-
-        const finalRole = (computedRole !== 'user') ? computedRole : (existingUser?.role || 'user');
-
-        const userRecord = existingUser ? {
-          ...existingUser,
-          role: finalRole,
-          isAdmin: (finalRole === 'admin'),
-          isGestionnaire: (finalRole === 'gestionnaire'),
-          discord: discordProfile
-        } : {
-          id: 'usr-dc-' + discordUser.id.slice(-8),
-          username: discordUser.global_name || discordUser.username,
-          role: finalRole,
-          isAdmin: (finalRole === 'admin'),
-          isGestionnaire: (finalRole === 'gestionnaire'),
-          stationName: 'Antenne Protection Civile',
-          city: 'Paris',
-          departmentCode: '75',
-          discord: discordProfile
-        };
-
-        const sessionToken = 'jwt_discord_' + discordUser.id + '_' + Date.now();
-        finishAuth(sessionToken, userRecord, isLinkMode ? 'linked' : 'login');
-        return;
-      }
-
-      // Si aucun token ni code n'a pu être validé
-      titleEl.textContent = 'Échec de la Connexion';
-      descEl.textContent = 'Aucun jeton d’autorisation n’a été reçu de Discord. Veuillez fermer cette fenêtre et réessayer.';
-      titleEl.classList.add('text-rose-400');
-      spinnerEl.classList.add('hidden');
-      actionEl.classList.remove('hidden');
 
       function finishAuth(token, user, action) {
         titleEl.textContent = 'Connexion Réussie !';
         descEl.textContent = `Bienvenue, ${user.discord?.global_name || user.username} ! Synchronisation en cours...`;
         titleEl.classList.add('text-emerald-400');
+        if (iconContainer) {
+          iconContainer.classList.remove('bg-[#5865F2]', 'shadow-[#5865F2]/30');
+          iconContainer.classList.add('bg-emerald-600', 'shadow-emerald-600/30');
+        }
         spinnerEl.classList.add('hidden');
 
-        // Notification de la fenêtre principale (jeu)
         if (window.opener && !window.opener.closed) {
           try {
             window.opener.postMessage({
@@ -209,7 +101,6 @@
           } catch (e) {}
           setTimeout(() => window.close(), 600);
         } else {
-          // Redirection directe si l'utilisateur a ouvert le lien dans le même onglet
           localStorage.setItem('protec_auth_token', token);
           localStorage.setItem('protec_user', JSON.stringify(user));
           setTimeout(() => {
@@ -217,6 +108,223 @@
           }, 800);
         }
       }
+
+      // 1. Extraction des paramètres de retour OAuth2
+      const hashParams = new URLSearchParams(window.location.hash.substring(1));
+      const queryParams = new URLSearchParams(window.location.search);
+
+      const accessToken = hashParams.get('access_token');
+      const tokenType = hashParams.get('token_type') || 'Bearer';
+      const code = queryParams.get('code');
+      const state = hashParams.get('state') || queryParams.get('state') || '';
+      const isLinkMode = state.startsWith('link');
+
+      let discordUser = null;
+      let discordRoles = [];
+      let inGuild = false;
+
+      // Cas 1 : Token OAuth2 reçu directement (Implicit Flow SPA)
+      if (accessToken) {
+        try {
+          const res = await fetch('https://discord.com/api/v10/users/@me', {
+            headers: { Authorization: `${tokenType} ${accessToken}` }
+          });
+          if (res.ok) {
+            discordUser = await res.json();
+          } else {
+            throw new Error('Erreur de validation du jeton Discord (' + res.status + ')');
+          }
+
+          // Rôles sur le serveur officiel Protection Civile (Guild ID : 1480571890543235122)
+          try {
+            const guildRes = await fetch('https://discord.com/api/v10/users/@me/guilds/1480571890543235122/member', {
+              headers: { Authorization: `${tokenType} ${accessToken}` }
+            });
+            if (guildRes.ok) {
+              const guildData = await guildRes.json();
+              inGuild = true;
+              discordRoles = Array.isArray(guildData.roles) ? guildData.roles : [];
+            }
+          } catch (gErr) {
+            console.warn('Statut guilde Discord non récupéré:', gErr);
+          }
+        } catch (err) {
+          console.error('Erreur API Discord /users/@me:', err);
+          showError('Erreur Discord', 'Impossible de récupérer votre profil Discord. Veuillez réessayer.');
+          return;
+        }
+      }
+
+      // Cas 2 : Code d'autorisation reçu (Authorization Code Flow avec backend)
+      if (!discordUser && code) {
+        try {
+          const redirectUri = window.location.origin + window.location.pathname;
+          const apiBase = (window.opener && window.opener.ProtecAPI && window.opener.ProtecAPI.API_URL) ? window.opener.ProtecAPI.API_URL : '';
+          const exchangeUrl = apiBase ? `${apiBase}/api/auth/discord/exchange` : '/api/auth/discord/exchange';
+          const res = await fetch(exchangeUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code, redirectUri, existingUserId: isLinkMode ? window.opener?.ProtecAuth?.currentUser?.id : null })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok && data && data.user) {
+            finishAuth(data.token, data.user, isLinkMode ? 'linked' : 'login');
+            return;
+          } else if (data && data.error) {
+            showError('Compte Discord non lié', data.error);
+            return;
+          }
+        } catch (err) {
+          console.warn('Backend exchange indisponible:', err);
+        }
+      }
+
+      // Si aucun utilisateur Discord n'a pu être identifié
+      if (!discordUser) {
+        showError('Échec de la Connexion', 'Aucun jeton d’autorisation valide n’a été reçu de Discord.');
+        return;
+      }
+
+      // Traitement du profil Discord validé
+      const avatarUrl = discordUser.avatar
+        ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=128`
+        : `https://cdn.discordapp.com/embed/avatars/${parseInt(discordUser.discriminator || '0', 10) % 5}.png`;
+
+      // Détection des rôles FNPC Discord : Admin : 1561701759733465128 | Gestionnaire : 1561702120732758077
+      let computedRole = 'user';
+      if (discordRoles.includes('1561701759733465128')) {
+        computedRole = 'admin';
+      } else if (discordRoles.includes('1561702120732758077')) {
+        computedRole = 'gestionnaire';
+      }
+
+      const discordProfile = {
+        id: discordUser.id,
+        username: discordUser.username,
+        global_name: discordUser.global_name || discordUser.username,
+        avatar: discordUser.avatar,
+        avatarUrl: avatarUrl,
+        email: discordUser.email || null,
+        discriminator: discordUser.discriminator,
+        roles: discordRoles,
+        inGuild: inGuild,
+        accessToken: accessToken || null,
+        linkedAt: new Date().toISOString()
+      };
+
+      // Initialisation du connecteur Supabase Cloud
+      let supaClient = (window.opener && window.opener.ProtecSupabase && window.opener.ProtecSupabase.client)
+        ? window.opener.ProtecSupabase.client
+        : (window.supabase ? window.supabase.createClient('https://yrayehhbqcnuiuejqsjz.supabase.co', 'sb_publishable__SL5mXhQJBnyBBxgJJajXw_tCxJzlPs') : null);
+
+      // CAS A : Mode Liaison (un compte est déjà connecté dans l'application)
+      if (isLinkMode) {
+        let existingUser = null;
+        try {
+          if (window.opener && window.opener.ProtecAuth && window.opener.ProtecAuth.currentUser) {
+            existingUser = window.opener.ProtecAuth.currentUser;
+          } else {
+            existingUser = JSON.parse(localStorage.getItem('protec_user') || 'null');
+          }
+        } catch (e) {}
+
+        if (!existingUser || !existingUser.id) {
+          showError('Action Impossible', 'Veuillez d’abord vous connecter à votre compte Protec Live avant d’associer Discord.');
+          return;
+        }
+
+        const finalRole = (computedRole !== 'user') ? computedRole : (existingUser.role || 'directeur');
+        const isAdmin = (finalRole === 'admin' || existingUser.isAdmin === true);
+        const isGestionnaire = (finalRole === 'gestionnaire');
+
+        const userRecord = {
+          ...existingUser,
+          role: finalRole,
+          isAdmin: isAdmin,
+          is_admin: isAdmin,
+          isGestionnaire: isGestionnaire,
+          discord: discordProfile
+        };
+
+        if (supaClient && existingUser.id) {
+          try {
+            await supaClient.from('players').update({
+              discord: discordProfile,
+              discord_id: discordUser.id,
+              role: finalRole,
+              is_admin: isAdmin
+            }).eq('id', existingUser.id);
+          } catch (supaErr) {
+            console.warn('Erreur update Supabase link:', supaErr);
+          }
+        }
+
+        const sessionToken = window.opener?.ProtecAuth?.token || localStorage.getItem('protec_auth_token') || ('jwt_discord_' + discordUser.id + '_' + Date.now());
+        finishAuth(sessionToken, userRecord, 'linked');
+        return;
+      }
+
+      // CAS B : Mode Connexion ("Continuer avec Discord")
+      // Recherche impérative d'un compte joueur lié dans la base de données
+      let matchedPlayer = null;
+      if (supaClient) {
+        try {
+          const { data, error } = await supaClient
+            .from('players')
+            .select('*')
+            .or(`discord_id.eq.${discordUser.id},discord->>id.eq.${discordUser.id}`)
+            .maybeSingle();
+          if (data && !error) {
+            matchedPlayer = data;
+          }
+        } catch (errDb) {
+          console.warn('Erreur recherche joueur Supabase:', errDb);
+        }
+      }
+
+      // Si aucun compte joueur lié n'existe : REFUS DE CONNEXION !
+      if (!matchedPlayer) {
+        const msgHtml = `Le compte Discord <strong>@${discordUser.username}</strong> n'est associé à aucun compte joueur Protec Live.<br><br>Veuillez d'abord <strong>créer votre compte Directeur</strong> ou <strong>vous connecter avec vos identifiants classiques</strong> pour lier votre Discord.`;
+        const rawMsg = `Le compte Discord @${discordUser.username} n'est associé à aucun compte joueur. Veuillez vous inscrire ou vous connecter avec vos identifiants.`;
+        showError('Compte Discord non lié', msgHtml, rawMsg);
+        return;
+      }
+
+      // Compte joueur officiel trouvé : connexion et synchronisation
+      const finalRole = (computedRole !== 'user') ? computedRole : (matchedPlayer.role || 'directeur');
+      const isAdmin = (finalRole === 'admin' || matchedPlayer.is_admin === true);
+      const isGestionnaire = (finalRole === 'gestionnaire');
+
+      const userRecord = {
+        id: matchedPlayer.id,
+        username: matchedPlayer.username,
+        role: finalRole,
+        isAdmin: isAdmin,
+        is_admin: isAdmin,
+        isGestionnaire: isGestionnaire,
+        stationName: matchedPlayer.station_name,
+        city: matchedPlayer.city,
+        departmentCode: matchedPlayer.department_code,
+        discord: discordProfile
+      };
+
+      if (supaClient) {
+        try {
+          await supaClient.from('players').update({
+            role: finalRole,
+            is_admin: isAdmin,
+            discord: discordProfile,
+            discord_id: discordUser.id,
+            last_login: new Date().toISOString()
+          }).eq('id', matchedPlayer.id);
+        } catch (updErr) {
+          console.warn('Erreur maj Supabase login Discord:', updErr);
+        }
+      }
+
+      const sessionToken = `supa-${matchedPlayer.id}`;
+      finishAuth(sessionToken, userRecord, 'login');
+
     })();
   </script>
 </body>

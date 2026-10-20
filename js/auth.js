@@ -82,10 +82,33 @@ window.ProtecAuth = {
             }
           }
 
+          if (action === 'login') {
+            await this.checkCloudSaveOnLogin(targetGame);
+            if (targetGame && typeof targetGame.returnToMyAntenna === 'function' && Array.isArray(targetGame.stations) && targetGame.stations.length > 0) {
+              setTimeout(() => targetGame.returnToMyAntenna(15, true), 300);
+            }
+            if (window.ProtecSupabase) {
+              window.ProtecSupabase.startAccountWatchdog(targetGame);
+              window.ProtecSupabase.initMultiplayerRealtime(targetGame);
+            }
+          }
+
           const modal = document.getElementById('auth-modal');
           if (modal && !modal.classList.contains('hidden')) {
             this.renderModalContent('profile');
           }
+        }
+      } else if (event.data && event.data.type === 'DISCORD_AUTH_ERROR') {
+        const errorMsg = event.data.message || 'Ce compte Discord n’est associé à aucun compte joueur.';
+        const targetGame = game || window.game;
+        if (targetGame && typeof targetGame.showToast === 'function') {
+          targetGame.showToast('Compte Discord non lié', errorMsg, 'amber');
+        }
+        const errorEl = document.getElementById('auth-error-msg');
+        if (errorEl) {
+          errorEl.innerHTML = `<div class="font-bold flex items-center gap-1.5"><i data-lucide="alert-circle" class="w-4 h-4"></i> Compte non associé</div><div class="mt-1 text-[11px] leading-tight">${errorMsg}</div>`;
+          errorEl.classList.remove('hidden');
+          if (window.lucide) window.lucide.createIcons();
         }
       }
     });
