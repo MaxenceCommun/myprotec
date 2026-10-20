@@ -34,13 +34,13 @@ window.ProtecAdvancedModals = {
     const hasAntenna = streakInfo.hasAntenna;
     const canClaimStreak = streakInfo.canClaim;
     const streakList = window.ProtecAdvanced?.streakRewardsCatalog || [
-      { day: 1, title: 'Jour 1', shortDesc: '350 € + 2x O2 B5', icon: '🎁' },
-      { day: 2, title: 'Jour 2', shortDesc: '500 € + DAE + Rép.', icon: '⚡' },
-      { day: 3, title: 'Jour 3', shortDesc: '650 € + 4x Soins SUAP', icon: '🩹' },
-      { day: 4, title: 'Jour 4', shortDesc: '800 € + 80 Abonnés', icon: '📣' },
-      { day: 5, title: 'Jour 5', shortDesc: '1 000 € + Colliers', icon: '⭐' },
-      { day: 6, title: 'Jour 6', shortDesc: '1 500 € + 25 Agrément', icon: '🎖️' },
-      { day: 7, title: 'Jour 7', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
+      { day: 1, title: 'Jour 1', shortDesc: '500 €', icon: '🎁' },
+      { day: 2, title: 'Jour 2', shortDesc: '750 €', icon: '⚡' },
+      { day: 3, title: 'Jour 3', shortDesc: '1 000 €', icon: '💰' },
+      { day: 4, title: 'Jour 4', shortDesc: '1 250 €', icon: '⭐' },
+      { day: 5, title: 'Jour 5', shortDesc: '1 500 €', icon: '💎' },
+      { day: 6, title: 'Jour 6', shortDesc: '2 000 €', icon: '🎖️' },
+      { day: 7, title: 'Jour 7', shortDesc: '5 000 €', icon: '🏆' }
     ];
 
     return `

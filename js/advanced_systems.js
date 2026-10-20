@@ -1193,13 +1193,13 @@ window.ProtecAdvanced = {
   // Helper date du jour au format ISO YYYY-MM-DD
   // Catalogue officiel des récompenses de connexion consécutive (Cycle de 7 jours)
   streakRewardsCatalog: [
-    { day: 1, title: 'Jour 1', money: 350, o2: 2, desc: '+350 € & 2 bouteilles d’Oxygène B5 de dotation', shortDesc: '350 € + 2x O2 B5', icon: '🎁' },
-    { day: 2, title: 'Jour 2', money: 500, dae: 2, rep: 15, desc: '+500 € & 2 paires d’électrodes DAE de dotation', shortDesc: '500 € + DAE', icon: '⚡' },
-    { day: 3, title: 'Jour 3', money: 650, kits: 4, desc: '+650 € & 4 trousses complètes de soins SUAP d’urgence', shortDesc: '650 € + 4x Soins SUAP', icon: '🩹' },
-    { day: 4, title: 'Jour 4', money: 800, followers: 80, desc: '+800 € & +80 abonnés locaux (Notoriété & Communication)', shortDesc: '800 € + 80 Abonnés', icon: '📣' },
-    { day: 5, title: 'Jour 5', money: 1000, collars: 2, desc: '+1 000 € & 2 colliers cervicaux pédiatriques & adultes', shortDesc: '1 000 € + Colliers', icon: '⭐' },
-    { day: 6, title: 'Jour 6', money: 1500, rep: 25, desc: '+1 500 € & dotation de secours pour l’antenne', shortDesc: '1 500 € + Secours', icon: '🎖️' },
-    { day: 7, title: 'Jour 7', money: 3500, rep: 50, o2: 4, kits: 6, desc: '🏆 GRAND BONUS FÉDÉRAL JOUR 7 : +3 500 € & dotation complète pour l’antenne !', shortDesc: '3 500 € + Grand Lot Fédéral', icon: '🏆' }
+    { day: 1, title: 'Jour 1', money: 500, desc: '+500 € de dotation fédérale', shortDesc: '500 €', icon: '🎁' },
+    { day: 2, title: 'Jour 2', money: 750, desc: '+750 € de dotation fédérale', shortDesc: '750 €', icon: '⚡' },
+    { day: 3, title: 'Jour 3', money: 1000, desc: '+1 000 € de dotation fédérale', shortDesc: '1 000 €', icon: '💰' },
+    { day: 4, title: 'Jour 4', money: 1250, desc: '+1 250 € de dotation fédérale', shortDesc: '1 250 €', icon: '⭐' },
+    { day: 5, title: 'Jour 5', money: 1500, desc: '+1 500 € de dotation fédérale', shortDesc: '1 500 €', icon: '💎' },
+    { day: 6, title: 'Jour 6', money: 2000, desc: '+2 000 € de dotation fédérale', shortDesc: '2 000 €', icon: '🎖️' },
+    { day: 7, title: 'Jour 7', money: 5000, desc: '🏆 GRAND BONUS FÉDÉRAL JOUR 7 : +5 000 € pour l’antenne !', shortDesc: '5 000 €', icon: '🏆' }
   ],
 
   // Helper date du jour au format ISO YYYY-MM-DD
@@ -1305,13 +1305,8 @@ window.ProtecAdvanced = {
     const streakRewards = this.streakRewardsCatalog;
     const pick = streakRewards[claimDay - 1] || streakRewards[0];
 
-    // Attribution des dotations
-    game.resources.money = (game.resources.money || 0) + pick.money;
-    if (pick.o2 && game.logistics) game.logistics.oxygenBottles = (game.logistics.oxygenBottles || 0) + pick.o2;
-    if (pick.dae && game.logistics) game.logistics.aedPads = (game.logistics.aedPads || 0) + pick.dae;
-    if (pick.kits && game.logistics) game.logistics.woundKits = (game.logistics.woundKits || 0) + pick.kits;
-    if (pick.collars && game.logistics) game.logistics.cervicalCollars = (game.logistics.cervicalCollars || 0) + pick.collars;
-    if (pick.followers) game.resources.followers = (game.resources.followers || 0) + pick.followers;
+    // Attribution des dotations : 100% en trésorerie (argent net)
+    game.resources.money = (game.resources.money || 0) + (pick.money || 0);
     if (pick.rep) game.resources.reputationScore = (game.resources.reputationScore || 0) + pick.rep;
 
     const curDayNum = game.clock ? game.clock.day : new Date().getDate();
@@ -1513,7 +1508,7 @@ window.ProtecAdvanced = {
       } else if (tier === 2) {
         return [
           { id: 'task-daily-ops', title: 'Réaliser 2 missions opérationnelles (DPS, SAMU 15 ou Maraude sociale)', goal: 2, current: 0, reward: 800, done: false, icon: 'ambulance' },
-          { id: 'task-daily-logi', title: 'Vérifier la dotation consommables (≥ 4 unités : Oxygène, DAE ou Trousses)', goal: 4, current: 0, reward: 600, done: false, icon: 'package' },
+          { id: 'task-daily-logi', title: 'Maintenir la réserve logistique de l’antenne (≥ 4 articles en stock)', goal: 4, current: 0, reward: 600, done: false, icon: 'package' },
           { id: 'task-daily-pedago', title: 'Formations : traiter 1 devis B2B entreprise ou inscrire un bénévole en recyclage', goal: 1, current: 0, reward: 750, done: false, icon: 'file-text' }
         ];
       } else {
@@ -1558,6 +1553,15 @@ window.ProtecAdvanced = {
       const t = game.rewards.tier || currentTier;
       game.rewards.weeklyTasks = this.getTasksForTier(t, true);
       this.saveRewardsLocally(game);
+    }
+
+    // Nettoyage immédiat des anciens intitulés de tâches stockés en mémoire
+    if (Array.isArray(game.rewards.dailyTasks)) {
+      game.rewards.dailyTasks.forEach(t => {
+        if (t.id === 'task-daily-logi' && t.title && t.title.includes('Oxygène')) {
+          t.title = 'Maintenir la réserve logistique de l’antenne (≥ 4 articles en stock)';
+        }
+      });
     }
 
     // 4. Initialisation ou passage de palier
