@@ -20524,8 +20524,8 @@ class ProtecGame {
     }
 
     if (moduleKey === 'antenne_messages' || moduleKey === 'messages') {
-      title.textContent = "Messagerie & Échanges d'Antenne";
-      subtitle.textContent = "Flux opérationnels, messages formateurs, alertes logistiques et doléances directes des bénévoles";
+      title.textContent = "Messagerie d'antenne";
+      subtitle.textContent = "Messages des bénévoles, formateurs et alertes logistiques";
       icon.setAttribute('data-lucide', 'message-square');
       if (window.ProtecAntenneMessages && typeof window.ProtecAntenneMessages.renderModal === 'function') {
         try {
@@ -20537,8 +20537,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'ecussons') {
-      title.textContent = "Collection & Troc d'Écussons";
-      subtitle.textContent = "Tableau en liège d'antenne et bourse aux échanges inter-antennes en ligne";
+      title.textContent = "Écussons";
+      subtitle.textContent = "Collection et échanges d'écussons entre antennes";
       icon.setAttribute('data-lucide', 'shield');
       if (window.ProtecEcussons && typeof window.ProtecEcussons.renderTableauEcussons === 'function') {
         try {
@@ -20550,8 +20550,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'finances') {
-      title.textContent = "Direction Financière & Comptabilité Réglementaire";
-      subtitle.textContent = "Trésorerie d'antenne, grand livre des comptes, bilans d'exploitation et subventions";
+      title.textContent = "Finances";
+      subtitle.textContent = "Trésorerie, recettes, dépenses et subventions";
       icon.setAttribute('data-lucide', 'wallet');
       if (window.ProtecFinances) {
         try {
@@ -20567,8 +20567,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'equipements') {
-      title.textContent = "Inventaire & Dotations Matérielles";
-      subtitle.textContent = "Lots opérationnels (Lots A, B, C), tenues d'intervention et matériels de secours";
+      title.textContent = "Équipements";
+      subtitle.textContent = "Lots de secours, tenues et inventaire du matériel";
       icon.setAttribute('data-lucide', 'box');
       if (window.ProtecEquipements) {
         try {
@@ -20584,8 +20584,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'conventions') {
-      title.textContent = "Conventions Cadres & Partenariats";
-      subtitle.textContent = "Accords de secours d'urgence, CUMP, SAMU et conventions annuelles";
+      title.textContent = "Conventions & Partenariats";
+      subtitle.textContent = "Accords avec le SAMU, le SDIS et partenaires publics";
       icon.setAttribute('data-lucide', 'file-check-2');
       if (window.ProtecConventions) {
         try {
@@ -20597,8 +20597,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'subventions') {
-      title.textContent = "Pôle Action Sociale & Subventions Publiques";
-      subtitle.textContent = "Financements DDETS, CCAS et Conseil Départemental pour maraudes";
+      title.textContent = "Subventions";
+      subtitle.textContent = "Demandes de financements et subventions publiques";
       icon.setAttribute('data-lucide', 'landmark');
       if (window.ProtecSocial) {
         try {
@@ -20610,8 +20610,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'communication') {
-      title.textContent = "Communication & Rayonnement d'Antenne";
-      subtitle.textContent = "Réseaux sociaux, campagnes de notoriété et relations presse";
+      title.textContent = "Communication";
+      subtitle.textContent = "Gestion de la notoriété et des réseaux sociaux";
       icon.setAttribute('data-lucide', 'megaphone');
       if (window.ProtecCommunication) {
         try {
@@ -20623,8 +20623,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'tchat' || moduleKey === 'messagerie') {
-      title.textContent = "Messagerie & Communications Opérationnelles";
-      subtitle.textContent = "Échanges inter-bénévoles, canaux d'antenne et alertes de mission";
+      title.textContent = "Tchat opérationnel";
+      subtitle.textContent = "Échanges entre bénévoles et canaux de discussion";
       icon.setAttribute('data-lucide', 'message-square');
       if (window.ProtecMessaging) {
         try {
@@ -20636,8 +20636,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'cump') {
-      title.textContent = "Cellule d'Urgence Médico-Psychologique (CUMP)";
-      subtitle.textContent = "Soutien psychologique d'urgence et Cellule d'Accueil des Impliqués (CAI)";
+      title.textContent = "Cellule CUMP";
+      subtitle.textContent = "Soutien médico-psychologique d'urgence";
       icon.setAttribute('data-lucide', 'heart-handshake');
       if (window.ProtecCump) {
         try {
@@ -20653,8 +20653,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'apc') {
-      title.textContent = "Gouvernance Fédérale & Élections (APC)";
-      subtitle.textContent = "Comité directeur, vote d'orientation et politique nationale FNPC";
+      title.textContent = "Gouvernance fédérale";
+      subtitle.textContent = "Votes et orientations nationales FNPC";
       icon.setAttribute('data-lucide', 'award');
       if (window.ProtecAPC) {
         try {
@@ -20666,8 +20666,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'marche_occasion' || moduleKey === 'bourse' || moduleKey === 'occasion') {
-      title.textContent = "Marché d'Occasion & Revente Inter-Antennes";
-      subtitle.textContent = "Véhicules et équipements d'occasion cédés par d'autres antennes";
+      title.textContent = "Marché d'occasion";
+      subtitle.textContent = "Achat et revente de véhicules et matériels d'occasion";
       icon.setAttribute('data-lucide', 'repeat');
       if (window.ProtecMarcheOccasion) {
         try {
@@ -20679,8 +20679,8 @@ class ProtecGame {
         return;
       }
     } else if (moduleKey === 'alliance') {
-      title.textContent = 'Fédération, Alliances & Veille Opérationnelle';
-      subtitle.textContent = 'Entraide inter-antennes, détachements de renforts, astreintes et réseau fédéral';
+      title.textContent = 'Alliance & Réseau';
+      subtitle.textContent = 'Entraide, renforts opérationnels et réseau fédéral';
       icon.setAttribute('data-lucide', 'handshake');
  
        // Assainissement et purge des renforts corrompus ou invalides
@@ -21842,8 +21842,8 @@ class ProtecGame {
       this.activePlanningTab = 'devis';
       return this.openModule('planning', isBackNavigation);
     } else if (moduleKey === 'recrutement') {
-      title.textContent = 'Pôle Recrutement & Ressources Humaines';
-      subtitle.textContent = 'Intégrez de nouveaux bénévoles, volontaires et salariés pour renforcer votre antenne';
+      title.textContent = 'Recrutement & Effectifs';
+      subtitle.textContent = 'Gestion et recrutement des bénévoles de l\'antenne';
       icon.setAttribute('data-lucide', 'user-plus');
 
       // Déduplication préventive des candidatures bénévoles
@@ -22499,8 +22499,8 @@ class ProtecGame {
         </div>
       `;
     } else if (moduleKey === 'samu') {
-      title.textContent = 'Permanence & Gardes SAMU 15 (AASC)';
-      subtitle.textContent = 'Mise à disposition conventionnée d’ambulances VPSP et équipages au profit du SAMU départemental';
+      title.textContent = 'Gardes SAMU 15';
+      subtitle.textContent = 'Engagement d’ambulances VPSP et équipages pour le SAMU';
       icon.setAttribute('data-lucide', 'activity');
 
       const isGuardActive = this.samuGarde && this.samuGarde.active;
@@ -23165,8 +23165,8 @@ class ProtecGame {
         `;
       }
     } else if (moduleKey === 'flotte' || moduleKey === 'base') {
-      title.textContent = 'Flotte Automobile & Véhicules Opérationnels';
-      subtitle.textContent = 'Gestion du parc roulant, armement, statuts opérationnels et acquisition de véhicules';
+      title.textContent = 'Véhicules';
+      subtitle.textContent = 'Armement, entretien et disponibilité des véhicules';
       icon.setAttribute('data-lucide', 'truck');
 
       const isLeader = this.player.deptRole === 'antenne_principale';
@@ -23481,15 +23481,15 @@ class ProtecGame {
         body.innerHTML = window.ProtecModals.renderLogistique(this);
       }
     } else if (moduleKey === 'meteo') {
-      title.textContent = 'Bulletin Météo-France & Vigilance Préfectorale';
-      subtitle.textContent = 'Surveillance des risques départementaux et consignes de sécurité civile';
+      title.textContent = 'Vigilance météo';
+      subtitle.textContent = 'Suivi des alertes météo et risques départementaux';
       icon.setAttribute('data-lucide', 'cloud-sun');
       if (window.ProtecModals) {
         body.innerHTML = window.ProtecModals.renderMeteo(this);
       }
     } else if (moduleKey === 'recompenses') {
-      title.textContent = 'Récompenses Quotidiennes & Défis';
-      subtitle.textContent = 'Série de connexions, dotations fédérales et objectifs de l’antenne';
+      title.textContent = 'Récompenses & Défis';
+      subtitle.textContent = 'Bonus quotidiens et objectifs d\'antenne';
       icon.setAttribute('data-lucide', 'gift');
       if (window.ProtecAdvanced && window.ProtecAdvanced.updateTasksProgress) {
         window.ProtecAdvanced.updateTasksProgress(this);
@@ -23504,8 +23504,8 @@ class ProtecGame {
         }
         window.ProtecLocaux.renderModal(this);
       } else if (window.ProtecAdvancedModals) {
-        title.textContent = 'Aménagement & Évolution du Local';
-        subtitle.textContent = 'Améliorez vos pièces pour débloquer des bonus passifs permanents';
+        title.textContent = 'Aménagement du local';
+        subtitle.textContent = 'Amélioration des pièces et bonus permanents';
         icon.setAttribute('data-lucide', 'hammer');
         body.innerHTML = window.ProtecAdvancedModals.renderStationRooms(this, this.selectedStationId || this.stations[0]?.id);
       }
@@ -23521,14 +23521,14 @@ class ProtecGame {
       if (window.ProtecPoles) {
         window.ProtecPoles.renderModal(this);
       } else if (window.ProtecAdvancedModals) {
-        title.textContent = 'Arbre de Compétences & Bureau d’Antenne';
-        subtitle.textContent = 'Habilitations individuelles des secouristes et gouvernance associative';
+        title.textContent = 'Compétences';
+        subtitle.textContent = 'Habilitations des secouristes et rôles du bureau';
         icon.setAttribute('data-lucide', 'award');
         body.innerHTML = window.ProtecAdvancedModals.renderVolunteerSkills(this);
       }
     } else if (moduleKey === 'crise') {
-      title.textContent = 'Plan NOVI, Crises Majeures & CUMP';
-      subtitle.textContent = 'Dispositif ORSEC, Cellule d’Accueil des Impliqués (CAI), SNCF et Postes Médicaux Avancés';
+      title.textContent = 'Gestion de crise';
+      subtitle.textContent = 'Dispositifs ORSEC, NOVI et interventions d’urgence';
       icon.setAttribute('data-lucide', 'siren');
 
       const crisisMissions = (this.missions || []).filter(m => !this.isMissionTerminated(m) && (m.type === 'crise' || m.isCumpCai || m.alertOrigin === 'sncf' || ['critique', 'haute'].includes(m.urgency)));

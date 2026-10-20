@@ -267,27 +267,27 @@ window.ProtecLogistique = {
   ],
 
   CATALOG: [
-    // --- 1. CONSOMMABLES & RÉARMEMENT OPÉRATIONNEL ---
+    // --- 1. CONSOMMABLES & RÉARMEMENT ---
     {
       id: 'caisse_rearmement',
       category: 'pharmacie',
-      name: 'Kit de Réarmement & Consommables PS (Caisse de Réassort)',
+      name: 'Kit de réarmement',
       lucideIcon: 'archive',
       image: 'images/equipements/caisse_rearmement.png',
       price: 60,
-      unit: 'caisse (100% réassort)',
+      unit: 'caisse',
       slots: 1,
-      badge: 'Réarmement PS & Flotte',
+      badge: 'Réarmement',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700/60',
-      desc: 'Dotation complète de consommables premiers secours (pansements, compresses, tubulures O2, perfusions, attelles, colliers). Réarme à 100% le matériel de secours entamé, les lots PS et les véhicules opérationnels (VPSP, VTU).',
-      usage: 'Réarme immédiatement un VPSP, VTU ou lot de secours à 100% à l’antenne ou directement sur le terrain.'
+      desc: 'Réapprovisionne à 100% les consommables d’un véhicule (VPSP, VTU) ou d’un lot de secours.',
+      usage: 'Recharge le matériel de secours à l’antenne ou en intervention.'
     },
 
     // --- 2. LOTS DE SECOURS A / B / C ---
     {
       id: 'lot_secours_a',
       category: 'lots_secours',
-      name: 'Lot A (Poste de Secours Fixe & Tente Gonflable 16m²)',
+      name: 'Lot A - Poste de secours',
       lucideIcon: 'tent',
       image: 'images/equipements/lot_secours_a.png',
       price: 1750,
@@ -296,15 +296,15 @@ window.ProtecLogistique = {
       types: ['PS', 'LOG'],
       consumables: 100,
       isLot: true,
-      badge: 'Poste Fixe & Tente Officielle',
+      badge: 'Poste Fixe',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Tente gonflable officielle Protection Civile 16 m² à déploiement rapide avec sas d’accueil, rampe d’éclairage LED autonome, table de secrétariat SINUS, tabourets et poubelles DASRI étanches.',
-      usage: 'Permet d’accueillir et soigner jusqu’à 6 victimes simultanément sur DPS-ME, DPS-GE et festivals. Embarquable dans un véhicule LOG (4 slots).'
+      desc: 'Tente gonflable et équipement pour soigner jusqu’à 6 victimes sur les postes de secours.',
+      usage: 'Permet d’accueillir et soigner les victimes sur les DPS-ME, DPS-GE et festivals.'
     },
     {
       id: 'lot_secours_b',
       category: 'lots_secours',
-      name: 'Lot B (Secours à Personne Standard - Sac PS)',
+      name: 'Lot B - Premiers secours',
       lucideIcon: 'briefcase',
       image: 'images/equipements/lot_secours_b.png',
       price: 850,
@@ -313,15 +313,15 @@ window.ProtecLogistique = {
       types: ['PS'],
       consumables: 100,
       isLot: true,
-      badge: 'Secours à Personne Standard',
+      badge: 'Secours d’Urgence',
       badgeColor: 'bg-blue-50 text-pc-blue border-blue-300',
-      desc: 'Sac d’intervention d’urgence complet avec oxygénothérapie, BAVU adulte/enfant, saturomètre, tensiomètre manuel, colliers cervicaux et garrot tourniquet.',
-      usage: 'Armement obligatoire de base de tout VPSP et PAPS (+35% rapidité prise en charge). Embarquable dans un véhicule LOG (2 slots).'
+      desc: 'Sac d’urgence vitale avec oxygène et défibrillateur pour les interventions réflexes.',
+      usage: 'Armement obligatoire de base de tout VPSP et PAPS.'
     },
     {
       id: 'lot_secours_c',
       category: 'lots_secours',
-      name: 'Lot C (Brancardage, Relevage & Immobilisation)',
+      name: 'Lot C - Immobilisation & Brancardage',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
       price: 1250,
@@ -330,188 +330,188 @@ window.ProtecLogistique = {
       types: ['PS'],
       consumables: 100,
       isLot: true,
-      badge: 'Immobilisation & Brancardage',
+      badge: 'Immobilisation',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Sac d’intervention avec brancard pliant renforcé, matelas immobilisateur à dépression avec pompe, plan dur adulte/enfant, sangles araignée et chaise de transport.',
-      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Embarquable dans un véhicule LOG (2 slots).'
+      desc: 'Matériel de relevage, brancard et matelas coquille pour les traumatismes et fractures.',
+      usage: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates.'
     },
 
     // --- 3. TECHNIQUE & CRISE ---
     {
       id: 'lot_tronconnage',
       category: 'technique_crise',
-      name: 'Lot Tronçonnage / Dégagement Voirie',
+      name: 'Lot Tronçonnage',
       lucideIcon: 'axe',
       image: 'images/equipements/lot_tronconnage.png',
       price: 1450,
       unit: 'lot complet',
-      badge: 'Tempêtes & Axes',
+      badge: 'Tempêtes',
       badgeColor: 'bg-amber-50 text-amber-800 border-amber-300',
-      desc: '2 tronçonneuses thermiques (guides 45 & 50 cm), EPI anti-coupure complets et tire-fort 1.6T.',
-      usage: 'Dégagement express d’arbres tombés sur les voies lors d’intempéries.'
+      desc: 'Tronçonneuses thermiques et protections pour dégager les voies après une tempête.',
+      usage: 'Dégage rapidement les arbres et obstacles tombés sur la chaussée.'
     },
     {
       id: 'remorque_groupe_electro',
       category: 'technique_crise',
-      name: 'Remorque Groupe Électrogène 50 kVA (Attelage Boule)',
+      name: 'Remorque Groupe électrogène',
       lucideIcon: 'zap',
       image: 'images/equipements/remorque_groupe_electro.png',
       price: 4800,
-      unit: 'remorque routière freinée',
+      unit: 'remorque',
       slots: 3,
       requiresTrailer: true,
       requiresTowHitch: true,
-      badge: 'Énergie & Black-out (Attelage Boule)',
+      badge: 'Énergie de Crise',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
-      desc: 'Groupe électrogène diesel insonorisé 50 kVA (40 kW) sur remorque routière freinée avec tête d’attelage boule 50 mm. Inverseur de source normal/secours, armoire de prises triphasées 400V et monophasées 230V étanches IP67, cuve 350 L de GNR (autonomie 24-36h).',
-      usage: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réalimente d’urgence un EHPAD, un gymnase d’évacuation (CHU), un PMA ou sécurise l’antenne lors d’un black-out Enedis.'
+      desc: 'Alimente en électricité un gymnase d’évacuation, un PMA ou l’antenne lors d’un black-out.',
+      usage: 'Tractée par tout véhicule avec attelage (VTU, VLHR, VTP, VL).'
     },
     {
       id: 'remorque_motopompe',
       category: 'technique_crise',
-      name: 'Remorque Moto-Pompe d’Épuisement Grande Capacité (MPGC - Attelage Boule)',
+      name: 'Remorque Motopompe',
       lucideIcon: 'waves',
       image: 'images/equipements/remorque_motopompe.png',
       price: 3800,
-      unit: 'remorque routière freinée',
+      unit: 'remorque',
       slots: 3,
       requiresTrailer: true,
       requiresTowHitch: true,
-      badge: 'Inondations & Pompage Lourd (Attelage Boule)',
+      badge: 'Pompage Lourd',
       badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
-      desc: 'Unité motopompe thermique gros débit (120 m³/h soit 2 000 L/min) sur châssis remorque routière avec tête d’attelage boule 50 mm. Moteur thermique diesel 4 temps à démarrage électrique, crépine d’aspiration armée 100 mm avec clapet anti-retour, 120m de tuyaux de refoulement DSP 100 et vanne de régulation.',
-      usage: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réduit de 50% le temps d’épuisement des eaux lors des crues et parkings submergés. Majore l’indemnisation communale (+40% de subvention par chantier de pompage).'
+      desc: 'Pompe gros débit pour assécher les crues, sous-sols et parkings inondés.',
+      usage: 'Tractée par tout véhicule avec attelage (VTU, VLHR, VTP, VL).'
     },
     {
       id: 'drone_reco',
       category: 'technique_crise',
-      name: 'Pack Drone Reconnaissance Aérienne 4K',
+      name: 'Drone de reconnaissance',
       lucideIcon: 'camera',
       image: 'images/equipements/drone.png',
       price: 2600,
-      unit: 'pack valise étanche',
+      unit: 'pack valise',
       slots: 1,
-      badge: 'Reconnaissance Aérienne',
+      badge: 'Vue Aérienne',
       badgeColor: 'bg-sky-50 text-sky-800 border-sky-300',
-      desc: 'Drone d’observation 4K, 3 batteries (35 min), radiocommande avec retour vidéo HD et balises de vol.',
-      usage: 'Surveillance et reconnaissance aérienne rapide de crues ou grands rassemblements.'
+      desc: 'Caméra 4K pour survoler et évaluer les crues ou grands rassemblements.',
+      usage: 'Surveillance et reconnaissance aérienne rapide de la zone de mission.'
     },
     {
       id: 'drone_thermique',
       category: 'technique_crise',
-      name: 'Pack Drone Thermique Infrarouge (Recherche Nocturne)',
+      name: 'Drone thermique',
       lucideIcon: 'eye',
       image: 'images/equipements/drone_thermique.png',
       price: 5200,
-      unit: 'pack valise durcie',
+      unit: 'pack valise',
       slots: 1,
-      badge: 'Recherche & Nuit',
+      badge: 'Recherche Nuit',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Double capteur thermique radiométrique FLIR haute résolution, zoom x32, projecteur LED et haut-parleur.',
-      usage: 'Recherche de disparus en forêt/milieu périlleux et battues de nuit (+50% détection).'
+      desc: 'Caméra infrarouge pour localiser des personnes disparues, de jour comme de nuit.',
+      usage: 'Recherche de disparus en forêt et battues de nuit (+50% détection).'
     },
     {
       id: 'lot_pompage',
       category: 'technique_crise',
-      name: 'Lot Épuisement / Pompage Eaux Chargées',
+      name: 'Lot Pompage',
       lucideIcon: 'waves',
       image: 'images/equipements/lot_pompage.png',
       price: 1850,
       unit: 'lot complet',
-      badge: 'Inondations & Crues',
+      badge: 'Inondations',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
-      desc: '2 motopompes thermiques gros débit (60 m³/h), pompes vide-caves et 100m de tuyaux.',
-      usage: 'Assèchement rapide des sous-sols et parkings inondés (+40% indemnités mairie).'
+      desc: 'Motopompes portatives pour vider les caves et habitations inondées.',
+      usage: 'Assèchement rapide des sous-sols et parkings inondés.'
     },
     {
       id: 'lot_eclairage',
       category: 'technique_crise',
-      name: 'Lot Éclairage de Crise & Mât Télescopique',
+      name: 'Lot Éclairage',
       lucideIcon: 'lightbulb',
       image: 'images/equipements/lot_eclairage.png',
       price: 1600,
       unit: 'lot complet',
-      badge: 'Nocturne & PMA',
+      badge: 'Nocturne',
       badgeColor: 'bg-yellow-50 text-yellow-800 border-yellow-300',
-      desc: 'Groupe électrogène insonorisé 3.5 kVA, 2 mâts LED télescopiques 4m (50 000 lm) et ballon Airstar.',
+      desc: 'Projecteurs et mâts pour éclairer les postes de secours et zones de recherche la nuit.',
       usage: 'Illumination des postes médicaux avancés et recherches nocturnes.'
     },
     {
       id: 'lot_bachage',
       category: 'technique_crise',
-      name: 'Lot Bâchage Toitures & Consolidation Sinistres',
+      name: 'Lot Bâchage',
       lucideIcon: 'home',
       image: 'images/equipements/lot_bachage.png',
       price: 980,
       unit: 'lot complet',
       badge: 'Intempéries',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: '6 grandes bâches armées 10x12m, liteaux, cloueuses, sangles d’arrimage et harnais antichute.',
-      usage: 'Mise hors d’eau d’urgence des toitures arrachées par les vents violents.'
+      desc: 'Grandes bâches et fixations pour protéger d’urgence les toitures endommagées.',
+      usage: 'Mise hors d’eau rapide des habitations après de violentes intempéries.'
     },
 
     // --- 4. TENUES & ÉQUIPEMENTS EPI ---
     {
       id: 'tenue_pc',
       category: 'tenues_epi',
-      name: 'Pack Tenue Officielle Protection Civile (Dotation Bénévole)',
+      name: 'Tenue bénévole',
       lucideIcon: 'shirt',
       image: 'images/equipements/tenue_pc.png',
       price: 160,
-      unit: 'pack tenue complète',
+      unit: 'tenue complète',
       slots: 1,
-      badge: 'Dotation Bénévole Obligatoire',
+      badge: 'Dotation Bénévole',
       badgeColor: 'bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
-      desc: 'Ensemble textile officiel bleu marine et orange fluo réglementaire (Parka haute visibilité classe 3, Pantalon d’intervention, Polo). Indispensable pour doter chaque bénévole et l’autoriser à partir en mission.',
-      usage: 'Attribuée individuellement à chaque bénévole. Sans tenue, le secouriste est bloqué à la base, frustré et démotivé.'
+      desc: 'Uniforme officiel obligatoire pour permettre à un secouriste de partir en mission.',
+      usage: 'Attribuée individuellement à chaque bénévole pour l’autoriser à partir sur le terrain.'
     },
     {
       id: 'tenue_moto',
       category: 'tenues_epi',
-      name: 'Tenue Pilote Moto de Secours & Équipements Renforcés',
+      name: 'Tenue moto',
       lucideIcon: 'bike',
       image: 'images/equipements/tenue_moto.png',
       price: 240,
-      unit: 'pack tenue moto',
+      unit: 'tenue moto',
       slots: 1,
-      badge: 'Pilote Moto d’Urgence',
+      badge: 'Pilote Moto',
       badgeColor: 'bg-sky-50 text-sky-900 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
-      desc: 'Équipement moto homologué CE pour équipiers motocyclistes de la Protection Civile : blouson textile haute visibilité classe 3 avec protections coudes/épaules/dorsale, pantalon moto étanche, gants coqués et casque moto intégral radio-connectable.',
-      usage: 'Dotation pour les pilotes de motos de secours et liaisons rapides. Offre une protection optimale et autorise le départ sur les missions motorisées à deux-roues.'
+      desc: 'Équipement de protection homologué pour piloter les motos de secours.',
+      usage: 'Indispensable pour les motocyclistes en intervention rapide.'
     },
     {
       id: 'tenue_usar',
       category: 'tenues_epi',
-      name: 'Tenue Tactique USAR / INSARAG (Recherche & Sauvetage en Milieu Urbain)',
+      name: 'Tenue USAR',
       lucideIcon: 'hard-hat',
       image: 'images/equipements/tenue_usar.png',
       price: 320,
-      unit: 'pack tenue USAR',
+      unit: 'tenue USAR',
       slots: 1,
       badge: 'Sauvetage-Déblaiement',
       badgeColor: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
-      desc: 'Ensemble d’intervention haute résistance certifié INSARAG (ONU) pour les spécialistes de sauvetage en milieu urbain et structures effondrées. Tissu anti-déchirure renforcé, casque USAR avec visière polycarbonate et lampe frontale, gants anti-coupure et masque respiratoire.',
-      usage: 'Dotation des secouristes déployés sur les crises majeures, effondrements, tremblements de terre et opérations de recherche-sauvetage.'
+      desc: 'Tenue renforcée pour les interventions en décombres et structures effondrées.',
+      usage: 'Dotation des spécialistes déployés sur les effondrements et tremblements de terre.'
     },
     {
       id: 'rangers_secours',
       category: 'tenues_epi',
-      name: 'Rangers d’Intervention Secouriste Anti-Perforation',
+      name: 'Rangers de sécurité',
       lucideIcon: 'footprints',
       image: 'images/equipements/rangers_secours.png',
       price: 110,
       unit: 'paire',
       badge: 'Sécurité Pieds',
       badgeColor: 'bg-slate-100 text-slate-900 border-slate-300',
-      desc: 'Chaussures montantes en cuir avec embout composite et semelle anti-perforation.',
-      usage: 'Sécurité maximale sur les terrains boueux, décombres et intempéries.'
+      desc: 'Chaussures montantes de sécurité protégeant les pieds des secouristes.',
+      usage: 'Protection sur les terrains boueux, décombres et intempéries.'
     },
 
     // --- 5. RAVITAILLEMENT & ACTION SOCIALE ---
     {
       id: 'lot_hebergement',
       category: 'social_hebergement',
-      name: 'Lot Hébergement d’Urgence (30 Lits Picots + Duvets)',
+      name: 'Lot Hébergement',
       lucideIcon: 'bed-double',
       image: 'images/equipements/lot_hebergement.png',
       price: 2100,
@@ -520,183 +520,183 @@ window.ProtecLogistique = {
       types: ['LOG', 'TP'],
       consumables: 100,
       isLot: true,
-      badge: 'Plan PCS Sinistrés',
+      badge: 'Accueil Sinistrés',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: '30 lits de camp métalliques Sécurité Civile, 30 duvets thermiques et 30 kits d’hygiène.',
-      usage: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase communal. Embarquable dans un véhicule LOG (3 slots).'
+      desc: 'Lits de camp et duvets pour équiper un centre d’accueil pour sinistrés.',
+      usage: 'Armement immédiat d’un gymnase ou centre d’hébergement communal.'
     },
     {
       id: 'lot_ravitaillement',
       category: 'social_hebergement',
-      name: 'Lot Ravitaillement / Cuisine de Crise & Percolateur',
+      name: 'Lot Ravitaillement',
       lucideIcon: 'utensils',
       image: 'images/equipements/lot_ravitaillement.png',
       price: 1350,
       unit: 'lot complet',
-      badge: 'Soutien des Troupes',
+      badge: 'Soutien Troupes',
       badgeColor: 'bg-rose-50 text-rose-800 border-rose-300',
-      desc: 'Percolateur inox 15L, réchauds grande puissance, 4 marmites isothermes et tables réfectoire.',
-      usage: 'Restaure +20% d’énergie et de moral aux intervenants sur les longues missions.'
+      desc: 'Cuisine mobile et boissons chaudes pour restaurer les bénévoles et sinistrés.',
+      usage: 'Maintient l’énergie et le moral des intervenants sur les longues missions.'
     },
     {
       id: 'lot_soutien_psy',
       category: 'social_hebergement',
-      name: 'Lot Soutien Psychologique CAI & Peluches Enfants',
+      name: 'Lot Soutien psychologique',
       lucideIcon: 'heart-handshake',
       image: 'images/equipements/lot_soutien_psy.png',
       price: 1200,
       unit: 'lot complet',
       badge: 'Cellule d’Accueil',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
-      desc: 'Paravents acoustiques, plaids douillets, coin jeux/coloriages et peluches de réconfort.',
-      usage: 'Accueil des impliqués et familles lors de catastrophes NOVI et accidents collectifs.'
+      desc: 'Espace d’accueil et réconfort pour les victimes et familles lors d’accidents collectifs.',
+      usage: 'Accueil et apaisement des impliqués lors de catastrophes et crises.'
     },
 
     // --- 6. TRANSMISSIONS & RADIO ---
     {
       id: 'radio_antares',
       category: 'transmissions',
-      name: 'Portatif Radio Numérique ANTARES (VHF/UHF)',
+      name: 'Radio ANTARES',
       lucideIcon: 'radio',
       image: 'images/equipements/radio_antares.png',
       price: 450,
       unit: 'portatif',
-      badge: 'Réseau Inter-Services',
+      badge: 'Réseau Secours',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Talkie-walkie crypté avec micro déporté pour liaison directe CODIS, SAMU et chefs de dispositif.',
-      usage: 'Réduit la fatigue mentale des chefs d’équipe (-15% perte énergie en mission).'
+      desc: 'Radio sécurisée pour communiquer entre équipes et coordonner les secours.',
+      usage: 'Liaison directe avec le CODIS, le SAMU et les chefs de dispositif.'
     },
     {
       id: 'tablette_tlo',
       category: 'transmissions',
-      name: 'Tablette Tactique d’Engagement TLO Véhicule',
+      name: 'Tablette d’engagement TLO',
       lucideIcon: 'tablet',
       image: 'images/equipements/tablette_tlo.png',
       price: 550,
       unit: 'tablette',
-      badge: 'Numérisation',
+      badge: 'Numérique',
       badgeColor: 'bg-sky-50 text-sky-800 border-sky-300',
-      desc: 'Tablette durcie avec GPS opérationnel, cartographie IGN et transmission des bilans au 15.',
-      usage: 'Accélère le temps de route de 10% et fiabilise le départ en intervention.'
+      desc: 'GPS et bilans numériques embarqués pour accélérer les interventions.',
+      usage: 'Accélère les départs et transmet les bilans directement au SAMU.'
     },
     {
       id: 'chargeur_radios',
       category: 'transmissions',
-      name: 'Baie Chargeur Multiple 6 Postes ANTARES',
+      name: 'Chargeur 6 radios',
       lucideIcon: 'battery-charging',
       image: 'images/equipements/chargeur_radios.png',
       price: 190,
       unit: 'chargeur 6 slots',
-      badge: 'Vie d’Antenne',
+      badge: 'Base Antenne',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Station de recharge rapide simultanée pour 6 talkies-walkies au local d’antenne.',
-      usage: 'Garantit que toutes les radios sont chargées à 100% au départ des équipages.'
+      desc: 'Station pour recharger jusqu’à 6 talkies-walkies simultanément à la base.',
+      usage: 'Garantit que toutes les radios sont chargées à 100% au départ.'
     },
     {
       id: 'lot_poste_commandement_mobile',
       category: 'transmissions',
-      name: 'Poste de Commandement Mobile',
+      name: 'Kit Poste de commandement',
       lucideIcon: 'satellite',
       image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,
       unit: 'lot complet',
-      badge: 'Commandement de Crise (VLC)',
+      badge: 'Commandement VLC',
       badgeColor: 'bg-indigo-50 text-indigo-900 border-indigo-300',
-      desc: 'Valise tactique informatique durcie, cartographie SIG/SINUS, baie radio multi-bandes ANTARES, modem satellite 4G/5G, tableau SITAC et alimentation autonome.',
-      usage: 'À installer dans une VL pour la transformer en VL Commandement capable de piloter une crise majeure, un plan NOVI ou mise en gestion d’un Chef de Dispositif/Chef de Poste.'
+      desc: 'Équipement informatique et radio pour transformer un véhicule en PC de crise.',
+      usage: 'Permet à un chef de dispositif de piloter les grandes opérations et crises.'
     },
 
-    // --- 7. KITS PÉDAGOGIQUES OFFICIELS (FORMATIONS) ---
+    // --- 7. KITS PÉDAGOGIQUES (FORMATIONS) ---
     {
       id: 'kit_pedago_psc',
       category: 'kits_formation',
-      name: 'Kit Pédagogique PSC (Prévention et Secours Civiques)',
+      name: 'Kit Pédagogique PSC',
       lucideIcon: 'graduation-cap',
       image: 'images/equipements/kit_pedago_psc.png',
       price: 1200,
       unit: 'kit complet',
-      badge: 'Filière Citoyenne',
+      badge: 'Grand Public',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: 'Mannequins QCPR adulte/enfant/nourrisson connectés, défibrillateur DAE de formation avec télécommande, tapis de sol et masques d’exercice.',
-      usage: 'Matériel obligatoire pour ouvrir et dispenser les formations grand public GQS et PSC.'
+      desc: 'Mannequins et défibrillateur pour dispenser les formations premiers secours PSC.',
+      usage: 'Obligatoire pour ouvrir et dispenser les formations grand public GQS et PSC.'
     },
     {
       id: 'kit_pedago_sst',
       category: 'kits_formation',
-      name: 'Kit Pédagogique SST (Sauveteur Secouriste du Travail)',
+      name: 'Kit Pédagogique SST',
       lucideIcon: 'briefcase',
       image: 'images/equipements/kit_pedago_sst.png',
       price: 1100,
       unit: 'kit complet',
-      badge: 'Santé Travail INRS',
+      badge: 'Santé Travail',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
-      desc: 'Plan d’intervention SST officiel INRS, mannequins, aides visuelles et accessoires de simulation des risques professionnels.',
-      usage: 'Indispensable pour organiser les formations SST et recyclages MAC SST auprès des entreprises.'
+      desc: 'Matériel officiel pour former les sauveteurs secouristes du travail en entreprise.',
+      usage: 'Indispensable pour dispenser les formations SST en entreprise.'
     },
     {
       id: 'kit_pedago_pse1',
       category: 'kits_formation',
-      name: 'Kit Pédagogique PSE1 (Secouriste)',
+      name: 'Kit Pédagogique PSE1',
       lucideIcon: 'backpack',
       image: 'images/equipements/kit_pedago_pse1.png',
       price: 1600,
       unit: 'kit complet',
-      badge: 'Filière Opérationnelle',
+      badge: 'Secouriste',
       badgeColor: 'bg-indigo-50 text-indigo-800 border-indigo-300',
-      desc: 'Sac d’intervention d’exercice, insufflateurs BAVU, colliers cervicaux, aspirateur de mucosités simulé et oxymètre d’entraînement.',
+      desc: 'Matériel pour former et recycler les bénévoles au secourisme opérationnel (PSE1).',
       usage: 'Requis pour former et certifier les bénévoles au rôle de Secouriste (PSE1).'
     },
     {
       id: 'kit_pedago_pse2',
       category: 'kits_formation',
-      name: 'Kit Pédagogique PSE2 (Équipier Secouriste)',
+      name: 'Kit Pédagogique PSE2',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/kit_pedago_pse2.png',
       price: 2200,
       unit: 'kit complet',
-      badge: 'Traumatologie & VPSP',
+      badge: 'Équipier VPSP',
       badgeColor: 'bg-purple-50 text-purple-800 border-purple-300',
-      desc: 'Matelas à dépression d’entraînement avec pompe, plan dur, brancard pliant, attelles de traction et matériel de relevage complexe.',
-      usage: 'Requis pour former les Équipiers Secouristes (PSE2) et organiser le recyclage FC PSE.'
+      desc: 'Matériel d’immobilisation pour former les équipiers secouristes en ambulance (PSE2).',
+      usage: 'Requis pour former les Équipiers Secouristes (PSE2).'
     },
     {
       id: 'kit_pedago_extincteur',
       category: 'kits_formation',
-      name: 'Kit Manipulation Extincteurs (EPI Incendie)',
+      name: 'Kit Extincteurs Incendie',
       lucideIcon: 'flame',
       image: 'images/equipements/kit_pedago_extincteur.png',
       price: 1400,
       unit: 'kit complet',
       badge: 'Sécurité Incendie',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Générateur de flammes à gaz écologique (bac à feu), extincteurs rechargeables à eau pulvérisée et CO2, couvertures anti-feu.',
-      usage: 'Obligatoire pour animer les formations pratiques de Manipulation Extincteurs en entreprise et ERP.'
+      desc: 'Bac à feu et extincteurs d’exercice pour animer les formations incendie pratiques.',
+      usage: 'Obligatoire pour les formations Manipulation Extincteurs en entreprise.'
     },
     {
       id: 'kit_pedago_picf',
       category: 'kits_formation',
-      name: 'Kit Pédagogique PIC F (Pédagogie de Formateur)',
+      name: 'Kit Pédagogique PIC F',
       lucideIcon: 'clipboard-list',
       image: 'images/equipements/kit_pedago_picf.png',
       price: 850,
       unit: 'kit complet',
-      badge: 'Filière Cadres Formateurs',
+      badge: 'Cadres Formateurs',
       badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
-      desc: 'Supports didactiques officiels, paperboard portable de formation, vidéoprojecteur nomade et jeux de cartes de dynamique de groupe.',
-      usage: 'Nécessaire pour animer le stage initial PIC F (Pédagogie Initiale et Commune de Formateur).'
+      desc: 'Supports didactiques pour former les futurs formateurs de premiers secours.',
+      usage: 'Nécessaire pour animer les formations de formateurs PIC F.'
     },
     {
       id: 'kit_pedago_ssa',
       category: 'kits_formation',
-      name: 'Kit Pédagogique SSA (Sauvetage Aquatique)',
+      name: 'Kit Sauvetage Aquatique (SSA)',
       lucideIcon: 'life-buoy',
       image: 'images/equipements/kit_pedago_ssa.png',
       price: 1300,
       unit: 'kit complet',
-      badge: 'Spécialité Aquatique',
+      badge: 'Aquatique',
       badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
-      desc: 'Mannequins d’immersion lestés, bouées tubes de sauvetage, filins de jet, palmes d’entraînement et matériel de flottabilité.',
-      usage: 'Matériel requis pour les entraînements et certifications de Surveillance et Sauvetage Aquatique (SSA).'
+      desc: 'Mannequins et bouées de sauvetage pour les entraînements aquatiques.',
+      usage: 'Requis pour les entraînements de Surveillance et Sauvetage Aquatique (SSA).'
     }
   ],
 
@@ -704,7 +704,7 @@ window.ProtecLogistique = {
   // 2. GESTION DES STOCKS & INITIALISATION
   // =========================================================================
 
-  getActiveStation(game) {
+    getActiveStation(game) {
     if (!game || !game.stations || game.stations.length === 0) return null;
     if (this.selectedStationId) {
       const found = game.stations.find(s => s.id === this.selectedStationId);
@@ -3454,15 +3454,15 @@ window.ProtecLogistique = {
   LOT_COMPOSITIONS: {
     caisse_rearmement: {
       id: 'caisse_rearmement',
-      title: 'Caisse de Réarmement Opérationnel (Kit de Réassort)',
-      shortName: 'Caisse Réarmement',
+      title: 'Kit de réarmement',
+      shortName: 'Kit réarmement',
       standard: 'RNMSC - Réassort Consommables',
       category: 'Soins & Réarmement',
       slots: 1,
       price: 60,
       icon: 'archive',
       badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-700',
-      desc: 'Caisse Eurobox normée de consommables d’avance pour réapprovisionner les sacs de secours et VPSP.',
+      desc: 'Consommables d’avance pour réapprovisionner les sacs de secours et véhicules.',
       items: [
         { icon: '🩹', name: 'Compresses stériles 10x10 cm', qty: 10 },
         { icon: '🩹', name: 'Bandes extensibles Velpeau 10 cm', qty: 6 },
@@ -3478,15 +3478,15 @@ window.ProtecLogistique = {
     },
     lot_secours_a: {
       id: 'lot_secours_a',
-      title: 'Lot A - Secours à Personne Standard (Sac d’Urgence Vitale)',
-      shortName: 'Lot A Secours PS',
+      title: 'Lot A - Poste de secours',
+      shortName: 'Lot A',
       standard: 'RNMSC FNPC - Dotation VPSP / DPS',
       category: 'Premiers Secours & Urgence Vitale',
       slots: 2,
       price: 850,
       icon: 'briefcase-medical',
       badgeClass: 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700',
-      desc: 'Dotation d’équipier secouriste indispensable pour la réanimation et la prise en charge immédiate.',
+      desc: 'Tente et équipement pour soigner jusqu’à 6 victimes sur les postes de secours.',
       items: [
         { icon: '🫁', name: 'Bouteille Oxygène Médical 5L (200 bar) + manodétendeur', qty: 1 },
         { icon: '⚡', name: 'Défibrillateur Automatisé DAE + 2 paires électrodes', qty: 1 },
@@ -3502,15 +3502,15 @@ window.ProtecLogistique = {
     },
     lot_secours_b: {
       id: 'lot_secours_b',
-      title: 'Lot B - Traumatologie, Immobilisation & Relevage',
-      shortName: 'Lot B Traumatologie',
+      title: 'Lot B - Premiers secours',
+      shortName: 'Lot B',
       standard: 'RNMSC FNPC - Dotation VPSP / DPS-ME',
       category: 'Traumatologie & Évacuation',
       slots: 2,
       price: 1250,
       icon: 'stretch-horizontal',
       badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-700',
-      desc: 'Équipements complets d’immobilisation osseuse, rachidienne et extraction pour traumatismes lourds.',
+      desc: 'Sac d’urgence vitale avec oxygène et défibrillateur pour équiper un VPSP ou PAPS.',
       items: [
         { icon: '🛌', name: 'Matelas Immobilisateur à Dépression (MID Coquille) + pompe', qty: 1 },
         { icon: '📏', name: 'Plan Dur spinal radio-transparent + Sangles araignée', qty: 1 },
@@ -3524,15 +3524,15 @@ window.ProtecLogistique = {
     },
     lot_secours_c: {
       id: 'lot_secours_c',
-      title: 'Lot C - Poste de Secours Fixe & Structure Modulaire 16m²',
-      shortName: 'Lot C Poste Fixe',
+      title: 'Lot C - Immobilisation & Brancardage',
+      shortName: 'Lot C',
       standard: 'RNMSC FNPC - Poste Médical Avancé & DPS',
       category: 'Structure & Accueil Soins',
       slots: 3,
       price: 1750,
       icon: 'tent',
       badgeClass: 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700',
-      desc: 'Poste de soins autonome sous tente gonflable avec lits brancards, régulation SINUS et éclairage.',
+      desc: 'Matériel complet d’immobilisation, de relevage et d’évacuation des blessés.',
       items: [
         { icon: '⛺', name: 'Tente gonflable de secours 16 m² avec armature & gonfleur électrique', qty: 1 },
         { icon: '🛏️', name: 'Brancards pliables de soins sur tréteaux d’examen médical', qty: 2 },
@@ -3546,15 +3546,15 @@ window.ProtecLogistique = {
     },
     lot_hebergement: {
       id: 'lot_hebergement',
-      title: 'Lot Hébergement d’Urgence CAREP (Soutien aux Populations)',
-      shortName: 'Lot Hébergement CAREP',
+      title: 'Lot Hébergement',
+      shortName: 'Lot Hébergement',
       standard: 'Sécurité Civile - Plan Communal de Sauvegarde (PCS)',
       category: 'Action Sociale & Hébergement',
       slots: 3,
       price: 2100,
       icon: 'bed-double',
       badgeClass: 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-700',
-      desc: 'Matériels complets pour armer en urgence un centre d’accueil des sinistrés et personnes évacuées.',
+      desc: 'Lits de camp et duvets pour équiper un centre d’accueil pour sinistrés.',
       items: [
         { icon: '🛏️', name: 'Lits de camp métalliques pliables type PICOT armée', qty: 10 },
         { icon: '🧶', name: 'Couvertures polaires lavables étiquetées Protection Civile', qty: 15 },
@@ -3566,15 +3566,15 @@ window.ProtecLogistique = {
     },
     lot_ravitaillement: {
       id: 'lot_ravitaillement',
-      title: 'Caisse Ravitaillement & Soutien Opérationnel',
-      shortName: 'Caisse Ravitaillement',
+      title: 'Lot Ravitaillement',
+      shortName: 'Lot Ravitaillement',
       standard: 'Logistique Soutien des Troupes & Bénévoles',
       category: 'Ravitaillement & Énergie Humaine',
       slots: 1,
       price: 1350,
       icon: 'utensils',
       badgeClass: 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-700',
-      desc: 'Boissons chaudes, eau fraîche et collations pour préserver le moral et l’énergie des intervenants.',
+      desc: 'Boissons chaudes et collations pour restaurer les bénévoles et sinistrés.',
       items: [
         { icon: '💧', name: 'Bouteilles d’eau minérale plate 50 cl (bouchon sport)', qty: 24 },
         { icon: '☕', name: 'Percolateur / Thermos inox café & eau chaude 5L', qty: 1 },
@@ -3586,15 +3586,15 @@ window.ProtecLogistique = {
     },
     lot_eclairage: {
       id: 'lot_eclairage',
-      title: 'Lot Éclairage de Crise & Énergie Autonome',
-      shortName: 'Lot Éclairage & Énergie',
+      title: 'Lot Éclairage',
+      shortName: 'Lot Éclairage',
       standard: 'Pôle Technique & Crise Nocturne',
       category: 'Énergie & Éclairage Chantier',
       slots: 2,
       price: 1600,
       icon: 'lightbulb',
       badgeClass: 'bg-yellow-50 text-yellow-800 border-yellow-300 dark:bg-yellow-950/40 dark:text-yellow-200 dark:border-yellow-700',
-      desc: 'Source électrique autonome et projecteurs de forte puissance pour illuminer la zone d’intervention.',
+      desc: 'Projecteurs et mâts pour éclairer les postes de secours la nuit.',
       items: [
         { icon: '⚡', name: 'Groupe électrogène insonorisé 3.0 kVA inverter + nourrice 10L', qty: 1 },
         { icon: '💡', name: 'Mât d’éclairage télescopique LED 360° (20 000 lumens, h: 3m)', qty: 1 },

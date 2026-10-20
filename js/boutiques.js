@@ -38,7 +38,7 @@ window.ProtecBoutiques = {
       freeShippingAlways: true,
       priceMultiplier: 1.0,
       specialty: 'Livraison 100% GRATUITE garantie sur toutes les commandes',
-      desc: 'La centrale d’achats associative officielle de la Protection Civile. Approvisionnez vos antennes en tenues officielles, caisses de réarmement d’urgence, lots de secours A/B/C et kits pédagogiques de formation aux tarifs conventionnés.',
+      desc: 'Boutique officielle : tenues, kits de réarmement, lots de secours et matériel pédagogique.',
       rayons: [
         { id: 'all', label: 'Tous les rayons', icon: 'layout-grid' },
         { id: 'tenues', label: 'Tenues & Équipements EPI', icon: 'shield' },
@@ -51,8 +51,8 @@ window.ProtecBoutiques = {
       id: 'hexacom_telecoms',
       name: 'HexaCom & OndePro Télécoms',
       shortName: 'HexaCom Télécoms',
-      slogan: 'Armurerie radio, réseaux tactiques LTE et liaisons Sécurité Civile',
-      badge: 'Spécialiste Transmissions',
+      slogan: 'Radios professionnelles, réseaux LTE et stations de charge',
+      badge: 'Transmissions',
       badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300',
       icon: 'radio',
       bannerGradient: 'from-indigo-950 via-slate-900 to-indigo-900',
@@ -64,7 +64,7 @@ window.ProtecBoutiques = {
       freeShippingAlways: false,
       priceMultiplier: 1.0,
       specialty: 'Terminaux certifiés IP68, réseaux LTE 4G/5G et packs dégressifs jusqu’à -22%',
-      desc: 'Fournisseur d’équipements radio professionnels. Du talkie-walkie analogique économique de proximité jusqu’au terminal hybride bi-mode ANTARES / LTE sécurisé pour le commandement de crise.',
+      desc: 'Équipements radio analogiques, LTE et hybrides pour la communication des équipes.',
       rayons: [
         { id: 'all', label: 'Toutes les transmissions', icon: 'layout-grid' },
         { id: 'analogique', label: 'Postes Analogiques VHF/UHF', icon: 'radio' },
@@ -77,8 +77,8 @@ window.ProtecBoutiques = {
       id: 'securicom_crise',
       name: 'Securicom Matériel & Crise',
       shortName: 'Securicom Sauvetage',
-      slogan: 'Équipements techniques d’intervention lourde, pompage et intempéries',
-      badge: 'Équipementier Lourd',
+      slogan: 'Pompage, tronçonnage, éclairage, bâchage et drones',
+      badge: 'Matériel de Crise',
       badgeClass: 'bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950 dark:text-amber-300',
       icon: 'wrench',
       bannerGradient: 'from-amber-950 via-slate-900 to-orange-950',
@@ -90,7 +90,7 @@ window.ProtecBoutiques = {
       freeShippingAlways: false,
       priceMultiplier: 0.98,
       specialty: 'Matériel robuste pour catastrophes naturelles, crues et tempêtes',
-      desc: 'Le grand magasin des équipements de crise de grande envergure. Retrouvez motopompes submersibles, remorques pompage, tronçonneuses thermiques d’élagage, mâts d’éclairage de zone, bâchage de toitures et drones thermiques.',
+      desc: 'Équipements techniques lourds pour inondations, tempêtes et catastrophes.',
       rayons: [
         { id: 'all', label: 'Tout le matériel', icon: 'layout-grid' },
         { id: 'pompage', label: 'Épuisement & Pompage', icon: 'waves' },
@@ -105,8 +105,8 @@ window.ProtecBoutiques = {
       id: 'concessionnaire_flotte',
       name: 'Concessionnaire Flotte Secours',
       shortName: 'Concessionnaire Véhicules',
-      slogan: 'Showroom officiel de véhicules de secours neufs, carrossés et équipés',
-      badge: 'Dotation Immédiate • Garage Antenne',
+      slogan: 'Véhicules neufs livrés directement au garage de votre antenne',
+      badge: 'Dotation Immédiate',
       badgeClass: 'bg-emerald-100 text-emerald-900 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300',
       icon: 'truck',
       bannerGradient: 'from-emerald-950 via-slate-900 to-teal-950',
@@ -118,16 +118,16 @@ window.ProtecBoutiques = {
       freeShippingAlways: true,
       priceMultiplier: 1.0,
       specialty: 'Affectation directe au hangar avec immatriculation officielle et indicatif radio',
-      desc: 'Le showroom officiel de la flotte opérationnelle de Sécurité Civile. Commandez vos Véhicules de Premiers Secours (VPSP), VTU fret, Véhicules Légers (VL), Tout-Terrain (VLHR 4x4), Poids Lourds, FLIT, TRM 2000, Bateaux, Quads et Motos. Configuration sur-mesure (châssis, cubes sanitaires, rampe LED, attelage, climatisation).',
+      desc: 'Ambulances VPSP, fourgons, minibus et 4x4 neufs prêts pour le départ en intervention.',
       rayons: [
         { id: 'all', label: 'Toute la flotte', icon: 'layout-grid' }
       ]
     },
     {
       id: 'social_humanitaire',
-      name: 'Solidarité, Hébergement & Social',
-      shortName: 'Magasin Social & CAI',
-      slogan: 'Matériel d’accueil des sinistrés, ravitaillement et soutien d’urgence',
+      name: 'Action Sociale & Hébergement',
+      shortName: 'Social & Hébergement',
+      slogan: 'Lits de camp, ravitaillement et accueil d’urgence des sinistrés',
       badge: 'Action Humanitaire',
       badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950 dark:text-purple-300',
       icon: 'heart-handshake',
@@ -140,7 +140,7 @@ window.ProtecBoutiques = {
       freeShippingAlways: false,
       priceMultiplier: 0.95,
       specialty: 'Packs hébergement complets et modules d’accueil des impliqués (CAI)',
-      desc: 'Spécialiste de la prise en charge des populations sinistrées. Lits picots pliants, duvets polaires, kits de ravitaillement alimentaire pour centres d’accueil, tentes d’hébergement et modules de soutien psychologique avec peluches pour enfants.',
+      desc: 'Matériel humanitaire pour ouvrir des centres d’hébergement et secourir les populations.',
       rayons: [
         { id: 'all', label: 'Tout le rayon social', icon: 'layout-grid' },
         { id: 'hebergement', label: 'Lits Picots & Hébergement', icon: 'bed-double' },
@@ -150,9 +150,9 @@ window.ProtecBoutiques = {
     },
     {
       id: 'disposecours_eclair',
-      name: 'DispoSecours Déstockage Éclair',
+      name: 'DispoSecours Express',
       shortName: 'DispoSecours Express',
-      slogan: 'Dépannage d’ultra-urgence livré en 35 secondes par coursier dédié',
+      slogan: 'Livraison d’ultra-urgence en 35 secondes par coursier',
       badge: 'Ultra-Urgence 35s',
       badgeClass: 'bg-rose-100 text-rose-900 border-rose-300 dark:bg-rose-950 dark:text-rose-300 animate-pulse',
       icon: 'clock',
@@ -165,7 +165,7 @@ window.ProtecBoutiques = {
       freeShippingAlways: false,
       priceMultiplier: 1.10,
       specialty: 'Livraison express par coursier motorisé en 35 secondes chrono',
-      desc: 'Le service de réapprovisionnement d’extrême urgence pour les situations de crise imminente. Pour réarmer un VPSP ou se faire livrer des consommables vitaux en quelques secondes avant un départ en intervention.',
+      desc: 'Livraison express pour réarmer vos véhicules avant un départ immédiat en intervention.',
       rayons: [
         { id: 'all', label: 'Dépannage Express', icon: 'layout-grid' }
       ]

@@ -69,19 +69,19 @@ window.ProtecEquipements = {
     mannequin_rcp_adulte: {
       id: 'mannequin_rcp_adulte',
       category: 'formation',
-      name: 'Mannequin RCP Adulte (Massage & Insufflation)',
+      name: 'Mannequin RCP Adulte',
       lucideIcon: 'heart-pulse',
       image: 'images/equipements/mannequin_rcp_adulte.png',
-      desc: 'Matériel pédagogique fondamental pour les ateliers GQS, formations PSC1 et recyclages opérationnels PSE.',
+      desc: 'Entraînement au massage cardiaque et aux insufflations.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Entrée de Gamme',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Mannequin RCP Mousse Basique',
+          title: 'Mannequin RCP basique',
           price: 25,
           maintenanceCostAnnual: 5,
-          desc: 'Structure en mousse simple avec voies respiratoires basiques. Aucun repère auditif.',
+          desc: 'Mannequin standard pour l’apprentissage des gestes de base.',
           bullets: [
             '⚠️ Usure rapide de la peau faciale et voies respiratoires',
             '📉 -10% d’attractivité des formations grand public',
@@ -93,10 +93,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Standard Réglementaire',
           badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
-          title: 'Mannequin RCP Réaliste avec Clicker Mécanique',
+          title: 'Mannequin RCP avec clicker',
           price: 150,
           maintenanceCostAnnual: 15,
-          desc: 'Conforme aux recommandations ERC/RNMSC. Clicker mécanique sonore confirmant la profondeur réglementaire (5-6 cm).',
+          desc: 'Indicateur sonore confirmant la bonne profondeur de compression.',
           bullets: [
             '✓ Standard réglementaire d’apprentissage officiel',
             '✓ Qualité d’apprentissage normale et durable',
@@ -108,10 +108,10 @@ window.ProtecEquipements = {
           level: 3,
           badge: 'Niveau 3 : Haut de Gamme & Connecté',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
-          title: 'Mannequin Connecté QCPR (Tablette & Bluetooth)',
+          title: 'Mannequin connecté QCPR',
           price: 450,
           maintenanceCostAnnual: 40,
-          desc: 'Capteurs biométriques haute fidélité avec retransmission Bluetooth temps réel sur tablette (rythme, décompression, volume).',
+          desc: 'Mesure en temps réel du rythme et de la qualité des compressions sur tablette.',
           bullets: [
             '🌟 +25% de satisfaction des apprenants (+20 € tarif PSC1 autorisé)',
             '⚡ +15% de rapidité de formation des nouveaux PSE bénévoles',
@@ -126,19 +126,19 @@ window.ProtecEquipements = {
     dsa_formation: {
       id: 'dsa_formation',
       category: 'formation',
-      name: 'Défibrillateur d’Entraînement Pédagogique (DSA)',
+      name: 'Défibrillateur de formation (DSA)',
       lucideIcon: 'zap',
       image: 'images/equipements/dsa_formation.png',
-      desc: 'Simulateur d’arrêt cardiaque pour l’apprentissage de la défibrillation automatisée précoce.',
+      desc: 'Simulateur pour l’apprentissage de la défibrillation.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Entrée de Gamme',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Boîtier DSA Pré-programmé Basique',
+          title: 'DSA préprogrammé',
           price: 90,
           maintenanceCostAnnual: 10,
-          desc: 'Boîtier autonome avec messages vocaux fixes et scénario pré-enregistré unique.',
+          desc: 'Scénario fixe pour l’entraînement aux bases de la défibrillation.',
           bullets: [
             '⚠️ Scénario unique rigide (choc recommandé uniquement)',
             '❌ Aucun contrôle instructeur à distance'
@@ -149,10 +149,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Connecté & Pédagogique Avancé',
           badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
-          title: 'Défibrillateur Connecté avec Télécommande Instructeur',
+          title: 'DSA avec télécommande',
           price: 320,
           maintenanceCostAnnual: 25,
-          desc: 'Télécommande sans fil instructeur permettant d’injecter des scénarios d’arythmie avancés (asystolie, FV, électrodes décollées).',
+          desc: 'Permet au formateur de simuler différentes arythmies cardiaques.',
           bullets: [
             '✓ Hausse de la qualité de validation PSE1 / PSC (+20% taux de réussite)',
             '✓ Scénarios d’arythmie variés et réalistes',
@@ -167,19 +167,19 @@ window.ProtecEquipements = {
     prise_parametres: {
       id: 'prise_parametres',
       category: 'secours',
-      name: 'Moniteurs Multiparamétriques & Prise de Constantes',
+      name: 'Moniteur de constantes',
       lucideIcon: 'activity',
       image: 'images/equipements/prise_parametres.png',
-      desc: 'Moniteurs de diagnostic vital et surveillance clinique embarqués dans les VPSP et postes de secours. Augmentent considérablement la qualité et le confort de travail des secouristes.',
+      desc: 'Mesure de la tension, oxygénation et surveillance clinique.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Tensiomètre & Saturomètre Compacts',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Tensiomètre Électronique NIBP & Saturomètre Compact',
+          title: 'Tensiomètre & oxymètre',
           price: 180,
           maintenanceCostAnnual: 15,
-          desc: 'Tensiomètre automatique au bras avec affichage digital et saturomètre SpO2 de pouls compact à pince.',
+          desc: 'Appareils compacts pour la mesure de la tension et de la SpO2.',
           bullets: [
             '⚡ Prise des constantes automatisée (tension artérielle et oxygénation)',
             '✓ Qualité de travail basique sur les postes de secours',
@@ -191,10 +191,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Moniteur Multiparamétrique de Transport',
           badgeColor: 'bg-blue-100 text-pc-blue border-blue-300 ring-1 ring-blue-400',
-          title: 'Moniteur Multiparamétrique Clinique de Transport (7 pouces)',
+          title: 'Moniteur multiparamétrique',
           price: 950,
           maintenanceCostAnnual: 55,
-          desc: 'Moniteur médical avec grand écran couleur 7 pouces, NIBP oscillométrique adulte/enfant, SpO2 technologie Masimo anti-artefacts et thermomètre tympanique.',
+          desc: 'Surveillance continue et affichage des constantes vitales.',
           bullets: [
             '⚡ Bilan secouriste 35% plus rapide et surveillance continue de la victime',
             '✓ 0% d’erreur de mesure ou de transcription manuscrite',
@@ -207,10 +207,10 @@ window.ProtecEquipements = {
           level: 3,
           badge: 'Niveau 3 : Moniteur Réanimation ECG 12D & Capnographie',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
-          title: 'Moniteur Multiparamétrique Réanimation (ECG 12D + Capnographie EtCO2 + 4G)',
+          title: 'Moniteur réanimation ECG',
           price: 3600,
           maintenanceCostAnnual: 140,
-          desc: 'Station diagnostique d’urgence durcie IP54 avec tracé ECG 12 dérivations, capnométrie/capnographie EtCO2 (vital pour arrêts cardiaques) et transmission 4G temps réel vers le SAMU.',
+          desc: 'Tracé ECG et capnographie pour urgences vitales et arrêts cardiaques.',
           bullets: [
             '⚡ Bilan vital instantané et exhaustif (-50% temps de prise en charge)',
             '🫀 Diagnostic immédiat des arrêts cardiaques et détresses respiratoires graves',
@@ -226,19 +226,19 @@ window.ProtecEquipements = {
     appareil_photo: {
       id: 'appareil_photo',
       category: 'communication',
-      name: 'Matériel Audiovisuel & Appareils Photo (Couverture DPS & Événements)',
+      name: 'Matériel photo & vidéo',
       lucideIcon: 'camera',
       image: 'images/equipements/appareil_photo.png',
-      desc: 'Équipement photographique et vidéo mis à disposition des personnels photographes/vidéastes pour valoriser les missions, booster le moral des équipes et amplifier l’impact des communications d’antenne.',
+      desc: 'Couverture photo et communication sur les événements et missions.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Smartphone Équipé & Compact',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Smartphone Dédié & Compact Numérique Basique',
+          title: 'Smartphone photo',
           price: 180,
           maintenanceCostAnnual: 15,
-          desc: 'Photos de smartphone standards et compact d’appoint. Prises de vue simples pour les réseaux sociaux.',
+          desc: 'Prises de vue simples pour les réseaux sociaux.',
           bullets: [
             '📸 Prises de vue souvenirs de poste en plein jour convenables',
             '⚠️ Bruit numérique sur événements nocturnes ou concerts',
@@ -251,10 +251,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Boîtier Hybride Semi-Pro 4K',
           badgeColor: 'bg-blue-100 text-pc-blue border-blue-300 ring-1 ring-blue-400',
-          title: 'Boîtier Hybride Semi-Pro 4K avec Objectif Stabilisé',
+          title: 'Appareil hybride 4K',
           price: 1100,
           maintenanceCostAnnual: 45,
-          desc: 'Appareil photo hybride APS-C capteur haute sensibilité, autofocus ultra-rapide sur le regard et vidéo 4K nette même sous éclairage difficile.',
+          desc: 'Photos et vidéos nettes pour valoriser les actions de l’antenne.',
           bullets: [
             '🌟 Clichés d’action d’excellente qualité pour valoriser les secouristes en intervention',
             '💪 +18 Humeur et Motivation des photographes (fierté et grand plaisir de shooter)',
@@ -267,10 +267,10 @@ window.ProtecEquipements = {
           level: 3,
           badge: 'Niveau 3 : Boîtier Plein Format Pro & Kit Vidéo / Gimbal',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
-          title: 'Boîtier Plein Format Tropicalisé & Kit Vidéo / Gimbal 4K',
+          title: 'Boîtier pro & stabilisateur',
           price: 3400,
           maintenanceCostAnnual: 110,
-          desc: 'Boîtier plein format tropicalisé résistant à la pluie, optiques série L f/2.8 lumineuses, micro cravate HF et gimbal motorisé pour reportages vidéo cinématiques.',
+          desc: 'Matériel professionnel pour reportages et communication de haut niveau.',
           bullets: [
             '🏆 Rendu visuel digne des médias nationaux et de la communication de crise',
             '🔥 +30 Humeur et Motivation des photographes (passion comblée, moral au zénith)',
@@ -285,19 +285,19 @@ window.ProtecEquipements = {
     brancardage_immobilisation: {
       id: 'brancardage_immobilisation',
       category: 'secours',
-      name: 'Matériel d’Immobilisation & Brancardage',
+      name: 'Matériel d’immobilisation',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/brancardage_immobilisation.png',
-      desc: 'Conditionnement des polytraumatisés, extractions et évacuations sanitaires en VPSP.',
+      desc: 'Immobilisation et brancardage des victimes traumatisées.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Standard Manuel',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Brancard Cuillère & Matelas Coquille à Pompe Manuelle',
+          title: 'Brancard & matelas coquille manuel',
           price: 350,
           maintenanceCostAnnual: 15,
-          desc: 'Matelas coquille traditionnel avec pompe à dépression manuelle et brancard pliable en acier lourd.',
+          desc: 'Conditionnement standard des traumatismes avec pompe manuelle.',
           bullets: [
             '⚠️ Pompage manuel éprouvant et réarmement lent',
             '⚠️ Fatigue physique accrue des équipiers lors des portages'
@@ -308,10 +308,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Électrique & Ergonomique Pro',
           badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
-          title: 'Matelas Coquille avec Pompe Électrique & Brancard Ultraléger',
+          title: 'Brancard léger & pompe électrique',
           price: 1400,
           maintenanceCostAnnual: 50,
-          desc: 'Dépression instantanée par micro-pompe électrique 12V/230V et brancard en aluminium aéronautique avec roulettes tout-terrain.',
+          desc: 'Mise sous vide rapide et brancardage allégé pour les secouristes.',
           bullets: [
             '⚡ Réduit de 40% le temps de conditionnement de la victime',
             '💪 Préserve la santé des secouristes (-30% de fatigue sur brancardage)',
@@ -325,19 +325,19 @@ window.ProtecEquipements = {
     radio_communication: {
       id: 'radio_communication',
       category: 'secours',
-      name: 'Réseau Radio & Télécommunications de Poste',
+      name: 'Radios & transmissions',
       lucideIcon: 'radio',
       image: 'images/equipements/radio_communication.png',
-      desc: 'Liaison tactique entre les binômes PAPS, les VPSP, le chef de dispositif et le CODIS/SAMU.',
+      desc: 'Communication radio entre les équipes sur le terrain et le commandement.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Analogique Basique',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Talkies-Walkies Analogiques Grand Public',
+          title: 'Talkies-walkies analogiques',
           price: 180,
           maintenanceCostAnnual: 10,
-          desc: 'Postes PMR446 analogiques à portée limitée (1 km en milieu urbain dense).',
+          desc: 'Liaison radio locale à courte portée.',
           bullets: [
             '⚠️ Risque de grésillements et perte de liaison en zone encaissée',
             '⚠️ Aucune liaison cryptée avec les autorités'
@@ -348,10 +348,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Numérique Pro ANTARES / DMR',
           badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300 ring-1 ring-indigo-400',
-          title: 'Radios Numériques Professionnelles (ANTARES / Relais & Oreillettes)',
+          title: 'Radios numériques professionnelles',
           price: 850,
           maintenanceCostAnnual: 40,
-          desc: 'Terminaux numériques haute puissance compatibles réseau de Sécurité Civile, micros déportés et oreillettes discrètes.',
+          desc: 'Transmissions fiables et claires compatibles avec les réseaux de secours.',
           bullets: [
             '✓ Coordination fluide sans interférence sur les DPS de grande envergure',
             '✓ Appréciation renforcée par la Préfecture et le COD',
@@ -366,19 +366,19 @@ window.ProtecEquipements = {
     outillage_logistique: {
       id: 'outillage_logistique',
       category: 'logistique',
-      name: 'Outillage Logistique & Aménagement de Dispositif',
+      name: 'Outillage de montage',
       lucideIcon: 'wrench',
       image: 'images/equipements/outillage_logistique.png',
-      desc: 'Montage et démontage des tentes de poste, barnums, balisages et installations de crise.',
+      desc: 'Outils pour le montage des tentes de secours et installations.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Outillage Manuel d’Appoint',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Caisse d’Outillage Manuel d’Appoint',
+          title: 'Caisse d’outils manuels',
           price: 75,
           maintenanceCostAnnual: 5,
-          desc: 'Tournevis, marteaux, pinces et clés plates manuelles.',
+          desc: 'Tournevis, marteaux et pinces pour montages basiques.',
           bullets: [
             '⚠️ Temps de montage de poste long et manuel',
             '⚠️ Effort physique supplémentaire avant la prise de poste'
@@ -389,10 +389,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Électroportatif Pro & LED Haute Puissance',
           badgeColor: 'bg-amber-100 text-amber-900 border-amber-300 ring-1 ring-amber-400',
-          title: 'Pack Électroportatif Pro & Éclairages LED Autonomes',
+          title: 'Pack électroportatif & projecteurs LED',
           price: 650,
           maintenanceCostAnnual: 30,
-          desc: 'Visseuses à chocs Brushless, batteries rechargeables haute capacité et projecteurs LED autonomes 10 000 lumens.',
+          desc: 'Montage rapide des structures et éclairage puissant pour la nuit.',
           bullets: [
             '⚡ Divise par deux le temps de montage et démontage de poste',
             '🌙 Baisse de 25% la fatigue lors des dispositifs de nuit',
@@ -406,19 +406,19 @@ window.ProtecEquipements = {
     vetements_eup: {
       id: 'vetements_eup',
       category: 'tenues',
-      name: 'Tenues Opérationnelles & Équipements de Protection (EPI)',
+      name: 'Tenues d’intervention (EPI)',
       lucideIcon: 'shirt',
       image: 'images/equipements/vetements_eup.png',
-      desc: 'Parkas de protection intempéries, pantalons F1 Protec, casques et chasubles d’intervention.',
+      desc: 'Tenues et équipements de protection individuelle des secouristes.',
       tiers: [
         {
           level: 1,
           badge: 'Niveau 1 : Standards Reconditionnés',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-          title: 'Tenues Standards d’Occasion & Reconditionnées',
+          title: 'Tenues reconditionnées',
           price: 60,
           maintenanceCostAnnual: 10,
-          desc: 'Parkas et pantalons reconditionnés d’anciens stocks associatifs.',
+          desc: 'Tenues d’intervention d’occasion pour équiper les équipes.',
           bullets: [
             '⚠️ Usure rapide et tissus vieillissants',
             '⚪ Confort et présentation basiques'
@@ -429,10 +429,10 @@ window.ProtecEquipements = {
           level: 2,
           badge: 'Niveau 2 : Haute Visibilité Respirantes & Neuves',
           badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300 ring-1 ring-emerald-400',
-          title: 'Tenues Haute Visibilité Techniques & Respirantes',
+          title: 'Tenues haute visibilité neuves',
           price: 420,
           maintenanceCostAnnual: 30,
-          desc: 'Textiles respirants déperlants, bandes rétroréfléchissantes classe 3 haute visibilité et coupe ajustée.',
+          desc: 'Tenues respirantes et confortables conformes aux normes de sécurité.',
           bullets: [
             '🌟 Fort engagement et excellente cohésion d’équipe des bénévoles',
             '✓ Sentiment d’appartenance et valorisation d’image renforcés',
@@ -450,63 +450,63 @@ window.ProtecEquipements = {
   LOTS_CATALOG: [
     {
       id: 'lot_secours_a',
-      name: 'Lot A (Poste de Secours fixe & Tente)',
+      name: 'Lot A - Poste de secours',
       lucideIcon: 'tent',
       image: 'images/equipements/lot_secours_a.png',
       price: 1750,
       storageSize: 3,
-      badge: 'Poste Fixe & Tente Officielle',
+      badge: 'Poste Fixe',
       badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
-      desc: 'Tente gonflable de poste de secours officielle Protection Civile 16 m² à déploiement rapide avec sas d’accueil des victimes, rampe d’éclairage LED autonome, table de secrétariat SINUS, tabourets et poubelles DASRI étanches.',
-      bonus: 'Armement des Postes de Secours fixes pour moyens et grands dispositifs (DPS-ME, DPS-GE, festivals). Permet d’accueillir et soigner jusqu’à 6 victimes simultanément sans saturer les secours publics.'
+      desc: 'Tente gonflable et mobilier pour accueillir et soigner les victimes sur un poste fixe.',
+      bonus: 'Nécessaire pour l’ouverture d’un poste de secours fixe (DPS-ME, DPS-GE).'
     },
     {
       id: 'lot_secours_b',
-      name: 'Lot B (Secours à personne standard & Sac PS)',
+      name: 'Lot B - Secours à personne',
       lucideIcon: 'briefcase',
       image: 'images/equipements/lot_secours_b.png',
       price: 850,
       storageSize: 1,
-      badge: 'Secours à Personne Standard',
+      badge: 'Secours à Personne',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
-      desc: 'Sac d’intervention d’urgence multipoches rouge et jaune avec bouteille O2 2L composite, manodétendeur débitmètre, BAVU adulte/pédiatrique, saturomètre de pouls, tensiomètre manuel, colliers cervicaux, garrots tourniquets et pansements compressifs hémostatiques.',
-      bonus: 'Dotation fondamentale de tout VPSP et PAPS. Améliore la rapidité de prise en charge des malaises et traumatismes et valorise la qualité du bilan secouriste.'
+      desc: 'Sac de premiers secours avec oxygénothérapie, matériel de bilan et pansements.',
+      bonus: 'Dotation de base pour équiper les VPSP et binômes de premiers secours.'
     },
     {
       id: 'lot_secours_c',
-      name: 'Lot C (Brancardage, relevage & immobilisation)',
+      name: 'Lot C - Brancardage & relevage',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
       price: 1250,
       storageSize: 2,
-      badge: 'Immobilisation & Brancardage',
+      badge: 'Brancardage & Relevage',
       badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
-      desc: 'Sac d’intervention complet avec brancard de relevage pliant renforcé, matelas immobilisateur à dépression avec pompe, plan dur pédiatrique/adulte, sangles araignée, attelles de membre et chaise de transport.',
-      bonus: 'Indispensable pour la traumatologie sportive, chutes et extractions délicates. Prévient toute aggravation neurologique ou ostéo-articulaire et suscite les félicitations du médecin régulateur SAMU.'
+      desc: 'Matelas à dépression, brancard cuillère et attelles pour les traumatismes.',
+      bonus: 'Permet l’immobilisation et le relevage des blessés en toute sécurité.'
     },
     {
       id: 'lot_tronconnage',
-      name: 'Lot Tronçonnage / Dégagement',
+      name: 'Lot Tronçonnage',
       lucideIcon: 'axe',
       image: 'images/equipements/lot_tronconnage.png',
       price: 1450,
       storageSize: 2,
-      badge: 'Tempêtes & Axes Routiers',
+      badge: 'Tempêtes & Dégagement',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
-      desc: '2 tronçonneuses thermiques d’abattage et débitage (guides 45 & 50 cm), 1 tronçonneuse d’élagage, bidons de carburant 2T/huile, EPI anti-coupure complets (classe 2), tire-fort 1,6T avec câbles acier, haches d’abattage et serpes.',
-      bonus: 'Dégagement express d’arbres tombés sur les voies lors d’intempéries : suppression des risques de blocage et axes prioritaires rétablis pour la commune.'
+      desc: 'Tronçonneuses thermiques et équipements de protection pour le dégagement d’arbres.',
+      bonus: 'Dégagement des routes et voies d’accès encombrées lors de tempêtes.'
     },
     {
       id: 'lot_pompage',
-      name: 'Lot Épuisement / Pompage',
+      name: 'Lot Pompage',
       lucideIcon: 'waves',
       image: 'images/equipements/lot_pompage.png',
       price: 1850,
       storageSize: 3,
       badge: 'Inondations & Crues',
       badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
-      desc: '2 motopompes thermiques gros débit (60 m³/h et 30 m³/h auto-amorçantes), 2 pompes électriques submersibles vide-caves (eaux chargées), 100m de tuyaux de refoulement souples, tuyaux d’aspiration armés avec crépines, coffret électrique étanche IP67.',
-      bonus: 'Assèchement rapide des sous-sols, caves et parkings inondés. Permet de traiter jusqu’à 3 chantiers d’épuisement en simultané avec indemnisation municipale majorée.'
+      desc: 'Motopompes thermiques et pompes vide-caves pour évacuer les eaux d’inondation.',
+      bonus: 'Pompage des caves, sous-sols et parkings inondés.'
     },
     {
       id: 'lot_eclairage',
@@ -515,22 +515,22 @@ window.ProtecEquipements = {
       image: 'images/equipements/lot_eclairage.png',
       price: 1600,
       storageSize: 2,
-      badge: 'Nuit, Black-out & PMA',
+      badge: 'Nuit & Éclairage',
       badgeColor: 'bg-yellow-100 text-yellow-900 border-yellow-300',
-      desc: 'Groupe électrogène insonorisé 3,5 kVA inverter, 2 mâts d’éclairage télescopiques 4m à projecteurs LED 360° (2x 50 000 lumens), ballon éclairant anti-éblouissant Airstar, 4 projecteurs rechargeables autonomes de chantier, enrouleurs étanches 50m.',
-      bonus: 'Illumination complète des Postes Médicaux Avancés (PMA), postes de commandement et zones de recherche de disparus nocturnes. Sécurité maximale des équipiers.'
+      desc: 'Groupe électrogène et mâts d’éclairage LED pour sécuriser les zones d’intervention nocturnes.',
+      bonus: 'Éclaire les postes médicaux et chantiers d’intervention de nuit.'
     },
     {
       id: 'lot_bachage',
-      name: 'Lot Bâchage & Consolidation',
+      name: 'Lot Bâchage',
       lucideIcon: 'home',
       image: 'images/equipements/lot_bachage.png',
       price: 980,
       storageSize: 2,
       badge: 'Intempéries & Toitures',
       badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
-      desc: '6 grandes bâches armées imperméables 10x12m et 8x10m (250 g/m²), tasseaux et liteaux de fixation, cloueuses et agrafeuses pneumatiques, sangles d’arrimage à cliquet, cordages de fixation, échelles de toit et harnais antichute avec longes absorbantes.',
-      bonus: 'Mise hors d’eau d’urgence des toitures arrachées par les vents violents ou perforées par la grêle. Protection immédiate des foyers sinistrés et reconnaissance des élus locaux.'
+      desc: 'Grandes bâches étanches et outillage de fixation pour protéger les toitures endommagées.',
+      bonus: 'Mise hors d’eau d’urgence des toitures après tempêtes ou grêle.'
     },
     {
       id: 'lot_hebergement',
@@ -539,98 +539,98 @@ window.ProtecEquipements = {
       image: 'images/equipements/lot_hebergement.png',
       price: 2100,
       storageSize: 4,
-      badge: 'Gymnases & Plan PCS',
+      badge: 'Hébergement d’urgence',
       badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-      desc: '30 lits de camp pliants métalliques homologués Sécurité Civile (lits picots), 30 duvets thermiques grand froid, 30 kits d’hygiène individuels complets, paravents de séparation d’intimité, coin jeux et doudous d’urgence.',
-      bonus: 'Armement immédiat d’un Centre d’Hébergement d’Urgence (CHU) ou gymnase pour 30 sinistrés évacués lors d’inondations ou d’incendies d’immeubles sous réquisition préfectorale.'
+      desc: 'Lits de camp, duvets et kits d’hygiène pour l’accueil des personnes sinistrées.',
+      bonus: 'Permet d’équiper un gymnase ou un centre d’hébergement temporaire.'
     },
     {
       id: 'lot_ravitaillement',
-      name: 'Lot Ravitaillement / Cuisine de crise',
+      name: 'Lot Ravitaillement',
       lucideIcon: 'utensils',
       image: 'images/equipements/lot_ravitaillement.png',
       price: 1350,
       storageSize: 3,
-      badge: 'Logistique Alimentaire & Crise',
+      badge: 'Ravitaillement & Repas',
       badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
-      desc: 'Percolateur inox 15L pour boissons chaudes, 4 marmites isothermes 20L de maintien au chaud, réchauds grande puissance à gaz avec détendeurs sécurisés, barnum réfectoire pliant 3x3m avec tables et bancs, caisses de repas d’urgence et gobelets réutilisables.',
-      bonus: 'Distribution de boissons chaudes et repas complets aux secouristes, pompiers et personnes sinistrées lors de dispositifs de longue durée. Maintient l’énergie et le moral des équipages sur place.'
+      desc: 'Matériel de cuisine de crise, thermos et repas pour ravitailler intervenants et sinistrés.',
+      bonus: 'Restauration chaude sur les opérations de longue durée.'
     },
     {
       id: 'lot_soutien_psy',
-      name: 'Lot Soutien psychologique & Accueil (CAI, CHU)',
+      name: 'Lot Soutien psychologique',
       lucideIcon: 'heart-handshake',
       image: 'images/equipements/lot_soutien_psy.png',
       price: 1200,
       storageSize: 2,
-      badge: 'Centre d’Accueil Impliqués (CAI)',
+      badge: 'Accueil & Écoute (CAI)',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
-      desc: 'Mobilier ergonomique pliant pour sas d’accueil confidentiel, paravents acoustiques, plaids thermiques douillets, coin jeux/coloriages et peluches d’urgence pour enfants traumatisés, thermos de réconfort, fiches de traçabilité des impliqués et kits CUMP.',
-      bonus: 'Déploiement du CAI lors d’accidents collectifs ou de crises NOVI. Décuple l’impact des compétences AEP, assurant l’apaisement immédiat des familles et la prise en charge du choc psychologique.'
+      desc: 'Mobilier d’écoute, paravents et plaids pour l’accueil médico-psychologique (CAI/CUMP).',
+      bonus: 'Nécessaire au déploiement d’une Cellule d’Accueil des Impliqués (CAI).'
     },
     {
       id: 'lot_poste_commandement_mobile',
-      name: 'Poste de Commandement Mobile',
+      name: 'Poste de commandement mobile',
       lucideIcon: 'satellite',
       image: 'images/equipements/lot_poste_commandement_mobile.png',
       price: 2800,
       storageSize: 2,
-      badge: 'Commandement & Crise (VLC)',
+      badge: 'Commandement & Crise',
       badgeColor: 'bg-indigo-950 text-indigo-200 border-indigo-700',
-      desc: 'Mallette tactique informatique et transmissions tout-en-un (ordinateur de crise cartographie SIG/SINUS, baie radio multi-bandes ANTARES/VHF/UHF, modem satellite 4G/5G sécurisé, tableau SITAC, imprimante de crise et convertisseur 12V/230V). Permet d’équiper une VL standard pour la passer en VL Commandement opérationnelle.',
-      bonus: 'Transforme une VL en VL Commandement pour piloter une cellule de crise, un plan NOVI ou un grand dispositif sous la direction d’un Chef de Dispositif ou Chef de Poste.'
+      desc: 'Mallette informatique, radio multi-bandes et cartographie pour piloter les opérations.',
+      bonus: 'Permet à un véhicule léger (VL) d’assurer le commandement opérationnel.'
     },
     {
       id: 'remorque_groupe_electro',
-      name: 'Remorque Groupe Électrogène 50 kVA (Attelage Boule)',
+      name: 'Remorque Groupe électrogène 50 kVA',
       lucideIcon: 'zap',
       image: 'images/equipements/remorque_groupe_electro.png',
       price: 4800,
       storageSize: 3,
       requiresTrailer: true,
       requiresTowHitch: true,
-      badge: 'Énergie & Black-out (Attelage Boule)',
+      badge: 'Énergie & Black-out',
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
-      desc: 'Groupe électrogène diesel insonorisé 50 kVA (40 kW) sur remorque routière freinée avec tête d’attelage boule 50 mm. Inverseur de source normal/secours, armoire de prises triphasées 400V et monophasées 230V étanches IP67, cuve 350 L de GNR (autonomie 24-36h).',
-      bonus: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réalimente d’urgence un EHPAD, un gymnase d’évacuation (CHU), un PMA ou sécurise l’antenne lors d’un black-out Enedis (+350 € subvention et +45 réputation).'
+      desc: 'Groupe électrogène diesel tractable pour réalimenter des bâtiments sensibles ou postes avancés.',
+      bonus: 'Fournit de l’électricité de secours lors de coupures prolongées.'
     },
     {
       id: 'remorque_motopompe',
-      name: 'Remorque Moto-Pompe d’Épuisement Grande Capacité (MPGC - Attelage Boule)',
+      name: 'Remorque Motopompe gros débit',
       lucideIcon: 'waves',
       image: 'images/equipements/remorque_motopompe.png',
       price: 3800,
       storageSize: 3,
       requiresTrailer: true,
       requiresTowHitch: true,
-      badge: 'Inondations & Pompage Lourd (Attelage Boule)',
+      badge: 'Inondations & Pompage',
       badgeColor: 'bg-cyan-100 text-cyan-900 border-cyan-300',
-      desc: 'Unité motopompe thermique gros débit (120 m³/h soit 2 000 L/min) sur châssis remorque routière avec tête d’attelage boule 50 mm. Moteur thermique diesel 4 temps à démarrage électrique, crépine d’aspiration armée 100 mm avec clapet anti-retour, 120m de tuyaux de refoulement DSP 100 et vanne de régulation.',
-      bonus: 'Tractée par tout véhicule avec boule d’attelage (VTU, VLHR, VTP, VL). Réduit de 50% le temps d’épuisement des eaux lors des crues et parkings submergés. Majore l’indemnisation communale (+40% subvention soit +280 € et +40 réputation).'
+      desc: 'Pompe d’épuisement haute capacité tractable pour les inondations majeures.',
+      bonus: 'Évacuation rapide des grands volumes d’eau lors des crues.'
     },
     {
       id: 'lot_drone_reco',
-      name: 'Pack Drone Reconnaissance 4K',
+      name: 'Pack Drone de reconnaissance',
       lucideIcon: 'camera',
       image: 'images/equipements/drone.png',
       price: 2600,
       storageSize: 1,
-      badge: 'Reconnaissance & Surveillance',
+      badge: 'Reconnaissance aérienne',
       badgeColor: 'bg-sky-100 text-sky-900 border-sky-300',
-      desc: 'Drone multi-rotor compact avec capteur vidéo 4K stabilisé 3 axes, 3 batteries haute capacité (autonomie 35 min par vol), radiocommande avec écran tactile haute luminosité, balises lumineuses et kit d’atterrissage tout-terrain.',
-      bonus: 'Reconnaissance visuelle aérienne rapide lors d’inondations, crues, effondrements ou départs de feu. Permet de localiser les points de blocage et de guider les équipes au sol.'
+      desc: 'Drone avec caméra 4K pour survoler et évaluer les zones sinistrées.',
+      bonus: 'Reconnaissance aérienne rapide des inondations et zones difficiles d’accès.'
     },
     {
       id: 'lot_drone_thermique',
-      name: 'Pack Drone Thermique Infrarouge / Recherche Nocturne',
+      name: 'Pack Drone thermique',
       lucideIcon: 'eye',
       image: 'images/equipements/drone_thermique.png',
       price: 5200,
       storageSize: 1,
-      badge: 'Recherche Nocturne & Forêts',
+      badge: 'Recherche nocturne',
       badgeColor: 'bg-indigo-100 text-indigo-900 border-indigo-300',
-      desc: 'Drone de recherche professionnel équipé d’un double capteur thermique radiométrique FLIR haute résolution et zoom optique x32. Spot projecteur LED aérien, haut-parleur de diffusion de messages de secours et 4 batteries chauffantes.',
-      bonus: 'Détection thermique immédiate de personnes égarées ou disparues de nuit en forêt, friches ou berges. Décuple l’efficacité des battues coordonnées avec la Gendarmerie ou la Police.'
+      desc: 'Drone avec caméra thermique infrarouge pour la recherche de disparus.',
+      bonus: 'Recherche nocturne de personnes égarées en zone boisée ou berges.'
     }
   ],
 
@@ -640,57 +640,57 @@ window.ProtecEquipements = {
   WORKPLACE_CATALOG: [
     {
       id: 'tablettes',
-      name: 'Tablettes Tactiles Embarquées (TLO)',
+      name: 'Tablettes embarquées',
       lucideIcon: 'tablet',
       image: 'images/equipements/tablettes.png',
       price: 650,
-      badge: 'Informatique Embarquée',
+      badge: 'Informatique embarquée',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-200',
-      desc: 'Tablettes durcies montées sur support VPSP avec guidage GPS automatique, plans d’accès et régulation numérique.',
+      desc: 'Tablettes GPS avec guidage et transmission des bilans en direct.',
       bonus: '+15% de rapidité sur les interventions et navigation fluide sur le secteur.'
     },
     {
       id: 'phones',
-      name: 'Smartphones d’Astreinte Sécurisés',
+      name: 'Téléphones d’astreinte',
       lucideIcon: 'phone',
       image: 'images/equipements/phones.png',
       price: 320,
       badge: 'Alerte & Disponibilité',
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-200',
-      desc: 'Téléphones d’astreinte avec notifications sonores prioritaires pour les cadres et chefs d’équipages à domicile.',
+      desc: 'Téléphones avec alerte prioritaire pour mobiliser rapidement les cadres.',
       bonus: '+25% de taux de réponse favorable lors des mobilisations par SMS d’urgence.'
     },
     {
       id: 'pcs',
-      name: 'Station PC & Ordinateurs Portables Antenne',
+      name: 'Ordinateurs d’antenne',
       lucideIcon: 'laptop',
       image: 'images/equipements/pcs.png',
       price: 1100,
-      badge: 'Gestion Administrative & RH',
+      badge: 'Administration',
       badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
-      desc: 'Ordinateurs de bureau pour la planification des gardes, le suivi des heures salariés (Code du Travail) et les devis.',
+      desc: 'Postes informatiques pour la gestion du planning, des devis et du personnel.',
       bonus: '+25% de rapidité sur les démarches administratives, conventions et déclarations préfectorales.'
     },
     {
       id: 'fauteuils',
-      name: 'Fauteuils Ergonomiques & Espace Repos',
+      name: 'Espace repos',
       lucideIcon: 'armchair',
       image: 'images/equipements/fauteuils.png',
       price: 750,
-      badge: 'Santé au Travail & Ergonomie',
+      badge: 'Espace repos',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      desc: 'Sièges relax inclinables et literie ergonomique pour la salle de veille et le foyer des secouristes en garde.',
+      desc: 'Fauteuils inclinables et literie pour le repos des secouristes en garde.',
       bonus: 'Accélère significativement la récupération physique lors des temps de repos au local.'
     },
     {
       id: 'cafe',
-      name: 'Machine à Café Pro & Espace Convivialité',
+      name: 'Espace café & convivialité',
       lucideIcon: 'coffee',
       image: 'images/equipements/cafe.png',
       price: 380,
-      badge: 'Vie d’Antenne & Convivialité',
+      badge: 'Convivialité',
       badgeColor: 'bg-rose-100 text-rose-800 border-rose-200',
-      desc: 'Machine expresso haute capacité, bouilloire et distributeur de collations pour les retours d’interventions nocturnes.',
+      desc: 'Machine à café et collations pour les équipes en retour de mission.',
       bonus: 'Favorise la cohésion d’équipe et le réconfort après les interventions éprouvantes.'
     }
   ],
