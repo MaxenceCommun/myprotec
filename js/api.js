@@ -438,21 +438,13 @@
         m.status !== 'completed' && m.status !== 'canceled'
       );
 
-      let displayMissions = [];
-      if (pinnedMissions.length > 0) {
-        displayMissions = pinnedMissions;
-      } else {
-        // Fallback si aucune mission n'est encore épinglée : interventions en attente / en cours
-        displayMissions = (game.missions || []).filter(m => 
-          (m.isBackendIntervention || m.status === 'declenche' || m.status === 'ongoing' || m.status === 'prealerte') &&
-          m.status !== 'completed' && m.status !== 'canceled'
-        );
-      }
-
-      if (displayMissions.length === 0) {
+      // RÈGLE MÉTIER STRICTE : Si l'utilisateur n'a rien épinglé, ne rien afficher !
+      if (pinnedMissions.length === 0) {
         pillsContainer.innerHTML = '';
         return;
       }
+
+      const displayMissions = pinnedMissions;
 
       pillsContainer.innerHTML = displayMissions.slice(0, 5).map(m => {
         const isPinned = Boolean(m.isPinned || pinnedIds.includes(m.id));

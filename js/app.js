@@ -11954,6 +11954,15 @@ class ProtecGame {
     // Retrait immédiat de la mission terminée de la liste active pour ne plus jamais l'afficher
     this.missions = (this.missions || []).filter(m => m.id !== mission.id && !this.isMissionTerminated(m));
 
+    // Nettoyage immédiat des épingles si la mission était épinglée
+    if (Array.isArray(this.pinnedMissionIds) && this.pinnedMissionIds.includes(mission.id)) {
+      this.pinnedMissionIds = this.pinnedMissionIds.filter(id => id !== mission.id);
+      try { localStorage.setItem('protec_pinned_missions', JSON.stringify(this.pinnedMissionIds)); } catch (e) {}
+      if (window.ProtecAPI && typeof window.ProtecAPI.updateDashboardQuickBar === 'function') {
+        window.ProtecAPI.updateDashboardQuickBar();
+      }
+    }
+
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
