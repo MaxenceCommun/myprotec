@@ -24878,7 +24878,7 @@ class ProtecGame {
 
     this.saveGame();
     this.openVehicleDetailsModal(vehicleId);
-  },
+  }
 
   openVehicleDetailsModal(vehicleId) {
     const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
@@ -25920,6 +25920,9 @@ class ProtecGame {
       // 1b. DÉPART ET GESTION DU TEMPS RÉEL SUR LES ALERTES ET DPS
       if (this.clock.second === 0) {
         // 1b-1. Contrôle des alertes urgentes déclenchées non engagées (Carence / Expiration horaire)
+        const newCarences = [];
+        let totalRepPenalty = 0;
+
         this.missions.forEach(m => {
           if (m.status === 'declenche') {
             // Initialiser le timestamp réel de réception si absent
@@ -25964,25 +25967,14 @@ class ProtecGame {
                 if (vol && vol.status === 'mission') vol.status = 'dispo';
               });
 
-              this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - 25);
-              if (this.prefectureState) {
-                this.prefectureState.trustScore = Math.max(0, (this.prefectureState.trustScore || 85) - 5);
-              }
+              // Sanction réputation individuelle plafonnée
+              const individualPenalty = Math.min(25, 25);
+              totalRepPenalty += individualPenalty;
 
               const originLabel = m.alertOrigin === 'sncf' ? 'la SNCF' : (m.type === 'samu' ? 'le SAMU 15' : (m.type === 'pompiers' ? 'le SDIS' : 'le commanditaire'));
-              const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge (-25 réputation).`;
+              const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge.`;
 
-              this.recordAlertTriggerLog(m, 'carence', `Clôturée pour carence : délai maximal d'intervention dépassé (${Math.round(elapsedMinutes)} min). Services publics substitués.`, { repImpact: -25 });
-              this.showToast('⏱️ Carence Opérationnelle Constatée !', carenceMsg + ' Consigné dans le registre des déclenchements.', 'red');
-
-              if (window.ProtecNotifications) {
-                window.ProtecNotifications.recordNotification({
-                  title: '⏱️ Carence Opérationnelle Constatée',
-                  message: `Alerte « ${m.title} » : clôturée suite au dépassement du délai de réponse opérationnelle. Sanction de carence appliquée (-25 réputation). Consigné dans le registre des alertes.`,
-                  category: 'operations',
-                  level: 'danger'
-                });
-              }
+              this.recordAlertTriggerLog(m, 'carence', `Clôturée pour carence : délai maximal d'intervention dépassé (${Math.round(elapsedMinutes)} min). Services publics substitués.`, { repImpact: -individualPenalty });
 
               m.status = 'carence';
               m.carenceInfo = {
@@ -25990,6 +25982,13 @@ class ProtecGame {
                 msg: carenceMsg,
                 at: currentTime
               };
+
+              newCarences.push({
+                mission: m,
+                carenceMsg: carenceMsg,
+                elapsedMinutes: elapsedMinutes,
+                originLabel: originLabel
+              });
 
               if (this.selectedMissionId === m.id) {
                 this.refreshMissionDetailsIfOpen(m.id);
@@ -26009,6 +26008,48 @@ class ProtecGame {
             }
           }
         });
+
+        // Application de la réputation plafonnée (max -35 réputation cumulée lors d'une même vague d'expiration)
+        if (newCarences.length > 0) {
+          const cappedPenalty = Math.min(35, totalRepPenalty);
+          this.resources.reputationScore = Math.max(0, (this.resources.reputationScore || 0) - cappedPenalty);
+          if (this.prefectureState) {
+            this.prefectureState.trustScore = Math.max(0, (this.prefectureState.trustScore || 85) - Math.min(8, newCarences.length * 2));
+          }
+
+          // Anti-flood Toast & Notifications :
+          // Si 1 seule carence : toast normal
+          // Si 2 carences ou plus : regroupement synthétique en UN SEUL toast clair !
+          if (newCarences.length === 1) {
+            const single = newCarences[0];
+            this.showToast('⏱️ Carence Opérationnelle Constatée !', single.carenceMsg + ' Consigné dans le registre des déclenchements.', 'red');
+            if (window.ProtecNotifications) {
+              window.ProtecNotifications.recordNotification({
+                title: '⏱️ Carence Opérationnelle Constatée',
+                message: `Alerte « ${single.mission.title} » : clôturée suite au dépassement du délai de réponse opérationnelle. Services publics substitués. Consigné dans le registre.`,
+                category: 'operations',
+                level: 'danger'
+              });
+            }
+          } else {
+            const count = newCarences.length;
+            const sampleTitles = newCarences.slice(0, 2).map(c => `« ${c.mission.title} »`).join(', ');
+            const moreTxt = count > 2 ? ` et ${count - 2} autre(s)` : '';
+            const avgMinutes = Math.round(newCarences.reduce((acc, c) => acc + c.elapsedMinutes, 0) / count);
+            const groupMsg = `Faute de départ dans les délais impartis pendant votre absence (${avgMinutes} min d'attente), ${count} alertes ont été clôturées par les commanditaires (${sampleTitles}${moreTxt}). Services publics substitués (- ${cappedPenalty} réputation globale).`;
+            
+            this.showToast(`⏱️ ${count} Carences Opérationnelles Constatées !`, groupMsg, 'red');
+
+            if (window.ProtecNotifications) {
+              window.ProtecNotifications.recordNotification({
+                title: `⏱️ ${count} Carences Opérationnelles Constatées`,
+                message: groupMsg,
+                category: 'operations',
+                level: 'danger'
+              });
+            }
+          }
+        }
 
         // 1b-2. Contrôle et départ automatique des missions planifiées (DPS, Maraudes, etc.)
         this.missions.forEach(m => {
@@ -28440,6 +28481,29 @@ class ProtecGame {
     const container = document.getElementById('toast-container');
     if (!container) return;
 
+    // --- ANTI-FLOOD & DÉ-DOUBLONNAGE SYSTÉMATIQUE ---
+    if (!this._recentToastsList) this._recentToastsList = [];
+    const toastNow = Date.now();
+    // Nettoyer l'historique des toasts de plus de 4 secondes
+    this._recentToastsList = this._recentToastsList.filter(item => (toastNow - item.time) < 4000);
+    const toastFingerprint = `${title}__${message}`;
+    if (this._recentToastsList.some(item => item.key === toastFingerprint)) {
+      // Toast identique déjà affiché il y a moins de 4 secondes -> ne pas spammer l'écran !
+      return;
+    }
+    this._recentToastsList.push({ key: toastFingerprint, time: toastNow });
+
+    // --- PLAFOND MAXIMUM DE TOASTS SIMULTANÉS À L'ÉCRAN (MAX 3) ---
+    const MAX_VISIBLE_TOASTS = 3;
+    while (container.children.length >= MAX_VISIBLE_TOASTS) {
+      const oldestToast = container.firstElementChild;
+      if (oldestToast) {
+        oldestToast.remove();
+      } else {
+        break;
+      }
+    }
+
     // RÈGLE MÉTIER : Moral, motivation et réputation sont des données cachées du joueur.
     // Filtrage systématique de sécurité pour ne jamais exposer ces données dans l'interface ou les notifications.
     if (typeof message === 'string') {
@@ -28518,7 +28582,7 @@ class ProtecGame {
     if (color === 'red') { iconBg = 'bg-rose-100 text-rose-600'; iconName = 'alert-octagon'; barColor = 'bg-rose-500'; }
 
     const isAlert = color === 'red' || color === 'orange' || (target && ['mission', 'crise'].includes(target.type)) || (typeof title === 'string' && /alerte|urgence|samu|sdis|crise|départ réflexe|renfort/i.test(title));
-    const toastDuration = isAlert ? 15000 : 4500;
+    const toastDuration = isAlert ? 7000 : 4000;
     const barId = `toast-bar-${Date.now()}-${Math.floor(Math.random()*1000)}`;
 
     toast.innerHTML = `

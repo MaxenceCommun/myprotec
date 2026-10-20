@@ -1166,6 +1166,21 @@ window.ProtecNotifications = {
       return;
     }
 
+    // 2b. ANTI-FLOOD & DÉ-DOUBLONNAGE PUSH SYSTÈME (Web & Mobile)
+    if (!this._recentPushMap) this._recentPushMap = new Map();
+    const pushNow = Date.now();
+    for (const [k, t] of this._recentPushMap.entries()) {
+      if (pushNow - t > 60000) this._recentPushMap.delete(k);
+    }
+    const pushFingerprint = `${title}__${body}`;
+    const lastTime = this._recentPushMap.get(pushFingerprint);
+    if (lastTime && (pushNow - lastTime) < 20000) {
+      // Déjà envoyé il y a moins de 20 secondes -> rejet anti-spam
+      console.log('[Notifications] Anti-flood Push : notification identique ignorée (déjà émise).');
+      return;
+    }
+    this._recentPushMap.set(pushFingerprint, pushNow);
+
     // 3. Son d'alerte et vibration
     if (options.customSound && window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
       if (this.config.sound) {
@@ -1180,7 +1195,7 @@ window.ProtecNotifications = {
       body: body,
       icon: options.icon || 'badge-monochrome.png',
       badge: options.badge || 'badge-monochrome.png',
-      tag: options.tag || `protec-${Date.now()}`,
+      tag: options.tag || (options.category ? `protec-cat-${options.category}` : 'protec-general-alert'),
       vibrate: [300, 150, 300, 150, 450],
       renotify: true,
       requireInteraction: true,
@@ -1311,7 +1326,7 @@ window.ProtecNotifications = {
     }
 
     this.scheduleDelayedPush({
-      eventId: `inactivity_reminder_${Date.now()}`,
+      eventId: 'inactivity_reminder_global',
       delaySeconds: this.inactivityIntervalSec,
       title: emergencyTitle,
       body: emergencyBody,
@@ -1523,12 +1538,25 @@ window.ProtecNotifications = {
         const unread = pending.filter(n => new Date(n.created_at).getTime() > lastSeen);
 
         if (unread.length > 0) {
-          unread.forEach(n => {
+          if (unread.length === 1) {
+            const n = unread[0];
             this.sendPushNotification(n.title || '🔔 Alerte MyProtec', n.message || n.body || '', {
               category: n.category || 'admin-test',
-              color: n.type || 'orange'
+              color: n.type || 'orange',
+              tag: `pending-${n.id || 'single'}`
             });
-          });
+          } else {
+            // Plusieurs notifications en attente : un seul résumé groupé pour ne pas mitrailler le joueur
+            this.sendPushNotification(
+              `🔔 ${unread.length} Notifications Opérationnelles`,
+              `Vous avez ${unread.length} nouveaux messages et événements opérationnels à l'antenne.`,
+              {
+                category: 'general',
+                color: 'blue',
+                tag: 'pending-summary'
+              }
+            );
+          }
           localStorage.setItem('protec_last_seen_notif', Date.now().toString());
         }
       }

@@ -411,6 +411,10 @@ self.addEventListener('message', (event) => {
 
   // Planification d'une alerte si l'utilisateur quitte ou ferme l'application
   if (event.data.type === 'SCHEDULE_BACKGROUND_ALERT') {
+    // Purge préventive des anciens timers d'inactivité pour éviter l'accumulation en rafale
+    backgroundAlertTimers.forEach(id => clearTimeout(id));
+    backgroundAlertTimers = [];
+
     const delayMs = Number(event.data.delayMs) || 5000;
     const alertData = event.data.data || {
       title: '🚨 Alerte 15 : VPSP Requis',
@@ -432,7 +436,7 @@ self.addEventListener('message', (event) => {
               body: alertData.body,
               icon: alertData.icon ? getAssetUrl(alertData.icon) : DEFAULT_ICON,
               badge: alertData.badge ? getAssetUrl(alertData.badge) : DEFAULT_BADGE,
-              tag: `protec-bg-${Date.now()}`,
+              tag: 'protec-bg-inactivity',
               vibrate: [300, 150, 300, 150, 450],
               renotify: true,
               data: { url: alertData.url || 'jeu.html' }
