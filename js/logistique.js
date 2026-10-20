@@ -57,29 +57,16 @@ window.ProtecLogistique = {
     {
       id: 'caisse_rearmement',
       category: 'pharmacie',
-      name: 'Caisse de Réarmement Opérationnel (Kit de Réassort)',
+      name: 'Kit de Réarmement & Consommables PS (Caisse de Réassort)',
       lucideIcon: 'archive',
       image: 'images/equipements/woundKits.png',
       price: 60,
       unit: 'caisse (100% réassort)',
       slots: 1,
-      badge: 'Réarmement Opérationnel',
-      badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
-      desc: 'Caisse de consommables complète (pansements, compresses, tubulures O2, perfusions, attelles, colliers). Embarquable dans un véhicule LOG (1 slot) ou utilisable à la base pour réarmer en 1 clic.',
-      usage: 'Réarme immédiatement un VPSP ou un Lot entamé à 100% à la base ou directement sur le terrain.'
-    },
-    {
-      id: 'stock_materiels_ps',
-      category: 'pharmacie',
-      name: 'Stock Matériels PS (Consommables Premiers Secours)',
-      lucideIcon: 'briefcase-medical',
-      image: 'images/equipements/woundKits.png',
-      price: 150,
-      unit: 'lot réserve (100 unités / 100%)',
-      badge: 'Réarmement PS',
-      badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      desc: 'Dotation globale de consommables (pansements, compresses, O2, désinfection, colliers, attelles) pour réarmer les VPSP et VTU.',
-      usage: 'Permet de réarmer la flotte de secours (VPSP et VTU DPS). Diminue à chaque réarmement selon le % consommé.'
+      badge: 'Réarmement PS & Flotte',
+      badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700/60',
+      desc: 'Dotation complète de consommables premiers secours (pansements, compresses, tubulures O2, perfusions, attelles, colliers). Réarme à 100% le matériel de secours entamé, les lots PS et les véhicules opérationnels (VPSP, VTU).',
+      usage: 'Réarme immédiatement un VPSP, VTU ou lot de secours à 100% à l’antenne ou directement sur le terrain.'
     },
 
     // --- 2. LOTS DE SECOURS A / B / C ---
@@ -747,8 +734,10 @@ window.ProtecLogistique = {
         if (station) {
           this.ensureStationStock(station, game);
           Object.entries(d.items || {}).forEach(([itemId, qty]) => {
-            station.stock[itemId] = (station.stock[itemId] || 0) + qty;
-            if (itemId === 'stock_materiels_ps') {
+            // Conversion transparente de l'ancien ID vers caisse_rearmement
+            const targetId = (itemId === 'stock_materiels_ps') ? 'caisse_rearmement' : itemId;
+            station.stock[targetId] = (station.stock[targetId] || 0) + qty;
+            if (targetId === 'caisse_rearmement') {
               station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
               game.stockMaterielsPS = station.stockMaterielsPS;
             }
@@ -1063,7 +1052,7 @@ window.ProtecLogistique = {
                       <span class="px-2 py-0.5 rounded text-[9.5px] font-black border backdrop-blur-md shadow-xs absolute top-2 left-2 ${item.badgeColor}">
                         ${item.badge}
                       </span>
-                      <span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-white/95 border border-slate-200 text-slate-700 shadow-xs">
+                      <span class="badge-reserve-stock absolute top-2 right-2 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-900/80 border border-slate-700/80 text-slate-100 shadow-xs backdrop-blur-xs">
                         En réserve : ${currentStock}
                       </span>
                     </div>

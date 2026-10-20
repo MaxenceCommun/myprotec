@@ -1469,6 +1469,19 @@ html.dark .bg-white {
   color: #f8fafc !important;
 }
 
+html.dark .bg-white\/95,
+html.dark .bg-white\/90,
+html.dark .bg-white\/80 {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+html.dark .badge-reserve-stock {
+  background-color: rgba(15, 23, 42, 0.85) !important;
+  border-color: #334155 !important;
+  color: #e2e8f0 !important;
+}
+
 html.dark .bg-slate-50 {
   background-color: #0f172a !important;
 }
