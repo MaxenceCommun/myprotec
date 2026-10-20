@@ -98,6 +98,21 @@ window.ProtecAuth = {
             this.renderModalContent('profile');
           }
         }
+      } else if (event.data && event.data.type === 'DISCORD_REGISTER_PENDING') {
+        const { discord } = event.data;
+        if (discord) {
+          this.pendingDiscordProfile = discord;
+          sessionStorage.setItem('protec_pending_discord', JSON.stringify(discord));
+          const targetGame = game || window.game;
+          if (targetGame && typeof targetGame.showToast === 'function') {
+            targetGame.showToast(
+              'Compte Discord Lié !',
+              `@${discord.username} est associé. Complétez vos informations pour implanter votre antenne.`,
+              'indigo'
+            );
+          }
+          this.renderModalContent('register', true);
+        }
       } else if (event.data && event.data.type === 'DISCORD_AUTH_ERROR') {
         const errorMsg = event.data.message || 'Ce compte Discord n’est associé à aucun compte joueur.';
         const targetGame = game || window.game;
@@ -673,6 +688,12 @@ window.ProtecAuth = {
   },
 
   // Calcul dynamique de l'URI de redirection Discord OAuth2
+  clearPendingDiscord() {
+    this.pendingDiscordProfile = null;
+    sessionStorage.removeItem('protec_pending_discord');
+    this.renderModalContent('register', true);
+  },
+
   getDiscordRedirectUri() {
     if (window.location.protocol === 'file:') {
       return 'http://localhost:8080/discord_callback.html';
@@ -1357,7 +1378,7 @@ window.ProtecAuth = {
                 <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo du Directeur</label>
                 <div class="relative">
                   <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="text" id="auth-reg-username" required minlength="3" placeholder="Ex: Cdt_Thomas" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Max_Lunéville" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
               </div>
 
@@ -1781,7 +1802,15 @@ window.ProtecAuth = {
 
       // 1. Enregistrement dans Supabase Cloud en priorité
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode, city, referralCode });
+        const extraData = { 
+          stationName, 
+          departmentCode, 
+          city, 
+          referralCode,
+          discord: this.pendingDiscordProfile || null,
+          discordId: this.pendingDiscordProfile?.id || null
+        };
+        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, extraData);
         if (supaRes && supaRes.user) {
           data = {
             success: true,

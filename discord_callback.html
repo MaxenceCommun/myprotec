@@ -282,11 +282,32 @@
         }
       }
 
-      // Si aucun compte joueur lié n'existe : REFUS DE CONNEXION !
+      // Si aucun compte joueur lié n'existe : passage en mode Inscription avec Discord Lié !
       if (!matchedPlayer) {
-        const msgHtml = `Le compte Discord <strong>@${discordUser.username}</strong> n'est associé à aucun compte joueur Protec Live.<br><br>Veuillez d'abord <strong>créer votre compte Directeur</strong> ou <strong>vous connecter avec vos identifiants MyProtec</strong> pour lier votre Discord.`;
-        const rawMsg = `Le compte Discord @${discordUser.username} n'est associé à aucun compte joueur. Veuillez vous inscrire ou vous connecter avec vos identifiants.`;
-        showError('Compte Discord non lié', msgHtml, rawMsg);
+        titleEl.textContent = 'Compte Discord Validé !';
+        descEl.innerHTML = `Bonjour <strong>@${discordUser.username}</strong> !<br>Votre compte Discord est vérifié. Finalisation de votre inscription...`;
+        titleEl.classList.remove('text-rose-400');
+        titleEl.classList.add('text-indigo-400');
+        if (iconContainer) {
+          iconContainer.classList.remove('bg-rose-600', 'shadow-rose-600/30');
+          iconContainer.classList.add('bg-[#5865F2]', 'shadow-[#5865F2]/30');
+        }
+        spinnerEl.classList.add('hidden');
+
+        if (window.opener && !window.opener.closed) {
+          try {
+            window.opener.postMessage({
+              type: 'DISCORD_REGISTER_PENDING',
+              discord: discordProfile
+            }, '*');
+          } catch (e) {}
+          setTimeout(() => window.close(), 600);
+        } else {
+          sessionStorage.setItem('protec_pending_discord', JSON.stringify(discordProfile));
+          setTimeout(() => {
+            window.location.href = 'index.html?auth=register&discord_linked=1';
+          }, 700);
+        }
         return;
       }
 

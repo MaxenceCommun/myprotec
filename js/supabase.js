@@ -1132,14 +1132,28 @@ window.ProtecSupabase = {
       }
 
       // Création du compte joueur (uniquement les colonnes valides dans Supabase)
+      // Détection rôles Discord éventuels lors de l'inscription
+      let detectedRole = shouldBeAdmin ? 'admin' : 'directeur';
+      let detectedIsAdmin = shouldBeAdmin;
+      if (extraData.discord && Array.isArray(extraData.discord.roles)) {
+        if (extraData.discord.roles.includes('1561701759733465128')) {
+          detectedRole = 'admin';
+          detectedIsAdmin = true;
+        } else if (extraData.discord.roles.includes('1561702120732758077')) {
+          detectedRole = 'gestionnaire';
+        }
+      }
+
       const newPlayer = {
         username: username.trim(),
         password_hash: pwdHash,
         station_name: extraData.stationName || 'Antenne Protection Civile',
         city: detectedCity,
         department_code: extraData.departmentCode || '54',
-        role: shouldBeAdmin ? 'admin' : 'directeur',
-        is_admin: shouldBeAdmin,
+        role: detectedRole,
+        is_admin: detectedIsAdmin,
+        discord: extraData.discord || null,
+        discord_id: extraData.discord?.id || extraData.discordId || null,
         alliance_id: extraData.allianceId || null,
         created_at: new Date().toISOString(),
         last_login: new Date().toISOString(),
