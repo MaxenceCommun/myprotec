@@ -1205,6 +1205,14 @@ window.ProtecLogistique = {
             'green'
           );
         }
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.notifyCategory(
+            'logistique',
+            '📦 Commande Réceptionnée !',
+            `Le colis « ${d.orderNumber} » est arrivé à ${d.stationName}. Matériel rangé dans le stock de l'antenne.`,
+            `delivery-arrived-notif-${d.id}`
+          );
+        }
       }
     });
 

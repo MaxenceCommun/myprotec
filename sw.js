@@ -452,6 +452,32 @@ self.addEventListener('message', (event) => {
     event.waitUntil(taskPromise);
   }
 
+  // Planification d'alertes futures précises (Fin de mission, livraison colis, début de garde)
+  if (event.data.type === 'SCHEDULE_FUTURE_ALERT') {
+    const alert = event.data.alert;
+    if (alert && alert.targetTime) {
+      const delayMs = Math.max(100, alert.targetTime - Date.now());
+      const timerId = setTimeout(() => {
+        self.registration.showNotification(alert.title || '🚨 Protection Civile', {
+          body: alert.body || 'Événement opérationnel à l\'antenne.',
+          icon: alert.icon ? getAssetUrl(alert.icon) : DEFAULT_ICON,
+          badge: alert.badge ? getAssetUrl(alert.badge) : DEFAULT_BADGE,
+          tag: alert.tag || `protec-${alert.id || Date.now()}`,
+          vibrate: [300, 150, 300, 150, 450],
+          renotify: true,
+          requireInteraction: true,
+          data: alert.data || { url: 'jeu.html' }
+        }).catch(() => {
+          return self.registration.showNotification(alert.title || '🚨 Protection Civile', {
+            body: alert.body || 'Événement opérationnel.',
+            icon: DEFAULT_ICON
+          });
+        });
+      }, delayMs);
+      backgroundAlertTimers.push(timerId);
+    }
+  }
+
   // Annulation si l'utilisateur est revenu sur le jeu
   if (event.data.type === 'CANCEL_BACKGROUND_ALERTS') {
     backgroundAlertTimers.forEach(id => clearTimeout(id));

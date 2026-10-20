@@ -11669,6 +11669,15 @@ class ProtecGame {
         (term.kind === 'social' ? `Maraude « ${mission.title} » terminée (+${mission.rewardMoney} €) !` :
         `Dispositif « ${mission.title} » clôturé (+${mission.rewardMoney} €) !`)));
       this.showToast(closeTitle, closeMsg, 'green');
+      if (window.ProtecNotifications) {
+        const notifCat = (term.kind === 'samu' || term.kind === 'garde_samu') ? 'samu' : (term.kind === 'pompiers' ? 'sdis' : (term.kind === 'crise' ? 'weather' : 'dps'));
+        window.ProtecNotifications.notifyCategory(
+          notifCat,
+          closeTitle,
+          closeMsg,
+          `mission-complete-push-${mission.id}`
+        );
+      }
     }
 
     // Diffusion de la clôture de mission vers la main courante réseau
@@ -25568,9 +25577,23 @@ class ProtecGame {
 
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
+    this._lastTickTime = Date.now();
+    // 1. Horloge standard d'avant-plan (fenêtre active)
     setInterval(() => {
-      try {
-        const serverOffset = this.serverTimeOffset || 0;
+      if (!document.hidden) {
+        this.tickSimulation();
+      }
+    }, 1000);
+
+    // 2. Initialisation du Web Worker d'arrière-plan pour continuer de tourner même en veille / écran verrouillé
+    if (window.ProtecNotifications && typeof window.ProtecNotifications.initBackgroundTicker === 'function') {
+      window.ProtecNotifications.initBackgroundTicker(this);
+    }
+  }
+
+  tickSimulation() {
+    try {
+      const serverOffset = this.serverTimeOffset || 0;
       const now = new Date(Date.now() + serverOffset);
       this.clock.hour = now.getHours();
       this.clock.minute = now.getMinutes();
@@ -26612,7 +26635,6 @@ class ProtecGame {
     } catch (clockErr) {
       console.warn('[SimulationClock] Erreur interceptée dans la boucle de simulation (jeu préservé du gel) :', clockErr);
     }
-    }, 1000);
   }
 
   updateClockUI() {
@@ -28079,12 +28101,12 @@ class ProtecGame {
       window.ProtecNotifications.notifyCategory(
         'rh',
         '👥 Nouvelle Candidature Bénévole !',
-        `${p.n} (${p.rank} • Réside à ${geo.commune}) souhaite intégrer votre antenne (${geo.temps_ralliement_minutes} min de ralliement). Planifiez son entretien !`,
+        `${newCand.name} (${newCand.rank} • Réside à ${geo.commune}) souhaite intégrer votre antenne (${geo.temps_ralliement_minutes} min de ralliement). Planifiez son entretien !`,
         `cand-${Date.now()}`
       );
     }
 
-    this.showToast('Nouvelle Candidature', `${p.n} (${geo.commune} • ${p.rank}) souhaite intégrer votre antenne.`, 'blue');
+    this.showToast('Nouvelle Candidature', `${newCand.name} (${geo.commune} • ${newCand.rank}) souhaite intégrer votre antenne.`, 'blue');
     this.updateStatsUI();
   }
 

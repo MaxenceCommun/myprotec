@@ -517,7 +517,29 @@ window.ProtecNotifications = {
       this.onPageHidden();
     });
 
-    // 5. Écouteurs de présence active pour ne pas notifier un joueur en pleine partie
+        // 4b. Web Worker Ticker d'arrière-plan : empêche les navigateurs de geler le jeu en arrière-plan
+    this.initBackgroundTicker(game);
+
+    // 4c. Demande proactive de permission au premier geste utilisateur
+    const requestPermissionOnFirstAction = () => {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission().then(perm => {
+            this.permission = perm;
+            if (perm === 'granted') {
+              this.subscribeUserToPush();
+              this.updateHeaderUI();
+              this.hideSubscriptionBanner();
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, requestPermissionOnFirstAction, { once: true, passive: true });
+    });
+
+    // 5. Écouteurs de présence active pour ne pas notifier un joueur en pleine partie pour ne pas notifier un joueur en pleine partie
     const onUserActive = () => {
       this.lastUserInteraction = Date.now();
       if (!this.isDeviceMobile()) {
@@ -1077,6 +1099,63 @@ window.ProtecNotifications = {
   },
 
   // Envoi d'une vraie notification Push système (Arrière-plan & Écran verrouillé)
+  // Web Worker d'arrière-plan : garantit que la simulation continue de tourner même si l'onglet est masqué ou le smartphone verrouillé
+  initBackgroundTicker(game) {
+    if (this._bgWorkerStarted) return;
+    this._bgWorkerStarted = true;
+    try {
+      const workerBlob = new Blob([`
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) {
+              timer = setInterval(function() {
+                self.postMessage('tick');
+              }, 1000);
+            }
+          }
+        };
+        self.postMessage('ready');
+      `], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(workerBlob);
+      this.bgWorker = new Worker(workerUrl);
+      this.bgWorker.onmessage = (e) => {
+        if (e.data === 'tick' && window.game) {
+          // Si la page est en arrière-plan, continuer à faire avancer la simulation en temps réel !
+          if (document.hidden && typeof window.game.tickSimulation === 'function') {
+            window.game.tickSimulation();
+          }
+        }
+      };
+      this.bgWorker.postMessage('start');
+      console.log('[Notifications] Background Web Worker ticker actif (maintien du temps réel).');
+    } catch (e) {
+      console.warn('[Notifications] Background Worker non supporté:', e);
+    }
+  },
+
+  // Planification d'une alerte à une heure précise (transmise au Service Worker et au timer local)
+  scheduleFutureAlert(alertData) {
+    if (!alertData || !alertData.targetTime) return;
+    // 1. Transmission au Service Worker (niveau OS / écran verrouillé)
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_FUTURE_ALERT',
+        alert: alertData
+      });
+    }
+    // 2. Programmation locale si l'onglet reste ouvert
+    const delay = Math.max(100, alertData.targetTime - Date.now());
+    setTimeout(() => {
+      if (document.hidden) {
+        this.sendPushNotification(alertData.title, alertData.body, {
+          tag: alertData.id || `future-${Date.now()}`,
+          data: alertData.data
+        });
+      }
+    }, delay);
+  },
+
   sendPushNotification(title, body, options = {}) {
     body = this.sanitizeMessage(body);
     // 1. Enregistre TOUJOURS dans le journal in-app
@@ -1112,6 +1191,9 @@ window.ProtecNotifications = {
       }
     }, options);
 
+    // Envoi direct si document.hidden (onglet en arrière-plan, téléphone verrouillé)
+    const isHidden = (typeof document !== 'undefined' && document.hidden);
+
     // Affichage via le Service Worker si actif
     if (this.swRegistration && 'showNotification' in this.swRegistration) {
       try {
@@ -1130,6 +1212,7 @@ window.ProtecNotifications = {
           window.focus();
           notif.close();
         };
+        return;
       } catch (e) {
         console.warn('Erreur notification standard:', e);
       }
