@@ -201,6 +201,7 @@
       consumableCost: 40,
       environment: 'dynamique_course',
       riskLevel: 'moyen',
+      medicalTeamRequired: true,
       defaultFallback: (commune) => ({
         name: `Forêt Domaniale de ${commune}`,
         venue: `Forêt Domaniale de ${commune}`
@@ -227,6 +228,78 @@
       defaultFallback: (commune) => ({
         name: `Piste d’Athlétisme de ${commune}`,
         venue: `Piste d’Athlétisme de ${commune}`
+      })
+    },
+    {
+      id: 'marathon_metropole',
+      titleTemplate: 'Marathon & Grande Course Urbaine - {venue}',
+      osmQuery: '(node["leisure"="track"](around:{radius},{lat},{lng});way["highway"="primary"](around:{radius},{lat},{lng});node["place"="square"](around:{radius},{lat},{lng}););',
+      radiusKm: 25,
+      clientTemplate: 'Comité du Marathon de {commune}',
+      clientType: 'club_sportif',
+      category: 'sport',
+      dur: 7,
+      pubMin: 2500,
+      pubMax: 9000,
+      scale: 'DPS-ME (8 secouristes + 2 VPSP + VTU)',
+      reqV: 8,
+      ranks: ['CD', 'CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP', 'VTU'],
+      consumableCost: 65,
+      environment: 'dynamique_course',
+      riskLevel: 'eleve',
+      medicalTeamRequired: true,
+      defaultFallback: (commune) => ({
+        name: `Place Centrale de ${commune}`,
+        venue: `Hôtel de Ville de ${commune}`
+      })
+    },
+    {
+      id: 'criterium_cycliste',
+      titleTemplate: 'Grand Prix Cycliste & Critérium Régional à {venue}',
+      osmQuery: '(node["leisure"="sports_centre"](around:{radius},{lat},{lng});way["highway"="secondary"](around:{radius},{lat},{lng}););',
+      radiusKm: 30,
+      clientTemplate: 'Vélo Club & Ligue Cycliste de {commune}',
+      clientType: 'club_sportif',
+      category: 'sport',
+      dur: 6,
+      pubMin: 1200,
+      pubMax: 4500,
+      scale: 'DPS-PE (6 secouristes + VPSP + VTU)',
+      reqV: 6,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP', 'VTU'],
+      consumableCost: 50,
+      environment: 'dynamique_course',
+      riskLevel: 'eleve',
+      medicalTeamRequired: true,
+      defaultFallback: (commune) => ({
+        name: `Boulevard des Sports de ${commune}`,
+        venue: `Circuit Urbain de ${commune}`
+      })
+    },
+    {
+      id: 'motocross_enduro',
+      titleTemplate: 'Course d’Enduro Motocross & Quad au {venue}',
+      osmQuery: '(node["leisure"="pitch"]["sport"="motor"](around:{radius},{lat},{lng});way["landuse"="quarry"](around:{radius},{lat},{lng});node["landuse"="forest"](around:{radius},{lat},{lng}););',
+      radiusKm: 35,
+      clientTemplate: 'Moto Club Tout-Terrain de {commune}',
+      clientType: 'club_sportif',
+      category: 'sport',
+      dur: 6,
+      pubMin: 1500,
+      pubMax: 4000,
+      scale: 'DPS-PE (6 secouristes + VPSP + VTU)',
+      reqV: 6,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP', 'VTU'],
+      consumableCost: 55,
+      environment: 'dynamique_course',
+      riskLevel: 'eleve',
+      medicalTeamRequired: true,
+      defaultFallback: (commune) => ({
+        name: `Terrain d’Enduro de ${commune}`,
+        venue: `Circuit Tout-Terrain de ${commune}`
       })
     }
   ];
@@ -505,6 +578,7 @@
       consumableCost: template.consumableCost || 30,
       environment: template.environment,
       riskLevel: template.riskLevel,
+      medicalTeamRequired: Boolean(template.medicalTeamRequired || template.environment === 'dynamique_course' || template.riskLevel === 'eleve'),
       status: 'pending',
       mealsProvidedByOrganizer: Math.random() < 0.5,
       isLastMinute: isLastMinute,

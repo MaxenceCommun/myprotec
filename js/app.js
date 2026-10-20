@@ -10994,6 +10994,26 @@ class ProtecGame {
       return;
     }
 
+    // Contrôle de l'équipe médicale requise (courses, crises, événements dangereux)
+    const medStatus = this.getMissionMedicalStatus(mission);
+    if (medStatus.required) {
+      if (!medStatus.hasMedicalStaff) {
+        this.showToast(
+          'Alerte Médicale : Équipe Sans Soignant ⚠️',
+          'Cet événement à risque (course / crise) exige une équipe médicale. Dispositif déployé sans Médecin ni Infirmier : risque de sanctions préfectorales et d\'inconduite des soins !',
+          'amber'
+        );
+        mission.lacksMedicalTeam = true;
+      } else {
+        this.showToast(
+          'Équipe Médicale Déployée 🩺',
+          `Dispositif médicalisé engagé (${medStatus.doctorCount} Médecin(s), ${medStatus.nurseCount} Infirmier(s)). Sécurité maximale !`,
+          'green'
+        );
+        mission.hasMedicalTeam = true;
+      }
+    }
+
     // Contrôle des compétences exigées (CE / PSE2)
     const requiredRanks = mission.requiredRanks || [];
     const crewVols = mission.registeredVolunteers.map(vid => this.volunteers.find(v => v.id === vid)).filter(Boolean);
@@ -11423,6 +11443,14 @@ class ProtecGame {
         if (window.ProtecConventions) {
           window.ProtecConventions.adjustLocalReputation(this, successCity, Math.round(8 * repGainMult), 'Succès mission');
           if (mission.type === 'samu') window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', Math.round(6 * repGainMult), 'Renfort SAMU');
+          if (mission.hasMedicalTeam) {
+            const medBonus = mission.type === 'crise' ? 250 : 150;
+            this.resources.money = (this.resources.money || 0) + medBonus;
+            window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 4, 'Présence équipe médicale certifiée');
+            if (this.showToast) {
+              this.showToast('Prime de Médicalisation 🩺', `Organisateur et SAMU saluent votre équipe médicale : +${medBonus} € de gratification et +4 Réputation SAMU !`, 'green');
+            }
+          }
           if (mission.type === 'pompiers') window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', Math.round(6 * repGainMult), 'Garde pompiers');
           if (mission.isEmergencyPlan && typeof mission.onCompleteSuccess === 'function') mission.onCompleteSuccess();
         }
@@ -12329,7 +12357,9 @@ class ProtecGame {
       'cyno': { id: 'cyno', label: 'Cynotechnie (Maître-Chien)', cat: 'Spécialité', badge: '🐕 Cyno', color: 'bg-amber-100 text-amber-900 border-amber-300 font-bold', order: 51 },
       'nautique': { id: 'nautique', label: 'Secours Nautique / BNSSA', cat: 'Spécialité', badge: '⚓ Nautique', color: 'bg-teal-100 text-teal-900 border-teal-300 font-bold', order: 52 },
       'radio': { id: 'radio', label: 'Opérateur Radio / Transmissions PC', cat: 'Transmission', badge: '📻 Radio/PC', color: 'bg-slate-100 text-slate-800 border-slate-300 font-bold', order: 53 },
-      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: '📸 Com', color: 'bg-pink-100 text-pink-900 border-pink-300 font-semibold', order: 54 }
+      'communication': { id: 'communication', label: 'Communication & Médias', cat: 'Presse', badge: '📸 Com', color: 'bg-pink-100 text-pink-900 border-pink-300 font-semibold', order: 54 },
+      'medecin': { id: 'medecin', label: 'Docteur en Médecine / Urgentiste', cat: 'Santé', badge: '🩺 DOC', color: 'bg-rose-100 text-rose-900 border-rose-300 font-extrabold', order: 5 },
+      'infirmier': { id: 'infirmier', label: 'Infirmier Diplômé d’État (IDE)', cat: 'Santé', badge: '💉 IDE', color: 'bg-cyan-100 text-cyan-900 border-cyan-300 font-extrabold', order: 6 }
     };
 
     const detected = new Set();
@@ -12359,6 +12389,8 @@ class ProtecGame {
       else if (clean.includes('aep2')) detected.add('aep2');
       else if (clean.includes('aep1') || clean.includes('aep')) detected.add('aep1');
       else if (clean.includes('com')) detected.add('communication');
+      else if (clean.includes('medecin') || clean === 'doc' || clean.includes('docteur')) detected.add('medecin');
+      else if (clean.includes('infirmier') || clean.includes('infirmiere') || clean === 'ide') detected.add('infirmier');
       else if (skillsMap[clean]) detected.add(clean);
     });
 
@@ -12411,6 +12443,8 @@ class ProtecGame {
       detected.add('formateur_psc');
       if (['PSE2', 'CE', 'CP', 'CD'].includes(rank)) detected.add('formateur_ps');
     }
+    if (v.isDoctor || v.professionCivil === 'medecin') detected.add('medecin');
+    if (v.isNurse || v.professionCivil === 'infirmier') detected.add('infirmier');
 
     const items = Array.from(detected).map(id => {
       return skillsMap[id] || {
@@ -12783,6 +12817,8 @@ class ProtecGame {
     if (skillId === 'permis_b' && (vol.permis_b || vol.hasPermisB)) return true;
     if (skillId === 'permis_c' && (vol.permis_c || vol.hasPermisC)) return true;
     if (skillId === 'permis_vpsp' && (vol.hasPermisVpsp || vol.permis_vpsp)) return true;
+    if (skillId === 'medecin' && (vol.isDoctor || (vol.skills || []).some(s => String(s).toLowerCase().includes('medecin') || s === 'doc'))) return true;
+    if (skillId === 'infirmier' && (vol.isNurse || vol.isDoctor || (vol.skills || []).some(s => String(s).toLowerCase().includes('infirmier') || s === 'ide' || s === 'doc' || s === 'medecin'))) return true;
 
     // Inspection du tableau de compétences existant
     if (Array.isArray(vol.skills)) {
@@ -12829,6 +12865,8 @@ class ProtecGame {
       'formateur_de_formateur': 'Formateur de Formateurs (FdF)',
       'cef': 'CEF Encadrant Formation',
       'communication': 'Communication & Médias',
+      'medecin': 'Docteur en Médecine (Médecin)',
+      'infirmier': 'Infirmier Diplômé d’État (IDE)',
       'pilotage': 'Conduite d’Urgence VPSP',
       'ci': 'Chef d’Intervention',
       'ca': 'Chef d’Agrès',
@@ -12847,6 +12885,8 @@ class ProtecGame {
       { id: 'equipier', label: 'Équipier-Secouriste', icon: 'heart-pulse', desc: 'Équipier secouriste qualifié (PSE2)' },
       { id: 'conducteur', label: 'Conducteur', icon: 'truck', reqSkill: 'pilotage', desc: 'Conduite opérationnelle du VPSP / VTU' },
       { id: 'chef_binome', label: 'Chef Binôme', icon: 'users', desc: 'Responsable du binôme de secours' },
+      { id: 'infirmier', label: 'Infirmier DE (Équipe Médicale)', icon: 'syringe', reqSkill: 'infirmier', desc: 'Infirmier Diplômé d’État : soins d’urgence, protocoles et analgésie' },
+      { id: 'medecin', label: 'Médecin (Équipe Médicale)', icon: 'stethoscope', reqSkill: 'medecin', desc: 'Docteur en Médecine : régulation terrain et médicalisation d’urgence' },
       { id: 'chef_equipe', label: 'Chef d’équipe', icon: 'shield', desc: 'Commandement opérationnel de l’équipe' },
       { id: 'chef_poste', label: 'Chef de Poste', icon: 'home', desc: 'Responsable de la structure de soins fixe' },
       { id: 'chef_secteur', label: 'Chef de Secteur', icon: 'compass', desc: 'Coordination tactique sur un secteur géographique' },
@@ -12885,8 +12925,28 @@ class ProtecGame {
     const isPse2 = isCe || ['PSE2', 'ÉQUIPIER', 'EQUIPIER', 'ÉQUIPIER-SECOURISTE'].includes(rank) || skills.includes('pse2');
     const isPse1 = isPse2 || ['PSE1', 'SECOURISTE'].includes(rank) || skills.includes('pse1');
     const isDriver = Boolean(volunteer.isDriver || volunteer.permis_b || skills.some(s => ['permis_b', 'b', 'conducteur', 'permis_vpsp', 'pilotage'].includes(s)));
+    const isDoctor = skills.some(s => ['medecin', 'doc', 'docteur'].includes(s)) || Boolean(volunteer.isDoctor);
+    const isNurse = isDoctor || skills.some(s => ['infirmier', 'infirmiere', 'ide'].includes(s)) || Boolean(volunteer.isNurse);
 
     switch (roleId) {
+      case 'medecin':
+        if (!isDoctor) {
+          return {
+            qualified: false,
+            reason: `Qualification médicale requise : le rôle « Médecin » exige un Docteur en Médecine diplômé (${volunteer.name} est titulaire de ${volunteer.rank || 'Secouriste'}).`
+          };
+        }
+        break;
+
+      case 'infirmier':
+        if (!isNurse) {
+          return {
+            qualified: false,
+            reason: `Qualification médicale requise : le rôle « Infirmier DE » exige un Diplôme d'État d'Infirmier (${volunteer.name} est titulaire de ${volunteer.rank || 'Secouriste'}).`
+          };
+        }
+        break;
+
       case 'equipier':
       case 'chef_binome':
         if (!isPse2) {
@@ -12953,6 +13013,52 @@ class ProtecGame {
     }
 
     return { qualified: true };
+  }
+
+  // --- ANALYSE DE L'EXIGENCE D'UNE ÉQUIPE MÉDICALE SUR ÉVÉNEMENTS & CRISES ---
+  isMedicalTeamRequired(mission) {
+    if (!mission) return false;
+    if (mission.medicalTeamRequired || mission.requireMedicalTeam || mission.requiresMedical) return true;
+    const title = (mission.title || mission.name || mission.eventName || '').toLowerCase();
+    const type = (mission.type || '').toLowerCase();
+    const risk = (mission.riskLevel || '').toLowerCase();
+    const scale = (mission.scale || '').toLowerCase();
+
+    // 1. Grosses courses sportives et sports dangereux (trails, marathons, cyclisme, motocross, sports de combat)
+    const isDangerousRace = /marathon|trail|triathlon|moto|auto|karting|cyclisme|vtt|descente|boxe|mma|combat|rugby.*national|rallye|course.*nature|cross/i.test(title);
+    if (isDangerousRace && (risk === 'eleve' || risk === 'moyen' || scale.includes('me') || scale.includes('ge') || (mission.requiredVolunteers || 0) >= 4)) {
+      return true;
+    }
+
+    // 2. Grands événements / festivals à forte affluence (> 5 000 participants ou DPS-GE)
+    const isBigEvent = /festival|concert|pyrotechnique|rave|meeting aérien|carnaval/i.test(title) && (scale.includes('ge') || (mission.requiredVolunteers || 0) >= 8);
+    if (isBigEvent) return true;
+
+    // 3. Crises majeures, plans NOVI, PMA, catastrophes
+    const isCrisisMedical = type === 'crise' && (
+      /novi|pma|catastrophe|attentat|effondrement|ferroviaire|explosion|choc/i.test(title) ||
+      mission.crisisType === 'novi' || scale.includes('pma') || (mission.requiredVolunteers || 0) >= 6
+    );
+    if (isCrisisMedical) return true;
+
+    return false;
+  }
+
+  getMissionMedicalStatus(mission) {
+    if (!mission) return { required: false, hasMedicalStaff: false, doctorCount: 0, nurseCount: 0, doctors: [], nurses: [] };
+    const required = this.isMedicalTeamRequired(mission);
+    const regVols = (mission.registeredVolunteers || []).map(id => (this.volunteers || []).find(v => v.id === id)).filter(Boolean);
+    const doctors = regVols.filter(v => this.hasVolunteerSkill(v, 'medecin') || mission.volunteerRoles?.[v.id] === 'medecin');
+    const nurses = regVols.filter(v => (this.hasVolunteerSkill(v, 'infirmier') || mission.volunteerRoles?.[v.id] === 'infirmier') && !doctors.includes(v));
+    const hasMedicalStaff = doctors.length > 0 || nurses.length > 0;
+    return {
+      required,
+      hasMedicalStaff,
+      doctorCount: doctors.length,
+      nurseCount: nurses.length,
+      doctors,
+      nurses
+    };
   }
 
   // --- VÉRIFICATION DU CONDUCTEUR ET DU BON PERMIS SELON LE VÉHICULE ---
@@ -15484,7 +15590,48 @@ class ProtecGame {
                 <span class="px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-200 flex items-center gap-1">
                   <span>🚑</span> ${driverCount} Chauffeur
                 </span>
+                ${(() => {
+                  const medSt = this.getMissionMedicalStatus(mission);
+                  const badges = [];
+                  if (medSt.doctorCount > 0) {
+                    badges.push(`<span class="px-2.5 py-1 rounded-lg text-xs font-black bg-rose-100 text-rose-900 border border-rose-300 flex items-center gap-1"><span>🩺</span> ${medSt.doctorCount} Médecin${medSt.doctorCount > 1 ? 's' : ''}</span>`);
+                  }
+                  if (medSt.nurseCount > 0) {
+                    badges.push(`<span class="px-2.5 py-1 rounded-lg text-xs font-black bg-cyan-100 text-cyan-900 border border-cyan-300 flex items-center gap-1"><span>💉</span> ${medSt.nurseCount} IDE</span>`);
+                  }
+                  return badges.join('');
+                })()}
               </div>
+              ${(() => {
+                const medSt = this.getMissionMedicalStatus(mission);
+                if (!medSt.required) return '';
+                if (medSt.hasMedicalStaff) {
+                  return `
+                    <div class="p-3 rounded-2xl bg-emerald-50/90 border border-emerald-300 text-emerald-950 flex items-center justify-between text-xs shadow-2xs">
+                      <div class="flex items-center gap-2">
+                        <span class="text-base">🩺</span>
+                        <div>
+                          <span class="font-black text-emerald-900 block">Équipe Médicale Opérationnelle</span>
+                          <span class="text-[10px] text-emerald-700">Dispositif médicalisé conforme (${medSt.doctorCount} Médecin(s), ${medSt.nurseCount} Infirmier(s)).</span>
+                        </div>
+                      </div>
+                      <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-900">Médicalisé ✓</span>
+                    </div>
+                  `;
+                }
+                return `
+                  <div class="p-3 rounded-2xl bg-amber-50/90 border border-amber-300 text-amber-950 flex items-center justify-between text-xs shadow-2xs">
+                    <div class="flex items-center gap-2">
+                      <span class="text-base">⚠️</span>
+                      <div>
+                        <span class="font-black text-amber-900 block">Équipe Médicale Requise</span>
+                        <span class="text-[10px] text-amber-800">Événement à risques élevés (course / grand rassemblement / crise) : au moins 1 Médecin ou Infirmier DE est exigé.</span>
+                      </div>
+                    </div>
+                    <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 animate-pulse">Soignant Requis</span>
+                  </div>
+                `;
+              })()}
 
               <!-- Progression inscription -->
               <div class="space-y-1">

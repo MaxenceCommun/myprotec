@@ -985,6 +985,10 @@ window.ProtecAdvanced = {
     { id: 'aep1', name: 'Aide & Écoute Psychologique 1 (AEP1)', icon: '🧠', xpRequired: 25, desc: 'Sensibilisation à l’AEP : posture d’écoute active, réconfort immédiat des impliqués et premiers secours émotionnels.' },
     { id: 'aep2', name: 'Aide & Écoute Psychologique 2 (AEP2)', icon: '🫂', xpRequired: 45, reqSkill: 'aep1', desc: 'Prise en charge approfondie : deuil traumatique, defusing post-mission et CAI en crise NOVI.' },
 
+    // Filière Médicale & Équipe de Santé (Professionnels de Santé)
+    { id: 'infirmier', name: 'Infirmier DE (Infirmier Diplômé d’État)', icon: '💉', xpRequired: 40, desc: 'Diplôme d’État d’Infirmier : autorise les soins d’urgence protocolisés, analgésie et surveillance avancée au sein de l’équipe médicale.' },
+    { id: 'medecin', name: 'Médecin Urgentiste (Docteur en Médecine)', icon: '🩺', xpRequired: 55, desc: 'Docteur en Médecine : régulation terrain, médicalisation d’urgence, réanimation avancée et commandement médical du PMA.' },
+
     // Filière Pédagogique & Formateurs (PIC F préalable distinct de Formateur PSC)
     { id: 'picf', name: 'PIC F (Pédagogie Initiale de Formateur)', icon: '📘', xpRequired: 30, desc: 'Tronc commun pédagogique obligatoire préalable aux brevets de formateur de sécurité civile.' },
     { id: 'formateur_psc', name: 'Formateur PSC (Secourisme Citoyen)', icon: '🎓', xpRequired: 35, reqSkill: 'picf', desc: 'Habilité à animer et certifier le grand public aux Gestes Qui Sauvent (GQS) et au PSC.' },

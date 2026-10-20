@@ -3171,16 +3171,33 @@ window.ProtecPersonnel = {
         socialTypes: ['salarie', 'actif', 'fonctionnaire'],
         preferredTrait: ['rigoureux', 'calme', 'pedagogue', 'devoue']
       },
-      // 2. Équipier secouriste confirmé (PSE2)
-      {
-        role: 'Équipier Secouriste',
-        rank: 'PSE2',
-        baseExp: 22 + Math.floor(Math.random() * 10),
-        mandatorySkills: ['pse2', 'pse1'],
-        bonusSkillPool: ['permis_b', 'permis_vpsp', 'pma'],
-        socialTypes: ['etudiant', 'salarie', 'independant'],
-        preferredTrait: ['dynamique', 'devoue', 'enthousiaste']
-      },
+      // 2. Équipier secouriste confirmé (PSE2) ou Professionnel de Santé bénévole (Médecin / Infirmier)
+      (() => {
+        if (Math.random() < 0.35) {
+          const isDoc = Math.random() < 0.45;
+          return {
+            role: isDoc ? 'Médecin Urgentiste' : 'Infirmier DE Urgences',
+            rank: 'PSE2',
+            professionCivil: isDoc ? 'medecin' : 'infirmier',
+            isDoctor: isDoc,
+            isNurse: !isDoc,
+            baseExp: (isDoc ? 35 : 25) + Math.floor(Math.random() * 10),
+            mandatorySkills: isDoc ? ['medecin', 'pse2', 'pse1', 'permis_b'] : ['infirmier', 'pse2', 'pse1', 'permis_b'],
+            bonusSkillPool: ['pma', 'cai', 'permis_vpsp'],
+            socialTypes: ['actif', 'salarie'],
+            preferredTrait: ['calme', 'rigoureux', 'devoue']
+          };
+        }
+        return {
+          role: 'Équipier Secouriste',
+          rank: 'PSE2',
+          baseExp: 22 + Math.floor(Math.random() * 10),
+          mandatorySkills: ['pse2', 'pse1'],
+          bonusSkillPool: ['permis_b', 'permis_vpsp', 'pma'],
+          socialTypes: ['etudiant', 'salarie', 'independant'],
+          preferredTrait: ['dynamique', 'devoue', 'enthousiaste']
+        };
+      })(),
       // 3. Second Équipier secouriste (PSE2 ou Chauffeur)
       {
         role: Math.random() < 0.4 ? 'Secouriste Chauffeur' : 'Équipier Secouriste',
@@ -3265,7 +3282,10 @@ window.ProtecPersonnel = {
         isTrainer: skills.includes('ce') && Math.random() < 0.25,
         dispoType: dispoType,
         dispoJours: dispoJours,
-        skills: skills
+        skills: skills,
+        isDoctor: Boolean(template.isDoctor || skills.includes('medecin')),
+        isNurse: Boolean(template.isNurse || skills.includes('infirmier')),
+        professionCivil: template.professionCivil || (skills.includes('medecin') ? 'medecin' : (skills.includes('infirmier') ? 'infirmier' : null))
       };
 
       if (game && this.ensureVolunteerResidence) {

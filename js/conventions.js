@@ -1452,6 +1452,14 @@ window.ProtecRNMSC = {
       if (totalCrew < 3 && mission.scale !== 'PAPS') {
         errors.push(`Effectif insuffisant RNMSC : Une équipe de secours opérationnelle comporte au minimum 3 intervenants (1 CE + 1 PSE2 + 1 PSE1).`);
       }
+
+      // 2.5 Équipe Médicale Requise (Événements à hauts risques, courses sportives, PMA / crises)
+      if (game && typeof game.isMedicalTeamRequired === 'function' && game.isMedicalTeamRequired(mission)) {
+        const hasMedical = volunteers.some(v => (roles[v.id] === 'medecin' || roles[v.id] === 'infirmier' || game.hasVolunteerSkill(v, 'medecin') || game.hasVolunteerSkill(v, 'infirmier')));
+        if (!hasMedical) {
+          warnings.push("Équipe Médicale Requise : Cet événement à risque élevé (course sportive / grand rassemblement / crise) impose la présence d’au moins 1 Médecin ou Infirmier DE. Dispositif en vigilance médicale.");
+        }
+      }
     }
 
     // -------------------------------------------------------------------------
