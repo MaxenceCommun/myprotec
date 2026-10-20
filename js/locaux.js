@@ -3899,6 +3899,26 @@ window.ProtecLocaux = {
     if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
+  // Détection du support pour adapter le message contextuel d'aide (Tactile vs Souris)
+  getContextBarDefaultHTML() {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    if (isTouch) {
+      return `
+        <div class="flex items-center gap-1.5 text-slate-700 dark:text-slate-200 text-[10px] sm:text-[11px] font-medium text-center">
+          <span>👆</span>
+          <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un véhicule ou une pièce</span>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="flex items-center gap-2 text-slate-700 dark:text-slate-200 text-[10px] sm:text-[11px] font-medium text-center">
+          <span>🖱️</span>
+          <span><strong>Clic gauche + glisser :</strong> déplacer la vue • <strong>Molette :</strong> zoomer • <strong>Survol :</strong> infos véhicule • <strong>Clic :</strong> aménager</span>
+        </div>
+      `;
+    }
+  },
+
   updateContextBar(item) {
     const contextBar = document.getElementById('canvas-context-bar');
     if (!contextBar) return;
@@ -3923,12 +3943,7 @@ window.ProtecLocaux = {
         </div>
       `;
     } else {
-      contextBar.innerHTML = `
-        <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
-          <span>👆</span>
-          <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
-        </div>
-      `;
+      contextBar.innerHTML = this.getContextBarDefaultHTML();
     }
   },
 
@@ -4137,12 +4152,9 @@ window.ProtecLocaux = {
             </button>
           </div>
 
-          <!-- 4. Barre contextuelle inférieure interactive (Mobile & Bureau) -->
-          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-2xl bg-white/95 backdrop-blur border border-slate-200 shadow-lg max-w-[94%] transition-all">
-            <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
-              <span>👆</span>
-              <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
-            </div>
+          <!-- 4. Barre contextuelle inférieure interactive adaptée au support (Mobile / Tactile vs Ordinateur / Souris) -->
+          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-2xl bg-white/95 backdrop-blur border border-slate-200/90 shadow-lg max-w-[94%] transition-all">
+            ${this.getContextBarDefaultHTML()}
           </div>
 
         </div>
@@ -4438,8 +4450,34 @@ window.ProtecLocaux = {
         return;
       }
 
-      // Curseur dynamique selon survol et tracking du meuble sous le curseur
+      // Détection dynamique du survol d'un véhicule, meuble ou pièce
       const model = this.getArchitectModel();
+
+      // 1. Détection survol véhicule sur une place de parking
+      let hoveredVeh = null;
+      let hoveredSpot = null;
+      if (model.parking && model.parking.spots) {
+        const game = window.game;
+        const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+        const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
+
+        model.parking.spots.forEach((spot, idx) => {
+          if (wx >= spot.x && wx <= spot.x + spot.w && wy >= spot.y && wy <= spot.y + spot.d) {
+            if (stVehs[idx]) {
+              hoveredVeh = stVehs[idx];
+              hoveredSpot = spot;
+            }
+          }
+        });
+      }
+
+      if (this.hoveredVehicle !== hoveredVeh) {
+        this.hoveredVehicle = hoveredVeh;
+        this.hoveredVehicleSpot = hoveredSpot;
+        this.renderArchitectScene();
+      }
+
+      // 2. Détection survol meuble
       const hoveredFurniture = (model.furniture || []).slice().reverse().find(f => {
         return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
       });
@@ -4450,8 +4488,11 @@ window.ProtecLocaux = {
         this.renderArchitectScene();
       }
 
+      // 3. Mise à jour du curseur
       if (hoveredFurniture) {
         canvas.style.cursor = 'move';
+      } else if (hoveredVeh) {
+        canvas.style.cursor = 'pointer';
       } else {
         const hoveredRoom = (model.rooms || []).find(r => {
           return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h;
@@ -4886,15 +4927,104 @@ window.ProtecLocaux = {
     ctx.restore();
   },
 
-  // Dessin détaillé en vue du dessus d'un véhicule de secours officiel de la Protection Civile
-  drawTopDownVehicle(ctx, x, y, w, h, veh, isNight) {
-    ctx.save();
+  _vehicleTopDownImagesCache: {},
 
+  // Recherche et chargement asynchrone des images vue du dessus (avec cache mémoire)
+  getVehicleTopDownImage(veh) {
+    if (!veh) return null;
+    const key = veh.id || veh.type;
+    if (this._vehicleTopDownImagesCache[key] !== undefined) {
+      return this._vehicleTopDownImagesCache[key]; // null si introuvable, ou HTMLImageElement chargé
+    }
+
+    // Liste des chemins où le joueur peut déposer l'image du dessus
+    const candidatePaths = [];
+    if (veh.imageTopDown) candidatePaths.push(veh.imageTopDown);
+    if (veh.topDownImage) candidatePaths.push(veh.topDownImage);
+    if (veh.top_down_image) candidatePaths.push(veh.top_down_image);
+
+    const typeLower = (veh.type || '').toLowerCase();
+    candidatePaths.push(`images/vehicles/topdown/${veh.id}.png`);
+    candidatePaths.push(`images/vehicles/topdown/${typeLower}.png`);
+    candidatePaths.push(`images/vehicles/${typeLower}_topdown.png`);
+    candidatePaths.push(`images/vehicles/topdown_${typeLower}.png`);
+    candidatePaths.push(`images/vehicles/${typeLower}.png`);
+
+    this._vehicleTopDownImagesCache[key] = null; // Par défaut null
+
+    const tryLoad = (idx) => {
+      if (idx >= candidatePaths.length) return;
+      const path = candidatePaths[idx];
+      const img = new Image();
+      img.onload = () => {
+        this._vehicleTopDownImagesCache[key] = img;
+        if (this.renderArchitectScene) this.renderArchitectScene();
+      };
+      img.onerror = () => {
+        tryLoad(idx + 1);
+      };
+      img.src = path;
+    };
+
+    tryLoad(0);
+    return null;
+  },
+
+  // Dessin d'un véhicule de secours avec orientation adaptée au sens de sa place de parking
+  // RÈGLE : Les images sources pointent vers le HAUT.
+  // - Si la place est horizontale (plus large que haute, sortie sur la gauche) : rotation de -90° (nez vers la GAUCHE).
+  // - Si la place est verticale (plus haute que large) : rotation de 0° (nez vers le HAUT).
+  drawTopDownVehicle(ctx, cx, cy, spotW, spotD, veh, isNight, isHovered) {
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Détermination de l'orientation de la place de parking
+    const isHorizontal = spotW >= spotD;
+    // Rotation : -90° si place horizontale (oriente le nez vers la GAUCHE), 0° si place verticale (nez vers le HAUT)
+    const rotationAngle = isHorizontal ? -Math.PI / 2 : 0;
+    ctx.rotate(rotationAngle);
+
+    // Dimensions dans le repère local où le véhicule pointe vers le haut :
+    // localW = largeur du véhicule (côtés), localH = longueur du véhicule (du pare-chocs arrière au capot avant)
+    const localW = isHorizontal ? Math.min(spotD * 0.76, 44) : Math.min(spotW * 0.76, 44);
+    const localH = isHorizontal ? Math.min(spotW * 0.85, 90) : Math.min(spotD * 0.85, 90);
+
+    const img = this.getVehicleTopDownImage(veh);
+    if (img && img.complete && img.naturalWidth > 0) {
+      // Ombre portée au sol
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-localW / 2 + 3, -localH / 2 + 4, localW, localH, 5);
+      else ctx.rect(-localW / 2 + 3, -localH / 2 + 4, localW, localH);
+      ctx.fill();
+
+      // Dessin de l'image vue du dessus fournie par le joueur
+      ctx.drawImage(img, -localW / 2, -localH / 2, localW, localH);
+    } else {
+      // Fallback vectoriel propre et réaliste orienté dans le même sens
+      this.drawVectorVehicleTopDown(ctx, -localW / 2, -localH / 2, localW, localH, veh, isNight);
+    }
+
+    // Halo de surbrillance lumineux si le véhicule est survolé par le curseur
+    if (isHovered) {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 10;
+      ctx.strokeRect(-localW / 2 - 3, -localH / 2 - 3, localW + 6, localH + 6);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  },
+
+  // Rendu vectoriel de secours vue du dessus (pointant vers le haut local)
+  drawVectorVehicleTopDown(ctx, x, y, w, h, veh, isNight) {
     // Ombre portée au sol
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
     ctx.beginPath();
-    if (ctx.roundRect) ctx.roundRect(x + 3, y + 4, w, h, 6);
-    else ctx.rect(x + 3, y + 4, w, h);
+    if (ctx.roundRect) ctx.roundRect(x + 2, y + 3, w, h, 6);
+    else ctx.rect(x + 2, y + 3, w, h);
     ctx.fill();
 
     // Carrosserie blanche de base
@@ -4913,7 +5043,7 @@ window.ProtecLocaux = {
     ctx.fillRect(x + 3, y + 6, 2, h - 12);
     ctx.fillRect(x + w - 5, y + 6, 2, h - 12);
 
-    // Pare-brise avant teinté (dégradé bleu nuit)
+    // Pare-brise avant teinté (le haut représente l'avant / le nez)
     ctx.fillStyle = isNight ? '#0f172a' : '#1e293b';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(x + 4, y + 4, w - 8, Math.min(h * 0.22, 14), 3);
@@ -4926,14 +5056,14 @@ window.ProtecLocaux = {
     ctx.fillRect(x + w - 7, y + h * 0.35, 3, h * 0.3);
     ctx.fillRect(x + 6, y + h - 5, w - 12, 3);
 
-    // Toit : Croix de Vie ou Chevrons de toit
+    // Toit : Croix de Vie officielle ou chevrons
     const cx = x + w / 2;
     const cy = y + h * 0.6;
     ctx.fillStyle = '#0284c7';
     ctx.fillRect(cx - 2, cy - 6, 4, 12);
     ctx.fillRect(cx - 6, cy - 2, 12, 4);
 
-    // Rampe de gyrophares bleus avec éclat lumineux
+    // Rampe de gyrophares bleus sur le pavillon avant
     const lightY = y + 2;
     ctx.fillStyle = '#38bdf8';
     ctx.shadowColor = '#0284c7';
@@ -4947,12 +5077,10 @@ window.ProtecLocaux = {
     ctx.fillRect(x - 2, y + 8, 2, 4);
     ctx.fillRect(x + w, y + 8, 2, 4);
 
-    // Bordure globale du véhicule
+    // Bordure générale du véhicule
     ctx.strokeStyle = '#475569';
     ctx.lineWidth = 1.2;
     ctx.stroke();
-
-    ctx.restore();
   },
 
   // Dessin détaillé en vue du dessus d'un secouriste de la Protection Civile
@@ -5078,38 +5206,80 @@ window.ProtecLocaux = {
         const sd = spot.d * scale;
 
         const assignedVeh = stVehs[idx];
+        const isHovered = (this.hoveredVehicle && assignedVeh && this.hoveredVehicle.id === assignedVeh.id);
 
         // Lignes de stationnement blanches nettes
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = isHovered ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = isHovered ? 2.5 : 2;
         ctx.setLineDash([]);
         ctx.strokeRect(sx, sy, sw, sd);
 
-        // Si un véhicule est garé sur l'emplacement, on le dessine en vue du dessus !
         if (assignedVeh) {
-          const vehW = Math.min(sw * 0.78, 38);
-          const vehH = Math.min(sd * 0.88, 70);
-          const vehX = sx + sw / 2 - vehW / 2;
-          const vehY = sy + sd / 2 - vehH / 2;
-          this.drawTopDownVehicle(ctx, vehX, vehY, vehW, vehH, assignedVeh, isNightMode);
-
-          // Étiquette sous le véhicule
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'bottom';
-          ctx.fillText(assignedVeh.name, sx + sw / 2, sy + sd - 4);
+          // Dessin du véhicule centré sur sa place, avec orientation adaptée au sens de la place
+          const centerX = sx + sw / 2;
+          const centerY = sy + sd / 2;
+          this.drawTopDownVehicle(ctx, centerX, centerY, sw, sd, assignedVeh, isNightMode, isHovered);
         } else {
           // Emplacement vide
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
           ctx.fillRect(sx, sy, sw, sd);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
           ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(spot.label || `🅿️ LIBRE ${idx + 1}`, sx + sw / 2, sy + sd / 2);
+          ctx.fillText(spot.label || `🅿️ EMPLACEMENT 0${idx + 1}`, sx + sw / 2, sy + sd / 2);
         }
       });
+
+      // Infobulle flottante au survol du curseur sur un véhicule garé
+      if (this.hoveredVehicle && this.hoveredVehicleSpot) {
+        const sp = this.hoveredVehicleSpot;
+        const hx = ox + (sp.x + sp.w / 2) * scale;
+        const hy = oy + sp.y * scale;
+        const v = this.hoveredVehicle;
+
+        const titleText = `🚑 ${v.name || v.type}`;
+        const subText = `${v.type || 'Véhicule'} • État: ${v.conditionPercent || 100}% • Consommables: ${v.consumablesPercent || 100}%`;
+
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        const titleW = ctx.measureText(titleText).width;
+        ctx.font = '600 9.5px "Plus Jakarta Sans", sans-serif';
+        const subW = ctx.measureText(subText).width;
+        const cardW = Math.max(titleW, subW) + 24;
+        const cardH = 38;
+        const cardX = Math.max(10, Math.min(width - cardW - 10, hx - cardW / 2));
+        const cardY = Math.max(10, hy - cardH - 8);
+
+        // Boîte d'infobulle sombre et élégante avec flèche
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardW, cardH, 8);
+        else ctx.rect(cardX, cardY, cardW, cardH);
+        ctx.fill();
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Pointe vers la place
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.beginPath();
+        ctx.moveTo(hx - 6, cardY + cardH);
+        ctx.lineTo(hx + 6, cardY + cardH);
+        ctx.lineTo(hx, cardY + cardH + 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(titleText, cardX + cardW / 2, cardY + 6);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 9.5px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(subText, cardX + cardW / 2, cardY + 21);
+      }
     }
 
     // 3. Ombre portée globale du bâtiment (effet de relief de jeu de gestion)
