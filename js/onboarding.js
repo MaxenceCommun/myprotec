@@ -817,7 +817,7 @@ window.ProtecOnboarding = {
         ? `• Antenne la plus proche : <strong>${validation.nearestStationName || 'Réseau'}</strong> à <strong>${validation.nearestDist.toFixed(1)} km</strong> (≥ ${minKm} km)`
         : `• Aucune antenne proche (< ${minKm} km)`;
 
-      cardEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 border-2 border-emerald-300 text-xs text-emerald-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
+      cardEl.className = 'p-3.5 rounded-2xl bg-emerald-50/90 dark:bg-emerald-950/40 border-2 border-emerald-300 dark:border-emerald-700/60 text-xs text-emerald-950 dark:text-emerald-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
       cardEl.innerHTML = `
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black text-base flex items-center justify-center shadow-xs flex-shrink-0">
@@ -825,15 +825,15 @@ window.ProtecOnboarding = {
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="text-sm font-black text-slate-900" id="step2-city-label">${this.placementData.city}</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-200 text-emerald-900 border border-emerald-300">
+              <span class="text-sm font-black text-slate-900 dark:text-white" id="step2-city-label">${this.placementData.city}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-900/80 dark:text-emerald-200 dark:border-emerald-500 shadow-2xs">
                 ✓ Emplacement Autorisé
               </span>
             </div>
-            <div class="text-[11px] text-slate-600 mt-0.5">
-              Département <strong>${this.deptCode}</strong> • <span class="font-mono text-slate-500" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span>
+            <div class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+              Département <strong class="text-slate-900 dark:text-white">${this.deptCode}</strong> • <span class="font-mono text-slate-500 dark:text-slate-400" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span>
             </div>
-            <div class="text-[10px] text-emerald-800 font-medium mt-0.5">
+            <div class="text-[10px] text-emerald-800 dark:text-emerald-300 font-medium mt-0.5">
               ${nearestInfo}
             </div>
           </div>
@@ -842,12 +842,12 @@ window.ProtecOnboarding = {
         <button 
           type="button" 
           onclick="window.ProtecOnboarding.resetMapPosition()"
-          class="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
+          class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
           🎯 Recentrer
         </button>
       `;
     } else {
-      cardEl.className = 'p-3.5 rounded-2xl bg-rose-50/95 border-2 border-rose-400 text-xs text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
+      cardEl.className = 'p-3.5 rounded-2xl bg-rose-50/95 dark:bg-rose-950/40 border-2 border-rose-400 dark:border-rose-700/60 text-xs text-rose-950 dark:text-rose-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-sm transition-all';
       cardEl.innerHTML = `
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-rose-600 text-white font-black text-base flex items-center justify-center shadow-xs flex-shrink-0">
@@ -855,16 +855,16 @@ window.ProtecOnboarding = {
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="text-sm font-black text-rose-900" id="step2-city-label">${this.placementData.city}</span>
-              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-200 text-rose-900 border border-rose-300">
+              <span class="text-sm font-black text-rose-900 dark:text-rose-100" id="step2-city-label">${this.placementData.city}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-900/80 dark:text-rose-200 dark:border-rose-500 shadow-2xs">
                 ⛔ Non Conforme
               </span>
             </div>
-            <div class="text-[11px] text-rose-800 font-bold mt-0.5">
+            <div class="text-[11px] text-rose-800 dark:text-rose-300 font-bold mt-0.5">
               ${validation.message}
             </div>
-            <div class="text-[10px] text-rose-600 mt-0.5">
-              Département ${this.deptCode} • <span class="font-mono" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span> (Cliquez sur une zone libre dans le département)
+            <div class="text-[10px] text-rose-600 dark:text-rose-400 mt-0.5">
+              Département <strong class="text-slate-900 dark:text-white">${this.deptCode}</strong> • <span class="font-mono text-slate-500 dark:text-slate-400" id="step2-coords-label">${this.placementData.lat.toFixed(4)}, ${this.placementData.lng.toFixed(4)}</span> (Cliquez sur une zone libre dans le département)
             </div>
           </div>
         </div>
@@ -872,7 +872,7 @@ window.ProtecOnboarding = {
         <button 
           type="button" 
           onclick="window.ProtecOnboarding.resetMapPosition()"
-          class="px-3 py-1.5 rounded-xl bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
+          class="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-rose-300 dark:border-rose-700 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-800 dark:text-rose-200 font-bold text-xs transition cursor-pointer shadow-2xs whitespace-nowrap self-end sm:self-auto">
           🎯 Recentrer
         </button>
       `;
