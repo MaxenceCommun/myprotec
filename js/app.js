@@ -14797,15 +14797,9 @@ class ProtecGame {
         this.pinnedMissionIds.unshift(missionId);
       }
       if (mission) mission.isPinned = true;
-      if (typeof this.showToast === 'function') {
-        this.showToast('Raccourci épinglé', `« ${mission?.title || 'Mission'} » a été mise en raccourci sur la carte.`, 'blue');
-      }
     } else {
       this.pinnedMissionIds = this.pinnedMissionIds.filter(id => id !== missionId);
       if (mission) mission.isPinned = false;
-      if (typeof this.showToast === 'function') {
-        this.showToast('Raccourci retiré', `« ${mission?.title || 'Mission'} » a été retirée des raccourcis.`, 'slate');
-      }
     }
 
     try {
