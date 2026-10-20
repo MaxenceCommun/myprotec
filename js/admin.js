@@ -166,6 +166,15 @@ window.ProtecAdmin = {
       if (rstTab) rstTab.classList.remove('hidden');
     }
 
+    const debugToggleBtn = document.getElementById('admin-debug-toggle-btn');
+    if (debugToggleBtn) {
+      debugToggleBtn.className = `px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${this.isDebugModeActive() ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-md ring-2 ring-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'}`;
+      debugToggleBtn.innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full ${this.isDebugModeActive() ? 'bg-slate-950 animate-ping' : 'bg-slate-400'}"></span>
+        <span>Mode Debug (Données Cachées) : <strong>${this.isDebugModeActive() ? 'ACTIVÉ ✓' : 'DÉSACTIVÉ'}</strong></span>
+      `;
+    }
+
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     if (window.lucide) window.lucide.createIcons();
@@ -305,6 +314,8 @@ window.ProtecAdmin = {
       this.loadReferralsData();
     } else if (tab === 'balancing') {
       this.renderBalancingView();
+    } else if (tab === 'debug') {
+      this.renderDebugDashboard();
     }
   },
 
@@ -4191,13 +4202,14 @@ window.ProtecAdmin = {
             </div>
           </div>
           <div class="flex items-center gap-2">
-            <button id="admin-debug-toggle-btn" onclick="window.ProtecAdmin.toggleDebugMode()" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ">
-              <span class="w-2.5 h-2.5 rounded-full "></span>
-              <span>Mode Debug (Données Cachées) : <strong></strong></span>
+            <button id="admin-debug-toggle-btn" onclick="window.ProtecAdmin.toggleDebugMode()" class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${this.isDebugModeActive() ? 'bg-amber-400 text-slate-950 border-amber-500 shadow-md ring-2 ring-amber-300' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'}">
+              <span class="w-2.5 h-2.5 rounded-full ${this.isDebugModeActive() ? 'bg-slate-950 animate-ping' : 'bg-slate-400'}"></span>
+              <span>Mode Debug (Données Cachées) : <strong>${this.isDebugModeActive() ? 'ACTIVÉ ✓' : 'DÉSACTIVÉ'}</strong></span>
             </button>
             <button onclick="window.ProtecAdmin.closeAdminModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
-            <i data-lucide="x" class="w-4 h-4"></i>
-          </button>
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
         </div>
 
         <!-- 4 Cartes de Statistiques -->
@@ -4257,6 +4269,9 @@ window.ProtecAdmin = {
           </button>
           <button id="admin-tab-balancing-btn" onclick="window.ProtecAdmin.switchTab('balancing')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer" title="Gestion des probabilités et variables d'équilibrage du jeu">
             ⚙️ Équilibrage Gameplay
+          </button>
+          <button id="admin-tab-debug-btn" onclick="window.ProtecAdmin.switchTab('debug')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition flex items-center gap-1.5 cursor-pointer" title="Afficher les données cachées et diagnostics du jeu">
+            🔍 Données Cachées (Debug)
           </button>
           <button id="admin-tab-reset-btn" onclick="window.ProtecAdmin.switchTab('reset')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition flex items-center gap-1.5 cursor-pointer ml-auto" title="Réinitialiser l'ensemble du jeu, des comptes et des données">
             💣 Réinitialisation Complète
@@ -5198,6 +5213,9 @@ window.ProtecAdmin = {
             </div>
           </div>
         </div>
+
+        <!-- Vue 13 : Données Cachées (Debug) -->
+        <div id="admin-view-debug" class="hidden flex-col flex-1 min-h-0 overflow-y-auto pr-1 space-y-4"></div>
 
       </div>
     `;
