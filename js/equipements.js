@@ -43,7 +43,13 @@ window.ProtecEquipements = {
     'images/equipements/tenue_usar.png',
     'images/equipements/tenue_f1.png',
     'images/equipements/prise_parametres.png',
-    'images/equipements/schiller.png'
+    'images/equipements/schiller.png',
+    'images/equipements/lit_picot.png',
+    'images/equipements/lot_ravitaillement.png',
+    'images/equipements/lot_cai.png',
+    'images/equipements/rangers1.png',
+    'images/equipements/rangers2.png',
+    'images/equipements/rangers3.png',
   ]),
 
   hasRealImage(path) {
