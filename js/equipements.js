@@ -50,6 +50,8 @@ window.ProtecEquipements = {
     'images/equipements/rangers1.png',
     'images/equipements/rangers2.png',
     'images/equipements/rangers3.png',
+    'images/equipements/telephone_garde.png',
+    'images/equipements/phones.png',
   ]),
 
   hasRealImage(path) {
@@ -656,6 +658,17 @@ window.ProtecEquipements = {
       bonus: '+15% de rapidité sur les interventions et navigation fluide sur le secteur.'
     },
     {
+      id: 'telephone_garde',
+      name: 'Téléphone de service',
+      lucideIcon: 'smartphone',
+      image: 'images/equipements/telephone_garde.png',
+      price: 190,
+      badge: 'Garde & DPS',
+      badgeColor: 'bg-blue-100 text-pc-blue border-blue-200',
+      desc: 'Smartphone de service évitant d\'utiliser les téléphones personnels des secouristes.',
+      bonus: '+8 Moral & Préservation de la vie privée des équipiers sur chaque mission et garde.'
+    },
+    {
       id: 'phones',
       name: 'Téléphones d’astreinte',
       lucideIcon: 'phone',
@@ -714,7 +727,7 @@ window.ProtecEquipements = {
     }
     // Rétrocompatibilité lots et équipements
     const allKeys = [
-      'radios', 'tablettes', 'phones', 'pcs', 'fauteuils', 'cafe',
+      'radios', 'tablettes', 'telephone_garde', 'phones', 'pcs', 'fauteuils', 'cafe',
       'lot_secours_a', 'lot_secours_b', 'lot_secours_c',
       'lot_tronconnage', 'lot_pompage', 'lot_eclairage', 'lot_bachage',
       'lot_hebergement', 'lot_ravitaillement', 'lot_soutien_psy',

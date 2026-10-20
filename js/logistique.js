@@ -241,6 +241,8 @@ window.ProtecLogistique = {
     'images/equipements/rangers1.png',
     'images/equipements/rangers2.png',
     'images/equipements/rangers3.png',
+    'images/equipements/telephone_garde.png',
+    'images/equipements/phones.png',
   ]),
 
   hasRealImage(path) {
@@ -607,6 +609,19 @@ window.ProtecLogistique = {
     },
 
     // --- 6. TRANSMISSIONS & RADIO ---
+    {
+      id: 'telephone_garde',
+      category: 'transmissions',
+      name: 'Téléphone de service',
+      lucideIcon: 'smartphone',
+      image: 'images/equipements/telephone_garde.png',
+      price: 190,
+      unit: 'smartphone durci',
+      badge: 'Garde & DPS',
+      badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
+      desc: 'Smartphone de service évitant d\'utiliser les téléphones personnels des secouristes.',
+      usage: 'Préserve la vie privée et les forfaits des bénévoles lors des gardes et DPS (+8 moral).'
+    },
     {
       id: 'radio_antares',
       category: 'transmissions',
@@ -1159,7 +1174,7 @@ window.ProtecLogistique = {
           Object.entries(d.items || {}).forEach(([itemId, qty]) => {
             const targetId = (itemId === 'stock_materiels_ps') ? 'caisse_rearmement' : itemId;
             
-            // Déballage spécial des packs radios
+            // Déballage spécial des packs radios & téléphones
             if (itemId.startsWith('pack_radio_')) {
               const parts = itemId.split('_');
               const techKey = parts[2]; // analogique, lte, hybride
@@ -1168,8 +1183,21 @@ window.ProtecLogistique = {
               const totalRadios = countPerPack * qty;
               const stockKey = `radio_${techKey}`;
               station.stock[stockKey] = (station.stock[stockKey] || 0) + totalRadios;
+            } else if (itemId.startsWith('pack_phone_') || itemId.startsWith('pack_telephone_')) {
+              const packItem = (d.itemsSummary || []).find(it => it.id === itemId);
+              const countPerPack = packItem?.phoneCount || (itemId.includes('_binome') ? 2 : (itemId.includes('_section') ? 5 : (itemId.includes('_flotte') ? 10 : 1)));
+              const totalPhones = countPerPack * qty;
+              station.stock['telephone_garde'] = (station.stock['telephone_garde'] || 0) + totalPhones;
+              if (!game.workplaceEquipment) game.workplaceEquipment = {};
+              game.workplaceEquipment['telephone_garde'] = (game.workplaceEquipment['telephone_garde'] || 0) + totalPhones;
+              game.workplaceEquipment['phones'] = (game.workplaceEquipment['phones'] || 0) + totalPhones;
             } else {
               station.stock[targetId] = (station.stock[targetId] || 0) + qty;
+              if (targetId === 'telephone_garde' || targetId === 'phones') {
+                if (!game.workplaceEquipment) game.workplaceEquipment = {};
+                game.workplaceEquipment['telephone_garde'] = (game.workplaceEquipment['telephone_garde'] || 0) + qty;
+                game.workplaceEquipment['phones'] = (game.workplaceEquipment['phones'] || 0) + qty;
+              }
             }
 
             if (targetId === 'caisse_rearmement') {
@@ -2139,6 +2167,17 @@ window.ProtecLogistique = {
   getStockItemInfo(id) {
     let item = this.CATALOG.find(i => i.id === id);
     if (item) return item;
+
+    if (id === 'telephone_garde' || id === 'phones') {
+      return {
+        id: 'telephone_garde',
+        name: 'Téléphone de service',
+        price: 190,
+        badge: 'Garde & DPS',
+        image: 'images/equipements/telephone_garde.png',
+        lucideIcon: 'smartphone'
+      };
+    }
     
     if (id === 'radio_analogique') {
       return {

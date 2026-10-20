@@ -67,6 +67,7 @@ window.ProtecBoutiques = {
       desc: 'Équipements radio analogiques, LTE et hybrides pour la communication des équipes.',
       rayons: [
         { id: 'all', label: 'Toutes les transmissions', icon: 'layout-grid' },
+        { id: 'telephonie', label: 'Téléphonie de Service (Garde & DPS)', icon: 'smartphone' },
         { id: 'analogique', label: 'Postes Analogiques VHF/UHF', icon: 'radio' },
         { id: 'lte', label: 'Réseaux Numériques LTE (4G/5G)', icon: 'smartphone' },
         { id: 'hybride', label: 'Terminaux Hybrides Bi-Mode', icon: 'shield-alert' },
@@ -531,6 +532,34 @@ window.ProtecBoutiques = {
             radioTech: tKey,
             radioCount: p.count
           });
+        });
+      });
+
+      // Téléphones de service (Garde, DPS et Astreinte)
+      const phonePacks = [
+        { id: 'unit', name: 'Téléphone de service (Unité)', count: 1, discountPct: 0, packaging: 'Boîte unitaire', desc: 'Smartphone durci pour secouriste en garde ou DPS.' },
+        { id: 'binome', name: 'Pack Binôme (2 Téléphones)', count: 2, discountPct: 5, packaging: 'Pack duo', desc: '2 smartphones de service pour équiper un binôme complet en mission.' },
+        { id: 'section', name: 'Pack Section DPS (5 Téléphones)', count: 5, discountPct: 10, packaging: 'Mallette 5 unités', desc: '5 smartphones de service pour doter les chefs de poste et équipiers de DPS.' },
+        { id: 'flotte', name: 'Flotte Antenne (10 Téléphones)', count: 10, discountPct: 15, packaging: 'Malle 10 unités', desc: '10 smartphones de service pour couvrir toutes les gardes et missions de l\'antenne.' }
+      ];
+      const basePhonePrice = 190;
+      phonePacks.forEach(p => {
+        const rawPrice = Math.round(basePhonePrice * p.count * (1 - p.discountPct / 100));
+        const finalPrice = Math.round(rawPrice * shop.priceMultiplier);
+        list.push({
+          id: p.id === 'unit' ? 'telephone_garde' : `pack_phone_${p.id}`,
+          shopId: shop.id,
+          category: 'telephonie',
+          name: p.name,
+          price: finalPrice,
+          unit: p.packaging,
+          badge: `${p.count} Téléphone${p.count > 1 ? 's' : ''} ${p.discountPct > 0 ? `(-${p.discountPct}%)` : ''}`,
+          badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
+          image: 'images/equipements/telephone_garde.png',
+          lucideIcon: 'smartphone',
+          desc: p.desc,
+          usage: `+${p.count} téléphone(s) de service au stock. Préserve vie privée et forfaits perso (+8 moral).`,
+          phoneCount: p.count
         });
       });
 

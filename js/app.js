@@ -11469,11 +11469,20 @@ class ProtecGame {
 
         this.resources.reputationScore = currentRep + repGain;
 
-        // Évaluation de la dotation en Moniteurs Multiparamétriques (confort et qualité de travail des secouristes)
+        // Évaluation de la dotation en Moniteurs Multiparamétriques
         const paramTier = (this.equipmentTiers && this.equipmentTiers.prise_parametres) || 1;
         const paramDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.prise_parametres?.tiers?.find(t => t.level === paramTier);
         const moraleGainMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('moraleGainMultiplier', 1.0) : 1.0;
-        const secouristeMoralBonus = Math.max(1, Math.round((6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0) + salarieQualityBonus) * moraleGainMult));
+
+        // Évaluation des téléphones de service (Garde, DPS et missions) :
+        // Évite aux bénévoles d'utiliser leur téléphone personnel et forfait perso, préserve la vie privée (+8 Moral)
+        const missionStation = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
+        const stockPhones = (missionStation?.stock?.telephone_garde || 0) + (missionStation?.stock?.phones || 0);
+        const workplacePhones = (this.workplaceEquipment?.telephone_garde || 0) + (this.workplaceEquipment?.phones || 0);
+        const hasServicePhone = (stockPhones > 0) || (workplacePhones > 0);
+        const phoneMoralBonus = hasServicePhone ? 8 : 0;
+
+        const secouristeMoralBonus = Math.max(1, Math.round((6 + (paramDef?.stats?.crewMoralBonus ? Math.round(paramDef.stats.crewMoralBonus * 0.7) : 0) + salarieQualityBonus + phoneMoralBonus) * moraleGainMult));
 
         // Distinction opérationnels vs photographes
         const photographes = crew.filter(v => mission.volunteerRoles?.[v.id] === 'photographe');
@@ -11483,9 +11492,15 @@ class ProtecGame {
         secouristesOp.forEach(v => {
           v.motivation = Math.min(100, (v.motivation || 75) + secouristeMoralBonus);
           v.humeur = Math.min(100, (v.humeur || 75) + secouristeMoralBonus);
+          if (v.moral !== undefined) {
+            v.moral = Math.min(100, (v.moral || 75) + secouristeMoralBonus);
+          }
           if (paramTier >= 2) {
             // Moins de fatigue physique et mentale grâce au multiparamétrique moderne
             v.energy = Math.min(100, (v.energy || 70) + 6);
+          }
+          if (hasServicePhone) {
+            v.phoneProtected = true;
           }
         });
 
