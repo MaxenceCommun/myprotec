@@ -890,7 +890,7 @@ window.ProtecNotifications = {
     }
 
     // D. SAMU 15 / Départs réflexes
-    if (title.includes('samu') || title.includes('15') || item.category === 'samu') {
+    if (title.includes('samu') || /\bsamu\b|\b15\b/.test(title) || item.category === 'samu') {
       const samuMission = (game.missions || []).find(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (samuMission) {
         return { type: 'mission', id: samuMission.id, label: 'Voir la sortie 15' };
@@ -899,7 +899,7 @@ window.ProtecNotifications = {
     }
 
     // E. SDIS 18 / Pompiers
-    if (title.includes('sdis') || title.includes('pompier') || title.includes('18') || item.category === 'sdis') {
+    if (title.includes('sdis') || title.includes('pompier') || /\bsdis\b|\b18\b/.test(title) || item.category === 'sdis') {
       const sdisMission = (game.missions || []).find(m => m.type === 'pompiers' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (sdisMission) {
         return { type: 'mission', id: sdisMission.id, label: 'Voir la garde 18' };
@@ -907,13 +907,18 @@ window.ProtecNotifications = {
       return { type: 'module', id: 'pompiers', label: 'Ouvrir le SDIS' };
     }
 
-    // F. Crise, NOVI, CUMP, Plan d'urgence
-    if (title.includes('crise') || title.includes('novi') || title.includes('cai') || title.includes('cump') || title.includes('catastrophe')) {
+    // F. Crise, NOVI, CUMP, Plan d'urgence (Attention : regex \bcai\b pour ne pas matcher "encaissée" !)
+    if (title.includes('crise') || title.includes('novi') || /\bcai\b/.test(title) || title.includes("centre d'accueil") || title.includes('cump') || title.includes('catastrophe')) {
       const crisisMission = (game.missions || []).find(m => (m.isCrisis || m.type === 'crise') && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (crisisMission) {
         return { type: 'mission', id: crisisMission.id, label: 'Voir l\'urgence' };
       }
       return { type: 'module', id: 'crise', label: 'Cellule de crise' };
+    }
+
+    // Dotations Quotidiennes, Récompenses & Défis
+    if (title.includes('dotation') || title.includes('récompense') || title.includes('recompense') || title.includes('connexion') || item.category === 'recompenses') {
+      return { type: 'module', id: 'recompenses', label: 'Récompenses' };
     }
 
     // G. SNCF / Réseau Ferré & Naufragés du rail
