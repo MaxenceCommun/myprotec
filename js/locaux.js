@@ -23,6 +23,34 @@
  */
 
 window.ProtecLocaux = {
+
+  // Barème réaliste des travaux : Durée réelle Artisans (heures réelles) vs Heures-Bénévoles
+  ROOM_WORK_SPECS: {
+    garage_remisage: {
+      lvl2: { artisanHours: 6, volunteerHours: 50 },
+      lvl3: { artisanHours: 12, volunteerHours: 100 }
+    },
+    sas_desinfection_pharmacie: {
+      lvl2: { artisanHours: 4, volunteerHours: 30 },
+      lvl3: { artisanHours: 8, volunteerHours: 60 }
+    },
+    salle_formation_psc1: {
+      lvl2: { artisanHours: 4, volunteerHours: 40 },
+      lvl3: { artisanHours: 8, volunteerHours: 80 }
+    },
+    foyer_vie_associative: {
+      lvl2: { artisanHours: 3, volunteerHours: 25 },
+      lvl3: { artisanHours: 6, volunteerHours: 50 }
+    },
+    bureau_pc_radio: {
+      lvl2: { artisanHours: 4, volunteerHours: 35 },
+      lvl3: { artisanHours: 8, volunteerHours: 70 }
+    },
+    isolation: {
+      lvl3: { artisanHours: 8, volunteerHours: 60 }
+    }
+  },
+
   dimensionMode: '2d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique 3D)
   editorTab: 'furniture', // 'furniture' | 'doors' | 'rooms' | 'expand'
   snapToGrid: true, // Aimant / Magnétisme à la grille (0.2m)
@@ -647,6 +675,489 @@ window.ProtecLocaux = {
   // Récupère ou initialise la structure de locaux d'une antenne
   
   // Initialisation et rétrocompatibilité modulaire des locaux de l'antenne
+  
+  // Récupère les specs de travaux pour une pièce et un niveau cible
+  getRoomWorkSpec(roomId, targetLevel) {
+    const spec = this.ROOM_WORK_SPECS[roomId];
+    if (!spec) return { artisanHours: 4, volunteerHours: 40 };
+    const lvlKey = 'lvl' + targetLevel;
+    return spec[lvlKey] || spec.lvl2 || { artisanHours: 4, volunteerHours: 40 };
+  },
+
+  // Rendu interactif du bloc d'action d'une pièce (Artisans vs Bénévoles)
+  renderRoomActionBlock(station, roomId, room, premises) {
+    if (!room) return '';
+    if (room.level >= 3) {
+      return `<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Aménagement Maximal Atteint (Niveau ${room.level}) ✓</div>`;
+    }
+
+    const targetLevel = (room.level || 1) + 1;
+    const spec = this.getRoomWorkSpec(roomId, targetLevel);
+
+    // 1. Chantier Artisans en cours
+    if (room.artisanWork && room.artisanWork.targetCompletionTime) {
+      const now = Date.now();
+      const remainingMs = Math.max(0, room.artisanWork.targetCompletionTime - now);
+      const totalMs = (room.artisanWork.targetCompletionTime - (room.artisanWork.startTime || (now - 1000))) || (spec.artisanHours * 3600000);
+      const pct = Math.min(100, Math.max(5, Math.round(((totalMs - remainingMs) / totalMs) * 100)));
+      
+      const totalSec = Math.floor(remainingMs / 1000);
+      const hours = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const timeStr = hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+
+      return `
+        <div class="p-3 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-indigo-900 space-y-2">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="flex items-center gap-1.5 text-indigo-700">
+              <i data-lucide="hard-hat" class="w-4 h-4"></i>
+              <span>Artisans en cours (Niv. ${targetLevel})</span>
+            </span>
+            <span class="mono-num text-[11px] font-extrabold text-indigo-800">Livraison dans ~${timeStr}</span>
+          </div>
+          <div class="w-full bg-indigo-200/70 rounded-full h-2 overflow-hidden shadow-inner">
+            <div class="bg-indigo-600 h-full rounded-full transition-all duration-500 animate-pulse" style="width: ${pct}%"></div>
+          </div>
+          <p class="text-[10px] text-indigo-600 font-semibold leading-tight">
+            Intervention en tâche de fond. La pièce reste opérationnelle au Niveau ${room.level} jusqu'à livraison.
+          </p>
+        </div>
+      `;
+    }
+
+    // 2. Chantier Bénévoles en cours (Jauge d'heures-bénévoles)
+    if (room.volunteerWork) {
+      const vw = room.volunteerWork;
+      const req = vw.requiredHours || spec.volunteerHours || 50;
+      const cur = vw.currentHours || 0;
+      const pct = Math.min(100, Math.round((cur / req) * 100));
+
+      const activeMissions = (window.game?.missions || []).filter(m => 
+        m.type === 'travaux' && 
+        m.roomKey === roomId && 
+        m.stationId === station.id && 
+        (m.status === 'planifie' || m.status === 'ongoing')
+      );
+
+      return `
+        <div class="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="flex items-center gap-1.5 text-amber-800">
+              <i data-lucide="hammer" class="w-4 h-4 text-amber-600"></i>
+              <span>Chantier Bénévoles (Niv. ${vw.targetLevel || targetLevel})</span>
+            </span>
+            <span class="mono-num text-[11px] font-extrabold text-amber-900">${cur} / ${req} h (${pct}%)</span>
+          </div>
+          <div class="w-full bg-amber-200/80 rounded-full h-2.5 overflow-hidden shadow-inner">
+            <div class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-amber-200/60">
+            <span class="text-[10.5px] font-bold text-amber-800 flex items-center gap-1">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+              <span>${activeMissions.length > 0 ? `${activeMissions.length} session(s) au planning` : 'Aucune session active'}</span>
+            </span>
+            <button onclick="window.ProtecLocaux.openPlanTravauxSessionModal(window.game, '${station.id}', '${roomId}')" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[10.5px] font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+              <span>Planifier une session travaux</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. Choix initial : Chantier Bénévoles vs Artisans
+    const matCost = room.volunteerMatCost || 750;
+    const craftCost = room.craftsmanCost || 2200;
+
+    return `
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+        <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', '${roomId}', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition flex items-center justify-center gap-1" title="Achat matériaux (${matCost} €) puis planification libre de sessions travaux">
+          <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
+          <span>Chantier (${matCost} €)</span>
+        </button>
+        <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', '${roomId}', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition flex items-center justify-center gap-1" title="Artisans du bâtiment (${craftCost} € • ${spec.artisanHours}h réelles)">
+          <i data-lucide="hard-hat" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>Artisans (${craftCost} €)</span>
+        </button>
+      </div>
+    `;
+  },
+
+  // Rendu interactif du bloc isolation
+  renderInsulationActionBlock(station, premises) {
+    if (premises.isolationLevel >= 3) {
+      return '<span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Isolé BBC ✓</span>';
+    }
+
+    if (premises.isolationArtisanWork && premises.isolationArtisanWork.targetCompletionTime) {
+      const now = Date.now();
+      const remainingMs = Math.max(0, premises.isolationArtisanWork.targetCompletionTime - now);
+      const hours = Math.floor(remainingMs / 3600000);
+      const mins = Math.floor((remainingMs % 3600000) / 60000);
+      const timeStr = hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+      return `<span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 animate-pulse">Artisans BBC (reste ~${timeStr})</span>`;
+    }
+
+    if (premises.isolationVolunteerWork) {
+      const vw = premises.isolationVolunteerWork;
+      const cur = vw.currentHours || 0;
+      const req = vw.requiredHours || 60;
+      return `
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300">${cur}/${req}h BBC</span>
+          <button onclick="window.ProtecLocaux.openPlanTravauxSessionModal(window.game, '${station.id}', 'isolation')" class="px-2 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] transition">
+            + Session
+          </button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="flex gap-1.5">
+        <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'chantier_benevole')" class="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-black text-[10px] transition" title="Chantier participatif (1 200 € matériaux)">
+          Chantier (1,2k€)
+        </button>
+        <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'artisan')" class="px-2 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] transition" title="Entreprise isolation (3 500 € • 8h réelles)">
+          Artisans (3,5k€)
+        </button>
+      </div>
+    `;
+  },
+
+  // Boîte de dialogue & ouverture de la modale de planification de session travaux
+  async openPlanTravauxSessionModal(game, stationId, roomId) {
+    const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+    
+    let targetName = 'Locaux';
+    let currentHours = 0;
+    let requiredHours = 50;
+
+    if (roomId === 'isolation') {
+      targetName = 'Isolation Thermique BBC';
+      currentHours = premises.isolationVolunteerWork?.currentHours || 0;
+      requiredHours = premises.isolationVolunteerWork?.requiredHours || 60;
+    } else {
+      const room = premises.rooms?.[roomId];
+      if (!room || !room.volunteerWork) {
+        game.showToast('Aucun Projet Chantier', 'Veuillez d\'abord lancer le chantier en achetant les matériaux.', 'blue');
+        return;
+      }
+      targetName = room.name;
+      currentHours = room.volunteerWork.currentHours || 0;
+      requiredHours = room.volunteerWork.requiredHours || 50;
+    }
+
+    const curDay = game.clock?.day || 1;
+    const curMonth = game.clock?.month || 0;
+    const curYear = game.clock?.year || 2026;
+    const curHour = game.clock?.hour || 10;
+
+    // Supprimer ancienne modale si existante
+    const existingModal = document.getElementById('plan-travaux-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'plan-travaux-modal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in select-none';
+    
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-white/80 space-y-5 animate-scale-up">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b border-slate-200/80 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-700 flex items-center justify-center text-xl font-black">
+              🔨
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Planifier une Session Travaux</h3>
+              <p class="text-xs text-slate-500 font-semibold">${targetName} • Progression : ${currentHours} / ${requiredHours} h</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('plan-travaux-modal').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Jauge d'avancement actuelle -->
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 space-y-1.5">
+          <div class="flex justify-between text-xs font-black">
+            <span>Avancement global du chantier</span>
+            <span>${currentHours} / ${requiredHours} heures-bénévoles requises</span>
+          </div>
+          <div class="w-full bg-amber-200 rounded-full h-2 overflow-hidden shadow-inner">
+            <div class="bg-amber-600 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((currentHours / requiredHours) * 100))}%;"></div>
+          </div>
+        </div>
+
+        <!-- Formulaire de planification -->
+        <div class="space-y-4 text-xs font-bold text-slate-700">
+          
+          <!-- Date -->
+          <div>
+            <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Jour de la session</label>
+            <select id="pt-day-choice" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <option value="today">Aujourd'hui (Jour ${curDay}/${curMonth + 1}/${curYear})</option>
+              <option value="tomorrow" selected>Demain (Jour ${curDay + 1}/${curMonth + 1}/${curYear})</option>
+              <option value="weekend">Ce Samedi (Travaux associatifs du week-end)</option>
+              <option value="next_weekend">Samedi prochain (Grand chantier d'antenne)</option>
+            </select>
+          </div>
+
+          <!-- Horaires Début & Fin -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Heure de début</label>
+              <select id="pt-start-hour" onchange="window.ProtecLocaux.updateTravauxDurationHelp()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="8">08h00</option>
+                <option value="9" selected>09h00</option>
+                <option value="10">10h00</option>
+                <option value="13">13h00</option>
+                <option value="14">14h00</option>
+                <option value="15">15h00</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Heure de fin</label>
+              <select id="pt-end-hour" onchange="window.ProtecLocaux.updateTravauxDurationHelp()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="11">11h00</option>
+                <option value="12">12h00</option>
+                <option value="13" selected>13h00</option>
+                <option value="17">17h00</option>
+                <option value="18">18h00</option>
+                <option value="19">19h00</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Indicateur dynamique de réalisme / conseil durée -->
+          <div id="pt-duration-advisor" class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-emerald-600 mt-0.5 shrink-0"></i>
+            <div class="text-[11px] font-semibold leading-relaxed" id="pt-advisor-text">
+              Durée prévue : <strong>4 heures</strong>. Format idéal pour mobiliser les bénévoles le week-end (taux d'inscription optimal).
+            </div>
+          </div>
+
+          <!-- Plafond de bénévoles souhaité -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black">Plafond maximal de bénévoles</label>
+              <span class="text-[10px] text-slate-400 font-semibold">Le joueur choisit librement le plafond</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <input id="pt-max-vols" type="number" min="2" max="15" value="5" class="w-24 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-extrabold text-sm text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              <span class="text-[11px] text-slate-600 font-semibold leading-tight">
+                bénévoles max sur ce créneau (progression apportée = bénévoles présents × durée).
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="pt-3 border-t border-slate-200/80 flex items-center justify-end gap-2.5">
+          <button onclick="document.getElementById('plan-travaux-modal').remove()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            Annuler
+          </button>
+          <button onclick="window.ProtecLocaux.confirmPlanTravauxSession(window.game, '${station.id}', '${roomId}')" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Valider et Publier au Planning</span>
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (window.lucide) window.lucide.createIcons();
+    this.updateTravauxDurationHelp();
+  },
+
+  // Calcul interactif de la durée de session travaux et affichage du conseil
+  updateTravauxDurationHelp() {
+    const startEl = document.getElementById('pt-start-hour');
+    const endEl = document.getElementById('pt-end-hour');
+    const advisorEl = document.getElementById('pt-duration-advisor');
+    const textEl = document.getElementById('pt-advisor-text');
+    if (!startEl || !endEl || !advisorEl || !textEl) return;
+
+    let start = parseInt(startEl.value, 10) || 9;
+    let end = parseInt(endEl.value, 10) || 13;
+    if (end <= start) end = start + 1;
+
+    const duration = end - start;
+
+    if (duration <= 4) {
+      advisorEl.className = 'p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. Format idéal pour mobiliser les bénévoles (taux d'inscription optimal). Chaque bénévole présent apportera ${duration}h à la jauge !`;
+    } else if (duration <= 6) {
+      advisorEl.className = 'p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. Créneau long : mobilisation modérée des secouristes (prévoyez une collation pour le moral).`;
+    } else {
+      advisorEl.className = 'p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. ⚠️ <em>Attention : créneau trop long !</em> Les bénévoles ont des contraintes et hésiteront fortement à s'inscrire sur une journée continue non-stop.`;
+    }
+  },
+
+  // Confirmation et injection de la mission dans le planning
+  confirmPlanTravauxSession(game, stationId, roomId) {
+    const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+
+    let targetName = 'Locaux';
+    let targetLevel = 2;
+    let targetWorkObj = null;
+
+    if (roomId === 'isolation') {
+      targetName = 'Isolation BBC';
+      targetLevel = 3;
+      targetWorkObj = premises.isolationVolunteerWork;
+    } else {
+      const room = premises.rooms?.[roomId];
+      if (!room || !room.volunteerWork) return;
+      targetName = room.name;
+      targetLevel = room.volunteerWork.targetLevel;
+      targetWorkObj = room.volunteerWork;
+    }
+
+    const dayChoice = document.getElementById('pt-day-choice')?.value || 'tomorrow';
+    const startHour = parseInt(document.getElementById('pt-start-hour')?.value, 10) || 9;
+    let endHour = parseInt(document.getElementById('pt-end-hour')?.value, 10) || 13;
+    if (endHour <= startHour) endHour = startHour + 1;
+    const durationHours = endHour - startHour;
+    const maxVols = Math.max(2, parseInt(document.getElementById('pt-max-vols')?.value, 10) || 4);
+
+    let targetDay = game.clock?.day || 1;
+    let targetMonth = game.clock?.month || 0;
+    let targetYear = game.clock?.year || 2026;
+
+    if (dayChoice === 'tomorrow') {
+      targetDay += 1;
+    } else if (dayChoice === 'weekend') {
+      targetDay += 3;
+    } else if (dayChoice === 'next_weekend') {
+      targetDay += 7;
+    }
+
+    const mission = {
+      id: 'chantier-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      type: 'travaux',
+      subtype: 'chantier_locaux',
+      title: `Chantier Participatif : ${targetName}`,
+      desc: `Travaux d'aménagement associatif pour ${targetName} (Niveau ${targetLevel}). Les bénévoles présents apportent de l'avancement et renforcent la cohésion d'antenne.`,
+      roomKey: roomId,
+      stationId: station.id,
+      requiredVolunteers: maxVols,
+      registeredVolunteers: [],
+      plannedDate: { year: targetYear, month: targetMonth, day: targetDay, hour: startHour, minute: 0 },
+      eventDate: { year: targetYear, month: targetMonth, day: targetDay, hour: startHour, minute: 0 },
+      startHour: startHour,
+      endHour: endHour,
+      durationHours: durationHours,
+      durationSeconds: durationHours * 3600,
+      status: 'planifie',
+      address: station.address || `${station.city || 'Nancy'} Centre`,
+      location: { lat: station.lat || 48.692, lng: station.lng || 6.184 },
+      targetRoomName: targetName,
+      targetLevel: targetLevel,
+      pole: 'dps',
+      poleLabel: 'Chantier Bénévoles',
+      badgeBg: 'bg-amber-100 text-amber-900 border border-amber-300',
+      publishedAt: Date.now()
+    };
+
+    if (targetWorkObj) {
+      targetWorkObj.sessionsPlanned = targetWorkObj.sessionsPlanned || [];
+      targetWorkObj.sessionsPlanned.push(mission.id);
+    }
+
+    game.missions.push(mission);
+    game.saveGame();
+    game.updateStatsUI();
+
+    const modal = document.getElementById('plan-travaux-modal');
+    if (modal) modal.remove();
+
+    game.showToast(
+      'Session Travaux Planifiée 📋',
+      `« ${mission.title} » est enregistrée au planning (${durationHours}h, max ${maxVols} bénévoles). Les secouristes vont s'inscrire selon leurs disponibilités !`,
+      'green'
+    );
+
+    this.renderModal(game);
+  },
+
+  // Appelée lorsqu'une mission de travaux se termine
+  onTravauxMissionCompleted(game, mission) {
+    if (!mission || mission.type !== 'travaux') return;
+    const station = game.stations.find(s => s.id === mission.stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+
+    const vols = (mission.registeredVolunteers || [])
+      .map(id => (game.volunteers || []).find(v => v.id === id))
+      .filter(Boolean);
+
+    const durationHours = mission.durationHours || Math.max(1, Math.round((mission.durationSeconds || 10800) / 3600));
+    const hoursGained = vols.length * durationHours;
+
+    // Récompenses et fatigue aux bénévoles
+    vols.forEach(v => {
+      v.moral = Math.min(100, (v.moral || 70) + 25);
+      v.motivation = v.moral;
+      v.humeur = v.moral;
+      v.exp = (v.exp || 0) + 20;
+      v.fatigue = Math.min(100, (v.fatigue || 20) + (durationHours * 3));
+      v.energy = Math.max(0, 100 - v.fatigue);
+      v.status = 'dispo';
+    });
+
+    if (mission.roomKey === 'isolation') {
+      const vw = premises.isolationVolunteerWork;
+      if (vw) {
+        vw.currentHours = (vw.currentHours || 0) + hoursGained;
+        if (vw.currentHours >= (vw.requiredHours || 60)) {
+          premises.isolationLevel = 3;
+          delete premises.isolationVolunteerWork;
+          game.showToast('🎉 Isolation BBC Achevée !', `Chantier participatif terminé avec succès par vos bénévoles ! Bâtiment isolé standard BBC.`, 'green');
+        } else {
+          game.showToast('🔨 Session Travaux Clôturée', `+${hoursGained}h apportées par vos ${vols.length} bénévoles (${vw.currentHours}/${vw.requiredHours}h). Planifiez la prochaine session !`, 'blue');
+        }
+      }
+      return;
+    }
+
+    const room = premises.rooms?.[mission.roomKey];
+    if (room && room.volunteerWork) {
+      const vw = room.volunteerWork;
+      vw.currentHours = (vw.currentHours || 0) + hoursGained;
+      const req = vw.requiredHours || 50;
+
+      if (vw.currentHours >= req) {
+        const newLvl = vw.targetLevel || (room.level + 1);
+        room.level = newLvl;
+        room.state = 100;
+        if (mission.roomKey === 'garage_remisage') {
+          room.capacity = newLvl === 2 ? 4 : 8;
+          station.rooms = station.rooms || {};
+          station.rooms.garage = newLvl;
+          station.rooms.garage_remisage = room;
+          station.garageCapacity = room.capacity;
+        } else if (mission.roomKey === 'salle_formation_psc1') {
+          room.capacity = newLvl === 2 ? 20 : 30;
+        }
+        delete room.volunteerWork;
+        game.showToast('🎉 Chantier Participatif Réussi !', `Grâce à la mobilisation collective (${vols.length} bénévoles sur la dernière session), ${room.name} est officiellement inauguré au Niveau ${room.level} !`, 'green');
+      } else {
+        const pct = Math.round((vw.currentHours / req) * 100);
+        game.showToast('🔨 Session Travaux Clôturée', `+${hoursGained}h d'avancement apportées par vos ${vols.length} bénévoles (${vw.currentHours}/${req}h, ${pct}%). Planifiez la prochaine session !`, 'blue');
+      }
+    }
+  },
+
   ensureModularPremises(station, game) {
     if (!station) return null;
     if (!station.premises) {
@@ -805,7 +1316,7 @@ window.ProtecLocaux = {
   },
 
   // Amélioration d'une pièce : Artisans vs Chantier Bénévoles
-  upgradeRoom(game, stationId, roomId, mode) {
+  async upgradeRoom(game, stationId, roomId, mode) {
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
     if (!station) return;
     const premises = this.ensureModularPremises(station, game);
@@ -817,32 +1328,41 @@ window.ProtecLocaux = {
       return;
     }
 
+    const targetLevel = (room.level || 1) + 1;
+    const spec = this.getRoomWorkSpec(roomId, targetLevel);
+
     if (mode === 'artisan') {
       const cost = room.craftsmanCost || 2000;
       if (game.resources.money < cost) {
         game.showToast('Trésorerie Insuffisante', 'L\'intervention des artisans requiert ' + cost + ' €.', 'orange');
         return;
       }
+
+      const confirmed = await window.ProtecDialog.confirm(
+        `DEVIS TRAVAUX ARTISANS DU BÂTIMENT :\n\n• Pièce ciblée : ${room.name} (Niveau ${targetLevel})\n• Coût de l'intervention clé en main : ${cost} €\n• Durée des travaux : ${spec.artisanHours} heures réelles (en tâche de fond)\n\nPendant toute la durée du chantier, la pièce reste utilisable à son niveau actuel (Niveau ${room.level}).\n\nConfirmez-vous le lancement des travaux par les artisans ?`,
+        'Intervention Artisans du Bâtiment',
+        { confirmText: `Engager les Artisans (-${cost} €)`, cancelText: 'Annuler' }
+      );
+      if (!confirmed) return;
+
       game.resources.money -= cost;
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, -cost, 'Travaux d\'artisans : ' + room.name + ' Niveau ' + (room.level + 1), 'locaux');
+        window.ProtecFinances.recordTransaction(game, -cost, `Travaux Artisans : ${room.name} (Niv. ${targetLevel})`, 'locaux');
       }
 
-      room.level += 1;
-      room.state = 100;
-      if (roomId === 'garage_remisage') {
-        room.capacity = room.level === 2 ? 4 : 8;
-        station.rooms = station.rooms || {};
-        station.rooms.garage = room.level;
-        station.rooms.garage_remisage = room;
-        station.garageCapacity = room.capacity;
-      } else if (roomId === 'salle_formation_psc1') {
-        room.capacity = room.level === 2 ? 20 : 30;
-      }
-      room.craftsmanCost = Math.round(room.craftsmanCost * 1.5);
-      room.volunteerMatCost = Math.round(room.volunteerMatCost * 1.5);
+      room.artisanWork = {
+        targetLevel: targetLevel,
+        cost: cost,
+        startTime: Date.now(),
+        targetCompletionTime: Date.now() + (spec.artisanHours * 3600000),
+        durationHours: spec.artisanHours
+      };
 
-      game.showToast('Travaux Artisans Terminés 👷✓', room.name + ' a été agrandi et modernisé au Niveau ' + room.level + ' !', 'green');
+      game.showToast(
+        'Artisans Déployés 👷',
+        `Le chantier pour ${room.name} est lancé ! Livraison prévue dans ${spec.artisanHours} heures réelles.`,
+        'blue'
+      );
     } else if (mode === 'chantier_benevole') {
       const matCost = room.volunteerMatCost || 700;
       if (game.resources.money < matCost) {
@@ -850,52 +1370,37 @@ window.ProtecLocaux = {
         return;
       }
 
-      const reqCount = room.reqVolunteers || 3;
-      const availableVols = (game.volunteers || []).filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && (!v.fatigue || v.fatigue < 80));
-      if (availableVols.length < reqCount) {
-        game.showToast(
-          'Effectif Insuffisant',
-          'Le chantier participatif requiert au moins ' + reqCount + ' bénévoles disponibles et en forme (' + availableVols.length + '/' + reqCount + ' prêts).',
-          'orange'
-        );
-        return;
-      }
+      const confirmed = await window.ProtecDialog.confirm(
+        `CHANTIER PARTICIPATIF DES BÉNÉVOLES :\n\n• Pièce ciblée : ${room.name} (Niveau ${targetLevel})\n• Coût d'achat des matériaux : ${matCost} €\n• Effort requis : ${spec.volunteerHours} heures-bénévoles\n\nVous pourrez ensuite planifier des sessions de travaux au planning selon vos créneaux souhaités. Les bénévoles s'inscriront selon leurs disponibilités.\n\nConfirmez-vous l'achat des matériaux pour démarrer le chantier ?`,
+        'Lancement Chantier Bénévoles',
+        { confirmText: `Acheter les Matériaux (-${matCost} €)`, cancelText: 'Annuler' }
+      );
+      if (!confirmed) return;
 
       game.resources.money -= matCost;
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, -matCost, 'Achat matériaux - Chantier Bénévoles : ' + room.name, 'locaux');
+        window.ProtecFinances.recordTransaction(game, -matCost, `Achat matériaux chantier : ${room.name} (Niv. ${targetLevel})`, 'locaux');
       }
 
-      // Mobilisation des bénévoles
-      const mobilised = availableVols.slice(0, reqCount);
-      mobilised.forEach(v => {
-        v.fatigue = Math.min(100, (v.fatigue || 20) + 16);
-        v.energy = Math.max(0, 100 - v.fatigue);
-        v.moral = Math.min(100, (v.moral || 70) + 25); // Boost de cohésion collective !
-        v.motivation = v.moral;
-        v.humeur = v.moral;
-        v.exp = (v.exp || 0) + 20;
-      });
-
-      room.level += 1;
-      room.state = 100;
-      if (roomId === 'garage_remisage') {
-        room.capacity = room.level === 2 ? 4 : 8;
-        station.rooms = station.rooms || {};
-        station.rooms.garage = room.level;
-        station.rooms.garage_remisage = room;
-        station.garageCapacity = room.capacity;
-      } else if (roomId === 'salle_formation_psc1') {
-        room.capacity = room.level === 2 ? 20 : 30;
-      }
-      room.craftsmanCost = Math.round(room.craftsmanCost * 1.5);
-      room.volunteerMatCost = Math.round(room.volunteerMatCost * 1.5);
+      room.volunteerWork = {
+        targetLevel: targetLevel,
+        materialCostPaid: matCost,
+        requiredHours: spec.volunteerHours,
+        currentHours: 0,
+        sessionsPlanned: []
+      };
 
       game.showToast(
-        '🎉 Week-End Travaux Réussi !',
-        room.name + ' monté au Niveau ' + room.level + ' par ' + mobilised.map(v => v.name).join(', ') + ' ! Coût réduit (' + matCost + ' €), cohésion d\'équipe renforcée (+25 moral) !',
+        'Matériaux Livrés 🔨',
+        `Les matériaux sont arrivés au local ! Vous pouvez maintenant planifier vos sessions de travaux.`,
         'green'
       );
+
+      this.renderModal(game);
+      setTimeout(() => {
+        this.openPlanTravauxSessionModal(game, stationId, roomId);
+      }, 350);
+      return;
     }
 
     game.updateStatsUI();
@@ -903,7 +1408,6 @@ window.ProtecLocaux = {
     this.renderModal(game);
   },
 
-  // Installation d'une extension optionnelle
   installRoomExtension(game, stationId, roomId, extensionKey, mode) {
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
     if (!station) return;
@@ -1178,16 +1682,7 @@ window.ProtecLocaux = {
                   ${premises.isolationLevel === 3 ? 'Factures de chauffage -30%' : (premises.isolationLevel === 1 ? 'Surconsommation hiver +80%' : 'Isolation intermédiaire')}
                 </span>
               </div>
-              ${premises.isolationLevel < 3 ? `
-                <div class="flex gap-1.5">
-                  <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'chantier_benevole')" class="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-black text-[10px] transition" title="Chantier participatif bénévoles (1 200 €)">
-                    Chantier (1,2k€)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'artisan')" class="px-2 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] transition" title="Entreprise isolation (3 500 €)">
-                    Artisans
-                  </button>
-                </div>
-              ` : '<span class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800">Isolé BBC</span>'}
+              ${this.renderInsulationActionBlock(station, premises)}
             </div>
           </div>
 
@@ -1296,16 +1791,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Protège les ambulances VPSP et vecteurs contre la pluie, la canicule et le gel. ${garage.hasAtelierMecanique ? '✓ Atelier mécanique intégré réduisant de 50% les frais d\'entretien garage.' : 'Possibilité d\'installer un atelier pour réparations internes.'}
               </p>
-              ${garage.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'garage_remisage', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition" title="Achète les matériaux (750 €) et mobilise 3 bénévoles le week-end (+25 moral)">
-                    🔨 Chantier (${garage.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'garage_remisage', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition" title="Artisans du bâtiment (2 200 €)">
-                    👷 Artisans (${garage.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Garage Agrandissement Maximum (8 places) ✓</div>'}
+              ${this.renderRoomActionBlock(station, "garage_remisage", garage, premises)}
             </div>
 
             <!-- PIÈCE 2 : SAS DÉSINFECTION & PHARMACIE -->
@@ -1331,16 +1817,7 @@ window.ProtecLocaux = {
                     + Installer Centrale Désinfection VPSP (400 € chantier / 3 bénév.)
                   </button>
                 ` : ''}
-                ${sas.level < 3 ? `
-                  <div class="grid grid-cols-2 gap-2">
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'sas_desinfection_pharmacie', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                      🔨 Chantier (${sas.volunteerMatCost} €)
-                    </button>
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'sas_desinfection_pharmacie', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                      👷 Artisans (${sas.craftsmanCost} €)
-                    </button>
-                  </div>
-                ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Pharmacie & Bionettoyage Conforme ARS ✓</div>'}
+                ${this.renderRoomActionBlock(station, "sas_desinfection_pharmacie", sas, premises)}
               </div>
             </div>
 
@@ -1374,16 +1851,7 @@ window.ProtecLocaux = {
                     </button>
                   ` : ''}
                 </div>
-                ${psc1.level < 3 ? `
-                  <div class="grid grid-cols-2 gap-2">
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'salle_formation_psc1', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                      🔨 Chantier (${psc1.volunteerMatCost} €)
-                    </button>
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'salle_formation_psc1', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                      👷 Artisans (${psc1.craftsmanCost} €)
-                    </button>
-                  </div>
-                ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Amphithéâtre PSC1 30 Places Validé ✓</div>'}
+                ${this.renderRoomActionBlock(station, "salle_formation_psc1", psc1, premises)}
               </div>
             </div>
 
@@ -1404,16 +1872,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Espace détente (canapés, cuisine, café). Régénère passivement le moral des secouristes présents au local (+3 à +8 pts/cycle) et réduit l\'attrition/départ des membres.
               </p>
-              ${foyer.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'foyer_vie_associative', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                    🔨 Chantier (${foyer.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'foyer_vie_associative', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                    👷 Artisans (${foyer.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Foyer Convivial Haut de Gamme ✓</div>'}
+              ${this.renderRoomActionBlock(station, "foyer_vie_associative", foyer, premises)}
             </div>
 
             <!-- PIÈCE 5 : BUREAU PC RADIO & COMMANDEMENT -->
@@ -1433,16 +1892,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Poste de commandement radio et régulation opérationnelle. Permet la coordination simultanée de plusieurs dispositifs de secours (${pcRadio.level === 1 ? '1 DPS majeur' : (pcRadio.level === 2 ? '3 DPS simultanés sans pénalité' : 'Coordination illimitée / Salle de crise COD')}).
               </p>
-              ${pcRadio.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 max-w-md">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'bureau_pc_radio', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                    🔨 Chantier (${pcRadio.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'bureau_pc_radio', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                    👷 Artisans (${pcRadio.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Poste de Commandement de Crise (Niveau COD) ✓</div>'}
+              ${this.renderRoomActionBlock(station, "bureau_pc_radio", pcRadio, premises)}
             </div>
           </div>
         </div>

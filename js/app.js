@@ -7924,6 +7924,9 @@ class ProtecGame {
 
   // Vérifie si un bénévole peut s'inscrire sur une mission du planning
   canVolunteerRegisterForMission(vol, mission) {
+    if (mission && mission.type === 'travaux' && mission.durationHours > 6 && Math.random() < 0.70) {
+      return false; // Les bénévoles ne s'inscrivent que très rarement sur des créneaux de travaux excessifs (> 6h)
+    }
     if (!vol || !mission) return false;
     if (mission.status !== 'planifie') return false;
 
@@ -11523,6 +11526,9 @@ class ProtecGame {
   }
 
   completeMission(mission) {
+    if (mission.type === 'travaux' && window.ProtecLocaux && typeof window.ProtecLocaux.onTravauxMissionCompleted === 'function') {
+      window.ProtecLocaux.onTravauxMissionCompleted(this, mission);
+    }
     mission.status = 'completed';
     // Synchronisation du statut "terminee" avec le backend dédié OVH
     if (mission.isBackendIntervention || mission.backendId) {
