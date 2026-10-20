@@ -3291,15 +3291,43 @@ window.ProtecPersonnel = {
     if (!station) return;
     if (!station.stock) station.stock = {};
 
-    const stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_f1 || 0);
+    const stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_moto || 0) + (station.stock.tenue_usar || 0) + (station.stock.tenue_f1 || 0);
 
     if (stockTenues > 0) {
-      if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
+      let chosenType = 'pc';
+      let chosenLabel = 'Pack Tenue Protection Civile';
+      let icon = '👕';
+
+      if (vol.skills?.includes('moto') && station.stock.tenue_moto > 0) {
+        station.stock.tenue_moto--;
+        chosenType = 'moto';
+        chosenLabel = 'Tenue Pilote Moto de Secours';
+        icon = '🏍️';
+      } else if (vol.skills?.includes('usar') && station.stock.tenue_usar > 0) {
+        station.stock.tenue_usar--;
+        chosenType = 'usar';
+        chosenLabel = 'Tenue Tactique USAR / INSARAG';
+        icon = '🦺';
+      } else if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
         station.stock.tenue_pc--;
+        chosenType = 'pc';
+      } else if (station.stock.tenue_moto && station.stock.tenue_moto > 0) {
+        station.stock.tenue_moto--;
+        chosenType = 'moto';
+        chosenLabel = 'Tenue Pilote Moto de Secours';
+        icon = '🏍️';
+      } else if (station.stock.tenue_usar && station.stock.tenue_usar > 0) {
+        station.stock.tenue_usar--;
+        chosenType = 'usar';
+        chosenLabel = 'Tenue Tactique USAR / INSARAG';
+        icon = '🦺';
       } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
         station.stock.tenue_f1--;
+        chosenType = 'f1';
       }
+
       vol.hasUniform = true;
+      vol.uniformType = chosenType;
       vol.uniformEquippedAt = Date.now();
       vol.moral = Math.min(100, (vol.moral || 50) + 15);
       vol.motivation = vol.moral;
@@ -3307,8 +3335,8 @@ window.ProtecPersonnel = {
 
       if (typeof game.showToast === 'function') {
         game.showToast(
-          '👕 Tenue Officielle Dotée !',
-          `${vol.name} a reçu son Pack Tenue Protection Civile (+15 Moral) ! Il/Elle est désormais opérationnel(le) pour partir sur le terrain.`,
+          `${icon} ${chosenLabel} Dotée !`,
+          `${vol.name} a reçu son équipement officiel (+15 Moral) ! Il/Elle est désormais opérationnel(le) pour partir sur le terrain.`,
           'green'
         );
       }
@@ -3355,7 +3383,7 @@ window.ProtecPersonnel = {
     if (!station) return;
     if (!station.stock) station.stock = {};
 
-    let stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_f1 || 0);
+    let stockTenues = (station.stock.tenue_pc || 0) + (station.stock.tenue_moto || 0) + (station.stock.tenue_usar || 0) + (station.stock.tenue_f1 || 0);
     if (stockTenues <= 0) {
       if (typeof game.showToast === 'function') {
         game.showToast('Stock de Tenues Épuisé', 'Aucune tenue disponible en réserve. Commandez-en dans la boutique logistique.', 'orange');
@@ -3377,13 +3405,31 @@ window.ProtecPersonnel = {
     let count = 0;
     while (stockTenues > 0 && waitingVols.length > 0) {
       const vol = waitingVols.shift();
-      if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
+      let chosenType = 'pc';
+
+      if (vol.skills?.includes('moto') && station.stock.tenue_moto > 0) {
+        station.stock.tenue_moto--;
+        chosenType = 'moto';
+      } else if (vol.skills?.includes('usar') && station.stock.tenue_usar > 0) {
+        station.stock.tenue_usar--;
+        chosenType = 'usar';
+      } else if (station.stock.tenue_pc && station.stock.tenue_pc > 0) {
         station.stock.tenue_pc--;
+        chosenType = 'pc';
+      } else if (station.stock.tenue_moto && station.stock.tenue_moto > 0) {
+        station.stock.tenue_moto--;
+        chosenType = 'moto';
+      } else if (station.stock.tenue_usar && station.stock.tenue_usar > 0) {
+        station.stock.tenue_usar--;
+        chosenType = 'usar';
       } else if (station.stock.tenue_f1 && station.stock.tenue_f1 > 0) {
         station.stock.tenue_f1--;
+        chosenType = 'f1';
       }
+
       stockTenues--;
       vol.hasUniform = true;
+      vol.uniformType = chosenType;
       vol.uniformEquippedAt = Date.now();
       vol.moral = Math.min(100, (vol.moral || 50) + 15);
       vol.motivation = vol.moral;

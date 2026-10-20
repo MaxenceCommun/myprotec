@@ -230,6 +230,8 @@ window.ProtecLogistique = {
     'images/equipements/caisse_rearmement.png',
     'images/equipements/caisse_reassort.png',
     'images/equipements/tenue_pc.png',
+    'images/equipements/tenue_moto.png',
+    'images/equipements/tenue_usar.png',
     'images/equipements/tenue_f1.png',
     'images/equipements/prise_parametres.png',
     'images/equipements/schiller.png'
@@ -462,6 +464,34 @@ window.ProtecLogistique = {
       badgeColor: 'bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
       desc: 'Ensemble textile officiel bleu marine et orange fluo réglementaire (Parka haute visibilité classe 3, Pantalon d’intervention, Polo). Indispensable pour doter chaque bénévole et l’autoriser à partir en mission.',
       usage: 'Attribuée individuellement à chaque bénévole. Sans tenue, le secouriste est bloqué à la base, frustré et démotivé.'
+    },
+    {
+      id: 'tenue_moto',
+      category: 'tenues_epi',
+      name: 'Tenue Pilote Moto de Secours & Équipements Renforcés',
+      lucideIcon: 'bike',
+      image: 'images/equipements/tenue_moto.png',
+      price: 240,
+      unit: 'pack tenue moto',
+      slots: 1,
+      badge: 'Pilote Moto d’Urgence',
+      badgeColor: 'bg-sky-50 text-sky-900 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
+      desc: 'Équipement moto homologué CE pour équipiers motocyclistes de la Protection Civile : blouson textile haute visibilité classe 3 avec protections coudes/épaules/dorsale, pantalon moto étanche, gants coqués et casque moto intégral radio-connectable.',
+      usage: 'Dotation pour les pilotes de motos de secours et liaisons rapides. Offre une protection optimale et autorise le départ sur les missions motorisées à deux-roues.'
+    },
+    {
+      id: 'tenue_usar',
+      category: 'tenues_epi',
+      name: 'Tenue Tactique USAR / INSARAG (Recherche & Sauvetage en Milieu Urbain)',
+      lucideIcon: 'hard-hat',
+      image: 'images/equipements/tenue_usar.png',
+      price: 320,
+      unit: 'pack tenue USAR',
+      slots: 1,
+      badge: 'Sauvetage-Déblaiement',
+      badgeColor: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
+      desc: 'Ensemble d’intervention haute résistance certifié INSARAG (ONU) pour les spécialistes de sauvetage en milieu urbain et structures effondrées. Tissu anti-déchirure renforcé, casque USAR avec visière polycarbonate et lampe frontale, gants anti-coupure et masque respiratoire.',
+      usage: 'Dotation des secouristes déployés sur les crises majeures, effondrements, tremblements de terre et opérations de recherche-sauvetage.'
     },
     {
       id: 'rangers_secours',

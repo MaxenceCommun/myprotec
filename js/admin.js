@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PROTEC LIVE - PANEL ADMINISTRATEUR (GESTION DE TOUS LES JOUEURS)
  * Permet à l'administrateur de superviser la base de données,
  * modifier les trésoreries, réinitialiser des mots de passe,
@@ -3918,7 +3918,7 @@ window.ProtecAdmin = {
     const volsWithLowUniform = vols.filter(v => v.hasUniform === false);
     const volsBurnout = vols.filter(v => v.isBurnout);
     const primarySt = (game.stations || [])[0];
-    const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_f1 || 0);
+    const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_moto || 0) + (primarySt?.stock?.tenue_usar || 0) + (primarySt?.stock?.tenue_f1 || 0);
 
     container.innerHTML = `
       <div class="space-y-4">

@@ -39,6 +39,8 @@ window.ProtecEquipements = {
     'images/equipements/caisse_rearmement.png',
     'images/equipements/caisse_reassort.png',
     'images/equipements/tenue_pc.png',
+    'images/equipements/tenue_moto.png',
+    'images/equipements/tenue_usar.png',
     'images/equipements/tenue_f1.png',
     'images/equipements/prise_parametres.png',
     'images/equipements/schiller.png'

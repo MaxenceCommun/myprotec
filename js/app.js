@@ -10846,17 +10846,32 @@ class ProtecGame {
     const waitDays = Math.max(0, currentDay - (cand.createdDay || currentDay));
     const waitPenalty = waitDays >= 2 ? Math.min(40, waitDays * 15) : 0;
 
-    // Dotation Tenue officielle Protection Civile
+    // Dotation Tenue officielle Protection Civile (Standard PC, Moto ou USAR)
     const targetStation = (this.stations || []).find(s => s.id === (stationId || this.stations[0]?.id)) || this.stations[0];
     if (targetStation && !targetStation.stock) targetStation.stock = {};
-    const stockTenues = (targetStation?.stock?.tenue_pc || 0) + (targetStation?.stock?.tenue_f1 || 0);
+    const stockTenues = (targetStation?.stock?.tenue_pc || 0) + (targetStation?.stock?.tenue_moto || 0) + (targetStation?.stock?.tenue_usar || 0) + (targetStation?.stock?.tenue_f1 || 0);
 
     let hasUniform = false;
+    let uniformType = 'pc';
     if (stockTenues > 0) {
-      if (targetStation.stock.tenue_pc && targetStation.stock.tenue_pc > 0) {
+      if (cand.specialite === 'moto' && targetStation.stock.tenue_moto > 0) {
+        targetStation.stock.tenue_moto--;
+        uniformType = 'moto';
+      } else if (cand.specialite === 'usar' && targetStation.stock.tenue_usar > 0) {
+        targetStation.stock.tenue_usar--;
+        uniformType = 'usar';
+      } else if (targetStation.stock.tenue_pc && targetStation.stock.tenue_pc > 0) {
         targetStation.stock.tenue_pc--;
+        uniformType = 'pc';
+      } else if (targetStation.stock.tenue_moto && targetStation.stock.tenue_moto > 0) {
+        targetStation.stock.tenue_moto--;
+        uniformType = 'moto';
+      } else if (targetStation.stock.tenue_usar && targetStation.stock.tenue_usar > 0) {
+        targetStation.stock.tenue_usar--;
+        uniformType = 'usar';
       } else if (targetStation.stock.tenue_f1 && targetStation.stock.tenue_f1 > 0) {
         targetStation.stock.tenue_f1--;
+        uniformType = 'f1';
       }
       hasUniform = true;
     }
@@ -10871,6 +10886,7 @@ class ProtecGame {
       status: 'dispo',
       stationId: stationId || this.stations[0]?.id,
       hasUniform: hasUniform,
+      uniformType: hasUniform ? uniformType : null,
       uniformEquippedAt: hasUniform ? Date.now() : null,
       isTrainer: !!cand.isTrainer,
       avatar: cand.avatar || '🙋',
@@ -22217,7 +22233,7 @@ class ProtecGame {
                 const waitingVols = (this.volunteers || []).filter(v => v.hasUniform === false).length;
                 const equippedVols = totalVols - waitingVols;
                 const primarySt = (this.stations || [])[0];
-                const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_f1 || 0);
+                const stockTenues = (primarySt?.stock?.tenue_pc || 0) + (primarySt?.stock?.tenue_moto || 0) + (primarySt?.stock?.tenue_usar || 0) + (primarySt?.stock?.tenue_f1 || 0);
 
                 return `
                   <div class="p-3 rounded-2xl glass-card border border-blue-200 dark:border-blue-900/50 bg-gradient-to-r from-blue-50/70 via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:to-slate-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs mb-3 shadow-xs">
@@ -22282,8 +22298,18 @@ class ProtecGame {
                   const roleInfo = window.ProtecPoles?.getVolunteerRoleInfo ? window.ProtecPoles.getVolunteerRoleInfo(v) : null;
                   const isEquipped = v.hasUniform !== false;
                   const station = (this.stations || []).find(s => s.id === v.stationId) || this.stations?.[0];
-                  const stTenues = (station?.stock?.tenue_pc || 0) + (station?.stock?.tenue_f1 || 0);
+                  const stTenues = (station?.stock?.tenue_pc || 0) + (station?.stock?.tenue_moto || 0) + (station?.stock?.tenue_usar || 0) + (station?.stock?.tenue_f1 || 0);
                   const searchText = `${v.name} ${v.rank || ''} ${v.role || ''} ${roleInfo?.title || ''} ${contractLabel} ${v.dispoType || ''} ${trait.name || ''} ${(v.skills || []).join(' ')} ${isEquipped ? 'équipé' : 'sans tenue'}`.toLowerCase();
+
+                  let uniformBadgeLabel = 'Tenue Officielle PC Dotée';
+                  let uniformIcon = '👕';
+                  if (v.uniformType === 'moto') {
+                    uniformBadgeLabel = 'Tenue Moto de Secours Dotée';
+                    uniformIcon = '🏍️';
+                  } else if (v.uniformType === 'usar') {
+                    uniformBadgeLabel = 'Tenue Tactique USAR Dotée';
+                    uniformIcon = '🦺';
+                  }
 
                   return `
                     <div class="volunteer-card p-3 rounded-2xl glass-card text-xs space-y-2 ${v.isBurnout ? 'border-2 border-red-400 bg-red-50/40' : (!isEquipped ? 'border-2 border-amber-300 dark:border-amber-700 bg-amber-50/30' : '')}" data-search-text="${searchText}">
@@ -22310,8 +22336,8 @@ class ProtecGame {
                       <!-- Statut de la Tenue Protection Civile & Action Dotation -->
                       <div class="p-1.5 rounded-xl border flex items-center justify-between gap-2 text-[10px] ${isEquipped ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-200/80 text-blue-950 dark:text-blue-200' : 'bg-amber-100/80 dark:bg-amber-950/70 border-amber-300 text-amber-900 dark:text-amber-200 font-extrabold'}">
                         <div class="flex items-center gap-1.5 truncate">
-                          <span>${isEquipped ? '👕' : '⚠️'}</span>
-                          <span class="truncate">${isEquipped ? 'Tenue Officielle PC Dotée' : 'Sans Tenue : Bloqué en mission'}</span>
+                          <span>${isEquipped ? uniformIcon : '⚠️'}</span>
+                          <span class="truncate">${isEquipped ? uniformBadgeLabel : 'Sans Tenue : Bloqué en mission'}</span>
                         </div>
                         ${!isEquipped ? `
                           <button type="button" onclick="window.ProtecPersonnel?.equipVolunteer(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-1 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] shadow-xs transition flex items-center gap-1 cursor-pointer flex-shrink-0">

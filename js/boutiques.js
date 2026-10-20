@@ -97,6 +97,7 @@ window.ProtecBoutiques = {
         { id: 'tronconnage', label: 'Tronçonnage & Bâchage', icon: 'axe' },
         { id: 'eclairage', label: 'Énergie & Éclairage', icon: 'zap' },
         { id: 'drones', label: 'Drones & Reconnaissance', icon: 'crosshair' },
+        { id: 'sauvetage', label: 'Sauvetage Décombres & USAR', icon: 'hard-hat' },
         { id: 'pcm', label: 'Poste de Commandement (PCM)', icon: 'radio' }
       ]
     },
@@ -486,12 +487,12 @@ window.ProtecBoutiques = {
       // 1. Coopérative Fédérale : Tenues, Consommables réassort, Lots A/B/C, Formations
       const cat = window.ProtecLogistique?.CATALOG || [];
       list = cat.filter(it => {
-        if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c', 'tenue_pc', 'rangers_secours'].includes(it.id)) return true;
+        if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c', 'tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers_secours'].includes(it.id)) return true;
         if (it.category === 'kits_formation') return true;
         return false;
       }).map(it => ({ ...it, shopId: shop.id }));
 
-      if (rayon === 'tenues') list = list.filter(it => ['tenue_pc', 'rangers_secours'].includes(it.id));
+      if (rayon === 'tenues') list = list.filter(it => ['tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers_secours'].includes(it.id));
       else if (rayon === 'pharmacie') list = list.filter(it => it.id === 'caisse_rearmement');
       else if (rayon === 'lots_secours') list = list.filter(it => ['lot_secours_a', 'lot_secours_b', 'lot_secours_c'].includes(it.id));
       else if (rayon === 'formations') list = list.filter(it => it.category === 'kits_formation');
@@ -544,11 +545,11 @@ window.ProtecBoutiques = {
       }
 
     } else if (shop.id === 'securicom_crise') {
-      // 3. Securicom Crise : Pompage, tronçonnage, bâchage, éclairage, drones, PCM
+      // 3. Securicom Crise : Pompage, tronçonnage, bâchage, éclairage, drones, PCM, Tenue USAR
       const targetIds = [
         'lot_pompage', 'remorque_motopompe', 'lot_tronconnage', 'lot_bachage',
         'lot_eclairage', 'remorque_groupe_electro', 'drone', 'drone_thermique',
-        'lot_poste_commandement_mobile'
+        'lot_poste_commandement_mobile', 'tenue_usar'
       ];
       const cat = window.ProtecLogistique?.CATALOG || [];
       list = cat.filter(it => targetIds.includes(it.id)).map(it => {
@@ -558,6 +559,7 @@ window.ProtecBoutiques = {
         else if (it.id.includes('eclairage') || it.id.includes('electro')) rayonTag = 'eclairage';
         else if (it.id.includes('drone')) rayonTag = 'drones';
         else if (it.id.includes('poste_commandement')) rayonTag = 'pcm';
+        else if (it.id.includes('usar')) rayonTag = 'sauvetage';
         return {
           ...it,
           shopId: shop.id,
