@@ -1570,9 +1570,12 @@ class ProtecGame {
           this.showOnboardingModal();
         }
       }
+    } else {
       this.syncDepartmentFromStation();
       this.ensureStarterVehicle();
-      this.showToast('Partie chargée', `Bienvenue ! Votre antenne compte ${this.volunteers.length} secouristes.`, 'blue');
+      const stName = this.stations[0]?.name || 'Antenne';
+      const playerName = this.player?.name ? ` ${this.player.name}` : '';
+      this.showToast('Partie chargée', `Bienvenue Commandant${playerName} ! L'${stName} compte ${this.volunteers.length} secouristes.`, 'blue');
       if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
         window.ProtecEvenementsReels.ensureTerritoryEvents(this);
       }

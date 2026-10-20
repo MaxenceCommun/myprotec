@@ -1115,6 +1115,22 @@ window.ProtecSupabase = {
         await this.client.from('game_saves').delete().eq('username', username.trim());
       } catch (cleanErr) {}
 
+      // Auto-promotion Admin : Si le pseudo est 'admin' ou s'il n'y a encore aucun administrateur en base
+      let shouldBeAdmin = (username.trim().toLowerCase() === 'admin');
+      if (!shouldBeAdmin) {
+        try {
+          const { count, error: countErr } = await this.client
+            .from('players')
+            .select('id', { count: 'exact', head: true })
+            .or('role.eq.admin,is_admin.eq.true');
+          if (!countErr && (count === 0 || count === null)) {
+            shouldBeAdmin = true;
+          }
+        } catch (errCheckAdmin) {
+          console.warn('Vérification premier admin Supabase:', errCheckAdmin);
+        }
+      }
+
       // Création du compte joueur (uniquement les colonnes valides dans Supabase)
       const newPlayer = {
         username: username.trim(),
@@ -1122,8 +1138,8 @@ window.ProtecSupabase = {
         station_name: extraData.stationName || 'Antenne Protection Civile',
         city: detectedCity,
         department_code: extraData.departmentCode || '54',
-        role: 'directeur',
-        is_admin: false,
+        role: shouldBeAdmin ? 'admin' : 'directeur',
+        is_admin: shouldBeAdmin,
         alliance_id: extraData.allianceId || null,
         created_at: new Date().toISOString(),
         last_login: new Date().toISOString(),

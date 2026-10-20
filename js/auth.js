@@ -1769,6 +1769,8 @@ window.ProtecAuth = {
               id: supaRes.user.id,
               username: supaRes.user.username,
               role: supaRes.user.role || 'directeur',
+              isAdmin: (supaRes.user.is_admin === true || supaRes.user.role === 'admin'),
+              is_admin: (supaRes.user.is_admin === true || supaRes.user.role === 'admin'),
               stationName: supaRes.user.station_name,
               city: supaRes.user.city || city,
               departmentCode: supaRes.user.department_code || departmentCode,
@@ -1848,6 +1850,7 @@ window.ProtecAuth = {
       game.player.id = data.user.id;
       game.player.name = data.user.username;
       game.player.role = data.user.role || 'user';
+      game.player.isAdmin = !!(data.user.isAdmin || data.user.is_admin || data.user.role === 'admin');
       game.player.deptRole = data.user.deptRole || 'antenne_principale';
       game.player.departmentCode = data.user.departmentCode || departmentCode;
       game.currentDepartmentCode = game.player.departmentCode;
