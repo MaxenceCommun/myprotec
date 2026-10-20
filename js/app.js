@@ -52,6 +52,12 @@ class ProtecGame {
 
     // Identifiants de renforts émis par ce joueur (anti-boucle d'alerte)
     this.mySentRenfortIds = new Set();
+    try {
+      this.pinnedMissionIds = JSON.parse(localStorage.getItem('protec_pinned_missions') || '[]');
+      if (!Array.isArray(this.pinnedMissionIds)) this.pinnedMissionIds = [];
+    } catch (e) {
+      this.pinnedMissionIds = [];
+    }
 
     // Calendrier et Horloge Opérationnelle (Synchronisée sur l'heure réelle dès l'instanciation)
     const nowInit = new Date();
@@ -1778,6 +1784,7 @@ class ProtecGame {
           vehicles: this.vehicles,
           volunteers: this.volunteers,
           missions: this.missions,
+          pinnedMissionIds: this.pinnedMissionIds || [],
           devis: this.devis,
           aascConvention: this.aascConvention,
           samuConvention: this.samuConvention,
@@ -1851,6 +1858,7 @@ class ProtecGame {
             this.missions = c.missions || [];
             this.devis = c.devis || [];
             this.alertTriggerLogs = Array.isArray(c.alertTriggerLogs) ? c.alertTriggerLogs : [];
+            if (Array.isArray(c.pinnedMissionIds)) this.pinnedMissionIds = c.pinnedMissionIds;
             if (c.money !== undefined && this.resources) {
               this.resources.money = c.money;
               this.resources.budget = c.money;
@@ -14528,6 +14536,112 @@ class ProtecGame {
     `;
   }
 
+  isMissionPinned(missionId) {
+    if (!missionId) return false;
+    if (Array.isArray(this.pinnedMissionIds) && this.pinnedMissionIds.includes(missionId)) return true;
+    const m = (this.missions || []).find(x => x.id === missionId);
+    return Boolean(m && m.isPinned);
+  }
+
+  togglePinMission(missionId, event) {
+    if (event) {
+      if (typeof event.stopPropagation === 'function') event.stopPropagation();
+      if (typeof event.preventDefault === 'function') event.preventDefault();
+    }
+    if (!missionId) return;
+
+    if (!Array.isArray(this.pinnedMissionIds)) {
+      this.pinnedMissionIds = [];
+    }
+
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    const isCurrentlyPinned = this.isMissionPinned(missionId);
+    const nowPinned = !isCurrentlyPinned;
+
+    if (nowPinned) {
+      if (!this.pinnedMissionIds.includes(missionId)) {
+        this.pinnedMissionIds.unshift(missionId);
+      }
+      if (mission) mission.isPinned = true;
+      if (typeof this.showToast === 'function') {
+        this.showToast('Raccourci épinglé', `« ${mission?.title || 'Mission'} » a été mise en raccourci sur la carte.`, 'blue');
+      }
+    } else {
+      this.pinnedMissionIds = this.pinnedMissionIds.filter(id => id !== missionId);
+      if (mission) mission.isPinned = false;
+      if (typeof this.showToast === 'function') {
+        this.showToast('Raccourci retiré', `« ${mission?.title || 'Mission'} » a été retirée des raccourcis.`, 'slate');
+      }
+    }
+
+    try {
+      localStorage.setItem('protec_pinned_missions', JSON.stringify(this.pinnedMissionIds));
+    } catch (e) {}
+
+    // Mise à jour de la barre de raccourcis en bas à gauche de la carte
+    if (window.ProtecAPI && typeof window.ProtecAPI.updateDashboardQuickBar === 'function') {
+      window.ProtecAPI.updateDashboardQuickBar();
+    }
+
+    // Mise à jour du bouton d'épingle dans le drawer
+    this.updateDrawerPinButton(missionId);
+
+    // Mise à jour de tous les boutons épingle sur la page
+    document.querySelectorAll(`.pin-mission-btn[data-mission-id="${missionId}"]`).forEach(btn => {
+      btn.setAttribute('data-pinned', nowPinned ? '1' : '0');
+      btn.title = nowPinned ? 'Retirer du raccourci sur la carte' : 'Mettre en raccourci sur la carte';
+      btn.className = `pin-mission-btn p-1.5 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${nowPinned ? 'text-amber-500 bg-amber-500/10 border-amber-400/40 hover:bg-amber-500/20 shadow-xs' : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-white/10 border-transparent'}`;
+      const svg = btn.querySelector('svg');
+      if (svg) {
+        svg.setAttribute('fill', nowPinned ? 'currentColor' : 'none');
+        svg.setAttribute('class', `lucide lucide-pin transition-transform ${nowPinned ? 'rotate-[-35deg] scale-110' : 'rotate-0'}`);
+      }
+    });
+
+    if (typeof this.saveGame === 'function') {
+      this.saveGame();
+    }
+  }
+
+  updateDashboardQuickBar() {
+    if (window.ProtecAPI && typeof window.ProtecAPI.updateDashboardQuickBar === 'function') {
+      window.ProtecAPI.updateDashboardQuickBar();
+    }
+  }
+
+  updateDrawerPinButton(missionId) {
+    const pinBtn = document.getElementById('drawer-pin-btn');
+    if (!pinBtn) return;
+    const isPinned = this.isMissionPinned(missionId);
+    pinBtn.title = isPinned ? 'Retirer du raccourci sur la carte' : 'Mettre en raccourci sur la carte';
+    pinBtn.className = `p-2 rounded-xl transition cursor-pointer ${isPinned ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/40' : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-white/10'}`;
+    const pinIcon = pinBtn.querySelector('svg');
+    if (pinIcon) {
+      pinIcon.setAttribute('fill', isPinned ? 'currentColor' : 'none');
+      pinIcon.setAttribute('class', `lucide lucide-pin transition-transform ${isPinned ? 'rotate-[-35deg] scale-110' : 'rotate-0'}`);
+    }
+  }
+
+  renderPinButtonHTML(missionId, isPinned = null, extraClasses = '') {
+    if (!missionId) return '';
+    const pinned = (isPinned !== null) ? Boolean(isPinned) : this.isMissionPinned(missionId);
+    const activeColor = pinned 
+      ? 'text-amber-500 bg-amber-500/10 border-amber-400/40 hover:bg-amber-500/20 shadow-xs' 
+      : 'text-slate-400 hover:text-amber-500 hover:bg-slate-100 dark:hover:bg-white/10 border-transparent';
+    const title = pinned ? 'Retirer du raccourci sur la carte' : 'Mettre en raccourci sur la carte';
+
+    return `
+      <button type="button" 
+              onclick="event.stopPropagation(); window.game && window.game.togglePinMission('${missionId}', event);" 
+              class="pin-mission-btn p-1.5 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-center shrink-0 ${activeColor} ${extraClasses}" 
+              title="${title}"
+              data-mission-id="${missionId}"
+              data-pinned="${pinned ? '1' : '0'}">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="${pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin transition-transform ${pinned ? 'rotate-[-35deg] scale-110' : 'rotate-0'}"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+      </button>
+    `;
+  }
+
   openMissionDetails(missionId) {
     try {
       this._lastMarkerClickTime = Date.now();
@@ -14591,6 +14705,7 @@ class ProtecGame {
       catBadge.textContent = mission.categoryLabel || 'MISSION';
       title.textContent = mission.title || 'Dispositif de Secours';
       headerIcon.setAttribute('data-lucide', 'calendar');
+      this.updateDrawerPinButton(mission.id);
 
       const myId = this.player?.id || 'usr_local';
       const isManager = (mission.managerPlayerId === myId);
@@ -21296,7 +21411,10 @@ class ProtecGame {
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-600 text-white uppercase">
                                           🥫 Maraude
                                         </span>
+                                        <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-mono font-bold text-purple-800 dark:text-purple-300">+${m.rewardMoney} €</span>
+                                        ${this.renderPinButtonHTML(m.id)}
+                                      </div>
                                       </div>
                                       <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${m.title}</h5>
                                       <p class="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5 flex items-center gap-1">
@@ -21347,7 +21465,13 @@ class ProtecGame {
                                           ⏳ En Prévisionnel
                                         </span>
                                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        <div class="flex items-center gap-1.5">
+                                        <div class="flex items-center gap-1.5">
                                         <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                        ${this.renderPinButtonHTML(d.id)}
+                                      </div>
+                                        ${this.renderPinButtonHTML(d.id)}
+                                      </div>
                                       </div>
                                       <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
                                       <p class="text-[11px] text-slate-500 dark:text-slate-400">
@@ -21477,7 +21601,10 @@ class ProtecGame {
                                     <div>
                                       <div class="flex items-center justify-between">
                                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${timeStr}</span>
-                                        <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mono-num">+${m.rewardMoney} €</span>
+                                        <div class="flex items-center gap-1.5">
+                                          <span class="text-xs font-bold text-emerald-700 dark:text-emerald-400 mono-num">+${m.rewardMoney} €</span>
+                                          ${this.renderPinButtonHTML(m.id)}
+                                        </div>
                                       </div>
                                       <h5 class="text-xs font-extrabold text-slate-900 dark:text-white mt-1">${m.title}</h5>
                                       <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
@@ -21635,7 +21762,10 @@ class ProtecGame {
                           <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
                             ${e.poleLabel} • ${e.type}
                           </span>
-                          ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
+                          <div class="flex items-center gap-1.5">
+                            ${e.rewardMoney ? `<span class="text-xs font-bold mono-num text-emerald-600">+${e.rewardMoney} €</span>` : ''}
+                            ${this.renderPinButtonHTML(e.id)}
+                          </div>
                         </div>
                         <div class="text-[11px] font-black ${isToday ? 'text-amber-600' : 'text-slate-500'}">
                           📅 ${dateStr} ${isToday ? '⭐ (AUJOURD’HUI)' : ''}
@@ -22622,7 +22752,10 @@ class ProtecGame {
                 <div class="p-4 rounded-2xl glass-card space-y-2 border-l-4 border-pc-orange">
                   <div class="flex items-center justify-between">
                     <span class="px-2 py-0.5 rounded text-[10px] font-black bg-pc-orange text-white">APPEL RÉFLEXE 15</span>
-                    <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                      ${this.renderPinButtonHTML(m.id)}
+                    </div>
                   </div>
                   <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
                   <p class="text-xs text-slate-600">${m.desc}</p>
@@ -22907,7 +23040,10 @@ class ProtecGame {
                 <div class="p-4 rounded-2xl glass-card space-y-2 border-l-4 border-red-600">
                   <div class="flex items-center justify-between">
                     <span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white">DÉPART POMPIERS</span>
-                    <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-xs font-bold mono-num text-emerald-700">+${m.rewardMoney} €</span>
+                      ${this.renderPinButtonHTML(m.id)}
+                    </div>
                   </div>
                   <h4 class="text-sm font-extrabold text-slate-900">${m.title}</h4>
                   <p class="text-xs text-slate-600">${m.desc}</p>
@@ -23438,6 +23574,7 @@ class ProtecGame {
                       </div>
                       <p class="text-[11px] text-slate-600 line-clamp-1">${m.desc || 'Intervention de grande envergure sous autorité préfectorale.'}</p>
                     </div>
+                    ${this.renderPinButtonHTML(m.id)}
                     <button onclick="window.game.closeMainModal(); window.game.openMissionDetails('${m.id}')" class="px-3.5 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow transition flex-shrink-0">
                       Prendre en charge
                     </button>

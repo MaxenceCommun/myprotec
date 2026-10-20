@@ -432,30 +432,50 @@
       const pillsContainer = document.getElementById('active-missions-pills');
       if (!pillsContainer) return;
 
-      const activeInterventions = (game.missions || []).filter(m => 
-        (m.isBackendIntervention || m.status === 'declenche' || m.status === 'ongoing' || m.status === 'prealerte') &&
+      const pinnedIds = Array.isArray(game.pinnedMissionIds) ? game.pinnedMissionIds : [];
+      const pinnedMissions = (game.missions || []).filter(m => 
+        (m.isPinned || pinnedIds.includes(m.id)) &&
         m.status !== 'completed' && m.status !== 'canceled'
       );
 
-      if (activeInterventions.length === 0) {
+      let displayMissions = [];
+      if (pinnedMissions.length > 0) {
+        displayMissions = pinnedMissions;
+      } else {
+        // Fallback si aucune mission n'est encore épinglée : interventions en attente / en cours
+        displayMissions = (game.missions || []).filter(m => 
+          (m.isBackendIntervention || m.status === 'declenche' || m.status === 'ongoing' || m.status === 'prealerte') &&
+          m.status !== 'completed' && m.status !== 'canceled'
+        );
+      }
+
+      if (displayMissions.length === 0) {
         pillsContainer.innerHTML = '';
         return;
       }
 
-      pillsContainer.innerHTML = activeInterventions.slice(0, 4).map(m => {
+      pillsContainer.innerHTML = displayMissions.slice(0, 5).map(m => {
+        const isPinned = Boolean(m.isPinned || pinnedIds.includes(m.id));
         const isWaiting = (m.status === 'declenche' || m.status === 'prealerte');
-        const badgeColor = isWaiting ? 'bg-red-600 text-white animate-pulse' : 'bg-emerald-600 text-white';
-        const badgeLabel = isWaiting ? 'En attente' : 'Engagée';
-        const iconName = isWaiting ? 'siren' : 'truck';
+        const badgeColor = isWaiting ? 'bg-red-600 text-white animate-pulse' : (m.status === 'ongoing' ? 'bg-emerald-600 text-white' : 'bg-pc-blue text-white');
+        const badgeLabel = isWaiting ? 'En attente' : (m.status === 'ongoing' ? 'Engagée' : (m.status === 'planifie' ? 'Planifié' : 'Actif'));
+        
+        let iconName = 'siren';
+        if (m.type === 'dps') iconName = 'calendar';
+        else if (m.type === 'samu') iconName = 'activity';
+        else if (m.type === 'pompiers') iconName = 'flame';
+        else if (m.type === 'social') iconName = 'heart-handshake';
+        else if (m.status === 'ongoing') iconName = 'truck';
+
         const vehList = (m.requiredVehicles && m.requiredVehicles.length > 0)
           ? m.requiredVehicles.join(', ')
-          : 'Véhicules requis';
+          : (m.scale || 'Dispositif');
 
         return `
           <div onclick="window.game && window.game.openMissionDetails('${m.id}')" 
-               class="glass-panel-heavy p-2.5 rounded-2xl border border-white/90 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center justify-between gap-3 max-w-xs group bg-white/90 dark:bg-slate-900/90 backdrop-blur-md">
-            <div class="flex items-center gap-2.5 min-w-0">
-              <div class="w-8 h-8 rounded-xl ${isWaiting ? 'bg-red-100 text-red-600 dark:bg-red-950/60' : 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60'} flex items-center justify-center shrink-0">
+               class="glass-panel-heavy p-2.5 rounded-2xl border border-white/90 shadow-lg hover:shadow-xl hover:scale-[1.02] active:scale-95 transition-all cursor-pointer flex items-center justify-between gap-2.5 max-w-xs group bg-white/90 dark:bg-slate-900/90 backdrop-blur-md relative">
+            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+              <div class="w-8 h-8 rounded-xl ${isWaiting ? 'bg-red-100 text-red-600 dark:bg-red-950/60' : (m.status === 'ongoing' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/60' : 'bg-blue-100 text-pc-blue dark:bg-blue-950/60')} flex items-center justify-center shrink-0">
                 <i data-lucide="${iconName}" class="w-4 h-4"></i>
               </div>
               <div class="min-w-0 flex-1">
@@ -467,9 +487,17 @@
                 </div>
               </div>
             </div>
-            <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${badgeColor}">
-              ${badgeLabel}
-            </span>
+            <div class="flex items-center gap-1.5 shrink-0">
+              <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase shrink-0 ${badgeColor}">
+                ${badgeLabel}
+              </span>
+              <button type="button" 
+                      onclick="event.stopPropagation(); window.game && window.game.togglePinMission('${m.id}', event);" 
+                      class="p-1 rounded-lg text-amber-500 hover:text-rose-500 hover:bg-slate-200/50 dark:hover:bg-slate-800 transition cursor-pointer shrink-0" 
+                      title="${isPinned ? 'Retirer du raccourci' : 'Épingler en raccourci'}">
+                <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="${isPinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pin ${isPinned ? 'rotate-[-35deg]' : ''}"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg>
+              </button>
+            </div>
           </div>
         `;
       }).join('');
