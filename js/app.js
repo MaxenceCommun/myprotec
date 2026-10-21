@@ -11041,11 +11041,15 @@ class ProtecGame {
     const base = this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', departmentCode: deptCode };
     const coords = this.calculateRealisticMissionLocation(base, pick.origin || 'sncf', { title: pick.title || '', desc: pick.scenarioText || '', targetEnvironment: pick.targetEnvironment });
 
-    // Calcul de l'heure estimée de déploiement (H+25 min dans l'horloge in-game)
+    // Durée de préalerte aléatoire entre 2 minutes (120s) et 1 heure (3600s)
+    const prealertSec = Math.floor(Math.random() * (3600 - 120 + 1)) + 120;
+    const targetMinutes = Math.max(2, Math.round(prealertSec / 60));
+
+    // Calcul de l'heure estimée d'évaluation / déploiement dans l'horloge in-game
     const curHour = this.clock?.hour !== undefined ? this.clock.hour : 14;
     const curMin = this.clock?.minute !== undefined ? this.clock.minute : 0;
-    const targetH = (curHour + Math.floor((curMin + 25) / 60)) % 24;
-    const targetM = (curMin + 25) % 60;
+    const targetH = (curHour + Math.floor((curMin + targetMinutes) / 60)) % 24;
+    const targetM = (curMin + targetMinutes) % 60;
     const targetTimeStr = `${targetH.toString().padStart(2, '0')}:${targetM.toString().padStart(2, '0')}`;
 
     const newMission = {
@@ -11081,9 +11085,9 @@ class ProtecGame {
       authorityLabel: pick.authorityLabel,
       authorityBadgeBg: pick.authorityBadgeBg,
       targetTimeStr: targetTimeStr,
-      targetTime: Date.now() + 65000,
-      prealertSecondsLeft: 65,
-      prealertTotalSec: 65,
+      targetTime: Date.now() + (prealertSec * 1000),
+      prealertSecondsLeft: prealertSec,
+      prealertTotalSec: prealertSec,
       evolutionResolved: false,
       prealertDecisionMode: 'veille_simple', // 'veille_simple' vs 'premobilisation'
       preMobilisationActive: false,
@@ -11424,6 +11428,7 @@ class ProtecGame {
 
             const spawnedTime = now;
 
+            const offlinePrealertSec = Math.floor(Math.random() * (3600 - 120 + 1)) + 120;
             const offlineCrisis = {
               id: `m-prealert-${spawnedTime}`,
               type: 'crise',
@@ -11453,8 +11458,8 @@ class ProtecGame {
               rewardReputation: pick.rewardReputation || 35,
               progress: 0,
               status: 'prealerte',
-              prealertSecondsLeft: 65,
-              prealertTotalSec: 65,
+              prealertSecondsLeft: offlinePrealertSec,
+              prealertTotalSec: offlinePrealertSec,
               alertOrigin: pick.origin,
               authority: pick.authority,
               authorityLabel: pick.authorityLabel,
@@ -18897,9 +18902,9 @@ class ProtecGame {
                 <span>Mettre les effectifs en préalerte</span>
               </button>
             `}
-            <div class="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-300 flex items-center gap-1.5">
+            <div id="prealert-footer-timer" class="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 flex items-center gap-1.5 shadow-2xs">
               <i data-lucide="radio" class="w-3.5 h-3.5 text-amber-700 animate-pulse"></i>
-              <span>Évaluation COZ / SIDPC en cours</span>
+              <span>Évaluation COZ / SIDPC en cours${typeof mission.prealertSecondsLeft === 'number' ? ` (~${Math.max(1, Math.ceil(mission.prealertSecondsLeft / 60))} min)` : ''}</span>
             </div>
           </div>
         </div>
@@ -29090,9 +29095,9 @@ class ProtecGame {
             m.prealertSecondsLeft--;
             if (m.prealertSecondsLeft <= 0) {
               // Fin du compte à rebours de veille opérationnelle :
-              // Option A (70% des cas) : Confirmation d'engagement opérationnel par l'autorité -> passage en Alerte Réelle
-              // Option B (30% des cas) : Situation maîtrisée par les secours publics ou risque écarté -> Levée de préalerte
-              if (Math.random() < 0.30) {
+              // Option A (65% des cas) : Confirmation d'engagement opérationnel par l'autorité -> passage en Alerte Réelle
+              // Option B (35% des cas) : Situation maîtrisée par les secours publics ou risque écarté -> Levée de préalerte / Annulation
+              if (Math.random() < 0.35) {
                 this.resolvePrealertFavorable(m);
               } else {
                 this.resolvePrealertAggravation(m);
@@ -29569,6 +29574,14 @@ class ProtecGame {
             const volCountEl = document.getElementById('prealert-vols-count');
             if (volCountEl) volCountEl.textContent = `${cur.registeredVolunteers?.length || 0} / ${cur.requiredVolunteers || 1} secouristes prêts`;
             const barEl = document.getElementById('prealert-vols-bar');
+            if (barEl) barEl.style.width = `${Math.min(100, Math.round(((cur.registeredVolunteers?.length || 0) / (cur.requiredVolunteers || 1)) * 100))}%`;
+            const timerFooterEl = document.getElementById('prealert-footer-timer');
+            if (timerFooterEl && typeof cur.prealertSecondsLeft === 'number') {
+              const mLeft = Math.floor(cur.prealertSecondsLeft / 60);
+              const sLeft = cur.prealertSecondsLeft % 60;
+              const timeDisplay = mLeft > 0 ? `${mLeft}m ${sLeft.toString().padStart(2, '0')}s` : `${sLeft}s`;
+              timerFooterEl.innerHTML = `<i data-lucide="radio" class="w-3.5 h-3.5 text-amber-700 animate-pulse"></i><span>Évaluation : ${timeDisplay}</span>`;
+            }
           }
         }
       }
