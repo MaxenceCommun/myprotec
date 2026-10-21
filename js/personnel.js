@@ -2970,7 +2970,7 @@ window.ProtecPersonnel = {
           volunteer.coords_domicile = { lat: ban.lat, lng: ban.lng };
           const station = (game.stations || []).find(s => s.id === volunteer.stationId) || game.stations?.[0];
           if (station && window.ProtecDepartements) {
-            volunteer.distance_base_km = parseFloat(window.ProtecDepartements.calculateDistance(ban.lat, ban.lng, station.lat, station.lng).toFixed(2));
+            volunteer.distance_base_km = parseFloat((window.ProtecDepartements.calculateDistance(ban.lat, ban.lng, station.lat, station.lng) * 1.32).toFixed(1));
             const speedKmh = volunteer.mode_transport === 'moto' ? 46 : (volunteer.mode_transport === 'voiture' ? 38 : 16);
             const prepMin = volunteer.mode_transport === 'voiture' ? 4 : 3;
             volunteer.temps_ralliement_minutes = Math.max(4, Math.round(prepMin + (volunteer.distance_base_km / speedKmh) * 60));
@@ -3034,10 +3034,12 @@ window.ProtecPersonnel = {
       modeTransport = 'velo_transports';
     }
 
-    // 6. Distance et temps de ralliement calculés selon la géographie départementale
-    const distanceKm = window.ProtecDepartements
+    // 6. Distance routière réelle et temps de ralliement calculés selon le réseau routier
+    // Facteur moyen de sinuosité et détour routier en France (réseau départemental/communal vs vol d'oiseau = ~1.32)
+    const directDistKm = window.ProtecDepartements
       ? parseFloat(window.ProtecDepartements.calculateDistance(coordsDomicile.lat, coordsDomicile.lng, baseStation.lat, baseStation.lng).toFixed(2))
-      : 5.0;
+      : 4.0;
+    const distanceKm = parseFloat((directDistKm * 1.32).toFixed(1));
 
     // Vitesse moyenne réaliste (prise en compte des axes départementaux / voies rapides si distance > 10 km)
     let speedKmh = 45;

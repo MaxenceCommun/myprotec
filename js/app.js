@@ -14322,7 +14322,8 @@ class ProtecGame {
     const station = this.stations?.find(s => s.id === vol.stationId) || this.stations?.[0] || { lat: 48.8566, lng: 2.3522 };
     let distKm = vol.distance_base_km;
     if (!distKm && vol.coords_domicile && window.ProtecDepartements?.calculateDistance) {
-      distKm = parseFloat(window.ProtecDepartements.calculateDistance(vol.coords_domicile.lat, vol.coords_domicile.lng, station.lat, station.lng).toFixed(2));
+      // Majoration du détour routier réel (1.32x distance à vol d'oiseau)
+      distKm = parseFloat((window.ProtecDepartements.calculateDistance(vol.coords_domicile.lat, vol.coords_domicile.lng, station.lat, station.lng) * 1.32).toFixed(1));
     }
     if (!distKm) distKm = 4.5;
 
@@ -14343,8 +14344,26 @@ class ProtecGame {
       departedDomicileAt: now,
       arrivalBaseAt: now + (rallyMin * 60 * 1000),
       loggedDeparture: true,
-      loggedArrival: false
+      loggedArrival: false,
+      routeCoords: vol._routeToBaseCoords || null
     };
+
+    // Préchargement asynchrone de l'itinéraire OSRM réel
+    if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function' && vol.coords_domicile && station.lat && station.lng) {
+      window.ProtecSystems.fetchRouteDetails(vol.coords_domicile, { lat: station.lat, lng: station.lng }).then(details => {
+        if (details && Array.isArray(details.coords) && details.coords.length > 1) {
+          vol._routeToBaseCoords = details.coords;
+          if (mission.volunteerTransit && mission.volunteerTransit[volId]) {
+            mission.volunteerTransit[volId].routeCoords = details.coords;
+            if (details.totalDistanceMeters) {
+              const roadDistKm = parseFloat((details.totalDistanceMeters / 1000).toFixed(1));
+              mission.volunteerTransit[volId].distBaseKm = roadDistKm;
+              vol.distance_base_km = roadDistKm;
+            }
+          }
+        }
+      }).catch(() => {});
+    }
 
     if (mission.operationalLog) {
       const timeStr = new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -26491,7 +26510,9 @@ class ProtecGame {
   async centerMapOnVolunteerTransit(missionId, volId) {
     if (!volId) return;
 
-    const mission = (this.missions || []).find(m => m.id === missionId) || (this.missions || []).find(m => m.volunteerTransit && m.volunteerTransit[volId]) || this.missions?.[0];
+    const mission = (this.missions || []).find(m => m.id === missionId) 
+      || (this.missions || []).find(m => m.volunteerTransit && m.volunteerTransit[volId]) 
+      || this.missions?.[0];
     const vol = (this.volunteers || []).find(v => v.id === volId);
     if (!vol) return;
 
@@ -26515,218 +26536,263 @@ class ProtecGame {
     const homeLat = Number(vol.coords_domicile?.lat || vol.lat || (baseLat + 0.025));
     const homeLng = Number(vol.coords_domicile?.lng || vol.lng || (baseLng + 0.025));
 
-    // Calcul de la progression en direct (entre 4% et 96% si en cours de trajet)
+    // Calcul de la progression temporelle en direct
     let progress = 0.5;
     let minsLeft = vol.temps_ralliement_minutes || 8;
 
     if (transit && transit.departedDomicileAt && transit.arrivalBaseAt) {
       const total = Math.max(1000, transit.arrivalBaseAt - transit.departedDomicileAt);
       const elapsed = nowTs - transit.departedDomicileAt;
-      progress = Math.max(0.04, Math.min(0.96, elapsed / total));
+      progress = Math.max(0.02, Math.min(0.98, elapsed / total));
       minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
     }
 
-    // Fermer les fenêtres ouvertes pour dévoiler la carte
+    // Fermer les tiroirs / modales pour dégager la vue sur la carte
     if (typeof this.closeModal === 'function') this.closeModal();
     if (typeof this.closeDrawer === 'function') this.closeDrawer();
     const mainModal = document.getElementById('main-modal');
     if (mainModal) mainModal.classList.add('hidden');
 
-    // Récupération du tracé routier précis (OSRM)
-    let routeCoords = [];
-    if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function') {
-      try {
-        const details = await window.ProtecSystems.fetchRouteDetails(
-          { lat: homeLat, lng: homeLng },
-          { lat: baseLat, lng: baseLng }
-        );
-        if (details && Array.isArray(details.coords) && details.coords.length > 1) {
-          routeCoords = details.coords;
+    // Récupération de l'itinéraire routier (OSRM)
+    let routeCoords = transit?.routeCoords || vol._routeToBaseCoords;
+    if (!routeCoords || routeCoords.length < 2) {
+      if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function') {
+        try {
+          const details = await window.ProtecSystems.fetchRouteDetails(
+            { lat: homeLat, lng: homeLng },
+            { lat: baseLat, lng: baseLng }
+          );
+          if (details && Array.isArray(details.coords) && details.coords.length > 1) {
+            routeCoords = details.coords;
+            if (transit) transit.routeCoords = routeCoords;
+            vol._routeToBaseCoords = routeCoords;
+            if (details.totalDistanceMeters) {
+              const roadKm = parseFloat((details.totalDistanceMeters / 1000).toFixed(1));
+              if (transit) transit.distBaseKm = roadKm;
+              vol.distance_base_km = roadKm;
+            }
+          }
+        } catch (e) {
+          console.warn('[VolunteerTransit] Erreur OSRM:', e);
         }
-      } catch (e) {
-        console.warn('[VolunteerTransit] Erreur OSRM, fallback direct:', e);
       }
     }
 
-    if (!routeCoords || routeCoords.length === 0) {
-      // Fallback interpolation droite
-      routeCoords = [
-        [homeLat, homeLng],
-        [homeLat + (baseLat - homeLat) * 0.5, homeLng + (baseLng - homeLng) * 0.5],
-        [baseLat, baseLng]
-      ];
+    // Fallback si indisponible (tracé incurvé réaliste)
+    if (!routeCoords || routeCoords.length < 2) {
+      routeCoords = [];
+      const steps = 24;
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const curLat = homeLat + (baseLat - homeLat) * t + Math.sin(t * Math.PI) * 0.003;
+        const curLng = homeLng + (baseLng - homeLng) * t - Math.sin(t * Math.PI) * 0.002;
+        routeCoords.push([curLat, curLng]);
+      }
     }
-
-    // Calcul de la position exacte sur la route selon la progression
-    let targetIndex = Math.floor(progress * (routeCoords.length - 1));
-    targetIndex = Math.max(0, Math.min(routeCoords.length - 1, targetIndex));
-    const currentPoint = routeCoords[targetIndex] || [homeLat + (baseLat - homeLat) * progress, homeLng + (baseLng - homeLng) * progress];
-    const approxLat = currentPoint[0];
-    const approxLng = currentPoint[1];
 
     if (!this.map) return;
 
-    // Nettoyer l'ancien tracé et l'ancien marqueur
-    if (this._tempVolunteerPolyline) {
-      try { this._tempVolunteerPolyline.remove(); } catch(e) {}
-      this._tempVolunteerPolyline = null;
-    }
-    if (this._tempVolunteerTransitMarker) {
-      try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
-      this._tempVolunteerTransitMarker = null;
+    // Calcul précis de la position sur la route le long des segments cumulés
+    let approxLat = homeLat;
+    let approxLng = homeLng;
+    const segDistances = [];
+    let totalRouteMeters = 0;
+
+    for (let i = 0; i < routeCoords.length - 1; i++) {
+      const p0 = routeCoords[i];
+      const p1 = routeCoords[i + 1];
+      const d = (window.ProtecSystems && typeof window.ProtecSystems.haversineMeters === 'function')
+        ? window.ProtecSystems.haversineMeters(p0[0], p0[1], p1[0], p1[1])
+        : Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) * 111000;
+      segDistances.push(d);
+      totalRouteMeters += d;
     }
 
-    // 1. Tracé sur la route comme les véhicules Protection Civile
+    if (totalRouteMeters > 0) {
+      const targetMeters = totalRouteMeters * progress;
+      let accum = 0;
+      let placed = false;
+      for (let i = 0; i < segDistances.length; i++) {
+        const d = segDistances[i];
+        if (accum + d >= targetMeters) {
+          const frac = d > 0 ? (targetMeters - accum) / d : 0;
+          approxLat = routeCoords[i][0] + (routeCoords[i + 1][0] - routeCoords[i][0]) * frac;
+          approxLng = routeCoords[i][1] + (routeCoords[i + 1][1] - routeCoords[i][1]) * frac;
+          placed = true;
+          break;
+        }
+        accum += d;
+      }
+      if (!placed) {
+        approxLat = routeCoords[routeCoords.length - 1][0];
+        approxLng = routeCoords[routeCoords.length - 1][1];
+      }
+    } else {
+      approxLat = homeLat + (baseLat - homeLat) * progress;
+      approxLng = homeLng + (baseLng - homeLng) * progress;
+    }
+
+    // Nettoyer les anciens calques
+    this.clearVolunteerTransitDisplay();
+
+    // 1. Tracé de l'itinéraire routier (ligne orange vive continue et bordée)
+    this._tempVolunteerPolylineBorder = L.polyline(routeCoords, {
+      color: '#ffffff',
+      weight: 6.5,
+      opacity: 0.85,
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(this.map);
+
     this._tempVolunteerPolyline = L.polyline(routeCoords, {
       color: '#f59e0b',
       weight: 4.5,
-      opacity: 0.9,
+      opacity: 0.95,
       dashArray: '8, 8',
       lineCap: 'round',
       lineJoin: 'round'
     }).addTo(this.map);
 
-    // 2. Point GPS sur la route où se trouve le bénévole avec balise
-    const modeIcon = vol.mode_transport === 'moto' ? '🏍️' : (vol.mode_transport === 'velo' ? '🚲' : '🚗');
-    const icon = L.divIcon({
+    // 2. Marqueur du domicile de départ (🏠)
+    const homeIcon = L.divIcon({
+      className: 'temp-volunteer-home',
+      html: `<div class="w-7 h-7 rounded-full bg-slate-900 border-2 border-white shadow-lg flex items-center justify-center text-sm cursor-pointer hover:scale-110 transition -translate-x-1/2 -translate-y-1/2" title="Domicile : ${vol.adresse || vol.commune || 'Départ'}">
+        🏠
+      </div>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0]
+    });
+    this._tempVolunteerHomeMarker = L.marker([homeLat, homeLng], { icon: homeIcon })
+      .bindPopup(`<strong>Domicile de ${vol.name}</strong><br><span class="text-xs text-slate-500">${vol.adresse || vol.commune || ''}</span>`)
+      .addTo(this.map);
+
+    // 3. Marqueur de l'antenne d'arrivée (🏢)
+    const stationIcon = L.divIcon({
+      className: 'temp-volunteer-station',
+      html: `<div class="w-8 h-8 rounded-full bg-pc-blue border-2 border-white shadow-lg flex items-center justify-center text-sm cursor-pointer hover:scale-110 transition -translate-x-1/2 -translate-y-1/2" title="Destination : Base ${station.name || station.nom || 'Antenne'}">
+        🏢
+      </div>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0]
+    });
+    this._tempVolunteerStationMarker = L.marker([baseLat, baseLng], { icon: stationIcon })
+      .bindPopup(`<strong>Base d'Antenne</strong><br><span class="text-xs text-slate-500">${station.name || station.nom || 'Base'}</span>`)
+      .addTo(this.map);
+
+    // 4. Marqueur du bénévole en route sur son point exact
+    const modeIcon = vol.mode_transport === 'moto' ? '🏍️' : (vol.mode_transport === 'velo' || vol.mode_transport === 'velo_transports' ? '🚲' : '🚗');
+    const volIcon = L.divIcon({
       className: 'temp-volunteer-ping',
-      html: `<div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer">
-        <!-- Point d'onde pulsant -->
-        <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-amber-400 opacity-75"></span>
+      html: `<div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer group">
+        <!-- Onde radar pulsante -->
+        <span class="animate-ping absolute inline-flex h-10 w-10 rounded-full bg-amber-400 opacity-75"></span>
         <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-white shadow-md"></span>
         <!-- Étiquette informative -->
-        <div class="absolute left-5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-black shadow-xl border-2 border-white flex items-center gap-1.5 whitespace-nowrap">
-          <span>${modeIcon}</span>
-          <span>${vol.name.split(' ')[0]} (~<span class="mono-num">${minsLeft}</span> min)</span>
+        <div class="absolute left-5 px-3 py-1.5 rounded-full bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 text-white text-[11px] font-black shadow-2xl border-2 border-white flex items-center gap-1.5 whitespace-nowrap">
+          <span class="text-sm">${modeIcon}</span>
+          <span>${vol.name.split(' ')[0]}</span>
+          <span class="px-1.5 py-0.2 rounded-full bg-black/30 text-amber-100 text-[10px] font-mono mono-num">~${minsLeft} min</span>
         </div>
       </div>`,
       iconSize: [1, 1],
       iconAnchor: [0, 0]
     });
 
-    this._tempVolunteerTransitMarker = L.marker([approxLat, approxLng], { icon }).addTo(this.map);
+    const distLeftKm = transit?.distBaseKm ? Math.max(0.2, (transit.distBaseKm * (1 - progress))).toFixed(1) : (minsLeft * 0.6).toFixed(1);
+    this._tempVolunteerTransitMarker = L.marker([approxLat, approxLng], { icon: volIcon })
+      .bindPopup(`
+        <div class="p-1 space-y-1 text-xs">
+          <strong class="text-sm block font-black text-slate-900">${vol.name}</strong>
+          <div class="text-amber-700 font-bold flex items-center gap-1">
+            <span>${modeIcon}</span>
+            <span>Ralliement en cours vers la base</span>
+          </div>
+          <div class="text-slate-600 text-[11px]">📍 Départ : ${vol.adresse || vol.commune || 'Domicile'}</div>
+          <div class="text-slate-600 text-[11px]">🏢 Arrivée : ${station.name || station.nom || 'Base Antenne'}</div>
+          <div class="pt-1 border-t border-slate-200 text-slate-800 font-semibold flex items-center justify-between">
+            <span>Reste : ~${distLeftKm} km</span>
+            <span class="font-black text-amber-600 mono-num">~${minsLeft} min</span>
+          </div>
+        </div>
+      `)
+      .addTo(this.map);
 
-    // 3. Cadrage caméra modéré : ne pas trop zoomer pour voir le trajet restant jusqu'à la base
-    const remainingBounds = L.latLngBounds([
-      [approxLat, approxLng],
-      [baseLat, baseLng]
-    ]);
-
-    this.map.fitBounds(remainingBounds, {
-      padding: [90, 90],
-      maxZoom: 13,
+    // 5. Cadrer la caméra sur l'ensemble de l'itinéraire routier
+    this.map.fitBounds(L.latLngBounds(routeCoords), {
+      padding: [80, 80],
+      maxZoom: 15,
       animate: true,
       duration: 1.2
     });
 
-    // Nettoyage au bout de 14 secondes ou au premier clic carte
-    const cleanup = () => {
-      if (this._tempVolunteerPolyline) {
-        try { this._tempVolunteerPolyline.remove(); } catch(e) {}
-        this._tempVolunteerPolyline = null;
-      }
-      if (this._tempVolunteerTransitMarker) {
-        try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
-        this._tempVolunteerTransitMarker = null;
-      }
-    };
+    // 6. Afficher un bandeau flottant interactif
+    this.showVolunteerTransitBanner(vol, minsLeft, modeIcon, mission?.id, station.name || station.nom || 'Base');
 
-    const cleanupTimer = setTimeout(cleanup, 14000);
+    // Nettoyage au premier clic sur la carte ou après 22 secondes
+    const cleanupTimer = setTimeout(() => this.clearVolunteerTransitDisplay(), 22000);
     this.map.once('click', () => {
       clearTimeout(cleanupTimer);
-      cleanup();
+      this.clearVolunteerTransitDisplay();
     });
   }
 
-  // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
-  
-  // --- GÉOLOCALISATION ET VISUALISATION DU BÉNÉVOLE EN TRANSIT SUR LA CARTE ---
-  centerMapOnVolunteerTransit(missionId, volId) {
-    if (!volId) return;
-
-    const mission = (this.missions || []).find(m => m.id === missionId) || (this.missions || []).find(m => m.volunteerTransit && m.volunteerTransit[volId]) || this.missions?.[0];
-    const vol = (this.volunteers || []).find(v => v.id === volId);
-    if (!vol) return;
-
-    const transit = mission?.volunteerTransit?.[vol.id] || (mission?.volunteerTransit && Object.values(mission.volunteerTransit).find(t => t.volId === vol.id));
-    const nowTs = Date.now() + (this.serverTimeOffset || 0);
-
-    // Déterminer la station d'antenne de destination
-    const station = (this.stations || []).find(s => s.id === vol.stationId) 
-      || (this.stations || []).find(s => s.id === mission?.stationId) 
-      || this.stations?.[0]
-      || { lat: 48.6921, lng: 6.1844, name: 'Base Antenne' };
-
-    const baseLat = Number(station.lat || 48.6921);
-    const baseLng = Number(station.lng || 6.1844);
-
-    // S'assurer de la présence du domicile du bénévole
-    if (!vol.coords_domicile && window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
-      window.ProtecPersonnel.ensureVolunteerResidence(vol, this);
+  showVolunteerTransitBanner(vol, minsLeft, modeIcon, missionId, stationName) {
+    let banner = document.getElementById('volunteer-transit-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'volunteer-transit-banner';
+      document.body.appendChild(banner);
     }
+    banner.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-[1000] bg-slate-900/95 dark:bg-slate-900/95 text-white border border-amber-400/50 shadow-2xl rounded-2xl px-4 py-2.5 flex items-center gap-3 backdrop-blur-md animate-in fade-in slide-in-from-top-4';
+    banner.innerHTML = `
+      <div class="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg border border-amber-500/30 shrink-0">
+        ${modeIcon}
+      </div>
+      <div class="text-left text-xs min-w-0">
+        <span class="font-extrabold text-white block truncate">${vol.name} <span class="text-amber-400 font-bold">(~${minsLeft} min restantes)</span></span>
+        <span class="text-[10px] text-slate-300 block truncate">Ralliement routier vers l'antenne ${stationName}</span>
+      </div>
+      <div class="flex items-center gap-1.5 shrink-0 ml-1">
+        ${missionId ? `
+          <button type="button" onclick="window.game.openMissionDetails('${missionId}'); window.game.clearVolunteerTransitDisplay();" class="px-2.5 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-hover text-white text-[11px] font-black cursor-pointer transition shadow-xs">
+            Dispositif
+          </button>
+        ` : ''}
+        <button type="button" onclick="window.game.clearVolunteerTransitDisplay();" class="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center text-sm cursor-pointer transition" title="Fermer la vue itinéraire">
+          ✕
+        </button>
+      </div>
+    `;
+  }
 
-    const homeLat = Number(vol.coords_domicile?.lat || vol.lat || (baseLat + 0.025));
-    const homeLng = Number(vol.coords_domicile?.lng || vol.lng || (baseLng + 0.025));
-
-    // Calcul de la progression en direct (entre 5% et 95% si en route)
-    let progress = 0.5;
-    let minsLeft = vol.temps_ralliement_minutes || 8;
-
-    if (transit && transit.departedDomicileAt && transit.arrivalBaseAt) {
-      const total = Math.max(1000, transit.arrivalBaseAt - transit.departedDomicileAt);
-      const elapsed = nowTs - transit.departedDomicileAt;
-      progress = Math.max(0.05, Math.min(0.95, elapsed / total));
-      minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
+  clearVolunteerTransitDisplay() {
+    if (this._tempVolunteerPolylineBorder) {
+      try { this._tempVolunteerPolylineBorder.remove(); } catch(e) {}
+      this._tempVolunteerPolylineBorder = null;
     }
-
-    // Coordonnées interpolées estimées sur le trajet domicile ➔ base
-    const approxLat = homeLat + (baseLat - homeLat) * progress;
-    const approxLng = homeLng + (baseLng - homeLng) * progress;
-
-    // Fermer les fenêtres ouvertes pour dévoiler la carte
-    if (typeof this.closeModal === 'function') this.closeModal();
-    if (typeof this.closeDrawer === 'function') this.closeDrawer();
-    const mainModal = document.getElementById('main-modal');
-    if (mainModal) mainModal.classList.add('hidden');
-
-    // Déplacement fluide de la caméra vers la position approximative
-    if (this.map && typeof this.map.flyTo === 'function') {
-      const targetZoom = Math.max(this.map.getZoom(), 15);
-      this.map.flyTo([approxLat, approxLng], targetZoom, { duration: 1.2 });
-
-      // Balise visuelle éphémère (s'efface automatiquement après 6 secondes)
-      if (typeof L !== 'undefined' && L.divIcon) {
-        if (this._tempVolunteerTransitMarker) {
-          try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
-          this._tempVolunteerTransitMarker = null;
-        }
-
-        const modeIcon = vol.mode_transport === 'moto' ? '🏍️' : (vol.mode_transport === 'velo' ? '🚲' : '🚗');
-        const icon = L.divIcon({
-          className: 'temp-volunteer-ping',
-          html: `<div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer">
-            <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-amber-400 opacity-75"></span>
-            <div class="relative px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black shadow-xl border-2 border-white flex items-center gap-1.5 whitespace-nowrap">
-              <span>${modeIcon}</span>
-              <span>${vol.name.split(' ')[0]} (~<span class="mono-num">${minsLeft}</span> min)</span>
-            </div>
-          </div>`,
-          iconSize: [1, 1],
-          iconAnchor: [0, 0]
-        });
-
-        this._tempVolunteerTransitMarker = L.marker([approxLat, approxLng], { icon }).addTo(this.map);
-        setTimeout(() => {
-          if (this._tempVolunteerTransitMarker) {
-            try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
-            this._tempVolunteerTransitMarker = null;
-          }
-        }, 6500);
-      }
+    if (this._tempVolunteerPolyline) {
+      try { this._tempVolunteerPolyline.remove(); } catch(e) {}
+      this._tempVolunteerPolyline = null;
+    }
+    if (this._tempVolunteerHomeMarker) {
+      try { this._tempVolunteerHomeMarker.remove(); } catch(e) {}
+      this._tempVolunteerHomeMarker = null;
+    }
+    if (this._tempVolunteerStationMarker) {
+      try { this._tempVolunteerStationMarker.remove(); } catch(e) {}
+      this._tempVolunteerStationMarker = null;
+    }
+    if (this._tempVolunteerTransitMarker) {
+      try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
+      this._tempVolunteerTransitMarker = null;
+    }
+    const banner = document.getElementById('volunteer-transit-banner');
+    if (banner) {
+      banner.remove();
     }
   }
 
-  centerMapOnVolunteerAddress(volunteerId, isCandidate = false) {
+    centerMapOnVolunteerAddress(volunteerId, isCandidate = false) {
     if (!volunteerId) return;
 
     const vol = isCandidate 
