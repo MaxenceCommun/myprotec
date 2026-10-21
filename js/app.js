@@ -7337,19 +7337,9 @@ class ProtecGame {
     return `${h}h ${m} min`;
   }
 
-  // Bascule de l'affichage de l'onglet/section des demandes de renforts (masqué par défaut)
+  // Ouverture directe de la modale complète des renforts (personnel, véhicules et réseau FNPC)
   toggleMissionRenfortSection(missionId) {
-    this._showRenfortSection = !this._showRenfortSection;
-    if (this._showRenfortSection) {
-      this.selectedMissionSubTab = 'vehicules';
-    }
-    this.openMissionDetails(missionId);
-    if (this._showRenfortSection) {
-      setTimeout(() => {
-        const el = document.getElementById('mission-renfort-section');
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 150);
-    }
+    this.openMissionReinforcementsModal(missionId);
   }
 
   // Affectation d'un véhicule à une fonction / tâche opérationnelle demandée par l'autorité
@@ -18828,7 +18818,7 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            <button onclick="window.game.toggleMissionRenfortSection('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+            <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
               <i data-lucide="users" class="w-3.5 h-3.5"></i> <span>+ Renfort</span>
             </button>
           </div>
@@ -18866,7 +18856,7 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            <button onclick="window.game.toggleMissionRenfortSection('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+            <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
               <i data-lucide="users" class="w-3.5 h-3.5"></i> <span>+ Renfort</span>
             </button>
           </div>
@@ -18912,7 +18902,7 @@ class ProtecGame {
         <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
           <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
-        <button onclick="window.game.toggleMissionRenfortSection('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+        <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
           <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Renfort</span>
         </button>
         ${isCrisisMission ? (
@@ -19331,7 +19321,7 @@ class ProtecGame {
 
   // --- GESTION DES MOYENS SUPPLÉMENTAIRES DURANT L'ÉVÉNEMENT (RENFORTS SUR SITE) ---
   openMissionReinforcementsModal(missionId) {
-    const mission = this.missions.find(m => m.id === missionId);
+    const mission = (this.missions || []).find(m => m.id === missionId);
     if (!mission) return;
 
     const modal = document.getElementById('main-modal');
@@ -19341,139 +19331,206 @@ class ProtecGame {
 
     title.innerHTML = `
       <div class="flex items-center gap-2">
-        <i data-lucide="user-plus" class="w-5 h-5 text-indigo-600"></i>
-        <span>Moyens Supplémentaires & Renforts : ${mission.title}</span>
+        <div class="w-8 h-8 rounded-xl bg-purple-600/20 text-purple-600 dark:text-purple-300 flex items-center justify-center text-base border border-purple-500/30">
+          <i data-lucide="users" class="w-4 h-4"></i>
+        </div>
+        <div>
+          <span class="text-xs uppercase font-bold text-slate-400 block tracking-wider">Moyens & Renforts</span>
+          <span class="text-sm font-extrabold text-slate-900 dark:text-white truncate max-w-sm block">${mission.title}</span>
+        </div>
       </div>
     `;
 
-    const assignedVolIds = mission.assignedCrew?.volunteers || mission.registeredVolunteers || [];
-    const assignedVehIds = (mission.assignedCrew?.vehicles || []).map(v => typeof v === 'object' ? v.id : v).concat(mission.assignedVehicleIds || []).filter(Boolean);
+    const isCrisis = Boolean(mission.isCrisis || mission.type === 'crise' || mission.status === 'prealerte' || mission.status === 'declenche');
 
-    const dispoVols = (this.volunteers || []).filter(v => v.status === 'dispo' && !assignedVolIds.includes(v.id));
-    const dispoVehs = (this.vehicles || []).filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !assignedVehIds.includes(v.id));
+    // 1. Liste des effectifs déjà engagés ou inscrits sur cette mission
+    const assignedVolIds = new Set(
+      (mission.assignedCrew?.volunteers || [])
+        .concat(mission.registeredVolunteers || [])
+        .concat(mission.engagedVolunteers || [])
+    );
+
+    // Effectifs occupés sur d'autres missions en cours
+    const busyVolIds = new Set();
+    (this.missions || []).filter(m => m.id !== mission.id && (m.status === 'ongoing' || m.status === 'declenche')).forEach(m => {
+      (m.assignedCrew?.volunteers || []).forEach(id => busyVolIds.add(id));
+      (m.engagedVolunteers || []).forEach(id => busyVolIds.add(id));
+    });
+
+    // Secouristes réellement disponibles
+    const dispoVols = (this.volunteers || []).filter(v => {
+      if (!v || assignedVolIds.has(v.id) || busyVolIds.has(v.id)) return false;
+      if (v.isBurnout) return false;
+      return v.status === 'dispo' || v.status === 'disponible' || v.status === 'base' || v.status === 'repos' || !v.status;
+    });
+
+    // 2. Véhicules déjà engagés sur cette mission
+    const assignedVehIds = new Set(
+      (mission.assignedCrew?.vehicles || []).map(v => typeof v === 'object' ? v.id : v)
+        .concat(mission.assignedVehicleIds || [])
+    );
+
+    // Véhicules occupés sur d'autres missions
+    const busyVehIds = new Set();
+    (this.missions || []).filter(m => m.id !== mission.id && (m.status === 'ongoing' || m.status === 'declenche')).forEach(m => {
+      (m.assignedCrew?.vehicles || []).forEach(v => busyVehIds.add(typeof v === 'object' ? v.id : v));
+      (m.assignedVehicleIds || []).forEach(id => busyVehIds.add(id));
+    });
+
+    // Véhicules disponibles au garage
+    const dispoVehs = (this.vehicles || []).filter(v => {
+      if (!v || assignedVehIds.has(v.id) || busyVehIds.has(v.id)) return false;
+      if (v.isUnavailable || v.isUnderRepair) return false;
+      return v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'disponible' || v.status === 'base' || !v.status;
+    });
 
     body.innerHTML = `
       <div class="space-y-4">
-        <!-- Contexte & Choix d'arbitrage -->
-        <div class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs text-indigo-950 space-y-1">
-          <div class="font-black flex items-center gap-1.5">
-            <span>ℹ️</span>
-            <span>Point de situation & Dimensionnement</span>
+        <!-- Bandeau informatif & Situation -->
+        <div class="p-3.5 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 text-xs text-indigo-950 dark:text-indigo-200 space-y-1">
+          <div class="font-black flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <span>ℹ️</span>
+              <span>Mobilisation de Renforts Opérationnels</span>
+            </span>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-200/70 dark:bg-indigo-800 text-indigo-900 dark:text-indigo-100">
+              ${isCrisis ? '🚨 Dispositif de Crise' : 'Dispositif de Secours'}
+            </span>
           </div>
-          <p class="text-[11px] text-indigo-900 leading-relaxed">
-            Vous pouvez ajuster les moyens engagés selon l'évolution du terrain et les capacités actuelles de votre antenne.
-            Aucun engagement n'est imposé : décidez en fonction de vos effectifs et du niveau d'urgence.
+          <p class="text-[11px] text-indigo-900 dark:text-indigo-300 leading-relaxed">
+            Mobilisez des secouristes ou véhicules de votre antenne en renfort, ou sollicitez le réseau des antennes alliées FNPC (autres directeurs connectés).
           </p>
         </div>
 
-        <!-- Section 1 : Bénévoles disponibles à la base -->
-        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+        <!-- Section 1 : Secouristes disponibles à mobiliser -->
+        <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+            <span class="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 tracking-wide">
               <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
-              <span>Secouristes Disponibles à la Base (${dispoVols.length})</span>
+              <span>Secouristes Disponibles de l'Antenne (${dispoVols.length})</span>
             </span>
-            <span class="text-[10px] text-slate-500 font-bold">Effectif actuel : ${assignedVolIds.length}</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Mobilisés sur mission : ${assignedVolIds.size}</span>
           </div>
 
           ${dispoVols.length > 0 ? `
-            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-              ${dispoVols.map(v => `
-                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-base">${v.av || '👤'}</span>
-                    <div class="min-w-0">
-                      <div class="font-bold text-slate-900 truncate">${v.name}</div>
-                      <div class="text-[10px] text-slate-500">${v.rank || 'Secouriste'} • ${v.skills?.join(', ') || 'PSE'}</div>
+            <div class="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+              ${dispoVols.map(v => {
+                const distKm = v.distance_base_km || 4;
+                const rallyMin = v.temps_ralliement_minutes || Math.max(4, Math.round(distKm * 2.2));
+                const skillsBadges = (v.skills || ['PSE1']).slice(0, 3).map(s => `<span class="px-1 py-0.2 rounded text-[8px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">${s.toUpperCase()}</span>`).join(' ');
+                return `
+                  <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/80 flex items-center justify-between text-xs gap-2 hover:border-indigo-300 transition">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="text-lg shrink-0">${v.av || '👤'}</span>
+                      <div class="min-w-0">
+                        <div class="font-extrabold text-slate-900 dark:text-white truncate">${v.name}</div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                          <span class="font-bold text-slate-700 dark:text-slate-300">${v.rank || 'Secouriste'}</span>
+                          <span>•</span>
+                          <span>${skillsBadges}</span>
+                          <span>•</span>
+                          <span class="text-amber-600 dark:text-amber-400 font-semibold">🏠 ~${rallyMin} min</span>
+                        </div>
+                      </div>
                     </div>
+                    <button 
+                      type="button"
+                      onclick="window.game.deployReinforcementVolunteer('${mission.id}', '${v.id}')"
+                      class="px-3 py-1.5 rounded-xl text-[10px] font-black bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0 active:scale-95">
+                      <i data-lucide="user-plus" class="w-3 h-3"></i>
+                      <span>Mobiliser</span>
+                    </button>
                   </div>
-                  <button 
-                    onclick="window.game.deployReinforcementVolunteer('${mission.id}', '${v.id}')"
-                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="send" class="w-3 h-3"></i>
-                    <span>Engager</span>
-                  </button>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           ` : `
-            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
-              Aucun secouriste n'est actuellement disponible à la base.
-            </p>
+            <div class="text-center py-3 px-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+              Tous vos secouristes sont actuellement engagés sur le terrain ou en repos.
+            </div>
           `}
         </div>
 
         <!-- Section 2 : Véhicules disponibles au garage -->
-        <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+        <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+            <span class="text-xs font-black text-slate-800 dark:text-white uppercase flex items-center gap-1.5 tracking-wide">
               <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
               <span>Véhicules Disponibles au Garage (${dispoVehs.length})</span>
             </span>
-            <span class="text-[10px] text-slate-500 font-bold">Actifs : ${assignedVehIds.length}</span>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Actifs : ${assignedVehIds.size}</span>
           </div>
 
           ${dispoVehs.length > 0 ? `
-            <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-              ${dispoVehs.map(veh => `
-                <div class="p-2 rounded-xl border border-slate-200 bg-slate-50/60 flex items-center justify-between text-xs">
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span class="text-base">🚑</span>
-                    <div class="min-w-0">
-                      <div class="font-bold text-slate-900 truncate">${veh.name} (${veh.type})</div>
-                      <div class="text-[10px] text-slate-500">Carburant : ${veh.fuel || 90}%</div>
+            <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+              ${dispoVehs.map(veh => {
+                const vehIcon = veh.type === 'VPSP' ? '🚑' : (veh.type === 'VL' ? '🚗' : (veh.type === 'VTU' ? '🚐' : '🚒'));
+                return `
+                  <div class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/80 flex items-center justify-between text-xs gap-2 hover:border-pc-blue transition">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <span class="text-lg shrink-0">${vehIcon}</span>
+                      <div class="min-w-0">
+                        <div class="font-extrabold text-slate-900 dark:text-white truncate">${veh.name} <span class="text-slate-400 font-normal">(${veh.type || 'Véhicule'})</span></div>
+                        <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                          <span>⛽ ${veh.fuel || 90}%</span>
+                          <span>•</span>
+                          <span>💺 ${veh.seatsCount || veh.capacity || 3} places</span>
+                        </div>
+                      </div>
                     </div>
+                    <button 
+                      type="button"
+                      onclick="window.game.deployReinforcementVehicle('${mission.id}', '${veh.id}')"
+                      class="px-3 py-1.5 rounded-xl text-[10px] font-black bg-pc-blue hover:bg-pc-blue-hover text-white shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0 active:scale-95">
+                      <i data-lucide="send" class="w-3 h-3"></i>
+                      <span>Déployer</span>
+                    </button>
                   </div>
-                  <button 
-                    onclick="window.game.deployReinforcementVehicle('${mission.id}', '${veh.id}')"
-                    class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-pc-blue hover:bg-pc-blue-hover text-white shadow-xs transition flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="send" class="w-3 h-3"></i>
-                    <span>Déployer</span>
-                  </button>
-                </div>
-              `).join('')}
+                `;
+              }).join('')}
             </div>
           ` : `
-            <p class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-xl">
-              Tous vos véhicules sont actuellement en mission ou en atelier.
-            </p>
+            <div class="text-center py-3 px-2 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+              Tous vos véhicules sont actuellement en mission ou en cours de maintenance.
+            </div>
           `}
         </div>
 
         <!-- Section 3 : Renforts Inter-Antennes Réels (Réseau FNPC / Confrères Connectés) -->
-        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+        <div class="p-3.5 rounded-2xl bg-gradient-to-br from-indigo-50/90 via-white to-purple-50/70 dark:from-slate-900 dark:via-slate-900 dark:to-purple-950/40 border border-indigo-200 dark:border-purple-800/80 shadow-2xs space-y-2.5">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
-              <i data-lucide="handshake" class="w-4 h-4 text-indigo-600"></i>
-              <span>Renforts Inter-Antennes Réels (Réseau FNPC)</span>
+            <span class="text-xs font-black text-indigo-950 dark:text-indigo-300 uppercase flex items-center gap-1.5 tracking-wide">
+              <i data-lucide="radio" class="w-4 h-4 text-indigo-600 dark:text-indigo-400"></i>
+              <span>Appel à Renfort Réseau FNPC</span>
             </span>
-            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Multijoueur En Direct
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-100 text-indigo-800 dark:bg-indigo-900/60 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700">
+              Multijoueur Direct
             </span>
           </div>
 
-          <p class="text-[11px] text-slate-600 leading-relaxed">
-            Seuls les <strong>responsables d'antennes (joueurs) connectés</strong> peuvent détacher et faire rouler leurs véhicules et secouristes en renfort sur votre mission. <em>Aucun renfort fictif ni moyen inventé n'est généré.</em>
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+            Sollicitez les autres responsables d'antennes Protection Civile (autres directeurs connectés) pour qu'ils détachent un VPSP ou des secouristes en renfort.
           </p>
 
           <button 
+            type="button"
             onclick="window.game.closeModal(); window.game.requestAllianceRenfortForMission('${mission.id}');"
-            class="w-full p-3 rounded-xl border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-left transition cursor-pointer flex items-center justify-between group shadow-xs">
-            <div class="space-y-0.5">
-              <div class="font-black text-xs text-indigo-950 flex items-center gap-1.5 group-hover:text-indigo-800">
-                <span>🤝</span>
-                <span>Diffuser un Appel à Renfort Réel sur la Fréquence Fédérale</span>
+            class="w-full p-3 rounded-xl border border-indigo-200 dark:border-indigo-700/80 bg-white/90 dark:bg-slate-800/90 hover:bg-indigo-50 dark:hover:bg-indigo-950/60 text-left transition cursor-pointer flex items-center justify-between group shadow-xs">
+            <div class="space-y-0.5 min-w-0 pr-2">
+              <div class="font-black text-xs text-indigo-950 dark:text-indigo-200 flex items-center gap-1.5 group-hover:text-indigo-600 dark:group-hover:text-indigo-300">
+                <span>📡</span>
+                <span>Diffuser un Appel à Renfort sur la Fréquence Fédérale</span>
               </div>
-              <p class="text-[10px] text-indigo-800 leading-tight">
+              <p class="text-[10px] text-indigo-800 dark:text-indigo-300/80 leading-tight">
                 Diffusion instantanée aux antennes du département et de la zone de défense via le serveur opérationnel.
               </p>
             </div>
-            <i data-lucide="send" class="w-4 h-4 text-indigo-600 group-hover:translate-x-1 transition shrink-0"></i>
+            <i data-lucide="send" class="w-4 h-4 text-indigo-600 dark:text-indigo-400 group-hover:translate-x-1 transition shrink-0"></i>
           </button>
         </div>
 
-        <div class="flex justify-end pt-2">
-          <button onclick="window.game.closeModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 transition cursor-pointer">
+        <div class="flex justify-end pt-1">
+          <button type="button" onclick="window.game.closeModal()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer">
             Fermer
           </button>
         </div>
@@ -19485,28 +19542,41 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  deployReinforcementVolunteer(missionId, volId) {
-    const mission = this.missions.find(m => m.id === missionId);
-    const vol = this.volunteers.find(v => v.id === volId);
+    deployReinforcementVolunteer(missionId, volId) {
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    const vol = (this.volunteers || []).find(v => v.id === volId);
     if (!mission || !vol) return;
 
-    // Règle opérationnelle : le personnel déployé depuis la base fait route véhiculé (VL, VTU, VTP, VPSP)
-    const dispoVeh = (this.vehicles || []).find(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !v.requiresTrailer);
-    if (dispoVeh) {
-      this.deployReinforcementVehicleWithCrew(missionId, dispoVeh.id, [vol.id]);
-      return;
-    }
+    const isCrisis = Boolean(mission.isCrisis || mission.type === 'crise' || mission.status === 'prealerte' || mission.status === 'declenche');
 
     if (!mission.assignedCrew) mission.assignedCrew = { volunteers: [], vehicles: [] };
     if (!Array.isArray(mission.assignedCrew.volunteers)) mission.assignedCrew.volunteers = [];
     if (!Array.isArray(mission.registeredVolunteers)) mission.registeredVolunteers = [];
 
-    mission.assignedCrew.volunteers.push(vol.id);
-    mission.registeredVolunteers.push(vol.id);
-    vol.status = 'mission';
-    vol.energy = Math.max(10, (vol.energy || 90) - 15);
+    if (!mission.registeredVolunteers.includes(vol.id)) {
+      mission.registeredVolunteers.push(vol.id);
+    }
+    if (!mission.assignedCrew.volunteers.includes(vol.id)) {
+      mission.assignedCrew.volunteers.push(vol.id);
+    }
 
-    this.showToast('Secouriste Engagé ! 🏃‍♂️', `${vol.name} rejoint le dispositif sur « ${mission.title} ».`, 'green');
+    if (isCrisis) {
+      // Sur mission de crise : lancer le ralliement domicile ➔ base
+      this.initVolunteerCrisisTransit(mission, vol.id);
+      vol.status = 'mission';
+      const rallyMin = vol.temps_ralliement_minutes || 8;
+      this.showToast('Secouriste en Renfort ! 🏃', `${vol.name} part en renfort vers la base (~ ${rallyMin} min).`, 'green');
+    } else {
+      // Hors crise : si véhicule dispo, faire route en engin
+      const dispoVeh = (this.vehicles || []).find(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && !v.requiresTrailer);
+      if (dispoVeh) {
+        this.deployReinforcementVehicleWithCrew(missionId, dispoVeh.id, [vol.id]);
+        return;
+      }
+      vol.status = 'mission';
+      vol.energy = Math.max(10, (vol.energy || 90) - 15);
+      this.showToast('Secouriste Engagé ! 🏃‍♂️', `${vol.name} rejoint le dispositif sur « ${mission.title} ».`, 'green');
+    }
 
     this.saveGame();
     this.updateStatsUI();
