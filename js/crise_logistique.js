@@ -2084,6 +2084,38 @@ window.ProtecCriseLogistique = {
     }
   },
 
+  // Bandeau d'état opérationnel de la Cellule de Crise Active (affiché sous la prise de commandement)
+  renderCrisisActiveBarHTML(game, mission) {
+    if (!game) game = window.game;
+    if (!mission) return '';
+    const isCrisis = Boolean(mission.isCrisis || mission.isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type));
+    if (!isCrisis) return '';
+
+    const engaged = (game.volunteers || []).filter(v => (mission.registeredVolunteers || []).includes(v.id) || (mission.assignedCrew?.volunteers || []).includes(v.id));
+
+    return `
+      <!-- Bandeau d'état opérationnel Cellule de Crise Active -->
+      <div class="p-4 rounded-3xl bg-amber-50/90 border border-amber-300 text-amber-950 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-2.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black uppercase flex items-center gap-2 text-amber-800 dark:text-pc-orange">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
+            CELLULE DE CRISE ACTIVE (CODIS / PRÉFECTURE)
+          </span>
+          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-white/10 dark:text-slate-300 dark:border-transparent">
+            Rotations : ${mission.rotationsCount || 0}
+          </span>
+        </div>
+        <p class="text-[11px] text-amber-900/80 dark:text-slate-300 leading-snug">
+          Durée indéterminée dépendante de l'évolution du sinistre sur le terrain. Surveillez la main courante radio et gérez la fatigue de vos secouristes.
+        </p>
+        <div class="flex items-center justify-between pt-1 border-t border-amber-200 dark:border-white/10 text-[11px]">
+          <span class="text-amber-900/70 dark:text-slate-400">Effectifs engagés en première ligne :</span>
+          <span class="font-extrabold text-amber-900 dark:text-pc-orange mono-num">${engaged.length} secouristes</span>
+        </div>
+      </div>
+    `;
+  },
+
   renderCrisisDetailsHTML(game, mission) {
     this.injectState(game);
     if (!mission.operationalLog) this.initMissionOperationalLog(mission);
@@ -2094,26 +2126,6 @@ window.ProtecCriseLogistique = {
 
     return `
       <div class="space-y-4">
-        <!-- Bandeau d'état opérationnel SANS compte à rebours fixe -->
-        <div class="p-4 rounded-3xl bg-amber-50/90 border border-amber-300 text-amber-950 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-2.5">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase flex items-center gap-2 text-amber-800 dark:text-pc-orange">
-              <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-              CELLULE DE CRISE ACTIVE (CODIS / PRÉFECTURE)
-            </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-white/10 dark:text-slate-300 dark:border-transparent">
-              Rotations : ${mission.rotationsCount || 0}
-            </span>
-          </div>
-          <p class="text-[11px] text-amber-900/80 dark:text-slate-300 leading-snug">
-            Durée indéterminée dépendante de l'évolution du sinistre sur le terrain. Surveillez la main courante radio et gérez la fatigue de vos secouristes.
-          </p>
-          <div class="flex items-center justify-between pt-1 border-t border-amber-200 dark:border-white/10 text-[11px]">
-            <span class="text-amber-900/70 dark:text-slate-400">Effectifs engagés en première ligne :</span>
-            <span class="font-extrabold text-amber-900 dark:text-pc-orange mono-num">${engaged.length} secouristes</span>
-          </div>
-        </div>
-
         <!-- ACTIONS OPÉRATIONNELLES SELON LA GOUVERNANCE -->
         ${(() => {
           const myId = game.player?.id || 'usr_local';

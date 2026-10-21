@@ -16104,6 +16104,9 @@ class ProtecGame {
 
         <!-- BARRE DE GOUVERNANCE & PRISE DE COMMANDEMENT TOUT EN HAUT -->
         ${(mission.isCrisis || isCrisisMission || isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? window.ProtecCriseLogistique.renderCrisisCommandBannerHTML(this, mission) : ''}
+
+        <!-- BARRE CELLULE DE CRISE ACTIVE JUSTE EN DESSOUS DE LA PRISE DE COMMANDEMENT -->
+        ${(mission.isCrisis || isCrisisMission || isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? window.ProtecCriseLogistique.renderCrisisActiveBarHTML(this, mission) : ''}
         ${(mission.status === 'carence' || mission.status === 'annule_defaut' || mission.status === 'prealerte_levee') ? `
           <div class="p-3.5 rounded-2xl ${mission.status === 'prealerte_levee' ? 'bg-emerald-50 border border-emerald-300 text-emerald-950' : 'bg-rose-50 border border-rose-300 text-rose-950'} shadow-sm space-y-1.5">
             <div class="flex items-center justify-between">
