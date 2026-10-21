@@ -2324,12 +2324,10 @@ window.ProtecFormations = {
       totalRevenue += revFromExternals;
     }
 
-    // Bonus matériel sur recettes
+    // Bonus matériel sur recettes (facultatif : le Tier 1 est à 100%, le Tier 3 apporte un bonus)
     if (mannequinTier === 3) {
       totalRevenue = Math.round(totalRevenue * 1.25);
       tierNotice += ' [QCPR Connecté : +25% valorisation]';
-    } else if (mannequinTier === 1 && totalRevenue > 0) {
-      totalRevenue = Math.round(totalRevenue * 0.90);
     }
 
     if (totalRevenue > 0) {

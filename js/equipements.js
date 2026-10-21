@@ -983,7 +983,7 @@ window.ProtecEquipements = {
     const mText = `${mission.title || ''} ${mission.desc || ''}`.toLowerCase();
     const crew = mission.assignedCrew?.volunteers || [];
 
-    // 1. Prise de Paramètres Vitaux
+    // 1. Prise de Paramètres Vitaux (Bonus passifs de gestion sans alertes pop-up intrusives)
     const paramTier = game.equipmentTiers.prise_parametres || 1;
     if (paramTier === 3) {
       // Moniteur multiparamétrique ECG & Bluetooth
@@ -995,70 +995,40 @@ window.ProtecEquipements = {
         v.moral = Math.min(100, (v.moral || 75) + 6);
         v.motivation = v.moral;
       });
-      game.showToast(
-        '🩺 Bilan Vital Instantané (Moniteur ECG Pro)',
-        'Constantes NIBP/SpO2 et tracé ECG transmis par Bluetooth au SAMU 15. Régulation immédiate et prise en charge saluée par le médecin régulateur (+10 réputation SAMU) !',
-        'indigo'
-      );
     } else if (paramTier === 2) {
       if (window.ProtecConventions) {
         window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', 5, 'Bilan multiparamétrique automatique précis');
       }
-    } else {
-      // Tier 1 : Risque d'erreur de mesure
-      if (Math.random() < 0.15) {
-        game.showToast(
-          'Tensionométrie Délicate ⚠️',
-          'Victime agitée : la prise de tension manuelle au stéthoscope a pris du retard. Envisagez un tensiomètre multiparamétrique automatique.',
-          'orange'
-        );
-      }
     }
+    // Tier 1 : Matériel standard de base, parfaitement fonctionnel, aucune alerte ni pénalité
 
-    // 2. Brancardage & Immobilisation
+    // 2. Brancardage & Immobilisation (Bonus passif de confort)
     const brancardTier = game.equipmentTiers.brancardage_immobilisation || 1;
     if (brancardTier === 2) {
-      // Matelas pompe électrique & brancard ultraléger
       crew.forEach(v => {
-        // Préservation de la fatigue (-30%)
         v.fatigue = Math.max(0, (v.fatigue || 20) - 8);
         v.energy = Math.min(100, 100 - v.fatigue);
       });
       if (mText.includes('trauma') || mText.includes('sport') || mText.includes('chute') || mission.type === 'samu') {
         game.resources.reputationScore = (game.resources.reputationScore || 0) + 12;
-        game.showToast(
-          '🩼 Conditionnement Express & Sans Douleur',
-          'Matelas coquille mis sous dépression électrique en 20s et portage ergonomique : confort absolu pour la victime et fatigue des secouristes préservée (-30%) !',
-          'green'
-        );
       }
     }
 
-    // 3. Radios Numériques ANTARES
+    // 3. Radios Numériques ANTARES (Bonus passif de coordination)
     const radioTier = game.equipmentTiers.radio_communication || 1;
     if (radioTier === 2 && (mission.scale?.includes('ME') || mission.scale?.includes('GE') || mission.requiredVolunteers >= 5)) {
       if (window.ProtecConventions) {
-        window.ProtecConventions.adjustInstitutionalReputation(game, 'prefecture', 15, 'Coordination radio numérique ANTARES parfaite');
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'prefecture', 15, 'Coordination radio numérique ANTARES');
       }
-      game.showToast(
-        '📻 Réseau ANTARES Déployé',
-        'Liaison tactique numérique sans faille entre tous les binômes et le PC régulation (+15 pts réputation Préfecture) !',
-        'blue'
-      );
     }
 
-    // 4. Outillage Électroportatif Pro
+    // 4. Outillage Électroportatif Pro (Bonus passif de confort logistique)
     const outilTier = game.equipmentTiers.outillage_logistique || 1;
     if (outilTier === 2 && (mission.scale?.includes('ME') || mission.scale?.includes('GE') || mission.type === 'meteo')) {
       crew.forEach(v => {
         v.fatigue = Math.max(0, (v.fatigue || 20) - 5);
         v.energy = Math.min(100, 100 - v.fatigue);
       });
-      game.showToast(
-        '⚡ Montage Électroportatif Express',
-        'Poste de secours et éclairages LED montés deux fois plus vite grâce aux visseuses Brushless et projecteurs autonomes !',
-        'amber'
-      );
     }
   },
 
