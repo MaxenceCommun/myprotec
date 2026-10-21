@@ -2165,14 +2165,18 @@ window.ProtecCriseLogistique = {
               `;
             } else {
               return `
-                <div class="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-slate-900 border border-emerald-300 dark:border-slate-700 text-center space-y-1">
+                <div class="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-slate-900 border border-emerald-300 dark:border-slate-700 text-center space-y-2">
                   <div class="flex items-center justify-center gap-2 text-xs font-bold text-emerald-900 dark:text-emerald-300">
                     <i data-lucide="shield" class="w-4 h-4 text-emerald-600"></i>
                     <span>Soutien Opérationnel • Aucune demande de renfort en attente</span>
                   </div>
                   <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-snug">
-                    Le directeur aux commandes (<strong>${mission.managerPlayerName || 'Directeur Allié'}</strong>) n'a pas émis de demande de renfort pour le moment. Vous recevrez une notification dès qu'un appui sera sollicité.
+                    Le directeur aux commandes (<strong>${mission.managerPlayerName || 'Directeur Allié'}</strong>) n'a pas émis de demande formelle. Vous pouvez lui proposer spontanément un détachement de votre antenne.
                   </p>
+                  <button onclick="window.game.openProposeCrisisRenfortModal('${mission.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer">
+                    <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
+                    <span>+ Proposer un Renfort de Mon Antenne</span>
+                  </button>
                 </div>
               `;
             }
@@ -4630,11 +4634,15 @@ window.ProtecCriseLogistique = {
                         `).join('')}
                       </div>
                     ` : `
-                      <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-700 text-center space-y-1">
+                      <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-700 text-center space-y-2">
                         <div class="text-xs font-bold text-slate-300">Aucune demande de renfort en attente</div>
                         <p class="text-[11px] text-slate-400">
                           Le directeur aux commandes (${crisis.managerPlayerName || 'Directeur Allié'}) n'a pas émis de demande de renfort pour le moment.
                         </p>
+                        <button onclick="window.game.openProposeCrisisRenfortModal('${crisis.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center justify-center gap-1.5 mx-auto cursor-pointer">
+                          <i data-lucide="handshake" class="w-3.5 h-3.5"></i>
+                          <span>+ Proposer un Renfort de Mon Antenne</span>
+                        </button>
                       </div>
                     `}
                   </div>
