@@ -10704,17 +10704,11 @@ class ProtecGame {
     return scenarios;
   }
 
-  // Contrôle strict de fréquence des crises : Moins d'une par jour en moyenne, en journée ou en soirée (8h-22h)
+  // Contrôle strict de fréquence des crises : Moins d'une par jour en moyenne (Plage 7h-1h normale, 1h-7h divisée par 2)
   canTriggerDailyCrisis(ignoreHour = false) {
     if (!this.stations || this.stations.length === 0) return false;
 
-    // 1. Plage horaire : Exclusivement en journée ou en soirée (8h00 à 22h00)
-    const hour = (this.clock && this.clock.hour !== undefined) ? this.clock.hour : new Date().getHours();
-    if (!ignoreHour && (hour < 8 || hour >= 22)) {
-      return false; // Zéro crise la nuit
-    }
-
-    // 2. Plafond strict : Au maximum 1 crise par jour calendaire
+    // 1. Plafond strict : Au maximum 1 crise par jour calendaire
     const curDay = (this.clock && this.clock.year) 
       ? `${this.clock.year}-${this.clock.month}-${this.clock.day}` 
       : new Date().toISOString().slice(0, 10);
@@ -27801,13 +27795,18 @@ class ProtecGame {
       }
 
       // 3d. GESTION DES CRISES MAJEURES & PLANS D'URGENCE (AASC, SNCF, CUMP)
-      // RÈGLE MÉTIER STRICTE : Test très fréquent toutes les 10 secondes avec probabilité infinitésimale
-      // calibrée pour conserver exactement le même taux global (moins d'une crise par jour, ~40% sur la journée 8h-22h).
+      // RÈGLE MÉTIER STRICTE : Test toutes les 10 secondes.
+      // - Plage principale 07h00 à 01h00 : probabilité normale.
+      // - Nuit profonde 01h00 à 07h00 : probabilité divisée par 2.
+      // - Taux global maintenu à < 1 crise par jour (~40% de chance d'apparition par 24h = 1 crise tous les 2.5 jours).
       if (this.clock.second % 10 === 0) {
         if (this.canTriggerDailyCrisis()) {
-          // 0.0001013 par tirage de 10s (5040 tirages de 8h à 22h) = (1 - 0.0001013)^5040 = ~60.4% sans crise => ~39.6% de chance par jour
+          const hour = (this.clock && this.clock.hour !== undefined) ? this.clock.hour : new Date().getHours();
+          const isNight = (hour >= 1 && hour < 7); // Nuit profonde entre 01h et 07h
+
           const crisisMultiplier = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('criseChanceMultiplier', 1.0) : 1.0;
-          const baseChance = 0.0001013 * crisisMultiplier;
+          // Base 7h-1h : 0.00006757 (6480 tirages) | Nuit 1h-7h : 0.00003378 (2160 tirages) => (1 - p)^6480 * (1 - p/2)^2160 = 0.60
+          const baseChance = (isNight ? 0.00003378 : 0.00006757) * crisisMultiplier;
 
           if (Math.random() < baseChance) {
             const hasAasc = Boolean(this.aascConvention && this.aascConvention.signed);
