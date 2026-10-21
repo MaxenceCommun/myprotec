@@ -43,8 +43,27 @@ window.ProtecAdvancedModals = {
       { day: 7, title: 'Jour 7', shortDesc: '5 000 €', icon: '🏆' }
     ];
 
+    const isTuto = window.ProtecTutorial && typeof window.ProtecTutorial.isTutorialActive === 'function' && window.ProtecTutorial.isTutorialActive(game);
+    const tutoStep = window.ProtecTutorial && typeof window.ProtecTutorial.getCurrentStep === 'function' ? window.ProtecTutorial.getCurrentStep(game) : 1;
+
     return `
       <div class="space-y-6">
+        ${isTuto ? `
+          <div class="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-sky-950/60 border-2 border-pc-blue/40 dark:border-sky-500/50 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl animate-bounce">🎓</span>
+              <div>
+                <h4 class="text-xs font-black text-pc-blue dark:text-sky-300 uppercase tracking-wide">Tutoriel de Démarrage en cours (Étape ${tutoStep}/3)</h4>
+                <p class="text-[11px] text-slate-600 dark:text-slate-300">Finalisez vos 3 étapes prioritaires pour rendre votre antenne opérationnelle. Les défis quotidiens prendront leur plein essor ensuite !</p>
+              </div>
+            </div>
+            <button onclick="document.getElementById('generic-modal')?.remove(); window.ProtecTutorial.openTutorialModal(window.game);" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:brightness-110 text-white font-black text-xs transition cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5">
+              <span>Voir le Guide</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        ` : ''}
+
         ${!hasAntenna ? `
           <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-xs text-amber-800">
             <span class="text-xl">📍</span>

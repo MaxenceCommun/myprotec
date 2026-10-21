@@ -297,13 +297,15 @@
 
         <div class="h-6 w-px bg-slate-200/80 flex-shrink-0"></div>
 
-        <!-- Récompenses & Défis (Cliquable) -->
-        <div class="flex items-center gap-2 cursor-pointer group relative flex-shrink-0" onclick="window.game.openModule('recompenses')" title="Récompenses quotidiennes et défis de la semaine">
-          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition">
-            <i data-lucide="gift" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+        <!-- Récompenses & Défis / Tutoriel (Cliquable) -->
+        <div id="header-rewards-btn" class="flex items-center gap-2 cursor-pointer group relative flex-shrink-0 transition-all duration-300" onclick="window.game.handleRewardsOrTutorialClick()" title="Récompenses quotidiennes et défis de la semaine">
+          <div id="header-rewards-icon-box" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition">
+            <span id="header-rewards-icon-slot">
+              <i data-lucide="gift" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>
+            </span>
           </div>
           <div>
-            <div class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Défis & Cadeaux</div>
+            <div id="header-rewards-subtitle" class="text-[9px] uppercase font-bold tracking-wider text-slate-400">Défis & Cadeaux</div>
             <div class="text-xs font-black text-slate-700 flex items-center gap-1">
               <span id="stat-rewards-ready">Quotidien</span>
             </div>

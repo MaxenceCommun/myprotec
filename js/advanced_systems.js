@@ -1512,9 +1512,9 @@ window.ProtecAdvanced = {
     if (isWeekly) {
       if (tier === 1) {
         return [
-          { id: 'w-task-hours', title: 'Cumuler 10h de bénévolat d’intérêt public sur le terrain', goal: 10, current: 0, reward: 1200, done: false, icon: 'clock' },
-          { id: 'w-task-missions', title: 'Assurer 3 départs en missions de secours (DPS, SAMU ou urgence)', goal: 3, current: 0, reward: 1000, done: false, icon: 'shield-alert' },
-          { id: 'w-task-team', title: 'Pôles d’antenne : attribuer un rôle ou promouvoir 1 bénévole (PSE1/PSE2)', goal: 1, current: 0, reward: 800, done: false, icon: 'user-check' }
+          { id: 'w-task-hours', title: 'Cumuler au moins 15h de bénévolat d’intérêt public sur le terrain', goal: 15, current: 0, reward: 1400, done: false, icon: 'clock' },
+          { id: 'w-task-missions', title: 'Assurer au moins 4 départs en missions de secours (DPS, SAMU ou urgence)', goal: 4, current: 0, reward: 1200, done: false, icon: 'shield-alert' },
+          { id: 'w-task-team', title: 'Pôles d’antenne : attribuer 2 rôles ou promouvoir 2 bénévoles (PSE1/PSE2)', goal: 2, current: 0, reward: 900, done: false, icon: 'user-check' }
         ];
       } else if (tier === 2) {
         return [
@@ -1532,9 +1532,9 @@ window.ProtecAdvanced = {
     } else {
       if (tier === 1) {
         return [
-          { id: 'task-daily-ops', title: 'Assurer au moins 1 départ en mission de secours ou DPS', goal: 1, current: 0, reward: 500, done: false, icon: 'ambulance' },
-          { id: 'task-daily-logi', title: 'Disposer d’au moins 1 véhicule opérationnel réarmé & prêt au départ', goal: 1, current: 0, reward: 400, done: false, icon: 'truck' },
-          { id: 'task-daily-pedago', title: 'Pôle Formation : organiser ou planifier 1 session (PSC, SST ou FC Recyclage)', goal: 1, current: 0, reward: 450, done: false, icon: 'graduation-cap' }
+          { id: 'task-daily-ops', title: 'Assurer au moins 2 départs en missions de secours ou DPS', goal: 2, current: 0, reward: 600, done: false, icon: 'ambulance' },
+          { id: 'task-daily-logi', title: 'Flotte & Matériel : disposer d’au moins 2 véhicules prêts ou ≥ 6 matériels en stock', goal: 2, current: 0, reward: 550, done: false, icon: 'truck' },
+          { id: 'task-daily-pedago', title: 'Pôle Formation : organiser ou planifier au moins 2 sessions (PSC, SST ou Recyclage)', goal: 2, current: 0, reward: 500, done: false, icon: 'graduation-cap' }
         ];
       } else if (tier === 2) {
         return [
@@ -1586,11 +1586,38 @@ window.ProtecAdvanced = {
       this.saveRewardsLocally(game);
     }
 
-    // Nettoyage immédiat des anciens intitulés de tâches stockés en mémoire
+    // Nettoyage et recalibrage immédiat des objectifs Tier 1 après le tutoriel
     if (Array.isArray(game.rewards.dailyTasks)) {
       game.rewards.dailyTasks.forEach(t => {
-        if (t.id === 'task-daily-logi' && t.title && t.title.includes('Oxygène')) {
-          t.title = 'Maintenir la réserve logistique de l’antenne (≥ 4 articles en stock)';
+        if (t.id === 'task-daily-logi' && t.goal === 1) {
+          t.title = 'Flotte & Matériel : disposer d’au moins 2 véhicules prêts ou ≥ 6 matériels en stock';
+          t.goal = 2;
+          t.reward = 550;
+        } else if (t.id === 'task-daily-ops' && t.goal === 1) {
+          t.title = 'Assurer au moins 2 départs en missions de secours ou DPS';
+          t.goal = 2;
+          t.reward = 600;
+        } else if (t.id === 'task-daily-pedago' && t.goal === 1) {
+          t.title = 'Pôle Formation : organiser ou planifier au moins 2 sessions (PSC, SST ou Recyclage)';
+          t.goal = 2;
+          t.reward = 500;
+        }
+      });
+    }
+    if (Array.isArray(game.rewards.weeklyTasks)) {
+      game.rewards.weeklyTasks.forEach(w => {
+        if (w.id === 'w-task-hours' && w.goal === 10) {
+          w.title = 'Cumuler au moins 15h de bénévolat d’intérêt public sur le terrain';
+          w.goal = 15;
+          w.reward = 1400;
+        } else if (w.id === 'w-task-missions' && w.goal === 3) {
+          w.title = 'Assurer au moins 4 départs en missions de secours (DPS, SAMU ou urgence)';
+          w.goal = 4;
+          w.reward = 1200;
+        } else if (w.id === 'w-task-team' && w.goal === 1) {
+          w.title = 'Pôles d’antenne : attribuer 2 rôles ou promouvoir 2 bénévoles (PSE1/PSE2)';
+          w.goal = 2;
+          w.reward = 900;
         }
       });
     }
@@ -1670,18 +1697,29 @@ window.ProtecAdvanced = {
       }
       // 2. Logistique & Flotte
       else if (t.id === 'task-daily-logi') {
+        const readyVehs = (game.vehicles || []).filter(v => 
+          !v.isBrokenDown && !v.needsRearming && v.isRearmed !== false && (v.armementLevel === undefined || v.armementLevel >= 100) && (v.mechanical || 100) >= 50 && v.ctStatus !== 'expire'
+        ).length;
+        const o2 = game.logistics?.oxygenBottles || 0;
+        const dae = game.logistics?.aedPads || 0;
+        const kits = game.logistics?.woundKits || 0;
+        const totalItems = o2 + dae + kits;
+        const hasDoneRearm = (act.rearms || 0) > 0;
+
         if (t.goal > 2) {
           // Consommables d'urgence en stock
-          const o2 = game.logistics?.oxygenBottles || 0;
-          const dae = game.logistics?.aedPads || 0;
-          const kits = game.logistics?.woundKits || 0;
-          t.current = Math.min(t.goal, o2 + dae + kits);
+          t.current = Math.min(t.goal, totalItems);
+        } else if (t.goal === 2) {
+          // Tier 1 : nécessite 2 véhicules prêts OU 1 véhicule prêt + au moins 6 matériels en stock OU 1 atelier de réarmement
+          let score = 0;
+          if (readyVehs >= 2 || (readyVehs >= 1 && totalItems >= 6)) {
+            score = 2;
+          } else if (readyVehs >= 1 || totalItems >= 3) {
+            score = 1;
+          }
+          if (hasDoneRearm) score = Math.max(score, 2);
+          t.current = Math.min(t.goal, score);
         } else {
-          // Véhicules prêts au départ (armement complet, non en panne, CT valide)
-          const readyVehs = (game.vehicles || []).filter(v => 
-            !v.isBrokenDown && !v.needsRearming && v.isRearmed !== false && (v.armementLevel === undefined || v.armementLevel >= 100) && (v.mechanical || 100) >= 50 && v.ctStatus !== 'expire'
-          ).length;
-          const hasDoneRearm = (act.rearms || 0) > 0;
           t.current = Math.min(t.goal, Math.max(hasDoneRearm ? 1 : 0, readyVehs));
         }
       }
