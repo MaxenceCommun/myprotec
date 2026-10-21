@@ -2243,8 +2243,8 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // 21. Admin : Lecture des catalogues personnalisés (Véhicules, Matériel, Écussons)
-  if (url === '/api/admin/catalogs' && req.method === 'GET') {
+  // 21. Lecture publique des catalogues personnalisés (Véhicules, Gyrophares, Matériel, Écussons)
+  if ((url === '/api/catalogs' || url === '/api/admin/catalogs') && req.method === 'GET') {
     sendJson(res, 200, {
       success: true,
       vehicles: db.data.customVehicleCatalog || null,

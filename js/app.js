@@ -253,6 +253,7 @@ class ProtecGame {
     window.ProtecLoader?.setProgress(45, 'Initialisation des modules opérationnels...', 'Modules');
     this.init();
     this.initMultiplayer();
+    this.syncVehicleCatalogFromServer();
     if (window.ProtecAuth) {
       window.ProtecAuth.init(this);
     }
@@ -1298,7 +1299,50 @@ class ProtecGame {
           if (body) window.ProtecEcussons.renderTableauEcussons(this, body);
         }
       }
+    } else if (type === 'catalogs_updated') {
+      if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
+        if (window.ProtecAdvanced) {
+          window.ProtecAdvanced.vehicleCatalog = data.vehicles;
+        }
+        try {
+          localStorage.setItem('protec_custom_vehicle_catalog', JSON.stringify(data.vehicles));
+        } catch (e) {}
+        if (Array.isArray(this.vehicles)) {
+          this.vehicles.forEach(veh => {
+            const match = data.vehicles.find(m => m.type === veh.type || m.name === veh.name);
+            if (match && Array.isArray(match.beacons)) {
+              veh.beacons = JSON.parse(JSON.stringify(match.beacons));
+            }
+          });
+        }
+      }
     }
+  }
+
+  
+  // Synchronisation automatique des catalogues officiels (gyrophares, caractéristiques des véhicules) pour tous les joueurs (Web & Mobile)
+  syncVehicleCatalogFromServer() {
+    fetch('/api/catalogs')
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
+          if (window.ProtecAdvanced) {
+            window.ProtecAdvanced.vehicleCatalog = data.vehicles;
+          }
+          try {
+            localStorage.setItem('protec_custom_vehicle_catalog', JSON.stringify(data.vehicles));
+          } catch (e) {}
+          if (Array.isArray(this.vehicles)) {
+            this.vehicles.forEach(veh => {
+              const match = data.vehicles.find(m => m.type === veh.type || m.name === veh.name);
+              if (match && Array.isArray(match.beacons)) {
+                veh.beacons = JSON.parse(JSON.stringify(match.beacons));
+              }
+            });
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   updateRemotePlayerStations(remotePlayer) {

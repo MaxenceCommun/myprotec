@@ -603,6 +603,7 @@ window.ProtecSystems = {
         vehicleId: vehicle.id,
         vehicleName: vehicle.name,
         vehicleType: vehicle.type,
+        beacons: Array.isArray(vehicle.beacons) ? vehicle.beacons : null,
         origin: originCoords,
         dest: destCoords,
         statusTarget: statusTarget,
@@ -887,7 +888,7 @@ window.ProtecSystems = {
 
     const iconHtml = `
       <div class="vehicle-compact-marker is-remote ${isEmergency ? 'is-emergency' : ''}" title="${vehName}">
-        ${window.ProtecSystems.getVehicleBeaconsHTML({ type: data.vehicleType, name: vehName }, isEmergency)}
+        ${window.ProtecSystems.getVehicleBeaconsHTML({ type: data.vehicleType, name: vehName, beacons: data.beacons }, isEmergency)}
         <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
       </div>
     `;
