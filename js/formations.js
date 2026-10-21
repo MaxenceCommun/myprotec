@@ -20,52 +20,88 @@
 window.ProtecFormations = {
   // Variantes de dotation en mannequins de réanimation pour les lots pédagogiques
   MANNEQUIN_VARIANTS: {
-    standard: {
-      id: 'standard',
-      name: 'Mannequins Mousse Standard',
-      shortName: 'Standard',
+    rcp_1: {
+      id: 'rcp_1',
+      alias: 'standard',
+      name: 'Mannequin RCP Compact (GQS / PSC)',
+      shortName: 'Compact GQS/PSC',
+      image: 'images/equipements/rcp_1.png',
       tier: 1,
       cost: 0,
-      badge: 'De Série',
+      badge: 'Base GQS/PSC',
       badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-300',
-      desc: 'Mannequins de massage cardiaque standards pour les gestes élémentaires (inclus de base).',
+      desc: 'Mannequin torse compact pour l\'initiation aux Gestes Qui Sauvent et au PSC (inclus de base).',
       bonusRevPct: 0,
       bonusRep: 0,
       bonusTrainerMoral: 0
     },
-    clicker: {
-      id: 'clicker',
-      name: 'Mannequins avec Clicker Mécanique',
-      shortName: 'Clicker Sonore',
+    rcp_2: {
+      id: 'rcp_2',
+      alias: 'clicker',
+      name: 'Mannequin Secourisme Pro (Sans membres - Base PSE)',
+      shortName: 'Base PSE (Sans membres)',
+      image: 'images/equipements/rcp_2.png',
       tier: 2,
-      cost: 180,
-      badge: 'Retour Sonore (+5 Rép)',
+      cost: 220,
+      badge: 'Base PSE (+5 Rép)',
       badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950 dark:text-blue-300',
-      desc: 'Signal sonore automatique à la bonne profondeur de compression. Apprentissage facilité.',
-      bonusRevPct: 0,
+      desc: 'Mannequin torse professionnel de secourisme pour PSE1 et PSE2, sans bras ni jambes.',
+      bonusRevPct: 0.05,
       bonusRep: 5,
       bonusTrainerMoral: 5
     },
-    qcpr: {
-      id: 'qcpr',
-      name: 'Mannequins Connectés QCPR (Tablette & App)',
-      shortName: 'QCPR Connecté ⭐',
+    rcp_3: {
+      id: 'rcp_3',
+      name: 'Mannequin Corps Entier (Avec jambes)',
+      shortName: 'Corps Entier (+Jambes)',
+      image: 'images/equipements/rcp_3.png',
       tier: 3,
-      cost: 650,
+      cost: 480,
+      badge: 'Corps Entier (+10 Rép)',
+      badgeClass: 'bg-indigo-100 text-indigo-900 border-indigo-300 dark:bg-indigo-950 dark:text-indigo-300',
+      desc: 'Mannequin corps entier avec jambes articulées pour simulation complète de dégagement et brancardage.',
+      bonusRevPct: 0.12,
+      bonusRep: 10,
+      bonusTrainerMoral: 8
+    },
+    rcp_4: {
+      id: 'rcp_4',
+      alias: 'qcpr',
+      name: 'Mannequin Connecté QCPR (Tablette & Bluetooth)',
+      shortName: 'QCPR Connecté ⭐',
+      image: 'images/equipements/rcp_4.png',
+      tier: 4,
+      cost: 750,
       badge: 'Haute Fidélité (+25% Recettes)',
       badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950 dark:text-purple-300',
-      desc: 'Capteurs connectés temps réel avec courbe de décompression et bilan stagiaire (+25% valorisation).',
+      desc: 'Mannequin connecté haute précision avec affichage courbe de décompression et bilan sur tablette instructeur (+25% valorisation).',
       bonusRevPct: 0.25,
       bonusRep: 15,
-      bonusTrainerMoral: 10
+      bonusTrainerMoral: 12
     }
   },
 
   getKitMannequinVariant(game, kitId) {
     if (!game) game = window.game;
-    if (!game) return 'standard';
+    if (!game) return 'rcp_1';
     if (!game.trainingKitsVariants) game.trainingKitsVariants = {};
-    return game.trainingKitsVariants[kitId] || 'standard';
+    let val = game.trainingKitsVariants[kitId];
+    if (val === 'standard') val = 'rcp_1';
+    if (val === 'clicker') val = 'rcp_2';
+    if (val === 'qcpr') val = 'rcp_4';
+    if (!val) {
+      val = kitId?.includes('pse') ? 'rcp_2' : 'rcp_1';
+    }
+    return val;
+  },
+
+  hasSchillerFormation(game) {
+    if (!game) game = window.game;
+    if (!game) return false;
+    const stations = game.stations || [];
+    return stations.some(st => st.stock && (Number(st.stock.schiller_t7_formation) || 0) > 0) ||
+           (game.logistics && (Number(game.logistics.schiller_t7_formation) || 0) > 0) ||
+           Boolean(game.hasSchillerT7Formation);
   },
 
   upgradeKitMannequin(game, kitId, targetVariantId) {
@@ -2438,6 +2474,21 @@ window.ProtecFormations = {
       tierNotice += ' [DSA Connecté HF : Optimisé]';
     }
 
+    // Bonus Schiller Touch 7 de Formation Connecté Instructeur (PSE & Recyclages)
+    const hasSchillerT7Form = this.hasSchillerFormation(game);
+    const isPSECrewTraining = course?.id?.includes('PSE') || course?.kitRequired === 'kit_pedago_pse';
+    if (hasSchillerT7Form && isPSECrewTraining) {
+      repGain += 12;
+      tierNotice += ' [Schiller Touch 7 Formation : Scénarios ECG Connectés +12 Rép SAMU]';
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', 8, 'Formation PSE sur Schiller Touch 7 connecté');
+      }
+      if (trainer) {
+        trainer.moral = Math.min(100, (trainer.moral || 75) + 8);
+        trainer.motivation = trainer.moral;
+      }
+    }
+
     // Bonus Qualité Pédagogique des Locaux (mannequins RCP, vidéoprojecteur, tableau blanc posés dans la salle)
     if (window.ProtecLocaux && typeof window.ProtecLocaux.calculatePremisesStats === 'function') {
       const premises = session.stationId ? window.ProtecLocaux.getStationPremises(game, session.stationId) : game.stations[0]?.premises;
@@ -3644,12 +3695,34 @@ window.ProtecFormations = {
                                 <span class="text-[9px] uppercase font-black shrink-0">Manquant</span>
                               `}
                             </div>
-                            ${hasKit && curVarKey !== 'qcpr' ? `
-                              <div class="flex items-center justify-between pt-1 border-t border-emerald-200/80 dark:border-emerald-800/80 text-[9.5px]">
-                                <span class="text-emerald-700 dark:text-emerald-300">Dotation : ${curVar.name}</span>
-                                <button type="button" onclick="window.ProtecFormations.upgradeKitMannequin(window.game, '${course.kitRequired}', 'qcpr')" class="px-2 py-0.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-black cursor-pointer shadow-2xs transition" title="Passer aux mannequins connectés QCPR (+25% valorisation)">
-                                  ⚡ Upgrader QCPR (+650 €)
-                                </button>
+                            ${hasKit ? `
+                              <div class="flex items-center justify-between pt-1 border-t border-emerald-200/80 dark:border-emerald-800/80 text-[9.5px] flex-wrap gap-1">
+                                <div class="flex items-center gap-1.5">
+                                  <img src="${curVar.image || 'images/equipements/rcp_1.png'}" alt="${curVar.shortName}" class="w-5 h-5 object-contain rounded bg-white p-0.5 border border-slate-200" onerror="this.outerHTML='🫀'" />
+                                  <span class="text-emerald-800 dark:text-emerald-300 font-bold">${curVar.name}</span>
+                                </div>
+                                ${curVarKey !== 'rcp_4' ? `
+                                  <button type="button" onclick="window.ProtecFormations.upgradeKitMannequin(window.game, '${course.kitRequired}', 'rcp_4')" class="px-2 py-0.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-black cursor-pointer shadow-2xs transition" title="Passer au mannequin connecté QCPR (+25% valorisation)">
+                                    ⚡ Upgrader QCPR
+                                  </button>
+                                ` : ''}
+                              </div>
+                            ` : ''}
+
+                            <!-- Statut Schiller Touch 7 Formation -->
+                            ${isPSECrewTraining ? `
+                              <div class="flex items-center justify-between pt-1 border-t border-emerald-200/60 dark:border-emerald-800/60 text-[9.5px]">
+                                <span class="flex items-center gap-1 text-slate-700 dark:text-slate-300">
+                                  <img src="images/equipements/moniteur_t7.png" alt="Schiller T7" class="w-4 h-4 object-contain" onerror="this.outerHTML='📟'" />
+                                  <span>Moniteur Schiller T7 de Formation :</span>
+                                </span>
+                                ${hasSchillerT7Form ? `
+                                  <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-purple-100 text-purple-900 border border-purple-300">Connecté Instructeur ✓</span>
+                                ` : `
+                                  <button type="button" onclick="window.game.openModule('boutiques'); if(window.ProtecBoutiques){ window.ProtecBoutiques.activeShopId='centrale_federale'; window.ProtecBoutiques.activeRayonId='formations'; }" class="text-pc-blue font-black hover:underline cursor-pointer">
+                                    + Équiper en Boutique (2 600 €)
+                                  </button>
+                                `}
                               </div>
                             ` : ''}
                           </div>

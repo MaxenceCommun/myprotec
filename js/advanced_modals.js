@@ -1159,7 +1159,38 @@ window.ProtecAdvancedModals = {
         icon: '🚙',
         specialty: 'Accès Tout-Terrain & Crues'
       },
-      // 8. FLIT Poids Lourd Soutien Pop
+      // 8. MAN TGM FLIT Nouvelle Génération
+      {
+        id: 'type_flit_man_tgm',
+        type: 'FLIT',
+        title: 'FLIT - MAN TGM Fourgon Lourd d’Intervention Technique (Génération Neuve)',
+        category: 'Technique & Soutien',
+        roleGroup: 'heavy',
+        functions: ['LOG', 'POP', 'TECH'],
+        capacity_log: 16,
+        desc: 'Génération neuve des Fourgons Lourds sur porteur MAN TGM : rideaux alu assistés, groupe électrogène insonorisé, mât LED 360°, capacité PMA renforcée et boule d’attelage. Conducteur Permis C obligatoire.',
+        cost: 115000,
+        capacity: 3,
+        speedKmH: 80,
+        licenseRequired: 'C',
+        licenseLabel: 'Permis C (Poids Lourd)',
+        hasTowHitch: true,
+        image: 'images/vehicles/flit_pop_2.png',
+        icon: '🏗️',
+        specialty: 'Postes Médicaux Avancés & Crises Majeures',
+        variantOptions: {
+          id: 'man_tgm_flit',
+          name: 'MAN TGM - FLIT Fourgon Lourd d’Intervention Technique (Génération Neuve)',
+          model: 'MAN TGM FLIT Nouvelle Génération',
+          cost: 115000,
+          capacity: 3,
+          licenseRequired: 'C',
+          image: 'images/vehicles/flit_pop_2.png',
+          functions: ['LOG', 'POP', 'TECH'],
+          capacity_log: 16
+        }
+      },
+      // 8.bis FLIT Poids Lourd Soutien Pop
       {
         id: 'type_flit_heavy',
         type: 'FLIT',
@@ -1775,6 +1806,17 @@ window.ProtecAdvancedModals = {
         licenseRequired: 'B',
         hasTowHitch: true,
         image: 'images/vehicles/trafic_vtp.png'
+      };
+    } else if (cardId === 'type_flit_man_tgm') {
+      options = {
+        id: 'man_tgm_flit',
+        name: 'MAN TGM - FLIT Fourgon Lourd d’Intervention Technique (Génération Neuve)',
+        model: 'MAN TGM FLIT Nouvelle Génération',
+        cost: 115000,
+        capacity: 3,
+        licenseRequired: 'C',
+        hasTowHitch: true,
+        image: 'images/vehicles/flit_pop_2.png'
       };
     } else if (cardId === 'type_flit_heavy') {
       options = {

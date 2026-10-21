@@ -755,6 +755,19 @@ window.ProtecLogistique = {
       badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
       desc: 'Mannequins et bouées pour les entraînements aquatiques.',
       usage: 'Formations et entraînements aquatiques SSA.'
+    },
+    {
+      id: 'schiller_t7_formation',
+      category: 'kits_formation',
+      name: 'Moniteur ECG & DAE Schiller Touch 7 de Formation (Connecté Instructeur)',
+      lucideIcon: 'monitor',
+      image: 'images/equipements/moniteur_t7.png',
+      price: 2600,
+      unit: 'appareil complet',
+      badge: 'Simulation Médicale',
+      badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
+      desc: 'Moniteur-défibrillateur de simulation Touch 7 connecté en Bluetooth à la tablette du formateur. Permet de générer des scénarios ECG dynamiques (FV, TV, asystolie), piloter les constantes (SpO2, NIBP) et simuler des bilans réalistes pour les formations PSE.',
+      usage: 'Simulation haute fidélité pour les formations PSE1, PSE2 et recyclages opérationnels (+15% réussite, +12 réputation SAMU).'
     }],
 
   // =========================================================================

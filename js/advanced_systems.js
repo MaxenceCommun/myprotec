@@ -378,6 +378,25 @@ window.ProtecAdvanced = {
       defaultVariantId: 'flit_heavy',
       variants: [
         {
+          id: 'man_tgm_flit',
+          functions: ["LOG","POP","TECH"],
+          type: 'FLIT',
+          name: 'MAN TGM - FLIT Fourgon Lourd d’Intervention Technique (Génération Neuve)',
+          shortName: 'MAN TGM FLIT Nouvelle Génération',
+          category: 'Technique & Soutien',
+          missionFilter: ['logistique', 'usar', 'crise'],
+          desc: 'Génération neuve des Fourgons Lourds d’Intervention Technique sur châssis MAN TGM. Châssis lourd moderne avec rideaux alu, groupe électrogène insonorisé haute puissance, mât télescopique LED 360°, armement PMA et motopompes. Conducteur Permis C obligatoire.',
+          cost: 115000,
+          capacity: 3,
+          licenseRequired: 'C',
+          licenseLabel: 'Permis C (Poids Lourd)',
+          speedKmH: 80,
+          hasTowHitch: true,
+          image: 'images/vehicles/flit_pop_2.png',
+          specialty: 'Postes Médicaux Avancés & Crises Majeures',
+          capacity_log: 16
+        },
+        {
           id: 'flit_heavy',
           functions: ["LOG","POP","TECH"],
           type: 'FLIT',
