@@ -17270,7 +17270,8 @@ class ProtecGame {
                                       </div>
                                     `;
                                   }
-                                  if (dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || nowTs < dep.crisisArrivalAt) {
+                                  const isVehicleActuallyInTransit = Boolean(dep.assignedVeh && (this.transits || []).some(t => (t.vehicleId === dep.assignedVeh.id || t.vehicle?.id === dep.assignedVeh.id) && (t.statusTarget === 2 || t.statusTarget === 3)));
+                                  if (isVehicleActuallyInTransit || dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || nowTs < dep.crisisArrivalAt) {
                                     const minsLeft = Math.max(1, Math.ceil((dep.crisisArrivalAt - nowTs) / 60000));
                                     const withGyros = dep.hasBeacon !== false;
                                     return `
@@ -27667,32 +27668,80 @@ class ProtecGame {
                   // Démarrage du trajet animé sur la carte
                   if (!dep.transitStartedOnMap && dep.assignedVeh && window.ProtecSystems) {
                     dep.transitStartedOnMap = true;
-                    const base = this.stations[0] || { lat: 48.8566, lng: 2.3522 };
+                    const base = (this.stations || []).find(s => s.id === dep.assignedVeh.stationId) || this.stations[0] || { lat: 48.8566, lng: 2.3522 };
                     const dest = { lat: m.lat, lng: m.lng };
-                    window.ProtecSystems.startTransit(this, dep.assignedVeh, base, dest, m, 2);
+                    window.ProtecSystems.startTransit(this, dep.assignedVeh, base, dest, m, 2, () => {
+                      // ARRIVÉE EFFECTIVE DU VÉHICULE SUR LES LIEUX APRÈS SON TRAJET ROUTIER
+                      dep.status = 'sur_les_lieux';
+                      m.firstVehicleArrived = true;
+                      if (!m.firstVehicleArrivalAt) m.firstVehicleArrivalAt = Date.now();
+                      if (!m.onSceneStartedAt) m.onSceneStartedAt = Date.now();
+                      if (!dep.loggedCrisisArrival) {
+                        dep.loggedCrisisArrival = true;
+                        if (m.operationalLog) {
+                          m.operationalLog.unshift({
+                            time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                            text: `Arrivée sur les lieux : Équipe ${dep.teamName} sur place à « ${m.title} ». Début des opérations de secours et d'assistance.`,
+                            author: 'Sur les Lieux',
+                            isCritical: true
+                          });
+                        }
+                        this.showToast('Équipe sur les Lieux 🟢', `${dep.teamName} est arrivée à l'adresse de la crise et intervient sur le sinistre.`, 'green');
+                        if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+                          window.ProtecAudio.playRadioBeep();
+                        }
+                      }
+                      if (this.selectedMissionId === m.id) {
+                        this.refreshMissionDetailsIfOpen(m.id);
+                      }
+                    });
+
+                    // Caler dep.crisisArrivalAt sur la durée exacte du trajet routier réel
+                    const activeTransit = (this.transits || []).find(t => (t.vehicleId === dep.assignedVeh?.id || t.vehicle?.id === dep.assignedVeh?.id) && t.statusTarget === 2);
+                    if (activeTransit && activeTransit.durationMs) {
+                      dep.crisisArrivalAt = activeTransit.startTime + activeTransit.durationMs;
+                    }
                   }
                 }
               }
               // Phase 4 : Arrivée sur les lieux de la crise
               else if (currentTime >= dep.crisisArrivalAt) {
-                if (dep.status !== 'sur_les_lieux') {
-                  dep.status = 'sur_les_lieux';
-                  hasCrisisChanges = true;
-                }
-                if (!dep.loggedCrisisArrival) {
-                  dep.loggedCrisisArrival = true;
-                  hasCrisisChanges = true;
-                  if (m.operationalLog) {
-                    m.operationalLog.unshift({
-                      time: timeStr,
-                      text: `Arrivée sur les lieux : Équipe ${dep.teamName} sur place à « ${m.title} ». Début des opérations de secours et d'assistance.`,
-                      author: 'Sur les Lieux',
-                      isCritical: true
-                    });
+                // RÈGLE MÉTIER STRICTE : Si le véhicule roule encore physiquement sur la carte Leaflet, attendre son arrivée réelle !
+                const vehId = dep.assignedVeh?.id || dep.vehicleId;
+                const isStillInTransit = (this.transits || []).some(t => 
+                  (t.vehicleId === vehId || t.vehicle?.id === vehId) && 
+                  (t.statusTarget === 2 || t.statusTarget === 3)
+                );
+
+                if (isStillInTransit) {
+                  const activeTransit = (this.transits || []).find(t => (t.vehicleId === vehId || t.vehicle?.id === vehId) && t.statusTarget === 2);
+                  if (activeTransit && activeTransit.durationMs) {
+                    dep.crisisArrivalAt = Math.max(dep.crisisArrivalAt || 0, activeTransit.startTime + activeTransit.durationMs);
                   }
-                  this.showToast('Équipe sur les Lieux 🟢', `${dep.teamName} est arrivée à l'adresse de la crise et intervient sur le sinistre.`, 'green');
-                  if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
-                    window.ProtecAudio.playRadioBeep();
+                  // Le véhicule n'a pas encore touché sa destination : ne rien déclencher
+                } else {
+                  if (dep.status !== 'sur_les_lieux') {
+                    dep.status = 'sur_les_lieux';
+                    hasCrisisChanges = true;
+                  }
+                  if (!dep.loggedCrisisArrival) {
+                    dep.loggedCrisisArrival = true;
+                    hasCrisisChanges = true;
+                    m.firstVehicleArrived = true;
+                    if (!m.firstVehicleArrivalAt) m.firstVehicleArrivalAt = currentTime;
+                    if (!m.onSceneStartedAt) m.onSceneStartedAt = currentTime;
+                    if (m.operationalLog) {
+                      m.operationalLog.unshift({
+                        time: timeStr,
+                        text: `Arrivée sur les lieux : Équipe ${dep.teamName} sur place à « ${m.title} ». Début des opérations de secours et d'assistance.`,
+                        author: 'Sur les Lieux',
+                        isCritical: true
+                      });
+                    }
+                    this.showToast('Équipe sur les Lieux 🟢', `${dep.teamName} est arrivée à l'adresse de la crise et intervient sur le sinistre.`, 'green');
+                    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+                      window.ProtecAudio.playRadioBeep();
+                    }
                   }
                 }
               }

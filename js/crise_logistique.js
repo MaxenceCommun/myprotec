@@ -276,8 +276,9 @@ window.ProtecCriseLogistique = {
         const isVpsp = vType === 'VPSP' || vName.includes('VPSP');
         const isLog = logTypes.some(t => vType.includes(t) || vName.includes(t)) || vName.includes('LOGISTIQUE') || vName.includes('MATÉRIEL') || vName.includes('MATERIEL');
 
-        const isOnScene = dep.status === 'sur_les_lieux' || (dep.crisisArrivalAt && now >= dep.crisisArrivalAt);
-        const isInTransit = dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || 
+        const isVehRollingOnMap = (g?.transits || []).some(t => (t.vehicleId === veh?.id || t.vehicle?.id === veh?.id) && (t.statusTarget === 2 || t.statusTarget === 3));
+        const isOnScene = !isVehRollingOnMap && (dep.status === 'sur_les_lieux' || (dep.crisisArrivalAt && now >= dep.crisisArrivalAt));
+        const isInTransit = isVehRollingOnMap || dep.status === 'en_route_gyros' || dep.status === 'en_route_normal' || 
           (dep.vehicleDepartureAt && now >= dep.vehicleDepartureAt && (!dep.crisisArrivalAt || now < dep.crisisArrivalAt));
         const isAtBase = dep.status === 'armement_2min' || 
           (dep.maxArrivalBaseAt && now >= dep.maxArrivalBaseAt && (!dep.vehicleDepartureAt || now < dep.vehicleDepartureAt));
