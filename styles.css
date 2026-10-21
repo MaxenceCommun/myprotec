@@ -2533,3 +2533,45 @@ html.dark #step2-status-card .bg-rose-200 {
   color: #fda4af !important;
   border-color: rgba(251, 113, 133, 0.5) !important;
 }
+
+
+/* ==========================================================================
+   AMÉLIORATION DU CONTRASTE & STYLE - TIROIR MISSION (#context-drawer)
+   ========================================================================== */
+#context-drawer .shadow-2xs {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* En Dark Mode : cartes horaires et alertes de mission */
+html.dark #context-drawer .bg-white {
+  background-color: #0f172a !important;
+  border-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+html.dark #context-drawer .bg-slate-50 {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+html.dark #context-drawer .border-slate-100,
+html.dark #context-drawer .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+html.dark #context-drawer .text-slate-900 {
+  color: #f8fafc !important;
+}
+
+html.dark #context-drawer .text-slate-800 {
+  color: #e2e8f0 !important;
+}
+
+html.dark #context-drawer .text-slate-700 {
+  color: #cbd5e1 !important;
+}
+
+html.dark #context-drawer .text-slate-600 {
+  color: #94a3b8 !important;
+}

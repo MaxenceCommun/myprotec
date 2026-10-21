@@ -15528,15 +15528,15 @@ class ProtecGame {
         ${this.getMissionDebugDataHTML(mission)}
 
         <!-- BREADCRUMB & ENTÊTE EPROTEC -->
-        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 shadow-2xs">
-          <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 truncate">
-            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.closeDrawer()">Accueil</span>
-            <span class="text-slate-400">›</span>
-            <span class="hover:text-slate-900 cursor-pointer font-semibold" onclick="window.game.setMissionDetailTab('info')">Activité</span>
-            <span class="text-slate-400">›</span>
+        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-2xs">
+          <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 dark:text-slate-300 truncate">
+            <span class="hover:text-slate-900 dark:hover:text-white cursor-pointer font-semibold" onclick="window.game.closeDrawer()">Accueil</span>
+            <span class="text-slate-400 dark:text-slate-500">›</span>
+            <span class="hover:text-slate-900 dark:hover:text-white cursor-pointer font-semibold" onclick="window.game.setMissionDetailTab('info')">Activité</span>
+            <span class="text-slate-400 dark:text-slate-500">›</span>
             <span class="text-amber-500 font-black">▲</span>
-            <span class="font-bold text-slate-900 truncate" title="${mission.title}">${mission.title}</span>
-            <span class="text-slate-500 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
+            <span class="font-bold text-slate-900 dark:text-white truncate" title="${mission.title}">${mission.title}</span>
+            <span class="text-slate-500 dark:text-slate-400 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
           </div>
         </div>
         ${(mission.status === 'carence' || mission.status === 'annule_defaut' || mission.status === 'prealerte_levee') ? `
@@ -15886,16 +15886,16 @@ class ProtecGame {
         ` : ''}
 
         <!-- BARRE D'ONGLETS DU DISPOSITIF (STYLE eProtec) -->
-        <div class="flex items-center gap-1 border-b border-slate-200 pb-0 overflow-x-auto text-xs font-bold">
-          <button type="button" onclick="window.game.setMissionDetailTab('info')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'info' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+        <div class="flex items-center gap-1 border-b border-slate-200 dark:border-slate-700/80 pb-0 overflow-x-auto text-xs font-bold">
+          <button type="button" onclick="window.game.setMissionDetailTab('info')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'info' ? 'border-pc-blue text-pc-blue dark:border-sky-400 dark:text-sky-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
             <i data-lucide="info" class="w-3.5 h-3.5"></i>
             <span>Information</span>
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'personnel' || activeTab === 'effectifs' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+          <button type="button" onclick="window.game.setMissionDetailTab('personnel')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'personnel' || activeTab === 'effectifs' ? 'border-pc-blue text-pc-blue dark:border-sky-400 dark:text-sky-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
             <i data-lucide="users" class="w-3.5 h-3.5"></i>
             <span>Personnel (${registeredVols.length})</span>
           </button>
-          <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel' ? 'border-pc-blue text-pc-blue' : 'border-transparent text-slate-500 hover:text-slate-800'}">
+          <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel' ? 'border-pc-blue text-pc-blue dark:border-sky-400 dark:text-sky-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
             <i data-lucide="truck" class="w-3.5 h-3.5"></i>
             <span>Logistique</span>
             ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
@@ -15920,11 +15920,11 @@ class ProtecGame {
           <!-- ONGLET 1 : INFORMATION (eProtec 3 CARTES) -->
           <div class="space-y-3 animate-in fade-in duration-150">
             <!-- CARTE 1 : ACTIVITÉ N° -->
-            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <div class="flex items-center gap-2">
-                  <span class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center font-black text-xs">▲</span>
-                  <h4 class="text-xs font-black text-slate-900 tracking-wide uppercase">Activité n° ${(mission.id || 'ACT').toString().slice(0, 8).toUpperCase()}</h4>
+                  <span class="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center font-black text-xs">▲</span>
+                  <h4 class="text-xs font-black text-slate-900 dark:text-slate-100 tracking-wide uppercase">Activité n° ${(mission.id || 'ACT').toString().slice(0, 8).toUpperCase()}</h4>
                 </div>
                 <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${missionBadgeClass}">
                   ${missionBadgeText}
@@ -15933,93 +15933,106 @@ class ProtecGame {
 
               <!-- Titre & Dates -->
               <div class="space-y-1.5">
-                <h3 class="text-sm font-black text-slate-900 leading-snug">${mission.title}</h3>
-                <p class="text-xs text-slate-600 font-medium">${term.scaleLabel}</p>
+                <h3 class="text-sm font-black text-slate-900 dark:text-white leading-snug">${mission.title}</h3>
+                <p class="text-xs text-slate-600 dark:text-slate-400 font-medium">${term.scaleLabel}</p>
               </div>
 
               <!-- Dates & Horaires -->
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">Date & Horaires Prévisionnels</span>
-                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5">${missionScheduleRangeText}</strong>
-                  <span class="text-[10px] text-slate-500 block">Durée totale : ${durationDisplay}</span>
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80">
+                  <span class="text-[9px] uppercase font-black text-slate-500 dark:text-slate-400 block">Date & Horaires Prévisionnels</span>
+                  <strong class="text-xs font-extrabold text-slate-900 dark:text-slate-100 block mt-0.5">${missionScheduleRangeText}</strong>
+                  <span class="text-[10px] text-slate-600 dark:text-slate-400 block">Durée totale : ${durationDisplay}</span>
                 </div>
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">${term.interlocutorLabel}</span>
-                  <strong class="text-xs font-extrabold text-slate-900 block mt-0.5 truncate">${mission.clientName || term.interlocutorName}</strong>
-                  <span class="text-[10px] font-semibold text-slate-500 block truncate" title="${term.agreementStatus}">${term.agreementStatus}</span>
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80">
+                  <span class="text-[9px] uppercase font-black text-slate-500 dark:text-slate-400 block">${term.interlocutorLabel}</span>
+                  <strong class="text-xs font-extrabold text-slate-900 dark:text-slate-100 block mt-0.5 truncate">${mission.clientName || term.interlocutorName}</strong>
+                  <span class="text-[10px] font-semibold text-slate-600 dark:text-slate-400 block truncate" title="${term.agreementStatus}">${term.agreementStatus}</span>
                 </div>
               </div>
 
               <!-- 3 Horaires Clés indispensables (eProtec / eBrigade) -->
               <div class="grid grid-cols-3 gap-2 text-center text-xs pt-0.5">
-                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 ? 'bg-amber-100/90 border-amber-300 ring-1 ring-amber-400' : 'bg-amber-50/80 border-amber-200'} shadow-2xs">
-                  <span class="text-[9px] uppercase font-black text-amber-800 block">${term.rdvLabel}</span>
+                <!-- CARTE 1 : MOBILISATION BASE / DÉPART ANTENNE -->
+                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 
+                  ? 'bg-amber-500/15 dark:bg-amber-950/60 border-2 border-amber-500/50 dark:border-amber-500/70 ring-1 ring-amber-500/20' 
+                  : 'bg-amber-500/10 dark:bg-slate-800/90 border border-amber-500/30 dark:border-amber-500/30'} shadow-2xs flex flex-col justify-between">
+                  <span class="text-[9px] uppercase font-black ${departureDelayMinutes > 0 ? 'text-amber-900 dark:text-amber-300' : 'text-amber-800 dark:text-amber-400'} block leading-tight tracking-wider">${term.rdvLabel}</span>
                   ${departureDelayMinutes > 0 ? `
-                    <div class="my-0.5">
-                      <span class="text-[10px] text-slate-400 line-through mr-1">${formatH(nominalRdvDate)}</span>
-                      <strong class="text-xs font-black text-amber-950 inline-block">${formatH(schedule.effectiveDepartureDate)}</strong>
+                    <div class="my-1">
+                      <span class="text-[10px] text-slate-400 dark:text-slate-500 line-through mr-1 font-semibold">${formatH(nominalRdvDate)}</span>
+                      <strong class="text-xs sm:text-sm font-black text-slate-900 dark:text-amber-100 inline-block">${formatH(schedule.effectiveDepartureDate)}</strong>
                     </div>
-                    <span class="text-[8px] font-bold text-amber-700 dark:text-amber-300 block">Départ différé (+${this.formatDurationMinutes(departureDelayMinutes)})</span>
+                    <span class="inline-flex items-center justify-center gap-0.5 text-[8.5px] font-bold text-amber-900 dark:text-amber-200 bg-amber-500/20 dark:bg-amber-500/30 px-1.5 py-0.5 rounded-md border border-amber-500/30 dark:border-amber-400/40 mt-auto">
+                      Départ différé (+${this.formatDurationMinutes(departureDelayMinutes)})
+                    </span>
                   ` : `
-                    <strong class="text-xs font-black text-amber-950 block my-0.5">${rdvBaseStr}</strong>
-                    <span class="text-[8px] text-amber-700 block">Départ Antenne (~${this.formatDurationMinutes(transitMinutes)} route)</span>
+                    <strong class="text-xs sm:text-sm font-black text-slate-900 dark:text-white block my-1">${rdvBaseStr}</strong>
+                    <span class="text-[8.5px] font-semibold text-slate-600 dark:text-slate-400 block mt-auto">Départ Antenne (~${this.formatDurationMinutes(transitMinutes)} route)</span>
                   `}
                 </div>
-                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 ? 'bg-orange-100/90 border-orange-300 ring-1 ring-orange-400' : 'bg-sky-50/80 border-sky-200'} shadow-2xs">
-                  <span class="text-[9px] uppercase font-black ${departureDelayMinutes > 0 ? 'text-orange-900' : 'text-sky-800'} block">${term.startLabel}</span>
+
+                <!-- CARTE 2 : DÉPLOIEMENT TERRAIN / DÉBUT OPÉRATIONNEL -->
+                <div class="p-2.5 rounded-xl ${departureDelayMinutes > 0 
+                  ? 'bg-orange-500/15 dark:bg-orange-950/60 border-2 border-orange-500/50 dark:border-orange-500/70 ring-1 ring-orange-500/20' 
+                  : 'bg-sky-500/10 dark:bg-slate-800/90 border border-sky-500/30 dark:border-sky-500/30'} shadow-2xs flex flex-col justify-between">
+                  <span class="text-[9px] uppercase font-black ${departureDelayMinutes > 0 ? 'text-orange-900 dark:text-orange-300' : 'text-sky-800 dark:text-sky-400'} block leading-tight tracking-wider">${term.startLabel}</span>
                   ${departureDelayMinutes > 0 ? `
-                    <div class="my-0.5">
-                      <span class="text-[10px] text-slate-400 line-through mr-1">${formatH(schedule.plannedStartDate)}</span>
-                      <strong class="text-xs font-black text-orange-950 inline-block">${formatH(schedule.effectiveStartDate)}</strong>
+                    <div class="my-1">
+                      <span class="text-[10px] text-slate-400 dark:text-slate-500 line-through mr-1 font-semibold">${formatH(schedule.plannedStartDate)}</span>
+                      <strong class="text-xs sm:text-sm font-black text-slate-900 dark:text-orange-100 inline-block">${formatH(schedule.effectiveStartDate)}</strong>
                     </div>
-                    <span class="text-[8px] font-bold text-orange-700 dark:text-orange-300 block">Arrivée retardée (+${this.formatDurationMinutes(departureDelayMinutes)})</span>
+                    <span class="inline-flex items-center justify-center gap-0.5 text-[8.5px] font-bold text-orange-900 dark:text-orange-200 bg-orange-500/20 dark:bg-orange-500/30 px-1.5 py-0.5 rounded-md border border-orange-500/30 dark:border-orange-400/40 mt-auto">
+                      Arrivée retardée (+${this.formatDurationMinutes(departureDelayMinutes)})
+                    </span>
                   ` : `
-                    <strong class="text-xs font-black text-sky-950 block my-0.5">${debutEventStr}</strong>
-                    <span class="text-[8px] text-sky-700 block">Sur site</span>
+                    <strong class="text-xs sm:text-sm font-black text-slate-900 dark:text-white block my-1">${debutEventStr}</strong>
+                    <span class="text-[8.5px] font-semibold text-slate-600 dark:text-slate-400 block mt-auto">Sur site</span>
                   `}
                 </div>
-                <div class="p-2.5 rounded-xl bg-indigo-50/80 border border-indigo-200 shadow-2xs">
-                  <span class="text-[9px] uppercase font-black text-indigo-800 block">${term.endLabel}</span>
-                  <strong class="text-xs font-black text-indigo-950 block my-0.5">${finEventStr}</strong>
-                  <span class="text-[8px] text-indigo-700 block">${finEventSub}</span>
+
+                <!-- CARTE 3 : CLÔTURE DISPOSITIF / FIN -->
+                <div class="p-2.5 rounded-xl bg-indigo-500/10 dark:bg-slate-800/90 border border-indigo-500/30 dark:border-indigo-500/30 shadow-2xs flex flex-col justify-between">
+                  <span class="text-[9px] uppercase font-black text-indigo-900 dark:text-indigo-400 block leading-tight tracking-wider">${term.endLabel}</span>
+                  <strong class="text-xs sm:text-sm font-black text-slate-900 dark:text-white block my-1">${finEventStr}</strong>
+                  <span class="text-[8.5px] font-semibold text-slate-600 dark:text-slate-400 block mt-auto">${finEventSub}</span>
                 </div>
               </div>
 
               ${departureDelayMinutes > 0 ? `
-                <div class="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-300 dark:border-amber-700/80 text-amber-950 dark:text-amber-100 text-xs flex items-center gap-2.5 shadow-2xs animate-in fade-in">
+                <div class="p-3 rounded-xl bg-amber-500/15 dark:bg-amber-950/60 border-2 border-amber-500/50 dark:border-amber-500/70 text-slate-900 dark:text-amber-100 text-xs flex items-center gap-2.5 shadow-2xs animate-in fade-in">
                   <i data-lucide="clock" class="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0"></i>
                   <div class="leading-tight">
-                    <span class="font-black text-amber-900 dark:text-amber-200 block">Départ et Arrivée différés de +${this.formatDurationMinutes(departureDelayMinutes)} :</span>
-                    <span class="text-[11px] text-amber-800 dark:text-amber-300/90">
-                      ${schedule.delayedVolunteers.map(d => `<strong>${d.vol.name}</strong> a ${this.formatDurationMinutes(d.rallyMin)} de trajet (arrivée base : ${formatH(new Date(d.arrivalBaseAt))})`).join(', ')}. L'engin attendra son arrivée complète avant de quitter la base.
+                    <span class="font-black text-amber-950 dark:text-amber-200 block">Départ et Arrivée différés de +${this.formatDurationMinutes(departureDelayMinutes)} :</span>
+                    <span class="text-[11px] text-slate-700 dark:text-amber-200/90 font-medium block mt-0.5">
+                      ${schedule.delayedVolunteers.map(d => `<strong class="text-slate-900 dark:text-white">${d.vol.name}</strong> a ${this.formatDurationMinutes(d.rallyMin)} de trajet (arrivée base : ${formatH(new Date(d.arrivalBaseAt))})`).join(', ')}. L'engin attendra son arrivée complète avant de quitter la base.
                     </span>
                   </div>
                 </div>
               ` : ''}
 
               <!-- Lieu / Adresse -->
-              <div onclick="window.game.centerMapOnMission('${mission.id}')" class="flex items-center justify-between gap-2 text-xs text-slate-800 font-bold bg-sky-50/80 hover:bg-sky-100 p-2.5 rounded-xl border border-sky-200 cursor-pointer transition shadow-2xs group" title="Cliquer pour centrer la carte sur cette adresse">
+              <div onclick="window.game.centerMapOnMission('${mission.id}')" class="flex items-center justify-between gap-2 text-xs text-slate-800 dark:text-slate-200 font-bold bg-sky-50/80 hover:bg-sky-100 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 p-2.5 rounded-xl border border-sky-200 dark:border-slate-700 cursor-pointer transition shadow-2xs group" title="Cliquer pour centrer la carte sur cette adresse">
                 <div class="flex items-center gap-2 min-w-0">
                   <i data-lucide="map-pin" class="w-4 h-4 text-pc-blue flex-shrink-0 group-hover:scale-110 transition"></i>
-                  <span class="truncate">Lieu : <strong class="text-slate-900">${mission.address || (mission.lat && mission.lng ? 'Point GPS: ' + mission.lat.toFixed(4) + ', ' + mission.lng.toFixed(4) : 'Adresse sur site')}</strong></span>
+                  <span class="truncate">Lieu : <strong class="text-slate-900 dark:text-white">${mission.address || (mission.lat && mission.lng ? 'Point GPS: ' + mission.lat.toFixed(4) + ', ' + mission.lng.toFixed(4) : 'Adresse sur site')}</strong></span>
                 </div>
-                <span class="text-[10px] font-black text-pc-blue bg-white px-2 py-0.5 rounded-lg border border-sky-200 group-hover:bg-pc-blue group-hover:text-white transition flex items-center gap-1 shrink-0">
+                <span class="text-[10px] font-black text-pc-blue bg-white dark:bg-slate-900 px-2 py-0.5 rounded-lg border border-sky-200 dark:border-slate-700 group-hover:bg-pc-blue group-hover:text-white transition flex items-center gap-1 shrink-0">
                   <i data-lucide="crosshair" class="w-3 h-3"></i>
                   <span>Centrer</span>
                 </span>
               </div>
 
               <!-- Situation / Descriptif -->
-              <div class="text-xs text-slate-700 space-y-1 pt-1">
-                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Situation & Contexte :</span>
-                <p class="leading-relaxed bg-slate-50 p-2.5 rounded-xl border border-slate-200">${mission.desc}</p>
+              <div class="text-xs text-slate-700 dark:text-slate-300 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Situation & Contexte :</span>
+                <p class="leading-relaxed bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200">${mission.desc}</p>
               </div>
 
               <!-- Missions Prévues sur le Terrain -->
-              <div class="text-xs text-slate-700 space-y-1 pt-1">
-                <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 block">Missions Prévues sur Site :</span>
-                <ul class="text-[11px] text-slate-700 space-y-1 list-disc list-inside bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <div class="text-xs text-slate-700 dark:text-slate-300 space-y-1 pt-1">
+                <span class="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Missions Prévues sur Site :</span>
+                <ul class="text-[11px] text-slate-700 dark:text-slate-200 space-y-1 list-disc list-inside bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
                   <li>Reconnaissance de périmètre et bilans circonstanciés</li>
                   <li>Prise en charge des victimes et gestes de premiers secours</li>
                   <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
@@ -16029,11 +16042,11 @@ class ProtecGame {
             </div>
 
             <!-- CARTE 2 : PERSONNEL (QUALIFICATIONS BADGES & EFFECTIF) -->
-            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <div class="flex items-center gap-2">
-                  <i data-lucide="users" class="w-4 h-4 text-pc-blue"></i>
-                  <h4 class="text-xs font-black text-slate-900 uppercase">${term.personnelLabel}</h4>
+                  <i data-lucide="users" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
+                  <h4 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase">${term.personnelLabel}</h4>
                 </div>
                 <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${registeredVols.length >= (mission.requiredVolunteers || 1) ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
                   ${registeredVols.length} / ${mission.requiredVolunteers} inscrits
@@ -16120,11 +16133,11 @@ class ProtecGame {
             </div>
 
             <!-- CARTE 3 : LOGISTIQUE (VÉHICULES & MATÉRIELS) -->
-            <div class="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
                 <div class="flex items-center gap-2">
-                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue"></i>
-                  <h4 class="text-xs font-black text-slate-900 uppercase">Logistique & Vecteurs</h4>
+                  <i data-lucide="truck" class="w-4 h-4 text-pc-blue dark:text-sky-400"></i>
+                  <h4 class="text-xs font-black text-slate-900 dark:text-slate-100 uppercase">Logistique & Vecteurs</h4>
                 </div>
                 <span class="text-[10px] font-black px-2 py-0.5 rounded-full ${!hasMissingVehicles ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
                   ${assignedVehIds.length} véhicule(s) mobilisé(s) ${!hasMissingVehicles ? '✓' : '⚠️'}
