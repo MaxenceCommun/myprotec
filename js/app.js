@@ -11253,25 +11253,15 @@ class ProtecGame {
       mission.prealertDecisionMode = 'premobilisation';
       mission.preMobilisationActive = true;
 
-      const totalVols = (this.volunteers || []).length || 1;
-      mission.maxMobilisableAstreinte = Math.max(1, Math.round(totalVols * 0.15));
-
       if (!mission.registeredVolunteers) mission.registeredVolunteers = [];
-      // Seul 1 premier intervenant d'astreinte immédiate répond à la diffusion de l'appel si disponible
-      if (mission.registeredVolunteers.length === 0 && mission.maxMobilisableAstreinte >= 1) {
-        const dispoVol = this.volunteers.find(v => v.status === 'dispo' && !v.isBurnout && !(mission.registeredVolunteers || []).includes(v.id));
-        if (dispoVol) {
-          dispoVol.status = 'mission';
-          mission.registeredVolunteers.push(dispoVol.id);
-        }
-      }
 
-      const authorityName = mission.authorityLabel || 'l’autorité opérationnelle';
-      this.showToast(
-        '⚡ Effectifs Mis en Préalerte',
-        `Appel de disponibilité diffusé aux secouristes de l’antenne. Recensement des effectifs mobilisables en cours...`,
-        'amber'
-      );
+      this.saveGame();
+      this.renderMissions();
+      this.updateStatsUI();
+
+      // Ouvre immédiatement la page officielle de message personnalisé avec consignes
+      this.openSmsModal(mission.id, false);
+      return;
     } else {
       mission.prealertDecisionMode = 'veille_simple';
       mission.preMobilisationActive = false;

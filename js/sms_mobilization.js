@@ -214,10 +214,15 @@ window.ProtecSmsMobilization = {
       v.hasUniform !== false
     );
 
-    title.textContent = isUpdate ? 'Évolution de Situation - Mise à Jour des Consignes' : 'Composition & Diffusion SMS d\'Alerte';
+    const isPrealert = (mission.status === 'prealerte');
+    title.textContent = isUpdate 
+      ? 'Évolution de Situation - Mise à Jour des Consignes' 
+      : (isPrealert ? 'Consignes de Préalerte & Message Personnalisé aux Effectifs' : 'Composition & Diffusion SMS d\'Alerte');
     subtitle.textContent = isUpdate 
       ? `Transmettez les nouveaux ordres aux ${registeredCount} secouriste(s) déjà mobilisé(s) et/ou recrutez des renforts` 
-      : `Définissez les consignes opérationnelles transmises aux ${availableVols.length} secouriste(s) disponible(s)`;
+      : (isPrealert 
+          ? `Transmettez vos consignes de pré-mobilisation et vérifiez la disponibilité de vos ${availableVols.length} secouristes`
+          : `Définissez les consignes opérationnelles transmises aux ${availableVols.length} secouriste(s) disponible(s)`);
     if (icon) icon.setAttribute('data-lucide', 'send');
 
     // Situations prédéfinies pour choix en 1 clic
@@ -519,7 +524,7 @@ window.ProtecSmsMobilization = {
           </button>
           <button type="button" onclick="window.ProtecSmsMobilization.submitSms('${mission.id}', ${isUpdate})" class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white shadow-lg shadow-pc-blue/30 active:scale-95 transition flex items-center gap-2 cursor-pointer">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span>${isUpdate ? 'Transmettre les Nouvelles Consignes' : 'Diffuser le SMS d\'Alerte'}</span>
+            <span>${isUpdate ? 'Transmettre les Nouvelles Consignes' : (isPrealert ? 'Diffuser le Message de Préalerte' : 'Diffuser le SMS d\'Alerte')}</span>
           </button>
         </div>
 
@@ -917,6 +922,11 @@ window.ProtecSmsMobilization = {
     // Enregistrer la consigne active sur la mission
     mission.smsConsigne = config;
     mission.maxDepartureDelayMinutes = maxDepartureDelayMinutes;
+
+    if (mission.status === 'prealerte') {
+      mission.prealertDecisionMode = 'premobilisation';
+      mission.preMobilisationActive = true;
+    }
 
     const now = new Date();
     const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
