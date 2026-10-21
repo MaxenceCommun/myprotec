@@ -508,8 +508,18 @@ window.ProtecPWA = {
  */
 window.ProtecPlatformAnalytics = {
   detectPlatform() {
+    // 1. User-Agent Data moderne (Chrome, Edge, etc.)
+    if (navigator.userAgentData?.platform) {
+      const p = (navigator.userAgentData.platform || '').toLowerCase();
+      if (/win/.test(p)) return 'Windows';
+      if (/mac/.test(p)) return 'macOS';
+      if (/android/.test(p)) return 'Android';
+      if (/linux/.test(p)) return 'Linux';
+      if (/cros/.test(p)) return 'ChromeOS';
+    }
+
     const ua = (navigator.userAgent || '').toLowerCase();
-    const plat = (navigator.userAgentData?.platform || navigator.platform || '').toLowerCase();
+    const plat = (navigator.platform || '').toLowerCase();
 
     if (/android/.test(ua) || /android/.test(plat)) return 'Android';
     if (/iphone|ipad|ipod/.test(ua)) return 'iOS';
@@ -517,12 +527,16 @@ window.ProtecPlatformAnalytics = {
     if (/mac/.test(plat) || /macintosh|mac os x/.test(ua)) return 'macOS';
     if (/cros/.test(ua)) return 'ChromeOS';
     if (/linux/.test(plat) || /linux/.test(ua)) return 'Linux';
-    return 'Autre';
+    return 'Windows';
   },
 
   detectDeviceType() {
+    if (navigator.userAgentData?.mobile !== undefined) {
+      if (navigator.userAgentData.mobile) return 'Mobile';
+    }
+
     const ua = (navigator.userAgent || '').toLowerCase();
-    const width = window.innerWidth || screen.width || 1024;
+    const width = window.innerWidth || screen?.width || 1024;
 
     if (/ipad|tablet/.test(ua) || (width >= 768 && width <= 1024 && 'ontouchstart' in window)) {
       return 'Tablette';
@@ -534,13 +548,24 @@ window.ProtecPlatformAnalytics = {
   },
 
   detectBrowser() {
+    // 1. User-Agent Data moderne
+    if (Array.isArray(navigator.userAgentData?.brands)) {
+      const brands = navigator.userAgentData.brands.map(b => (b.brand || '').toLowerCase());
+      if (brands.some(b => b.includes('microsoft edge') || b.includes('edge'))) return 'Edge';
+      if (brands.some(b => b.includes('brave'))) return 'Brave';
+      if (brands.some(b => b.includes('opera'))) return 'Opera';
+      if (brands.some(b => b.includes('google chrome') || b.includes('chrome'))) return 'Chrome';
+    }
+
     const ua = (navigator.userAgent || '').toLowerCase();
     if (/edg\//.test(ua)) return 'Edge';
     if (/samsungbrowser/.test(ua)) return 'Samsung Internet';
+    if (/brave/.test(ua) || (navigator.brave && typeof navigator.brave.isBrave === 'function')) return 'Brave';
     if (/opr\/|opera/.test(ua)) return 'Opera';
-    if (/chrome|crios/.test(ua) && !/edg\//.test(ua)) return 'Chrome';
     if (/firefox|fxios/.test(ua)) return 'Firefox';
+    if (/chrome|crios/.test(ua) && !/edg\//.test(ua)) return 'Chrome';
     if (/safari/.test(ua) && !/chrome|crios/.test(ua)) return 'Safari';
+    if (window.chrome) return 'Chrome';
     return 'Navigateur Web';
   },
 
@@ -645,19 +670,66 @@ window.ProtecPlatformAnalytics = {
   },
 
   // Génération du widget graphique pour un joueur spécifique
-  renderPlayerPlatformChartHTML(platformStats, lastDevice, username = 'Joueur') {
-    const stats = platformStats || { platforms: { [this.detectPlatform()]: 1 }, installations: { installed: this.detectIsInstalled() ? 1 : 0, web: this.detectIsInstalled() ? 0 : 1 } };
-    const dev = lastDevice || stats.lastDevice || this.getCurrentDevice();
+  renderPlayerPlatformChartHTML(arg1, arg2, arg3) {
+    let stats = null;
+    let dev = null;
+    let username = 'Joueur';
 
-    const platforms = stats.platforms || {};
+    // 1. Détection polymorphe des arguments (Support objet User complet OU stats brutes)
+    if (arg1 && typeof arg1 === 'object' && (arg1.username || arg1.id || arg1.stationName || arg1.platformStats || arg1.saveData || arg1.lastDevice)) {
+      const user = arg1;
+      username = user.username || user.name || 'Directeur';
+      stats = user.platformStats || user.saveData?.platformStats || null;
+      dev = user.lastDevice || user.saveData?.lastDevice || stats?.lastDevice || null;
+
+      // Si le 2ème argument est un vrai objet device (et non une chaîne containerId comme 'adm-modal-platform-chart')
+      if (arg2 && typeof arg2 === 'object' && !Array.isArray(arg2) && (arg2.platform || arg2.browser)) {
+        dev = arg2;
+      }
+    } else if (arg1 && typeof arg1 === 'object') {
+      stats = arg1.platforms ? arg1 : (arg1.platformStats || arg1);
+      dev = (arg2 && typeof arg2 === 'object' && !Array.isArray(arg2) && (arg2.platform || arg2.browser)) ? arg2 : (stats?.lastDevice || null);
+      if (typeof arg3 === 'string') username = arg3;
+    }
+
+    // 2. Sécurisation absolue de l'objet Device (si manquant, null, ou écrasé par une string)
+    if (!dev || typeof dev !== 'object' || Array.isArray(dev) || !dev.platform) {
+      dev = this.getCurrentDevice();
+    } else {
+      // Compléter les champs manquants éventuels
+      if (!dev.platform) dev.platform = this.detectPlatform();
+      if (!dev.deviceType) dev.deviceType = this.detectDeviceType();
+      if (!dev.browser) dev.browser = this.detectBrowser();
+      if (!dev.screenResolution && !dev.screen) {
+        dev.screenResolution = `${window.screen?.width || window.innerWidth || 0}x${window.screen?.height || window.innerHeight || 0}`;
+      }
+      if (dev.isInstalled === undefined) dev.isInstalled = this.detectIsInstalled();
+    }
+
+    // 3. Sécurisation absolue des statistiques de plateformes
+    if (!stats || typeof stats !== 'object' || !stats.platforms || Object.keys(stats.platforms).length === 0) {
+      stats = {
+        platforms: { [dev.platform || this.detectPlatform()]: 1 },
+        devices: { [dev.deviceType || this.detectDeviceType()]: 1 },
+        installations: {
+          installed: dev.isInstalled ? 1 : 0,
+          web: dev.isInstalled ? 0 : 1
+        },
+        lastDevice: dev
+      };
+    }
+
+    const platforms = stats.platforms || { [dev.platform]: 1 };
     const totalSessions = Object.values(platforms).reduce((a, b) => a + Number(b || 0), 0) || 1;
 
-    const installedCount = stats.installations?.installed || (dev.isInstalled ? 1 : 0);
-    const webCount = stats.installations?.web || (!dev.isInstalled ? 1 : 0);
+    const installedCount = stats.installations?.installed ?? (dev.isInstalled ? 1 : 0);
+    const webCount = stats.installations?.web ?? (!dev.isInstalled ? 1 : 0);
     const totalInstalls = installedCount + webCount || 1;
     const installRate = Math.round((installedCount / totalInstalls) * 100);
 
     const sortedPlatforms = Object.entries(platforms).sort((a, b) => b[1] - a[1]);
+
+    const screenRes = dev.screenResolution || dev.screen || `${window.screen?.width || window.innerWidth || 0}x${window.screen?.height || window.innerHeight || 0}`;
 
     return `
       <div class="space-y-4 p-4 rounded-2xl bg-white border border-slate-200/90 shadow-xs text-xs">
@@ -704,7 +776,7 @@ window.ProtecPlatformAnalytics = {
         <div class="space-y-2 pt-1">
           <div class="flex items-center justify-between text-[11px] font-black text-slate-700">
             <span>Répartition par Plateforme de Jeu :</span>
-            <span class="text-[10px] font-bold text-slate-400">${totalSessions} accès enregistrés</span>
+            <span class="text-[10px] font-bold text-slate-400">${totalSessions} accès enregistré${totalSessions > 1 ? 's' : ''}</span>
           </div>
 
           <div class="space-y-2">
@@ -735,7 +807,7 @@ window.ProtecPlatformAnalytics = {
         <!-- Détails matériels & Dernier accès -->
         <div class="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between text-[10px] text-slate-500 gap-2">
           <span>Navigateur : <strong>${dev.browser || 'Inconnu'}</strong></span>
-          <span>Écran : <strong>${dev.screenResolution || 'N/A'}</strong></span>
+          <span>Écran : <strong>${screenRes}</strong></span>
           <span>Dernière connexion : <strong>${dev.lastSeen ? new Date(dev.lastSeen).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : 'Récente'}</strong></span>
         </div>
       </div>

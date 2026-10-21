@@ -2000,7 +2000,7 @@ window.ProtecAdmin = {
 
     // Graphique plateforme individuel
     const platformChartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
-      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-support-player-platform-chart')
+      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user)
       : '';
 
     container.innerHTML = `
@@ -2606,7 +2606,7 @@ window.ProtecAdmin = {
     }
 
     const chartHTML = window.ProtecPlatformAnalytics?.renderPlayerPlatformChartHTML
-      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user, 'adm-modal-platform-chart')
+      ? window.ProtecPlatformAnalytics.renderPlayerPlatformChartHTML(user)
       : '<p class="text-xs text-slate-400">Statistiques indisponibles.</p>';
 
     modalEl.innerHTML = `
