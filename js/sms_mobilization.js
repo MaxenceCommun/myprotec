@@ -357,7 +357,7 @@ window.ProtecSmsMobilization = {
                 ${Object.values(this.CONSIGNES).map(c => `
                   <label class="flex items-start gap-2.5 p-2 rounded-xl border cursor-pointer transition ${config.consigne === c.id ? 'bg-white dark:bg-slate-900 border-pc-blue ring-1 ring-pc-blue' : 'bg-white/60 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:bg-white dark:hover:bg-slate-800'}">
                     <input type="radio" name="sms-consigne" value="${c.id}" ${config.consigne === c.id ? 'checked' : ''} onchange="window.ProtecSmsMobilization.onConsigneChanged('${mission.id}', this.value)" class="mt-0.5 text-pc-blue focus:ring-pc-blue">
-                    <i data-lucide="${c.icon}" class="w-4 h-4 mt-0.5 shrink-0 ${c.id === 'base_immediat' ? 'text-rose-500' : c.id === 'base_horaire' ? 'text-indigo-500' : c.id === 'attente_domicile' ? 'text-blue-500' : c.id === 'attente_appel' ? 'text-amber-500' : 'text-slate-500'}"></i>
+                    <i data-lucide="${c.icon}" class="w-4 h-4 mt-0.5 shrink-0 ${c.id === 'base_immediat' ? 'text-rose-500' : c.id === 'base_horaire' ? 'text-indigo-500' : c.id === 'sur_place_immediat' ? 'text-emerald-500' : c.id === 'sur_place_horaire' ? 'text-teal-500' : c.id === 'attente_domicile' ? 'text-blue-500' : c.id === 'attente_appel' ? 'text-amber-500' : 'text-slate-500'}"></i>
                     <div class="min-w-0 flex-1">
                       <div class="flex items-center justify-between">
                         <span class="text-xs font-black text-slate-900 dark:text-white">${c.label}</span>
@@ -368,10 +368,10 @@ window.ProtecSmsMobilization = {
                 `).join('')}
               </div>
 
-              <!-- Sélecteur d'heure si consigne RDV horaire -->
-              <div id="sms-rdv-box" class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 ${config.consigne === 'base_horaire' ? '' : 'hidden'}">
+              <!-- Sélecteur d'heure si consigne RDV horaire (base ou sur place) -->
+              <div id="sms-rdv-box" class="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2 ${(config.consigne === 'base_horaire' || config.consigne === 'sur_place_horaire') ? '' : 'hidden'}">
                 <div class="flex items-center justify-between gap-3">
-                  <span class="text-xs font-bold text-slate-700 dark:text-slate-300">Heure précise du RDV à la base :</span>
+                  <span id="sms-rdv-label" class="text-xs font-bold text-slate-700 dark:text-slate-300">${config.consigne === 'sur_place_horaire' ? 'Heure précise du RDV sur place :' : 'Heure précise du RDV à la base :'}</span>
                   <input type="text" id="sms-rdv-time" value="${config.rdvTime}" oninput="window.ProtecSmsMobilization.updateSmsPreview('${mission.id}')" placeholder="Ex: 18h30" class="w-24 px-2.5 py-1 text-center font-bold text-xs rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white">
                 </div>
                 <div class="flex items-center gap-1.5 flex-wrap">
@@ -863,9 +863,13 @@ window.ProtecSmsMobilization = {
   // Changement de la consigne (affiche ou masque l'heure du RDV)
   onConsigneChanged(missionId, consigneId) {
     const rdvBox = document.getElementById('sms-rdv-box');
+    const rdvLabel = document.getElementById('sms-rdv-label');
     if (rdvBox) {
       if (consigneId === 'base_horaire' || consigneId === 'sur_place_horaire') {
         rdvBox.classList.remove('hidden');
+        if (rdvLabel) {
+          rdvLabel.textContent = consigneId === 'sur_place_horaire' ? 'Heure précise du RDV sur place :' : 'Heure précise du RDV à la base :';
+        }
       } else {
         rdvBox.classList.add('hidden');
       }

@@ -16556,7 +16556,7 @@ class ProtecGame {
                 <div class="text-[10px] text-slate-600 font-semibold leading-tight">
                   Dispositif : ${mission.assignedCrew?.volunteers?.length || mission.registeredVolunteers?.length || 0} secouriste(s), ${mission.assignedCrew?.vehicles?.length || (mission.assignedVehicleIds || []).filter(Boolean).length || 1} véhicule(s)
                 </div>
-                <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center gap-1 cursor-pointer border border-indigo-200" title="Demander des moyens supplémentaires (bénévoles disponibles, SDIS ou alliances)">
+                <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-1.5 rounded-lg text-[10px] font-black bg-indigo-50 hover:bg-indigo-600 hover:text-white text-indigo-700 transition flex items-center gap-1 cursor-pointer border border-indigo-200" title="Demander des moyens supplémentaires (bénévoles disponibles, SDIS ou alliances)">
                   <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
                   <span>+ Demander / Déployer Moyens</span>
                 </button>
@@ -18905,7 +18905,7 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+            <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
               <i data-lucide="users" class="w-3.5 h-3.5"></i> <span>+ Renfort</span>
             </button>
           </div>
@@ -18943,7 +18943,7 @@ class ProtecGame {
             <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5" title="Choisir et affecter un ou plusieurs salariés permanents">
               <i data-lucide="briefcase" class="w-3.5 h-3.5"></i> <span>+ Salarié</span>
             </button>
-            <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+            <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
               <i data-lucide="users" class="w-3.5 h-3.5"></i> <span>+ Renfort</span>
             </button>
           </div>
@@ -18996,7 +18996,7 @@ class ProtecGame {
         <button onclick="window.game.openSelectSalarieModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="Choisir et affecter un ou plusieurs salariés permanents">
           <i data-lucide="briefcase" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Salarié</span>
         </button>
-        <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
+        <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 ${this._showRenfortSection ? 'bg-purple-600 text-white shadow-xs' : 'bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800/60'}" title="Afficher ou masquer l'onglet des demandes de renforts">
           <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Renfort</span>
         </button>
         ${isCrisisMission ? (
@@ -19029,7 +19029,7 @@ class ProtecGame {
                 <span>Mettre du renfort</span>
               </button>
             ` : `
-              <button onclick="window.game.openMissionReinforcementsModal('${mission.id}')" class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 whitespace-nowrap flex items-center justify-center gap-1 transition cursor-pointer" title="Manque de moyens : cliquer pour mobiliser ou envoyer du renfort">
+              <button onclick="window.game.requestAllianceRenfortForMission('${mission.id}')" class="flex-1 min-w-[140px] px-3 py-2 rounded-xl text-center text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 whitespace-nowrap flex items-center justify-center gap-1 transition cursor-pointer" title="Manque de moyens : cliquer pour mobiliser ou envoyer du renfort">
                 <i data-lucide="shield-plus" class="w-3.5 h-3.5 text-amber-800"></i>
                 <span>Manque ${mission.requiredVolunteers - registeredVols.length} • Mettre du renfort</span>
               </button>

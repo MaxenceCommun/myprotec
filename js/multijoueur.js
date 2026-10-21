@@ -227,7 +227,7 @@ window.ProtecMultiplayer = {
     if (!modal) {
       modal = document.createElement('div');
       modal.id = 'renfort-zone-modal';
-      modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in';
+      modal.className = 'fixed inset-0 z-[99999] flex items-center justify-center bg-slate-950/80 backdrop-blur-md p-4 animate-in fade-in';
       document.body.appendChild(modal);
     }
 
