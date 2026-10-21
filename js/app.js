@@ -26692,6 +26692,71 @@ class ProtecGame {
     this.openVehicleDetailsModal(vehicleId);
   }
 
+  // --- GESTION DU CALENDRIER / AGENDA DÉDIÉ DES VÉHICULES ---
+  setVehiclePlanningView(vehicleId, viewMode) {
+    if (!this._vehCalendarState) this._vehCalendarState = {};
+    if (!this._vehCalendarState[vehicleId]) {
+      this._vehCalendarState[vehicleId] = {
+        view: 'agenda',
+        month: this.clock ? this.clock.month : new Date().getMonth(),
+        year: this.clock ? this.clock.year : new Date().getFullYear(),
+        selectedDay: this.clock ? this.clock.day : new Date().getDate()
+      };
+    }
+    this._vehCalendarState[vehicleId].view = viewMode;
+    this.openVehicleDetailsModal(vehicleId);
+  }
+
+  changeVehiclePlanningMonth(vehicleId, delta) {
+    if (!this._vehCalendarState) this._vehCalendarState = {};
+    if (!this._vehCalendarState[vehicleId]) {
+      this._vehCalendarState[vehicleId] = {
+        view: 'agenda',
+        month: this.clock ? this.clock.month : new Date().getMonth(),
+        year: this.clock ? this.clock.year : new Date().getFullYear(),
+        selectedDay: this.clock ? this.clock.day : new Date().getDate()
+      };
+    }
+    let m = this._vehCalendarState[vehicleId].month + delta;
+    let y = this._vehCalendarState[vehicleId].year;
+    if (m < 0) {
+      m = 11;
+      y--;
+    } else if (m > 11) {
+      m = 0;
+      y++;
+    }
+    this._vehCalendarState[vehicleId].month = m;
+    this._vehCalendarState[vehicleId].year = y;
+    this._vehCalendarState[vehicleId].selectedDay = 1;
+    this.openVehicleDetailsModal(vehicleId);
+  }
+
+  resetVehiclePlanningMonth(vehicleId) {
+    if (!this._vehCalendarState) this._vehCalendarState = {};
+    this._vehCalendarState[vehicleId] = {
+      view: 'agenda',
+      month: this.clock ? this.clock.month : new Date().getMonth(),
+      year: this.clock ? this.clock.year : new Date().getFullYear(),
+      selectedDay: this.clock ? this.clock.day : new Date().getDate()
+    };
+    this.openVehicleDetailsModal(vehicleId);
+  }
+
+  selectVehiclePlanningDay(vehicleId, day) {
+    if (!this._vehCalendarState) this._vehCalendarState = {};
+    if (!this._vehCalendarState[vehicleId]) {
+      this._vehCalendarState[vehicleId] = {
+        view: 'agenda',
+        month: this.clock ? this.clock.month : new Date().getMonth(),
+        year: this.clock ? this.clock.year : new Date().getFullYear(),
+        selectedDay: this.clock ? this.clock.day : new Date().getDate()
+      };
+    }
+    this._vehCalendarState[vehicleId].selectedDay = day;
+    this.openVehicleDetailsModal(vehicleId);
+  }
+
   openVehicleDetailsModal(vehicleId) {
     const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
     if (!v) return;
@@ -26822,7 +26887,7 @@ class ProtecGame {
     const imgUrl = v.image || this.getVehicleImage(v.type);
 
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl w-full max-w-xl max-h-[90vh] flex flex-col p-5 sm:p-6 shadow-2xl border border-white/95 animate-scale-in overflow-hidden">
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl max-h-[92vh] flex flex-col p-5 sm:p-6 shadow-2xl border border-white/95 animate-scale-in overflow-hidden">
         <!-- En-tête -->
         <div class="flex items-center justify-between pb-3.5 border-b border-slate-200">
           <div class="flex items-center gap-3">
@@ -27109,92 +27174,315 @@ class ProtecGame {
             </div>
           ` : ''}
 
-          <!-- Planning d'utilisation & Engagements du véhicule (Formation, DPS, SAMU, SDIS, Maraudes, Crise, Logistique) -->
-          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
-            <div class="flex items-center justify-between">
-              <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+          <!-- Planning d'utilisation & Engagements du véhicule sous forme d'Agenda -->
+          <div class="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-3">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <span class="font-extrabold text-xs text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                 <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
                 <span>Planning des Missions & Engagements (${vehicleMissions.length})</span>
               </span>
-              <span class="text-[10px] text-slate-400 font-bold">Affectations Véhicule</span>
+              <div class="flex items-center gap-1 bg-slate-100 dark:bg-slate-700/80 p-0.5 rounded-xl border border-slate-200 dark:border-slate-600 text-[10px] font-bold">
+                <button type="button" onclick="window.game.setVehiclePlanningView('${v.id}', 'agenda')" class="px-2.5 py-1 rounded-lg transition cursor-pointer ${(this._vehCalendarState?.[v.id]?.view !== 'list') ? 'bg-pc-blue text-white shadow-xs font-black' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'}">
+                  📅 Agenda
+                </button>
+                <button type="button" onclick="window.game.setVehiclePlanningView('${v.id}', 'list')" class="px-2.5 py-1 rounded-lg transition cursor-pointer ${(this._vehCalendarState?.[v.id]?.view === 'list') ? 'bg-pc-blue text-white shadow-xs font-black' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'}">
+                  📋 Liste (${vehicleMissions.length})
+                </button>
+              </div>
             </div>
 
-            ${vehicleMissions.length === 0 ? `
-              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-1">
-                <p class="text-xs font-bold text-slate-700">Aucun engagement ni mission planifiée</p>
-                <p class="text-[10.5px] text-slate-500">Ce véhicule est actuellement libre au garage pour être engagé sur un DPS, une formation, une garde ou un atelier logistique.</p>
-              </div>
-            ` : `
-              <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
-                ${vehicleMissions.map(m => {
-                  const isRearm = Boolean(m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique');
-                  const isFormation = m.type === 'formation' || m.isFormationB2B;
-                  const isSamu = m.type === 'samu' || m.isSamuGardeActive;
-                  const isSdis = m.type === 'pompiers' || m.isSdisGardeActive;
-                  const isSocial = m.type === 'social';
-                  const isCrisis = Boolean(m.type === 'crise' || m.isCrisis);
-                  const slotStr = m.eventTime || (typeof this.formatMissionTimeSlot === 'function' ? this.formatMissionTimeSlot(m) : 'Horaire planifié');
-                  const vehRole = (m.vehicleFunctions && m.vehicleFunctions[v.id]) || '';
+            ${(() => {
+              if (!this._vehCalendarState) this._vehCalendarState = {};
+              if (!this._vehCalendarState[v.id]) {
+                this._vehCalendarState[v.id] = {
+                  view: 'agenda',
+                  month: this.clock ? this.clock.month : new Date().getMonth(),
+                  year: this.clock ? this.clock.year : new Date().getFullYear(),
+                  selectedDay: this.clock ? this.clock.day : new Date().getDate()
+                };
+              }
+              const calState = this._vehCalendarState[v.id];
+              const viewMode = calState.view || 'agenda';
+              const curViewingMonth = (calState.month !== undefined) ? calState.month : (this.clock ? this.clock.month : new Date().getMonth());
+              const curYear = calState.year || (this.clock ? this.clock.year : new Date().getFullYear());
+              const monthNames = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+              const curMonthName = monthNames[curViewingMonth] || 'Mois';
+              const isViewingCurrentMonth = (curViewingMonth === (this.clock ? this.clock.month : new Date().getMonth()) && curYear === (this.clock ? this.clock.year : new Date().getFullYear()));
+              const todayDay = isViewingCurrentMonth ? (this.clock ? this.clock.day : new Date().getDate()) : null;
+              const selectedDay = calState.selectedDay || (isViewingCurrentMonth ? todayDay : 1);
 
-                  let badgeLabel = 'DPS';
-                  let badgeClass = 'bg-blue-100 text-blue-900 border-blue-300';
-                  if (isRearm) {
-                    badgeLabel = 'Atelier Logistique';
-                    badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
-                  } else if (isFormation) {
-                    badgeLabel = 'Formation';
-                    badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300';
-                  } else if (isSamu) {
-                    badgeLabel = 'SAMU 15';
-                    badgeClass = 'bg-orange-100 text-orange-900 border-orange-300';
-                  } else if (isSdis) {
-                    badgeLabel = 'SDIS 18';
-                    badgeClass = 'bg-red-100 text-red-900 border-red-300';
-                  } else if (isSocial) {
-                    badgeLabel = 'Maraude';
-                    badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
-                  } else if (isCrisis) {
-                    badgeLabel = 'Crise';
-                    badgeClass = 'bg-rose-100 text-rose-900 border-rose-300';
-                  }
+              const daysInMonth = new Date(curYear, curViewingMonth + 1, 0).getDate();
+              const firstDayIndex = (new Date(curYear, curViewingMonth, 1).getDay() + 6) % 7; // 0 = Lundi, 6 = Dimanche
 
-                  const clickHandler = isFormation
-                    ? `window.game.openModule('formation'); document.getElementById('${modalId}').remove();`
-                    : (m.isSamuGardeActive || m.isSdisGardeActive
-                      ? `window.game.openModule('conventions'); document.getElementById('${modalId}').remove();`
-                      : `window.game.openMissionDetails('${m.id}'); document.getElementById('${modalId}').remove();`);
+              // Helper d'extraction de date pour une mission de véhicule
+              const getMissionDate = (m) => {
+                if (m.eventDate && typeof m.eventDate === 'object') {
+                  const d = Number(m.eventDate.day);
+                  let mo = Number(m.eventDate.month);
+                  if (mo > 11) mo = mo - 1;
+                  const y = Number(m.eventDate.year) || (this.clock ? this.clock.year : 2026);
+                  if (!isNaN(d) && !isNaN(mo)) return { day: d, month: mo, year: y };
+                }
+                if (m.startedAt) {
+                  const dt = new Date(m.startedAt);
+                  if (!isNaN(dt.getTime())) return { day: dt.getDate(), month: dt.getMonth(), year: dt.getFullYear() };
+                }
+                if (m.scheduled_date) {
+                  const dt = new Date(m.scheduled_date);
+                  if (!isNaN(dt.getTime())) return { day: dt.getDate(), month: dt.getMonth(), year: dt.getFullYear() };
+                }
+                return { day: this.clock ? this.clock.day : 1, month: this.clock ? this.clock.month : 0, year: this.clock ? this.clock.year : 2026 };
+              };
 
+              // Helper d'information et badges d'un engagement
+              const getMissionInfo = (m) => {
+                const isRearm = Boolean(m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique');
+                const isFormation = m.type === 'formation' || m.isFormationB2B;
+                const isSamu = m.type === 'samu' || m.isSamuGardeActive;
+                const isSdis = m.type === 'pompiers' || m.isSdisGardeActive;
+                const isSocial = m.type === 'social';
+                const isCrisis = Boolean(m.type === 'crise' || m.isCrisis);
+
+                let badgeLabel = 'DPS';
+                let badgeClass = 'bg-blue-100 text-blue-900 border-blue-300';
+                let tagColor = 'bg-pc-blue';
+                if (isRearm) {
+                  badgeLabel = 'Atelier Logistique';
+                  badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
+                  tagColor = 'bg-amber-500';
+                } else if (isFormation) {
+                  badgeLabel = 'Formation';
+                  badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300';
+                  tagColor = 'bg-indigo-600';
+                } else if (isSamu) {
+                  badgeLabel = 'SAMU 15';
+                  badgeClass = 'bg-orange-100 text-orange-900 border-orange-300';
+                  tagColor = 'bg-orange-500';
+                } else if (isSdis) {
+                  badgeLabel = 'SDIS 18';
+                  badgeClass = 'bg-red-100 text-red-900 border-red-300';
+                  tagColor = 'bg-red-600';
+                } else if (isSocial) {
+                  badgeLabel = 'Maraude';
+                  badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
+                  tagColor = 'bg-purple-600';
+                } else if (isCrisis) {
+                  badgeLabel = 'Crise';
+                  badgeClass = 'bg-rose-100 text-rose-900 border-rose-300';
+                  tagColor = 'bg-rose-600 animate-pulse';
+                }
+
+                const clickHandler = isFormation
+                  ? `window.game.openModule('formation'); document.getElementById('${modalId}').remove();`
+                  : (m.isSamuGardeActive || m.isSdisGardeActive
+                    ? `window.game.openModule('conventions'); document.getElementById('${modalId}').remove();`
+                    : `window.game.openMissionDetails('${m.id}'); document.getElementById('${modalId}').remove();`);
+
+                return { isRearm, isFormation, isSamu, isSdis, isSocial, isCrisis, badgeLabel, badgeClass, tagColor, clickHandler };
+              };
+
+              // Si vue Liste demandée
+              if (viewMode === 'list') {
+                if (vehicleMissions.length === 0) {
                   return `
-                    <div onclick="${clickHandler}" class="p-2.5 rounded-xl border ${isRearm ? 'bg-amber-50/70 border-amber-200 hover:border-amber-400' : 'bg-slate-50 border-slate-200 hover:border-pc-blue/50'} hover:shadow-xs transition cursor-pointer flex flex-col gap-1" title="Cliquer pour afficher la mission">
-                      <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-1.5 min-w-0">
-                          <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border shrink-0 ${badgeClass}">
-                            ${badgeLabel}
-                          </span>
-                          <strong class="text-xs font-black text-slate-900 truncate">${m.title}</strong>
-                        </div>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${m.status === 'en_cours' || m.status === 'ongoing' ? 'bg-emerald-500 text-white animate-pulse' : (m.status === 'prealerte' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700')}">
-                          ${m.status === 'en_cours' || m.status === 'ongoing' ? 'En cours' : (m.status === 'prealerte' ? 'Préalerte' : (m.status === 'declenche' ? 'Déclenché' : 'Planifié'))}
-                        </span>
-                      </div>
-                      <div class="flex items-center justify-between text-[10px] text-slate-500 flex-wrap gap-1">
-                        <span class="flex items-center gap-1">
-                          <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
-                          <span>${isRearm ? `Durée atelier : ~${m.durationMinutes || 30} min` : slotStr}</span>
-                        </span>
-                        ${isRearm ? `
-                          <span class="font-bold text-amber-800">🛠️ Inscription bénévoles ouverte</span>
-                        ` : (vehRole ? `
-                          <span class="font-medium text-slate-600 truncate max-w-[220px]">${vehRole}</span>
-                        ` : '')}
-                      </div>
+                    <div class="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-700/80 text-center space-y-1">
+                      <p class="text-xs font-bold text-slate-700 dark:text-slate-300">Aucun engagement ni mission planifiée</p>
+                      <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Ce véhicule est actuellement libre au garage pour être engagé sur un DPS, une formation, une garde ou un atelier logistique.</p>
                     </div>
                   `;
-                }).join('')}
-              </div>
-            `}
-          </div>
+                }
 
+                return `
+                  <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+                    ${vehicleMissions.map(m => {
+                      const info = getMissionInfo(m);
+                      const slotStr = m.eventTime || (typeof this.formatMissionTimeSlot === 'function' ? this.formatMissionTimeSlot(m) : 'Horaire planifié');
+                      const vehRole = (m.vehicleFunctions && m.vehicleFunctions[v.id]) || '';
+                      return `
+                        <div onclick="${info.clickHandler}" class="p-2.5 rounded-xl border ${info.isRearm ? 'bg-amber-50/70 border-amber-200 hover:border-amber-400' : 'bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-700 hover:border-pc-blue/50'} hover:shadow-xs transition cursor-pointer flex flex-col gap-1" title="Cliquer pour afficher la mission">
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-1.5 min-w-0">
+                              <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border shrink-0 ${info.badgeClass}">
+                                ${info.badgeLabel}
+                              </span>
+                              <strong class="text-xs font-black text-slate-900 dark:text-white truncate">${m.title}</strong>
+                            </div>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${m.status === 'en_cours' || m.status === 'ongoing' ? 'bg-emerald-500 text-white animate-pulse' : (m.status === 'prealerte' ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300')}">
+                              ${m.status === 'en_cours' || m.status === 'ongoing' ? 'En cours' : (m.status === 'prealerte' ? 'Préalerte' : (m.status === 'declenche' ? 'Déclenché' : 'Planifié'))}
+                            </span>
+                          </div>
+                          <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 flex-wrap gap-1">
+                            <span class="flex items-center gap-1">
+                              <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+                              <span>${info.isRearm ? `Durée atelier : ~${m.durationMinutes || 30} min` : slotStr}</span>
+                            </span>
+                            ${info.isRearm ? `
+                              <span class="font-bold text-amber-800 dark:text-amber-300">🛠️ Inscription bénévoles ouverte</span>
+                            ` : (vehRole ? `
+                              <span class="font-medium text-slate-600 dark:text-slate-300 truncate max-w-[220px]">${vehRole}</span>
+                            ` : '')}
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                `;
+              }
+
+              // VUE AGENDA (CALENDRIER MENSUEL)
+              const selectedDayEvents = vehicleMissions.filter(m => {
+                const md = getMissionDate(m);
+                return md.day === selectedDay && md.month === curViewingMonth && md.year === curYear;
+              });
+
+              return `
+                <div class="space-y-3">
+                  <!-- Navigation du Mois dans l'Agenda -->
+                  <div class="p-2 sm:p-2.5 rounded-2xl bg-slate-50/90 dark:bg-slate-900/60 border border-slate-200/90 dark:border-slate-700/80 flex items-center justify-between gap-2 shadow-2xs">
+                    <button type="button" onclick="window.game.changeVehiclePlanningMonth('${v.id}', -1)" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer shrink-0" title="Mois précédent">
+                      <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    </button>
+                    <div class="text-center flex-1 min-w-0">
+                      <div class="flex items-center justify-center gap-2">
+                        <span class="text-xs sm:text-sm font-black text-slate-900 dark:text-white tracking-tight">${curMonthName} ${curYear}</span>
+                        ${!isViewingCurrentMonth ? `
+                          <button type="button" onclick="window.game.resetVehiclePlanningMonth('${v.id}')" class="px-2 py-0.5 rounded-lg text-[9px] font-black bg-pc-blue text-white hover:brightness-110 active:scale-95 transition cursor-pointer flex items-center gap-1 shadow-2xs" title="Revenir au mois en cours">
+                            <i data-lucide="rotate-ccw" class="w-2.5 h-2.5"></i>
+                            <span class="hidden sm:inline">Aujourd'hui</span>
+                          </button>
+                        ` : ''}
+                      </div>
+                      <span class="text-[9px] font-extrabold ${isViewingCurrentMonth ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'} uppercase tracking-wider block mt-0.5">
+                        ${isViewingCurrentMonth ? 'MOIS EN COURS' : ((curYear < (this.clock ? this.clock.year : 2026) || (curYear === (this.clock ? this.clock.year : 2026) && curViewingMonth < (this.clock ? this.clock.month : 0))) ? 'MOIS PASSÉ' : 'MOIS À VENIR')}
+                      </span>
+                    </div>
+                    <button type="button" onclick="window.game.changeVehiclePlanningMonth('${v.id}', 1)" class="w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-800 transition cursor-pointer shrink-0" title="Mois suivant">
+                      <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    </button>
+                  </div>
+
+                  <!-- Grille Calendrier 7 colonnes -->
+                  <div class="p-2 sm:p-3 rounded-2xl bg-slate-50/50 dark:bg-slate-900/40 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+                    <!-- En-têtes LUN à DIM -->
+                    <div class="grid grid-cols-7 gap-1 text-center text-[10px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                      <div>LUN</div><div>MAR</div><div>MER</div><div>JEU</div><div>VEN</div><div>SAM</div><div>DIM</div>
+                    </div>
+
+                    <!-- Cases des jours -->
+                    <div class="grid grid-cols-7 gap-1 sm:gap-1.5">
+                      <!-- Décalage du premier jour du mois -->
+                      ${Array.from({ length: firstDayIndex }).map(() => `
+                        <div class="min-h-[50px] rounded-xl bg-slate-100/30 dark:bg-slate-800/20 border border-transparent opacity-30"></div>
+                      `).join('')}
+
+                      <!-- Jours du mois -->
+                      ${Array.from({ length: daysInMonth }).map((_, i) => {
+                        const day = i + 1;
+                        const isToday = isViewingCurrentMonth && (day === todayDay);
+                        const isSelected = (day === selectedDay);
+                        const dayMissions = vehicleMissions.filter(m => {
+                          const md = getMissionDate(m);
+                          return md.day === day && md.month === curViewingMonth && md.year === curYear;
+                        });
+
+                        let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
+                        if (isSelected) {
+                          bgClass = 'bg-pc-blue/10 dark:bg-sky-950/60 border-pc-blue ring-2 ring-pc-blue/40 shadow-xs';
+                        } else if (isToday) {
+                          bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
+                        }
+
+                        return `
+                          <button
+                            type="button"
+                            onclick="window.game.selectVehiclePlanningDay('${v.id}', ${day})"
+                            class="min-h-[52px] sm:min-h-[56px] rounded-xl p-1 sm:p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
+                            title="${day} ${curMonthName} ${curYear} (${dayMissions.length} engagement(s))"
+                          >
+                            <div class="flex items-center justify-between w-full">
+                              <span class="text-[11px] sm:text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : 'text-slate-700 dark:text-slate-300 font-extrabold'}">
+                                ${day}
+                              </span>
+                              ${isToday ? `<span class="px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-black bg-amber-400 text-amber-950 uppercase shrink-0">AUJ.</span>` : ''}
+                            </div>
+
+                            <div class="flex flex-col gap-0.5 w-full mt-1">
+                              ${dayMissions.slice(0, 2).map(m => {
+                                const info = getMissionInfo(m);
+                                return `
+                                  <div class="px-1 py-0.2 rounded text-[7.5px] sm:text-[8px] font-extrabold text-white truncate text-center ${info.tagColor}">
+                                    ${info.badgeLabel}
+                                  </div>
+                                `;
+                              }).join('')}
+                              ${dayMissions.length > 2 ? `
+                                <span class="text-[7px] font-black text-slate-400 dark:text-slate-500 text-center block">+${dayMissions.length - 2}</span>
+                              ` : ''}
+                            </div>
+                          </button>
+                        `;
+                      }).join('')}
+                    </div>
+                  </div>
+
+                  <!-- Détail des missions du jour sélectionné -->
+                  <div class="p-3 sm:p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700/80 space-y-2.5">
+                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5">
+                      <div class="flex items-center gap-1.5">
+                        <i data-lucide="calendar-check" class="w-3.5 h-3.5 text-pc-blue"></i>
+                        <strong class="text-xs font-black text-slate-900 dark:text-white">Planning du ${selectedDay} ${curMonthName} ${curYear}</strong>
+                        ${isViewingCurrentMonth && selectedDay === todayDay ? `
+                          <span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-amber-100 text-amber-900 border border-amber-300">Aujourd'hui</span>
+                        ` : ''}
+                      </div>
+                      <span class="text-[10px] font-bold text-slate-500 dark:text-slate-400">${selectedDayEvents.length} engagement(s)</span>
+                    </div>
+
+                    ${selectedDayEvents.length === 0 ? `
+                      <p class="text-xs text-slate-500 dark:text-slate-400 py-3 text-center italic">
+                        Aucun engagement ni mission ce jour pour ${v.name}. Le véhicule est disponible pour d'autres affectations.
+                      </p>
+                    ` : `
+                      <div class="space-y-2">
+                        ${selectedDayEvents.map(m => {
+                          const info = getMissionInfo(m);
+                          const slotStr = m.eventTime || (typeof this.formatMissionTimeSlot === 'function' ? this.formatMissionTimeSlot(m) : 'Horaire planifié');
+                          const vehRole = (m.vehicleFunctions && m.vehicleFunctions[v.id]) || '';
+
+                          return `
+                            <div onclick="${info.clickHandler}" class="p-2.5 rounded-xl border ${info.isRearm ? 'bg-amber-50/70 border-amber-200 hover:border-amber-400' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-pc-blue/50'} hover:shadow-xs transition cursor-pointer flex flex-col gap-1" title="Cliquer pour afficher la mission">
+                              <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-1.5 min-w-0">
+                                  <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border shrink-0 ${info.badgeClass}">
+                                    ${info.badgeLabel}
+                                  </span>
+                                  <strong class="text-xs font-black text-slate-900 dark:text-white truncate">${m.title}</strong>
+                                </div>
+                                <span class="px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${m.status === 'en_cours' || m.status === 'ongoing' ? 'bg-emerald-500 text-white animate-pulse' : (m.status === 'prealerte' ? 'bg-amber-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300')}">
+                                  ${m.status === 'en_cours' || m.status === 'ongoing' ? 'En cours' : (m.status === 'prealerte' ? 'Préalerte' : (m.status === 'declenche' ? 'Déclenché' : 'Planifié'))}
+                                </span>
+                              </div>
+                              <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 flex-wrap gap-1">
+                                <span class="flex items-center gap-1">
+                                  <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
+                                  <span>${info.isRearm ? `Durée atelier : ~${m.durationMinutes || 30} min` : slotStr}</span>
+                                </span>
+                                ${info.isRearm ? `
+                                  <span class="font-bold text-amber-800 dark:text-amber-300">🛠️ Inscription bénévoles ouverte</span>
+                                ` : (vehRole ? `
+                                  <span class="font-medium text-slate-600 dark:text-slate-300 truncate max-w-[220px]">${vehRole}</span>
+                                ` : '')}
+                              </div>
+                            </div>
+                          `;
+                        }).join('')}
+                      </div>
+                    `}
+                  </div>
+                </div>
+              `;
+            })()}
+          </div>
           ${isVLC && cmdLeader ? `
             <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs flex items-center justify-between">
               <div>
