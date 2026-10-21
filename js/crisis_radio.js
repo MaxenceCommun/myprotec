@@ -1078,29 +1078,22 @@ window.ProtecCrisisRadio = {
     hud.className = 'fixed bottom-4 right-4 z-[10000] max-w-sm sm:max-w-md w-[92%] sm:w-auto transition-all duration-300 transform translate-y-32 opacity-0 pointer-events-none';
     hud.innerHTML = `
       <div class="glass-panel p-3.5 rounded-2xl bg-slate-950/95 border-2 border-cyan-500/80 shadow-2xl backdrop-blur-xl text-white">
-        <!-- En-tête HUD -->
+        <!-- En-tête HUD épuré et immersif -->
         <div class="flex items-center justify-between gap-3 border-b border-cyan-500/30 pb-2 mb-2">
           <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-full bg-emerald-500 animate-ping"></span>
-            <span class="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-1.5">
-              <span>● TX RADIO ACTIVE</span>
-              <span id="crisis-radio-hud-channel" class="text-slate-400 font-mono text-[9px]">CANAL CRISE</span>
-            </span>
-            <button type="button" id="crisis-radio-hud-engine-badge" onclick="window.ProtecCrisisRadio.cycleVoiceModel()" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer active:scale-95 shadow-2xs" title="Cliquer pour changer de modèle vocal (MLS 48 voix / Siwis Studio / UPMC)">
-              🎙️ Piper [MLS]
-            </button>
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span class="text-[10px] font-black uppercase tracking-wider text-emerald-400">TX RADIO</span>
+            <span id="crisis-radio-hud-channel" class="text-slate-400 font-mono text-[9px] uppercase px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700/60">CANAL CRISE</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <button type="button" onclick="window.ProtecCrisisRadio.testSpeech()" class="px-2 py-0.5 rounded-lg bg-cyan-900/60 hover:bg-cyan-800 text-[10px] font-bold text-cyan-200 hover:text-white transition border border-cyan-500/40 cursor-pointer active:scale-95" title="Tester immédiatement la voix TTS active">
-              Test 🎙️
-            </button>
             <span id="crisis-radio-hud-queue-badge" class="hidden text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
               +0 en attente
             </span>
-            <button onclick="window.ProtecCrisisRadio.skip()" class="px-2 py-0.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[10px] font-bold text-slate-300 hover:text-white transition border border-slate-700" title="Passer ce message vocal">
-              Passer ⏭️
+            <button onclick="window.ProtecCrisisRadio.skip()" class="px-2 py-0.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-[10px] font-bold text-slate-300 hover:text-white transition border border-slate-700/80 cursor-pointer active:scale-95 flex items-center gap-1" title="Passer ce message vocal">
+              <span>Passer</span>
+              <span class="text-xs">⏭</span>
             </button>
-            <button onclick="window.ProtecCrisisRadio.toggle()" class="w-6 h-6 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700" title="Couper la radio">
+            <button onclick="window.ProtecCrisisRadio.toggle()" class="w-6 h-6 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700/80 cursor-pointer active:scale-95" title="Fermer la radio">
               ✕
             </button>
           </div>
