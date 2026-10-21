@@ -2230,7 +2230,22 @@ class ProtecGame {
         });
       }
 
-      // 3.bis Purge stricte des missions distantes du backend OVH et crises imposées
+      // 3.bis Retrait des exigences de moyens LOG (VTU/VTP) sur toutes les crises
+      if (Array.isArray(this.missions)) {
+        this.missions.forEach(m => {
+          if (m && (m.type === 'crise' || m.isCrisis || m.isEmergencyPlan)) {
+            if (Array.isArray(m.requiredVehicles)) {
+              m.requiredVehicles = m.requiredVehicles.filter(v => v !== 'VTU' && v !== 'VTP');
+            }
+            if (m.requiredAssets) {
+              m.requiredAssets.vtu = 0;
+              m.requiredAssets.vtp = 0;
+            }
+          }
+        });
+      }
+
+      // 3.ter Purge stricte des missions distantes du backend OVH et crises imposées
       this.missions = this.missions.filter(m => {
         if (!m) return false;
         if (m.isBackendIntervention) return false;
@@ -10207,10 +10222,8 @@ class ProtecGame {
       const maxVpsp = isSigned 
         ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.40)), 2)) 
         : Math.min(1, apcCap.totalVpsp);
-      const maxVtu = isSigned 
-        ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVtu * 0.40)), 2)) 
-        : Math.min(1, apcCap.totalVtu);
-      const maxVtp = isSigned && apcCap.totalVtp > 0 && apcCap.totalStations >= 2 ? 1 : 0;
+      const maxVtu = 0;
+      const maxVtp = 0;
       const maxChuPlaces = Math.min(100, Math.max(30, apcCap.totalStations * 30));
 
       return {
@@ -10243,10 +10256,8 @@ class ProtecGame {
       const maxVpsp = isSigned 
         ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.55)), apcCap.totalVpsp)) 
         : Math.min(1, apcCap.totalVpsp);
-      const maxVtu = isSigned 
-        ? Math.max(1, Math.min(1, apcCap.totalVtu)) 
-        : Math.min(1, apcCap.totalVtu);
-      const maxVtp = isSigned && apcCap.totalVtp > 0 ? Math.min(1, apcCap.totalVtp) : 0;
+      const maxVtu = 0;
+      const maxVtp = 0;
       const maxChuPlaces = Math.min(40, Math.max(15, apcCap.totalStations * 15));
 
       return {
@@ -10285,7 +10296,7 @@ class ProtecGame {
         authorized: isAascSigned,
         maxVolunteers,
         maxVpsp: 0,
-        maxVtu: Math.max(1, Math.min(1, apcCap.totalVtu)),
+        maxVtu: 0,
         maxVtp: 0,
         maxChuPlaces: 0,
         pmaAuthorized: false,
@@ -10344,8 +10355,7 @@ class ProtecGame {
       const feuVtu = pompiersLimits.maxVtu;
       const feuVtp = pompiersLimits.maxVtp;
       const feuChu = pompiersLimits.maxChuPlaces;
-      const feuVehicles = ['VPSP', 'VTU'];
-      if (feuVtp > 0) feuVehicles.push('VTP');
+      const feuVehicles = ['VPSP'];
 
       if (isParisArea) {
         scenarios.push({
@@ -10363,8 +10373,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: feuVpsp,
-            vtu: feuVtu,
-            vtp: feuVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: feuChu,
             pma: false,
             cyno: 0,
@@ -10392,8 +10402,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: feuVpsp,
-            vtu: feuVtu,
-            vtp: feuVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: feuChu,
             pma: false,
             cyno: 0,
@@ -10416,8 +10426,7 @@ class ProtecGame {
       const tgvVtu = Math.max(1, sncfLimits.maxVtu || 1);
       const tgvVtp = sncfLimits.maxVtp || 0;
       const tgvChu = Math.max(25, sncfLimits.maxChuPlaces || 25);
-      const tgvVehicles = ['VPSP', 'VTU'];
-      if (tgvVtp > 0) tgvVehicles.push('VTP');
+      const tgvVehicles = ['VPSP'];
 
       scenarios.push({
         id: 'tgv_bloque',
@@ -10434,8 +10443,8 @@ class ProtecGame {
         ],
         requiredAssets: {
           vpsp: tgvVpsp,
-          vtu: tgvVtu,
-          vtp: tgvVtp,
+          vtu: 0,
+          vtp: 0,
           chu_places: tgvChu,
           pma: false,
           cyno: 0,
@@ -10472,7 +10481,7 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: 0,
-            vtu: 1,
+            vtu: 0,
             vtp: 0,
             chu_places: 0,
             pma: false,
@@ -10480,7 +10489,7 @@ class ProtecGame {
             drone: true
           },
           requiredVolunteers: rechVols,
-          requiredVehicles: ['VTU'],
+          requiredVehicles: ['VLHR'],
           scale: `Préfecture de Police [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
           rewardMoney: Math.round(460 + (rechVols * 18)),
           rewardReputation: 35
@@ -10502,7 +10511,7 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: 0,
-            vtu: 1,
+            vtu: 0,
             vtp: 0,
             chu_places: 0,
             pma: false,
@@ -10510,7 +10519,7 @@ class ProtecGame {
             drone: true
           },
           requiredVolunteers: rechVols,
-          requiredVehicles: ['VTU'],
+          requiredVehicles: ['VL'],
           scale: `DSPAP [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
           rewardMoney: Math.round(450 + (rechVols * 18)),
           rewardReputation: 35
@@ -10536,7 +10545,7 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: 0,
-            vtu: 1,
+            vtu: 0,
             vtp: 0,
             chu_places: 0,
             pma: false,
@@ -10544,7 +10553,7 @@ class ProtecGame {
             drone: true
           },
           requiredVolunteers: rechVols,
-          requiredVehicles: isPetiteCouronne ? ['VTU'] : ['VLHR'],
+          requiredVehicles: isPetiteCouronne ? ['VL'] : ['VLHR'],
           scale: `${isPetiteCouronne ? 'Police' : 'Gendarmerie'} [${rechLimits.conventionBadge}] : Plafond ${rechVols} secouristes + Drone/Cyno`,
           rewardMoney: Math.round(450 + (rechVols * 18)),
           rewardReputation: 35
@@ -10560,8 +10569,7 @@ class ProtecGame {
       const inondVtu = prefLimits.maxVtu;
       const inondVtp = prefLimits.maxVtp;
       const inondChu = prefLimits.maxChuPlaces;
-      const inondVehicles = ['VPSP', 'VTU'];
-      if (inondVtp > 0) inondVehicles.push('VTP');
+      const inondVehicles = ['VPSP'];
 
       if (isParisIntramuros) {
         scenarios.push({
@@ -10580,8 +10588,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: inondVpsp,
-            vtu: inondVtu,
-            vtp: inondVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: inondChu,
             pma: true,
             cyno: 0,
@@ -10609,8 +10617,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: inondVpsp,
-            vtu: inondVtu,
-            vtp: inondVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: inondChu,
             pma: true,
             cyno: 0,
@@ -10633,8 +10641,7 @@ class ProtecGame {
       const noviVtu = samuLimits.maxVtu;
       const noviVtp = samuLimits.maxVtp;
       const noviChu = samuLimits.maxChuPlaces;
-      const noviVehicles = ['VPSP', 'VTU'];
-      if (noviVtp > 0) noviVehicles.push('VTP');
+      const noviVehicles = ['VPSP'];
 
       if (isParisArea) {
         scenarios.push({
@@ -10652,8 +10659,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: noviVpsp,
-            vtu: noviVtu,
-            vtp: noviVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: noviChu,
             pma: true,
             cyno: 0,
@@ -10681,8 +10688,8 @@ class ProtecGame {
           ],
           requiredAssets: {
             vpsp: noviVpsp,
-            vtu: noviVtu,
-            vtp: noviVtp,
+            vtu: 0,
+            vtp: 0,
             chu_places: noviChu,
             pma: true,
             cyno: 0,
@@ -16209,15 +16216,7 @@ class ProtecGame {
                   color: 'text-sky-700 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/40 border-sky-200 dark:border-sky-500/30'
                 });
               }
-              const logVecteurs = (assets.vtu || 0) + (assets.vtp || 0);
-              if (logVecteurs > 0) {
-                requestedItems.push({
-                  icon: '🚚',
-                  label: 'Logistique',
-                  val: `${logVecteurs} vecteur(s) (VTU/VTP)`,
-                  color: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700'
-                });
-              }
+              // Le moyen LOG n'est pas requis sur le dispositif (utilisé uniquement en interne pour transport matériel)
               if (requestedItems.length === 0) {
                 requestedItems.push({
                   icon: '👥',
