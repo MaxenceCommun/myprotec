@@ -39,14 +39,23 @@ window.ProtecCrisisRadio = {
 
   // Voix fixes optimisées pour les autorités et partenaires régaliens
   INSTITUTIONAL_SPEAKERS: {
-    // 🏛️ Autorités Préfectorales & Gouvernance (Voix masculine posée et solennelle)
-    'prefet': 70,                 // Voix claire, calme et autoritaire
-    'prefecture': 70,
-    'cabinet_prefet': 70,
+    // 🏛️ Voix d'Élite #3 : PC de Crise, Annonces Principales, Commandement & Régulation
+    'pc_crise': 3,                // Voix #3 (Choisie pour sa clarté, son naturel et son timbre net)
+    'pc_operationnel': 3,
+    'centre_operationnel': 3,
+    'commandement': 3,
+    'pc_regulation': 3,
+    'regulation': 3,
+    'main_courante': 3,
     'sidpc': 3,                   // Service Interministériel de Défense et de Protection Civile
     'siras': 3,
     'cellule_crise': 3,
     'cod': 3,                     // Centre Opérationnel Départemental
+    'prefecture': 3,              // Annonces et communiqués préfectoraux
+
+    // 🏛️ Préfet (Autorité solennelle)
+    'prefet': 70,                 // Voix posée, autoritaire et calme
+    'cabinet_prefet': 70,
     
     // 🚑 Régulation Médicale & Secours Publics
     'samu': 30,                   // Régulateur médical SAMU / Centre 15 (Dynamique et nette)
@@ -102,12 +111,28 @@ window.ProtecCrisisRadio = {
     if (volunteer) {
       return this.getVolunteerSpeakerId(volunteer);
     }
-    if (!source) return this.INSTITUTIONAL_SPEAKERS['sidpc'];
+    // Par défaut : Voix #3 (PC de crise & régulation principale)
+    if (!source) return this.INSTITUTIONAL_SPEAKERS['pc_crise'];
 
     const s = String(source).toLowerCase();
+
+    // 1. Voix d'Élite #3 : PC Crise, Centre Opérationnel, Main Courante, Cellule de Crise & SIDPC
+    if (
+      s.includes('pc') || 
+      s.includes('crise') || 
+      s.includes('centre opérationnel') || 
+      s.includes('cellule') || 
+      s.includes('sidpc') || 
+      s.includes('cod') || 
+      s.includes('main courante') || 
+      s.includes('siras')
+    ) {
+      return this.INSTITUTIONAL_SPEAKERS['pc_crise']; // Voix #3
+    }
+
+    // 2. Partenaires de secours régaliens
     if (s.includes('préfet') || s.includes('prefet') || s.includes('cabinet')) return this.INSTITUTIONAL_SPEAKERS['prefet'];
-    if (s.includes('sidpc') || s.includes('cod') || s.includes('cellule de crise')) return this.INSTITUTIONAL_SPEAKERS['sidpc'];
-    if (s.includes('samu') || s.includes('15') || s.includes('régulation') || s.includes('regulation')) return this.INSTITUTIONAL_SPEAKERS['samu'];
+    if (s.includes('samu') || s.includes('15') || s.includes('médical')) return this.INSTITUTIONAL_SPEAKERS['samu'];
     if (s.includes('codis') || s.includes('sdis') || s.includes('pompier') || s.includes('18')) return this.INSTITUTIONAL_SPEAKERS['codis'];
     if (s.includes('cos') || s.includes('commandement terrain') || s.includes('chef de dispositif')) return this.INSTITUTIONAL_SPEAKERS['cos'];
     if (s.includes('cadre') || s.includes('astreinte')) return this.INSTITUTIONAL_SPEAKERS['cadre_astreinte'];
@@ -116,14 +141,8 @@ window.ProtecCrisisRadio = {
     if (s.includes('sncf') || s.includes('gare')) return this.INSTITUTIONAL_SPEAKERS['sncf'];
     if (s.includes('police') || s.includes('gendarmerie')) return this.INSTITUTIONAL_SPEAKERS['police'];
 
-    // Hachage textuel générique vers le pool des voix claires
-    let hash = 0;
-    for (let i = 0; i < s.length; i++) {
-      hash = ((hash << 5) - hash) + s.charCodeAt(i);
-      hash |= 0;
-    }
-    const pool = this.CLEAR_SPEAKERS;
-    return pool[Math.abs(hash) % pool.length];
+    // 3. Repli général par défaut : Voix #3 (la préférée)
+    return this.INSTITUTIONAL_SPEAKERS['pc_crise'];
   },
 
   // =========================================================================
