@@ -621,7 +621,7 @@ window.ProtecSmsMobilization = {
   },
 
   // Modification rapide du délai maximum de départ à tout moment en fonction de l'évolution de la situation
-  quickEditMaxDelay(missionId) {
+  async quickEditMaxDelay(missionId) {
     const game = window.game;
     if (!game) return;
     const mission = game.missions.find(m => m.id === missionId);
@@ -631,14 +631,32 @@ window.ProtecSmsMobilization = {
       ? mission.smsConsigne.maxDepartureDelayMinutes
       : (mission.maxDepartureDelayMinutes !== undefined ? mission.maxDepartureDelayMinutes : 20);
 
-    const inputVal = prompt(
-      `MODIFICATION DU DÉLAI MAXIMUM DE DÉPART (Évolution de situation) :\n\nIndiquez le délai maximum en minutes (trajet domicile ➔ base) exigé pour cette mission :\n(0 pour aucun délai / illimité)`,
-      currentDelay > 0 ? String(currentDelay) : '20'
-    );
+    let inputVal = null;
+    if (window.ProtecDialog && typeof window.ProtecDialog.prompt === 'function') {
+      inputVal = await window.ProtecDialog.prompt(
+        "Indiquez le délai maximum en minutes (trajet domicile ➔ base) exigé pour cette mission :\n\n• Les bénévoles dont le temps de trajet dépasse ce délai seront placés en réserve éloignée.\n• Indiquez 0 pour aucun délai (temps de trajet illimité).",
+        currentDelay > 0 ? String(currentDelay) : '20',
+        "Délai Maximum de Départ",
+        {
+          category: "Ajustement Opérationnel SMS",
+          icon: "clock",
+          inputType: "number",
+          placeholder: "Ex: 20",
+          inputLabel: "Délai de trajet exigé (en minutes) :",
+          confirmText: "Valider le délai",
+          cancelText: "Annuler"
+        }
+      );
+    } else {
+      inputVal = prompt(
+        `MODIFICATION DU DÉLAI MAXIMUM DE DÉPART (Évolution de situation) :\n\nIndiquez le délai maximum en minutes (trajet domicile ➔ base) exigé pour cette mission :\n(0 pour aucun délai / illimité)`,
+        currentDelay > 0 ? String(currentDelay) : '20'
+      );
+    }
 
     if (inputVal === null) return; // Annulé
 
-    const parsedDelay = Math.max(0, parseInt(inputVal.trim(), 10) || 0);
+    const parsedDelay = Math.max(0, parseInt(String(inputVal).trim(), 10) || 0);
 
     if (!mission.smsConsigne) mission.smsConsigne = {};
     mission.smsConsigne.maxDepartureDelayMinutes = parsedDelay;

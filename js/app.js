@@ -13874,8 +13874,24 @@ class ProtecGame {
   }
 
   // Création personnalisée d'une équipe avec nom libre
-  promptCreateCustomTeam(missionId) {
-    const name = prompt('Nom de la nouvelle équipe opérationnelle (ex: Binôme 1, Équipe Maraude, VPSP Alpha, Triage...) :');
+  async promptCreateCustomTeam(missionId) {
+    let name = null;
+    if (window.ProtecDialog && typeof window.ProtecDialog.prompt === 'function') {
+      name = await window.ProtecDialog.prompt(
+        "Indiquez l'intitulé de la nouvelle équipe opérationnelle pour ce dispositif :",
+        "Binôme 1",
+        "Nouvelle Équipe Opérationnelle",
+        {
+          category: "Gestion d'Équipe",
+          icon: "users",
+          placeholder: "Ex: Binôme 1, Équipe Maraude, VPSP Alpha, Triage...",
+          inputLabel: "Nom de l'équipe :",
+          confirmText: "Créer l'équipe"
+        }
+      );
+    } else {
+      name = prompt('Nom de la nouvelle équipe opérationnelle (ex: Binôme 1, Équipe Maraude, VPSP Alpha, Triage...) :');
+    }
     if (!name || !name.trim()) return;
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;

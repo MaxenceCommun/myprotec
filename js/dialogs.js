@@ -17,9 +17,9 @@ window.ProtecDialog = {
     if (!container) {
       container = document.createElement('div');
       container.id = 'protec-dialog-overlay';
-      container.className = 'fixed inset-0 z-[10000] hidden items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md select-none transition-opacity duration-200';
+      container.className = 'fixed inset-0 z-[10000] hidden items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md select-none transition-opacity duration-200';
       container.innerHTML = `
-        <div id="protec-dialog-box" class="w-full max-w-md rounded-3xl glass-panel-heavy border border-white/90 p-5 sm:p-6 shadow-2xl relative transition-all duration-200 transform scale-95 opacity-0">
+        <div id="protec-dialog-box" class="w-full max-w-[94vw] sm:max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-2xl relative transition-all duration-200 transform scale-95 opacity-0 text-slate-900 dark:text-white">
           
           <!-- En-tête -->
           <div class="flex items-start gap-3.5 mb-3.5">
@@ -27,30 +27,30 @@ window.ProtecDialog = {
               <i id="protec-dialog-icon" data-lucide="info" class="w-5 h-5"></i>
             </div>
             <div class="flex-1 min-w-0 pt-0.5">
-              <h3 id="protec-dialog-title" class="text-base font-black text-slate-900 leading-snug">Confirmation</h3>
-              <p id="protec-dialog-category" class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mt-0.5">Protection Civile</p>
+              <h3 id="protec-dialog-title" class="text-base font-black text-slate-900 dark:text-white leading-snug">Confirmation</h3>
+              <p id="protec-dialog-category" class="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-400 mt-0.5">Protection Civile</p>
             </div>
-            <button id="protec-dialog-close-btn" type="button" class="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center text-xs font-bold transition cursor-pointer active:scale-90" title="Fermer">✕</button>
+            <button id="protec-dialog-close-btn" type="button" class="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-700 dark:hover:text-white flex items-center justify-center text-xs font-bold transition cursor-pointer active:scale-90" title="Fermer">✕</button>
           </div>
 
           <!-- Message principal -->
-          <div id="protec-dialog-body" class="text-xs text-slate-700 font-medium leading-relaxed max-h-[55vh] overflow-y-auto pr-1 space-y-2">
+          <div id="protec-dialog-body" class="text-xs text-slate-700 dark:text-slate-300 font-medium leading-relaxed max-h-[55vh] overflow-y-auto pr-1 space-y-2">
           </div>
 
           <!-- Champ de saisie pour Prompt -->
           <div id="protec-dialog-input-container" class="mt-4 hidden space-y-1.5">
-            <label id="protec-dialog-input-label" class="block text-[11px] font-extrabold text-slate-700">Votre saisie :</label>
+            <label id="protec-dialog-input-label" class="block text-[11px] font-extrabold text-slate-700 dark:text-slate-200">Votre saisie :</label>
             <input 
               type="text" 
               id="protec-dialog-input" 
-              class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-bold text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue shadow-inner transition"
+              class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/90 border border-slate-300 dark:border-slate-700 font-bold text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue shadow-inner transition"
               autocomplete="off"
             />
           </div>
 
           <!-- Boutons d'action -->
-          <div id="protec-dialog-actions" class="mt-5 pt-3.5 border-t border-slate-200/70 flex items-center justify-end gap-2.5">
-            <button id="protec-dialog-cancel-btn" type="button" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 hover:text-slate-800 transition cursor-pointer active:scale-95">
+          <div id="protec-dialog-actions" class="mt-5 pt-3.5 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-end gap-2.5">
+            <button id="protec-dialog-cancel-btn" type="button" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition cursor-pointer active:scale-95">
               Annuler
             </button>
             <button id="protec-dialog-confirm-btn" type="button" class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white shadow-md transition cursor-pointer active:scale-95 flex items-center gap-1.5">
