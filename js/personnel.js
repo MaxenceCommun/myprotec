@@ -2823,14 +2823,100 @@ window.ProtecPersonnel = {
     });
   },
 
-  // 3. Tirage équilibré parmi les villes et villages du département (sans barrière de 15 km)
-  pickWeightedCommune(eligibleCommunes, station) {
+  // Calcule dynamiquement le rayon et le bassin d'attractivité territoriale selon la maturité de l'antenne
+  getAntennaRecruitmentRadius(game, station) {
+    if (!game) return { maxRadiusKm: 10, preferredRadiusKm: 4, growthScore: 0, tier: 1, label: 'Bassin local immédiat (commune et limitrophes, max ~10 km)' };
+
+    const volCount = Array.isArray(game.volunteers) ? game.volunteers.length : 5;
+    const vehCount = Array.isArray(game.vehicles) ? game.vehicles.length : 1;
+    const completedMissions = Array.isArray(game.missions) ? game.missions.filter(m => m.status === 'completed').length : 0;
+    const followers = (game.resources && game.resources.followers) || 0;
+    const hasComCampaign = Boolean(game.resources?.campaigns?.social || game.resources?.campaigns?.posters || game.commData?.activeCampaign);
+
+    // Calcul du score d'envergure et de rayonnement (0 à 100+)
+    let growthScore = 0;
+    growthScore += Math.min(35, volCount * 1.5);           // jusqu'à 35 pts pour les effectifs (ex: 20 bénévoles = 30 pts)
+    growthScore += Math.min(25, vehCount * 5);             // jusqu'à 25 pts pour la flotte (ex: 5 véhicules = 25 pts)
+    growthScore += Math.min(25, completedMissions * 1.5);  // jusqu'à 25 pts pour les missions d'intervention
+    growthScore += Math.min(15, Math.floor(followers / 30)); // jusqu'à 15 pts pour la notoriété publique
+    if (hasComCampaign) growthScore += 10;                 // +10 pts si campagne de communication active
+
+    if (growthScore < 20) {
+      // Stade 1 : Antenne de base / débutante (commune locale + limitrophes immédiats, max ~10-12 km)
+      return {
+        maxRadiusKm: 11,
+        preferredRadiusKm: 4.5,
+        growthScore,
+        tier: 1,
+        label: 'Bassin local immédiat (commune et limitrophes, max ~11 km)'
+      };
+    } else if (growthScore < 50) {
+      // Stade 2 : Antenne en consolidation (agglomération, cantons voisins, max ~26 km)
+      return {
+        maxRadiusKm: 26,
+        preferredRadiusKm: 12,
+        growthScore,
+        tier: 2,
+        label: 'Bassin élargi (agglomération et cantons voisins, max ~26 km)'
+      };
+    } else {
+      // Stade 3 : Grande antenne départementale d'envergure (rayonnement départemental complet, max ~65 km)
+      return {
+        maxRadiusKm: 65,
+        preferredRadiusKm: 26,
+        growthScore,
+        tier: 3,
+        label: 'Rayonnement départemental complet (territoire étendu, max ~65 km)'
+      };
+    }
+  },
+
+  // 3. Tirage pondéré par la distance et l'envergure de l'antenne :
+  // - Bénévoles de base (début) : commune même et proximité immédiate (< 8-11 km)
+  // - Plus l'antenne grandit, plus son bassin s'élargit progressivement vers les communes lointaines
+  pickWeightedCommune(eligibleCommunes, station, game = null, isStarter = false) {
     if (!eligibleCommunes || eligibleCommunes.length === 0) return null;
     if (eligibleCommunes.length === 1) return eligibleCommunes[0];
 
-    // Tirage aléatoire équitable pour que les candidatures proviennent de l'ensemble du département
-    const idx = Math.floor(Math.random() * eligibleCommunes.length);
-    return eligibleCommunes[idx];
+    const radiusConfig = this.getAntennaRecruitmentRadius(game, station);
+    const maxRadius = isStarter ? 8 : radiusConfig.maxRadiusKm;
+    const prefRadius = isStarter ? 2.5 : radiusConfig.preferredRadiusKm;
+
+    // 1. Filtrer prioritairement les communes dans le rayon d'influence autorisé
+    let candidates = eligibleCommunes.filter(c => (c._distKm || 0) <= maxRadius);
+
+    // Si aucune commune dans ce rayon strict (zone très rurale par ex.), retenir les plus proches
+    if (candidates.length === 0) {
+      candidates = [...eligibleCommunes].sort((a, b) => (a._distKm || 0) - (b._distKm || 0)).slice(0, 6);
+    }
+
+    // 2. Pondération inversement proportionnelle à la distance (loi de gravité territoriale)
+    const weightedPool = candidates.map(commune => {
+      const dist = Math.max(0.4, commune._distKm || 0.4);
+
+      // Forte attractivité pour la ville même de l'antenne
+      const isStationCity = Boolean(
+        station && station.city && commune.nom &&
+        commune.nom.toLowerCase().trim() === station.city.toLowerCase().trim()
+      );
+      const cityBonus = isStationCity ? (isStarter ? 6.5 : 3.0) : 1;
+
+      // Poids décroissant avec la distance au carré
+      const weight = (1 / Math.pow(dist / prefRadius + 0.5, 2)) * cityBonus;
+      return { commune, weight: Math.max(0.01, weight) };
+    });
+
+    const totalWeight = weightedPool.reduce((sum, item) => sum + item.weight, 0);
+    let rand = Math.random() * totalWeight;
+
+    for (const item of weightedPool) {
+      rand -= item.weight;
+      if (rand <= 0) {
+        return item.commune;
+      }
+    }
+
+    return weightedPool[0].commune;
   },
 
   // 4. Interroge l'API officielle de la Base Adresse Nationale (BAN data.gouv.fr) pour obtenir une vraie adresse
@@ -2901,9 +2987,10 @@ window.ProtecPersonnel = {
   generateVolunteerResidence(game, station, volunteerProfile = {}) {
     const baseStation = station || (game.stations && game.stations[0]) || { lat: 48.6921, lng: 6.1844, departmentCode: '54', city: 'Nancy' };
     
-    // 1. Piocher parmi les communes et villages du département (sans restriction arbitraire de distance)
+    // 1. Piocher parmi les communes selon la maturité de l'antenne et la proximité territoriale
     const eligibleCommunes = this.getCatchmentCommunes(game, baseStation);
-    const commune = this.pickWeightedCommune(eligibleCommunes, baseStation) || {
+    const isStarter = Boolean(volunteerProfile.isStarter);
+    const commune = this.pickWeightedCommune(eligibleCommunes, baseStation, game, isStarter) || {
       nom: baseStation.city || 'Nancy',
       cp: `${(baseStation.departmentCode || '54').padStart(2, '0')}000`,
       lat: baseStation.lat,
@@ -3017,6 +3104,12 @@ window.ProtecPersonnel = {
         if (cpPrefix !== deptCode && !['2A', '2B'].includes(deptCode)) {
           needsReseed = true;
         }
+      }
+
+      // Vérification du rayon territorial : une antenne débutante (Tier 1) ne doit pas avoir de bénévoles anormalement loin
+      const radConf = this.getAntennaRecruitmentRadius(game, station);
+      if (!needsReseed && v.distance_base_km && radConf.tier === 1 && v.distance_base_km > 15) {
+        needsReseed = true;
       }
 
       if (needsReseed) {
@@ -3278,6 +3371,7 @@ window.ProtecPersonnel = {
       const vol = {
         id: `vol-${Date.now()}-${i}-${Math.random().toString(36).substr(2, 6)}`,
         name: `${fn} ${ln}`,
+        isStarter: true,
         role: template.role,
         rank: template.rank,
         gender: isFemale ? 'f' : 'h',

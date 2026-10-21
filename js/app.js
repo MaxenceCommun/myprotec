@@ -4137,11 +4137,11 @@ class ProtecGame {
       const starters = (window.ProtecPersonnel && typeof window.ProtecPersonnel.generateStarterVolunteers === 'function')
         ? window.ProtecPersonnel.generateStarterVolunteers(5, stationId, this)
         : [
-            { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
-            { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
-            { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
-            { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b', 'communication_1'] },
-            { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
+            { name: 'Alexandre Roux', role: 'Chef d’Équipe', rank: 'CE', isStarter: true, exp: 30, isTrainer: false, avatar: '👨‍💼', dispoType: 'salarié', dispoJours: ['Vendredi', 'Samedi', 'Dimanche'], motivation: 85, skills: ['ce', 'pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+            { name: 'Sarah Benali', role: 'Équipier Secouriste', rank: 'PSE2', isStarter: true, exp: 25, isTrainer: false, avatar: '👩‍🚒', dispoType: 'étudiante', dispoJours: ['Mardi', 'Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b', 'permis_vpsp'] },
+            { name: 'Thomas Girard', role: 'Équipier Secouriste', rank: 'PSE2', isStarter: true, exp: 20, isTrainer: false, avatar: '🧑‍🚒', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 80, skills: ['pse2', 'pse1', 'permis_b'] },
+            { name: 'Lucas Martin', role: 'Secouriste', rank: 'PSE1', isStarter: true, exp: 15, isTrainer: false, avatar: '🙋‍♂️', dispoType: 'salarié', dispoJours: ['Samedi', 'Dimanche'], motivation: 75, skills: ['pse1', 'permis_b', 'communication_1'] },
+            { name: 'Élodie Leroy', role: 'Secouriste', rank: 'PSE1', isStarter: true, exp: 10, isTrainer: false, avatar: '🧑', dispoType: 'étudiante', dispoJours: ['Mercredi', 'Vendredi', 'Samedi'], motivation: 85, skills: ['pse1'] }
           ];
 
       this.volunteers = [];
@@ -23825,6 +23825,21 @@ class ProtecGame {
                     </div>
                   `;
                 }
+              })()}
+
+              <!-- Indicateur de portée et bassin de recrutement évolutif -->
+              ${(() => {
+                const baseStation = (this.stations && this.stations[0]) || null;
+                const radInfo = window.ProtecPersonnel?.getAntennaRecruitmentRadius ? window.ProtecPersonnel.getAntennaRecruitmentRadius(this, baseStation) : { maxRadiusKm: 11, label: 'Bassin local (~11 km)' };
+                return `
+                  <div class="p-2.5 rounded-xl border border-blue-200/90 dark:border-blue-900/40 bg-blue-50/50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 text-xs flex items-center justify-between gap-2 flex-wrap shadow-2xs">
+                    <div class="flex items-center gap-2">
+                      <i data-lucide="compass" class="w-4 h-4 text-pc-blue shrink-0"></i>
+                      <span>Bassin d’attractivité territoriale : <strong class="text-pc-blue dark:text-sky-300">${radInfo.label}</strong></span>
+                    </div>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pc-blue/10 text-pc-blue dark:bg-sky-950 dark:text-sky-300">Portée : ~ ${radInfo.maxRadiusKm} km</span>
+                  </div>
+                `;
               })()}
                 </div>
                 <button onclick="window.game.toggleShowCandidatures()" class="px-3 py-1.5 rounded-xl text-xs font-black ${this.showCandidaturesView ? 'bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-white' : 'bg-pc-blue text-white shadow-sm hover:bg-pc-blue-light'} transition flex items-center gap-1.5 cursor-pointer">
