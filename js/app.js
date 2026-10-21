@@ -12586,27 +12586,86 @@ class ProtecGame {
         }
       }
     } else {
-      this.resources.reputationScore += mission.rewardReputation || 15;
-      const term = this.getMissionTerminology(mission);
-      const closeTitle = term.kind === 'samu' ? 'Intervention SAMU Terminée 🏁' :
-        (term.kind === 'garde_samu' ? 'Garde SAMU Clôturée 🏁' :
-        (term.kind === 'pompiers' ? 'Mission SDIS Terminée 🏁' :
-        (term.kind === 'social' ? 'Maraude Sociale Clôturée 🏁' :
-        (term.kind === 'crise' ? 'Mission de Crise Clôturée 🏁' : 'Dispositif Terminé 🏁'))));
-      const closeMsg = term.kind === 'samu' ? `Mission « ${mission.title} » clôturée avec succès (+${mission.rewardMoney} €) !` :
-        (term.kind === 'garde_samu' ? `Garde « ${mission.title} » terminée (+${mission.rewardMoney} €) !` :
-        (term.kind === 'pompiers' ? `Intervention « ${mission.title} » clôturée (+${mission.rewardMoney} €) !` :
-        (term.kind === 'social' ? `Maraude « ${mission.title} » terminée (+${mission.rewardMoney} €) !` :
-        `Dispositif « ${mission.title} » clôturé (+${mission.rewardMoney} €) !`)));
-      this.showToast(closeTitle, closeMsg, 'green');
-      if (window.ProtecNotifications) {
-        const notifCat = (term.kind === 'samu' || term.kind === 'garde_samu') ? 'samu' : (term.kind === 'pompiers' ? 'sdis' : (term.kind === 'crise' ? 'weather' : 'dps'));
-        window.ProtecNotifications.notifyCategory(
-          notifCat,
-          closeTitle,
-          closeMsg,
-          `mission-complete-push-${mission.id}`
-        );
+      const isCrisisMission = Boolean(
+        mission.type === 'crise' ||
+        mission.isCrisis ||
+        mission.isPlanOrsec ||
+        mission.isEmergencyPlan ||
+        mission.category === 'crise' ||
+        (mission.title && /crue|inondation|temp[êe]te|catastrophe|novi|orsec|séisme|disparu|attentat/i.test(mission.title))
+      );
+
+      if (isCrisisMission) {
+        // RÈGLE PROTECTION CIVILE : Aucune perte de réputation possible en crise (concours bénévole).
+        // Plus il y a de missions/moyens déployés, plus la récompense monte, et la réputation augmente avec les moyens et la rapidité.
+        const crewCount = crew.length;
+        const vehCount = (vehicles || []).length;
+        const hasCadre = crew.some(v => ['CE', 'CD', 'Cadre'].includes(v.rank));
+        const repMeansBonus = (crewCount * 3) + (vehCount * 8) + (hasCadre ? 6 : 0);
+
+        let repSpeedBonus = 8;
+        let speedNotice = "Intervention Opérationnelle";
+        const spawnTime = mission.spawnedRealTime || (Date.now() - 600000);
+        const departureTime = mission.firstDepartureTime || mission.startedAt || Date.now();
+        const responseMinutes = Math.max(0, (departureTime - spawnTime) / 60000);
+
+        if (responseMinutes <= 4) {
+          repSpeedBonus = 25;
+          speedNotice = "Départ Réflexe Immédiat (< 4 min) ⚡";
+        } else if (responseMinutes <= 10) {
+          repSpeedBonus = 16;
+          speedNotice = "Mobilisation Rapide (< 10 min) ⏱️";
+        } else if (responseMinutes <= 20) {
+          repSpeedBonus = 10;
+          speedNotice = "Réponse Conforme (< 20 min)";
+        }
+
+        const baseRep = mission.rewardReputation || 30;
+        const totalCrisisRep = Math.max(15, baseRep + repMeansBonus + repSpeedBonus);
+        this.resources.reputationScore = (this.resources.reputationScore || 0) + totalCrisisRep;
+
+        if (this.prefectureState) {
+          this.prefectureState.trustScore = Math.min(100, (this.prefectureState.trustScore || 85) + Math.round(totalCrisisRep / 3));
+        }
+        if (window.ProtecConventions) {
+          window.ProtecConventions.adjustInstitutionalReputation(this, 'prefecture', Math.round(totalCrisisRep * 0.7), 'Engagement solidaire crise');
+          window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', Math.round(totalCrisisRep * 0.4), 'Soutien secours publics');
+        }
+
+        const baseMoney = mission.rewardMoney || 1200;
+        const crisisMoneyGain = Math.round(baseMoney + (crewCount * 80) + (vehCount * 250));
+        this.resources.money = (this.resources.money || 0) + crisisMoneyGain;
+
+        const closeTitle = 'Mission de Crise Clôturée 🏁';
+        const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${crisisMoneyGain} €) ! Réputation +${totalCrisisRep} (Moyens déployés : ${crewCount} équipier(s), ${vehCount} véhicule(s) • ${speedNotice}).`;
+        this.showToast(closeTitle, closeMsg, 'green');
+
+        if (window.ProtecNotifications) {
+          window.ProtecNotifications.notifyCategory('weather', closeTitle, closeMsg, `mission-complete-push-${mission.id}`);
+        }
+      } else {
+        this.resources.reputationScore += mission.rewardReputation || 15;
+        const term = this.getMissionTerminology(mission);
+        const closeTitle = term.kind === 'samu' ? 'Intervention SAMU Terminée 🏁' :
+          (term.kind === 'garde_samu' ? 'Garde SAMU Clôturée 🏁' :
+          (term.kind === 'pompiers' ? 'Mission SDIS Terminée 🏁' :
+          (term.kind === 'social' ? 'Maraude Sociale Clôturée 🏁' :
+          `Dispositif Terminé 🏁`)));
+        const closeMsg = term.kind === 'samu' ? `Mission « ${mission.title} » clôturée avec succès (+${mission.rewardMoney} €) !` :
+          (term.kind === 'garde_samu' ? `Garde « ${mission.title} » terminée (+${mission.rewardMoney} €) !` :
+          (term.kind === 'pompiers' ? `Intervention « ${mission.title} » clôturée (+${mission.rewardMoney} €) !` :
+          (term.kind === 'social' ? `Maraude « ${mission.title} » terminée (+${mission.rewardMoney} €) !` :
+          `Dispositif « ${mission.title} » clôturé (+${mission.rewardMoney} €) !`)));
+        this.showToast(closeTitle, closeMsg, 'green');
+        if (window.ProtecNotifications) {
+          const notifCat = (term.kind === 'samu' || term.kind === 'garde_samu') ? 'samu' : (term.kind === 'pompiers' ? 'sdis' : 'dps');
+          window.ProtecNotifications.notifyCategory(
+            notifCat,
+            closeTitle,
+            closeMsg,
+            `mission-complete-push-${mission.id}`
+          );
+        }
       }
     }
 
@@ -28715,35 +28774,71 @@ class ProtecGame {
             // Si le délai maximal d'intervention est dépassé sans aucune action
             if (elapsedMinutes > maxResponse && !m.carenceApplied) {
               m.carenceApplied = true;
-              m.status = 'carence';
+
+              const isCrisisAlert = Boolean(
+                m.type === 'crise' ||
+                m.isCrisis ||
+                m.isEmergencyPlan ||
+                m.isPlanOrsec ||
+                m.category === 'crise' ||
+                m.alertOrigin === 'prefecture' ||
+                (m.title && /crue|inondation|temp[êe]te|catastrophe|novi|orsec|séisme|disparu|attentat/i.test(m.title))
+              );
 
               (m.registeredVolunteers || []).forEach(id => {
                 const vol = this.volunteers.find(v => v.id === id);
                 if (vol && vol.status === 'mission') vol.status = 'dispo';
               });
 
-              // Sanction réputation individuelle plafonnée
-              const individualPenalty = Math.min(25, 25);
-              totalRepPenalty += individualPenalty;
+              if (isCrisisAlert) {
+                // RÈGLE PROTECTION CIVILE : Jamais de carence ni de pénalité de réputation sur les crises !
+                // Les services publics prennent le relais selon les principes du concours bénévole AASC.
+                m.status = 'relais_public';
+                const originLabel = 'la Préfecture et les services publics';
+                const crisisNotice = `Faute de moyens immédiatement mobilisables pendant votre absence, ${originLabel} ont assuré la prise en charge de l'alerte « ${m.title} ». Aucune sanction : la réponse de sécurité civile s'effectue sur concours volontaire.`;
 
-              const originLabel = m.alertOrigin === 'sncf' ? 'la SNCF' : (m.type === 'samu' ? 'le SAMU 15' : (m.type === 'pompiers' ? 'le SDIS' : 'le commanditaire'));
-              const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge.`;
+                this.recordAlertTriggerLog(m, 'relais_public', `Dispositif de crise clôturé : prise en charge assurée par les services publics (SDIS / Police). Aucune pénalité réputationnelle pour l'antenne associative.`, { repImpact: 0 });
 
-              this.recordAlertTriggerLog(m, 'carence', `Clôturée pour carence : délai maximal d'intervention dépassé (${Math.round(elapsedMinutes)} min). Services publics substitués.`, { repImpact: -individualPenalty });
+                m.carenceInfo = {
+                  title: 'ℹ️ Relais Services Publics',
+                  msg: crisisNotice,
+                  at: currentTime
+                };
 
-              m.status = 'carence';
-              m.carenceInfo = {
-                title: '⏱️ Carence Opérationnelle',
-                msg: carenceMsg,
-                at: currentTime
-              };
+                this.showToast('ℹ️ Relais Services Publics', `Alerte « ${m.title} » : prise en charge exclusive par les services de l'État.`, 'blue');
 
-              newCarences.push({
-                mission: m,
-                carenceMsg: carenceMsg,
-                elapsedMinutes: elapsedMinutes,
-                originLabel: originLabel
-              });
+                if (window.ProtecNotifications) {
+                  window.ProtecNotifications.recordNotification({
+                    title: 'ℹ️ Relais Services Publics (Crise)',
+                    message: `Alerte de crise « ${m.title} » : prise en compte intégrale par les services de l'État et secours publics. Aucune sanction pour l'antenne.`,
+                    category: 'operations',
+                    level: 'info'
+                  });
+                }
+              } else {
+                // Missions commerciales/conventionnées ordinaires (SAMU, DPS, etc.)
+                m.status = 'carence';
+                const individualPenalty = Math.min(25, 25);
+                totalRepPenalty += individualPenalty;
+
+                const originLabel = m.alertOrigin === 'sncf' ? 'la SNCF' : (m.type === 'samu' ? 'le SAMU 15' : (m.type === 'pompiers' ? 'le SDIS' : 'le commanditaire'));
+                const carenceMsg = `Faute de départ dans les délais impartis (${Math.round(elapsedMinutes)} min d'attente), ${originLabel} a clôturé l'alerte « ${m.title} ». Les services publics ont assuré seuls la prise en charge.`;
+
+                this.recordAlertTriggerLog(m, 'carence', `Clôturée pour carence : délai maximal d'intervention dépassé (${Math.round(elapsedMinutes)} min). Services publics substitués.`, { repImpact: -individualPenalty });
+
+                m.carenceInfo = {
+                  title: '⏱️ Carence Opérationnelle',
+                  msg: carenceMsg,
+                  at: currentTime
+                };
+
+                newCarences.push({
+                  mission: m,
+                  carenceMsg: carenceMsg,
+                  elapsedMinutes: elapsedMinutes,
+                  originLabel: originLabel
+                });
+              }
 
               if (this.selectedMissionId === m.id) {
                 this.refreshMissionDetailsIfOpen(m.id);

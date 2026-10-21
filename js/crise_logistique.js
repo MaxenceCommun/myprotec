@@ -3391,7 +3391,7 @@ window.ProtecCriseLogistique = {
           }
         ],
         recompenses: { reputation_prefecture: 40, reputation_samu: 35, reputation_sdis: 20, indemnite_crise: 3800 },
-        penalites: { reputation_prefecture: -35, reputation_samu: -25, amende_administrative: 2500 }
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       recherche_disparu: {
         type: 'recherche_disparu',
@@ -3473,7 +3473,7 @@ window.ProtecCriseLogistique = {
           }
         ],
         recompenses: { reputation_prefecture: 35, reputation_samu: 25, reputation_sdis: 15, indemnite_crise: 2400 },
-        penalites: { reputation_prefecture: -25, reputation_samu: -15, amende_administrative: 1200 }
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       greve_ambulances: {
         type: 'greve_ambulances',
@@ -3537,7 +3537,7 @@ window.ProtecCriseLogistique = {
           }
         ],
         recompenses: { reputation_prefecture: 25, reputation_samu: 45, reputation_sdis: 15, indemnite_crise: 3200 },
-        penalites: { reputation_prefecture: -25, reputation_samu: -40, amende_administrative: 1800 }
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       violences_urbaines: {
         type: 'violences_urbaines',
@@ -3601,7 +3601,7 @@ window.ProtecCriseLogistique = {
           }
         ],
         recompenses: { reputation_prefecture: 35, reputation_samu: 15, reputation_sdis: 35, indemnite_crise: 2900 },
-        penalites: { reputation_prefecture: -30, reputation_samu: -10, amende_administrative: 1600 }
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       inondation_cai: {
         type: 'inondation_cai',
@@ -3674,7 +3674,7 @@ window.ProtecCriseLogistique = {
           }
         ],
         recompenses: { reputation_prefecture: 40, reputation_samu: 15, reputation_sdis: 25, indemnite_crise: 3400 },
-        penalites: { reputation_prefecture: -35, reputation_samu: -10, amende_administrative: 2000 }
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       }
     };
     return templates[type] || templates.novi_attentat;
@@ -3845,24 +3845,78 @@ window.ProtecCriseLogistique = {
 
     this.logCrisisRadio(crisis, crisis.autorite_demandeur, 'MISSION ACCOMPLIE : Fin du plan d\'urgence. Félicitations des autorités pour le professionnalisme des équipes.', 'success');
 
-    const rewards = crisis.recompenses || {};
-    const moneyGain = rewards.indemnite_crise || 2500;
+    // 1. Calcul de la récompense financière proportionnelle au nombre de sous-missions / tâches accomplies
+    let doneSubCount = 0;
+    let totalSubCount = 0;
+    if (Array.isArray(crisis.phases)) {
+      crisis.phases.forEach(p => {
+        (p.sous_missions || []).forEach(s => {
+          totalSubCount++;
+          if (s.statut === 'terminee' || (s.progression && s.progression >= 100)) doneSubCount++;
+        });
+      });
+    }
+    if (totalSubCount === 0) {
+      totalSubCount = 1;
+      doneSubCount = 1;
+    }
 
-    // Prise en compte financière
+    const baseIndemnite = crisis.recompenses?.indemnite_crise || 3000;
+    const taskRatio = Math.max(0.3, doneSubCount / totalSubCount);
+    // Plus il y a de missions accomplies, plus la récompense est élevée !
+    const moneyGain = Math.round((baseIndemnite * taskRatio) + (doneSubCount * 450));
+
+    // 2. Calcul de la réputation : monte avec les moyens engagés et la rapidité d'intervention
+    const mobilisedIds = crisis.mobilisation?.mobilisedVolunteerIds || [];
+    const volsCount = mobilisedIds.length;
+    const assignedVehs = crisis.mobilisation?.assignedVehicles || [];
+    const vehsCount = assignedVehs.length;
+    const hasCadre = mobilisedIds.some(vId => {
+      const v = (game.volunteers || []).find(x => x.id === vId);
+      return v && ['CE', 'CD', 'Cadre'].includes(v.rank);
+    });
+    const repMeansBonus = (volsCount * 3) + (vehsCount * 8) + (hasCadre ? 6 : 0);
+
+    let repSpeedBonus = 8;
+    let speedLabel = "Déploiement Opérationnel";
+    const startTime = crisis.startedAt || (Date.now() - 600000);
+    const firstEngaged = crisis.firstEngagementAt || (Date.now() - 300000);
+    const responseMinutes = Math.max(0, (firstEngaged - startTime) / 60000);
+
+    if (responseMinutes <= 4) {
+      repSpeedBonus = 25;
+      speedLabel = "Départ Réflexe Immédiat (< 4 min) ⚡";
+    } else if (responseMinutes <= 10) {
+      repSpeedBonus = 16;
+      speedLabel = "Mobilisation Rapide (< 10 min) ⏱️";
+    } else if (responseMinutes <= 20) {
+      repSpeedBonus = 10;
+      speedLabel = "Réponse Conforme (< 20 min)";
+    }
+
+    const baseRep = crisis.recompenses?.reputation_prefecture || 35;
+    const repGain = Math.max(15, Math.round(baseRep * (doneSubCount / totalSubCount) + repMeansBonus + repSpeedBonus));
+
+    // Prise en compte financière et réputation antenne
     if (!game.resources) game.resources = { money: 0 };
     game.resources.money += moneyGain;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
 
-    // Prise en compte de la réputation institutionnelle
+    // Prise en compte de la réputation institutionnelle (toujours positive)
     if (!game.institutionsRelations) {
       game.institutionsRelations = { prefecture: 50, samu: 50, sdis: 50 };
     }
-    if (rewards.reputation_prefecture) game.institutionsRelations.prefecture = Math.min(100, (game.institutionsRelations.prefecture || 50) + rewards.reputation_prefecture);
-    if (rewards.reputation_samu) game.institutionsRelations.samu = Math.min(100, (game.institutionsRelations.samu || 50) + rewards.reputation_samu);
-    if (rewards.reputation_sdis) game.institutionsRelations.sdis = Math.min(100, (game.institutionsRelations.sdis || 50) + rewards.reputation_sdis);
+    game.institutionsRelations.prefecture = Math.min(100, (game.institutionsRelations.prefecture || 50) + Math.round(repGain * 0.7));
+    game.institutionsRelations.sdis = Math.min(100, (game.institutionsRelations.sdis || 50) + Math.round(repGain * 0.5));
+    if (crisis.recompenses?.reputation_samu) {
+      game.institutionsRelations.samu = Math.min(100, (game.institutionsRelations.samu || 50) + Math.round(repGain * 0.4));
+    }
+    if (game.prefectureState) {
+      game.prefectureState.trustScore = Math.min(100, (game.prefectureState.trustScore || 85) + Math.round(repGain / 4));
+    }
 
     // Boost moral pour tous les participants mobilisés
-    const mobilised = crisis.mobilisation.mobilisedVolunteerIds || [];
-    mobilised.forEach(vId => {
+    mobilisedIds.forEach(vId => {
       const vol = (game.volunteers || []).find(v => v.id === vId);
       if (vol) {
         vol.moral = Math.min(100, (vol.moral || 80) + 15);
@@ -3873,7 +3927,7 @@ window.ProtecCriseLogistique = {
     if (window.ProtecAudio) window.ProtecAudio.playSuccess();
     game.showToast(
       '🏆 CRISE MAJEURE SURMONTÉE !',
-      `Félicitations ! Indemnité de réquisition versée : +${moneyGain} €. Relations institutionnelles en forte hausse.`,
+      `Félicitations ! Indemnité de réquisition versée : +${moneyGain} € (${doneSubCount}/${totalSubCount} missions accomplies). Réputation +${repGain} (Moyens : ${volsCount} équipier(s), ${vehsCount} véh. • ${speedLabel}).`,
       'green'
     );
 
@@ -3881,31 +3935,46 @@ window.ProtecCriseLogistique = {
   },
 
   /**
-   * Échec ou abandon d'une crise (sanctions préfectorales)
+   * Échec ou levée d'une crise (relais des secours publics sans aucune sanction)
    */
-  failCrisis(game, crisisId, reason = 'Refus ou incapacité opérationnelle') {
+  failCrisis(game, crisisId, reason = 'Fin de réquisition ou capacité opérationnelle atteinte') {
     if (!game) game = window.game;
     const crisis = (game.activeCrises || []).find(c => c.id === crisisId);
     if (!crisis) return;
 
-    crisis.status = 'echec';
-    const pen = crisis.penalites || {};
-    const fine = pen.amende_administrative || 1500;
+    crisis.status = 'relais_public';
+    crisis.endedAt = Date.now();
 
-    if (!game.resources) game.resources = { money: 0 };
-    game.resources.money = Math.max(0, game.resources.money - fine);
-
-    if (game.institutionsRelations) {
-      if (pen.reputation_prefecture) game.institutionsRelations.prefecture = Math.max(0, (game.institutionsRelations.prefecture || 50) + pen.reputation_prefecture);
-      if (pen.reputation_samu) game.institutionsRelations.samu = Math.max(0, (game.institutionsRelations.samu || 50) + pen.reputation_samu);
+    // RÈGLE PROTECTION CIVILE : Aucune pénalité de réputation ni amende sur les crises.
+    // L'association intervient au titre de la solidarité selon ses moyens disponibles.
+    let doneSubCount = 0;
+    if (Array.isArray(crisis.phases)) {
+      crisis.phases.forEach(p => {
+        (p.sous_missions || []).forEach(s => {
+          if (s.statut === 'terminee' || (s.progression && s.progression >= 100)) doneSubCount++;
+        });
+      });
     }
 
-    this.logCrisisRadio(crisis, 'Préfecture du Département', `SANCTION ADMINISTRATIVE : Abandon du dispositif pour motif « ${reason} ». Amende préfectorale de ${fine} € et dégradation de l'agrément de sécurité civile.`, 'alert');
+    // Indemnité pour les actions accomplies
+    let compensationMoney = 0;
+    let compensationRep = 0;
+    if (doneSubCount > 0) {
+      compensationMoney = doneSubCount * 500;
+      compensationRep = doneSubCount * 6;
+      if (!game.resources) game.resources = { money: 0 };
+      game.resources.money += compensationMoney;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + compensationRep;
+    }
+
+    this.logCrisisRadio(crisis, 'Préfecture du Département', `RELAIS SERVICES PUBLICS : Prise en charge de l'opération par les services de l'État et secours publics (${reason}). Remerciements de la Sécurité Civile pour les actions bénévoles accomplies.`, 'info');
 
     game.showToast(
-      '❌ Échec de la Réquisition Préfectorale',
-      `Amende de ${fine} € prélevée et perte sévère de crédibilité institutionnelle.`,
-      'red'
+      'ℹ️ Relais Services Publics (Crise)',
+      doneSubCount > 0 
+        ? `Dispositif relevé par les secours publics. Indemnité pour les missions accomplies : +${compensationMoney} € (+${compensationRep} Rép). Aucune pénalité.`
+        : `Dispositif relevé par les secours publics. Aucune pénalité : la réponse de sécurité civile s'effectue sur concours volontaire.`,
+      'blue'
     );
 
     game.saveGame();
@@ -4441,18 +4510,18 @@ window.ProtecCriseLogistique = {
                   </div>
 
                   <div class="p-2 rounded-xl bg-slate-800/80 border border-slate-700 space-y-1">
-                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Économie & Réputation Masquées</div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-300">Prime Réussite :</span>
-                      <span class="font-bold text-emerald-400 font-mono">+${(crisis.recompenses?.subvention || 5000).toLocaleString()} € / +${crisis.recompenses?.reputation || 15} Rép</span>
+                    <div class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Indemnisation & Réputation</div>
+                    <div class="flex justify-between text-[11px]">
+                      <span class="text-slate-300">Prime Réquisition :</span>
+                      <span class="font-bold text-emerald-400 font-mono">+${(crisis.recompenses?.indemnite_crise || crisis.recompenses?.subvention || 3400).toLocaleString()} € max</span>
                     </div>
-                    <div class="flex justify-between">
-                      <span class="text-slate-300">Pénalité Échec :</span>
-                      <span class="font-bold text-red-400 font-mono">-${crisis.penalites?.reputation || 25} Rép</span>
+                    <div class="flex justify-between text-[11px]">
+                      <span class="text-slate-300">Garantie AASC :</span>
+                      <span class="font-bold text-sky-400 font-mono">0 pénalité (Concours bénévole)</span>
                     </div>
                     <div class="flex justify-between text-[10px]">
-                      <span class="text-slate-400">Escalade alerte :</span>
-                      <span class="font-bold text-sky-300">${crisis.alertStage || 'standard'}</span>
+                      <span class="text-slate-400">Réputation :</span>
+                      <span class="font-bold text-amber-300">Boostée par moyens & rapidité</span>
                     </div>
                   </div>
                 </div>

@@ -4090,7 +4090,7 @@ window.ProtecAdmin = {
                         </span>
                       </td>
                       <td class="py-2.5 px-2 text-[10px] text-rose-700 dark:text-rose-400 font-bold">
-                        -35 rép • 0 € indemnités
+                        
                       </td>
                       <td class="py-2.5 px-2 text-right">
                         <button onclick="window.game.openMissionDetails('${item.m.id}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10px] font-bold transition">
