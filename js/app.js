@@ -17050,36 +17050,36 @@ class ProtecGame {
             </div>
 
             ${hasTeamManagement ? `
-              <!-- PANNEAU D'ORGANISATION DES ÉQUIPES OPÉRATIONNELLES (CONTRÔLE TOTAL DU JOUEUR, RIEN PAR DÉFAUT) -->
+                            <!-- PANNEAU DES VÉHICULES & ÉQUIPAGES OPÉRATIONNELS (CHAQUE VÉHICULE ENGAGÉ CONSTITUE UN ÉQUIPAGE) -->
               <div class="p-4 rounded-3xl bg-slate-50 border border-slate-200 text-slate-900 dark:bg-gradient-to-r dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 dark:text-white dark:border-indigo-400/30 shadow-md space-y-3.5">
                 <div class="flex items-center justify-between flex-wrap gap-2">
                   <div class="flex items-center gap-2.5">
                     <div class="w-9 h-9 rounded-2xl bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-lg border border-indigo-500/40 shadow-xs">
-                      👥
+                      🚒
                     </div>
                     <div>
                       <div class="flex items-center gap-2">
-                        <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider">Organisation des Équipes Opérationnelles</h4>
+                        <h4 class="text-xs font-black uppercase text-slate-800 dark:text-white tracking-wider">Véhicules & Équipages Opérationnels</h4>
                         ${isCrisisMission ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-red-500 text-white animate-pulse">Crise</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-indigo-500 text-white">Dispositif</span>'}
                       </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Les équipes sont créées automatiquement lors de l'engagement des véhicules. Affectez vos secouristes à chaque équipage.</p>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-300">Chaque véhicule engagé constitue un équipage opérationnel. Affectez vos secouristes à chaque véhicule.</p>
                     </div>
                   </div>
                   <div class="flex items-center gap-2">
                     ${isCrisisMission ? `
                       <div class="text-right mr-1">
-                        <span class="text-[9px] text-slate-400 block font-bold">Déployées en zone</span>
+                        <span class="text-[9px] text-slate-400 block font-bold">Véhicules déployés</span>
                         <strong class="text-emerald-400 text-xs mono-num">${(mission.deployedTeams || []).length} / ${crisisTeamsList.length}</strong>
                       </div>
                     ` : ''}
                   </div>
                 </div>
 
-                <!-- Grille des Équipes Opérationnelles du Dispositif (Chaque véhicule engagé EST une équipe) -->
+                <!-- Grille des Véhicules & Équipages du Dispositif (Chaque véhicule engagé EST un équipage) -->
                 ${crisisTeamsList.length === 0 ? `
                   <div class="p-3.5 rounded-2xl bg-white/5 border border-dashed border-white/20 text-center space-y-1">
-                    <p class="text-xs font-bold text-slate-200">Aucune équipe ni véhicule engagé pour ce dispositif.</p>
-                    <p class="text-[10px] text-slate-400">Engagez des véhicules pour créer automatiquement vos équipes et composer vos équipages.</p>
+                    <p class="text-xs font-bold text-slate-200">Aucun véhicule engagé pour ce dispositif.</p>
+                    <p class="text-[10px] text-slate-400">Engagez des véhicules dans l'onglet Moyens pour constituer vos équipages et affecter vos effectifs.</p>
                   </div>
                 ` : `
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
