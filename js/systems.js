@@ -757,13 +757,6 @@ window.ProtecSystems = {
         } else if (typeof game.openMissionDrawer === 'function') {
           game.openMissionDrawer(mission.id);
         }
-        if (typeof game.showToast === 'function') {
-          game.showToast('Suivi de Véhicule 🚑', `Centrage sur ${vehicle.name} (${stationName}) vers « ${mission.title} »`, 'blue', { type: 'mission', id: mission.id });
-        }
-      } else {
-        if (typeof game.showToast === 'function') {
-          game.showToast('Véhicule en Déplacement 🚑', `${vehicle.name} • ${stationName}`, 'blue');
-        }
       }
     });
 
@@ -1248,13 +1241,6 @@ window.ProtecSystems = {
           game.openMissionDetails(data.missionId);
         } else if (typeof game.openMissionDrawer === 'function') {
           game.openMissionDrawer(data.missionId);
-        }
-        if (typeof game.showToast === 'function') {
-          game.showToast('Suivi de Mon Véhicule 🚑', `Centrage sur ${vehName} (${stationName})`, 'blue', { type: 'mission', id: data.missionId });
-        }
-      } else {
-        if (typeof game.showToast === 'function') {
-          game.showToast('Antenne Partenaire 🚑', `${vehName} (${stationName}) • Directeur : ${playerName}`, 'indigo');
         }
       }
     });

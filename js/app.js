@@ -26316,12 +26316,6 @@ class ProtecGame {
       clearTimeout(cleanupTimer);
       cleanup();
     });
-
-    this.showToast(
-      `🚗 ${vol.name} en route`,
-      `Itinéraire vers ${station.name || 'la base'} affiché (~reste ${minsLeft} min, parcours à ${(progress * 100).toFixed(0)}%).`,
-      'orange'
-    );
   }
 
   // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
@@ -26409,12 +26403,6 @@ class ProtecGame {
           }
         }, 6500);
       }
-
-      this.showToast(
-        `🚗 ${vol.name} en route`,
-        `Position estimée en direct sur le trajet domicile ➔ ${station.name || 'base'} (~reste ${minsLeft} min, parcours à ${Math.round(progress * 100)}%).`,
-        'orange'
-      );
     }
   }
 
