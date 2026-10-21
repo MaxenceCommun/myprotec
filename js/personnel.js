@@ -177,12 +177,15 @@ window.ProtecPersonnel = {
     // Mise à jour de chaque secouriste existant avec les jauges Fatigue, Moral et Profils
     if (game.volunteers && Array.isArray(game.volunteers)) {
       game.volunteers.forEach(v => {
+        // Assainissement : Alexandre Roux et les bénévoles historiques sans contrat de travail formel sont des bénévoles
+        const hasLegitEmploymentContract = Boolean(v.jobOfferId || v.isHiredSalarie || v.contractCategory || v.contractType === 'CDI' || v.contractType === 'CDD' || v.dispoType === 'salarie_permanent');
+        if (!hasLegitEmploymentContract && (v.contractType === 'salarie' || v.contractType === 'salarie_asso')) {
+          v.contractType = 'benevole';
+          if (v.profilSocial === 'salarie_asso') v.profilSocial = 'actif';
+        }
+
         if (!v.contractType) {
-          if (v.name === 'Alexandre Roux' || v.dispoType === 'salarie_permanent') {
-            v.contractType = 'salarie';
-          } else {
-            v.contractType = 'benevole';
-          }
+          v.contractType = (v.dispoType === 'salarie_permanent' || v.isHiredSalarie) ? 'salarie' : 'benevole';
         }
         
         // Typologie sociologique : etudiant, actif, retraite
@@ -191,13 +194,14 @@ window.ProtecPersonnel = {
             v.profilSocial = 'etudiant';
           } else if (v.age && v.age >= 62) {
             v.profilSocial = 'retraite';
-          } else if (v.contractType === 'salarie') {
+          } else if (v.contractType === 'salarie' && hasLegitEmploymentContract) {
             v.profilSocial = 'salarie_asso';
           } else {
             v.profilSocial = 'actif';
           }
         }
         if (v.profilSocial === 'salarie') v.profilSocial = 'actif';
+        if (v.profilSocial === 'salarie_asso' && v.contractType === 'benevole') v.profilSocial = 'actif';
 
         // Nouvelles jauges fondamentales : Fatigue (0 à 100) et Moral (0 à 100)
         if (v.fatigue === undefined) {

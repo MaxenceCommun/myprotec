@@ -2245,6 +2245,19 @@ class ProtecGame {
         });
       }
 
+      // 3.0 Assainissement des contrats de bénévoles : aucun bénévole n'est salarié permanent sans contrat de travail formel
+      if (Array.isArray(this.volunteers)) {
+        this.volunteers.forEach(v => {
+          if (v) {
+            const hasLegitEmploymentContract = Boolean(v.jobOfferId || v.isHiredSalarie || v.contractCategory || v.contractType === 'CDI' || v.contractType === 'CDD' || v.dispoType === 'salarie_permanent');
+            if (!hasLegitEmploymentContract && (v.contractType === 'salarie' || v.contractType === 'salarie_asso')) {
+              v.contractType = 'benevole';
+              if (v.profilSocial === 'salarie_asso') v.profilSocial = 'actif';
+            }
+          }
+        });
+      }
+
       // 3.ter Purge stricte des missions distantes du backend OVH et crises imposées
       this.missions = this.missions.filter(m => {
         if (!m) return false;
@@ -9153,7 +9166,7 @@ class ProtecGame {
     if (!currentMission) {
       // VÉRIFICATION STRICTE DE DISPONIBILITÉ BÉNÉVOLE :
       // On ne peut jamais forcer un bénévole sans son accord ou s'il est indisponible !
-      const isSalarie = (vol.contractType === 'salarie' || vol.dispoType === 'salarié' || vol.dispoType === 'salarie_permanent');
+      const isSalarie = (vol.contractType === 'salarie' || vol.contractType === 'CDI' || vol.contractType === 'CDD' || vol.isHiredSalarie === true || vol.dispoType === 'salarie_permanent');
       const evalResult = this.evaluateVolunteerAvailability(vol, targetMission.eventDate, targetMission);
 
       if (!isSalarie && !evalResult.isAvailable) {
