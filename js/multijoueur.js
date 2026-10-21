@@ -236,7 +236,7 @@ window.ProtecMultiplayer = {
     const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-xl rounded-3xl p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[90vh] overflow-y-auto">
+      <div class="glass-panel w-full max-w-3xl lg:max-w-4xl rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[92vh] overflow-y-auto">
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-3">
             <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
@@ -244,7 +244,7 @@ window.ProtecMultiplayer = {
             </div>
             <div>
               <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Renfort Inter-Antennes Personnalisée</h3>
-              <p class="text-xs text-slate-500 font-semibold truncate max-w-sm">${mission.title} • Date : ${game.formatShortDate(mission.eventDate)}</p>
+              <p class="text-xs text-slate-500 font-semibold leading-relaxed">${mission.title} • Date : ${game.formatShortDate(mission.eventDate)}</p>
             </div>
           </div>
           <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
@@ -279,7 +279,7 @@ window.ProtecMultiplayer = {
             <!-- VPSP -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">🚑 VPSP (Secours d’Urgence)</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🚑 VPSP (Secours d’Urgence)</span>
                 <span class="text-[10px] text-slate-500 block">Arrive avec équipage complet</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -292,7 +292,7 @@ window.ProtecMultiplayer = {
             <!-- Lot PMA -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">⛺ Lot PMA (Poste Médical Avancé)</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">⛺ Lot PMA (Poste Médical Avancé)</span>
                 <span class="text-[10px] text-slate-500 block">Tente NOVI, brancards, triage</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -305,7 +305,7 @@ window.ProtecMultiplayer = {
             <!-- Lot CAI -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">🏥 Lot CAI (Accueil Impliqués)</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🏥 Lot CAI (Accueil Impliqués)</span>
                 <span class="text-[10px] text-slate-500 block">Accueil rescapés & soutien psy</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -318,7 +318,7 @@ window.ProtecMultiplayer = {
             <!-- Drone -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">🚁 Drone & Télépilote</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🚁 Drone de Reconnaissance & Télépilote</span>
                 <span class="text-[10px] text-slate-500 block">Reconnaissance aérienne / thermique</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -331,7 +331,7 @@ window.ProtecMultiplayer = {
             <!-- Cynotechnie -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">🐕 Équipe Cynotechnique (Cyno)</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🐕 Équipe Cynotechnique (Cyno)</span>
                 <span class="text-[10px] text-slate-500 block">Chien de recherche et décombres</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -344,7 +344,7 @@ window.ProtecMultiplayer = {
             <!-- Lot Éclairage & Logistique -->
             <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
               <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block truncate">💡 Lot Éclairage & Énergie</span>
+                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">💡 Lot Éclairage, Énergie & Logistique</span>
                 <span class="text-[10px] text-slate-500 block">Groupe électrogène & mâts</span>
               </div>
               <div class="flex items-center gap-1.5 shrink-0">
@@ -395,7 +395,7 @@ window.ProtecMultiplayer = {
 
         <!-- 4. SÉLECTION DE L'ÉCHELON DE MOBILISATION -->
         <div class="space-y-3 pt-1">
-          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">4. Échelon de Mobilisation & Envoi :</label>
+          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">5. Échelon de Mobilisation & Envoi :</label>
 
           <!-- ÉCHELON DÉPARTEMENTAL -->
           <div class="p-3.5 rounded-2xl border ${eligibility.departemental.canRequest ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-slate-50 opacity-70'} flex flex-col justify-between gap-2 transition">
