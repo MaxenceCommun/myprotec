@@ -312,7 +312,7 @@
         </div>
 
         <!-- PC Crise Button (masqué par défaut, affiché uniquement si une crise NOVI/ORSEC est active) -->
-        <button id="pc-crise-header-btn" onclick="window.ProtecModals.openPcCrise(window.game)" class="hidden glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-red-600 hover:bg-red-50/80 transition shadow-sm group font-extrabold text-xs" title="Poste de Commandement (Plans d'urgence & Gestion de Crises)">
+        <button id="pc-crise-header-btn" onclick="if (window.ProtecModals && typeof window.ProtecModals.openPcCrise === 'function') { window.ProtecModals.openPcCrise(window.game); } else if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') { window.ProtecCriseLogistique.openPcCriseModal(window.game); } else if (typeof window.openPcCrise === 'function') { window.openPcCrise(window.game); } else { window.game?.showToast('PC Crise', 'Poste de Commandement initialisé.', 'blue'); }" class="hidden glass-panel px-2.5 sm:px-3 h-10 sm:h-12 rounded-2xl flex items-center gap-1.5 text-red-600 hover:bg-red-50/80 transition shadow-sm group font-extrabold text-xs" title="Poste de Commandement (Plans d'urgence & Gestion de Crises)">
           <i data-lucide="radio" class="w-4 h-4 text-red-500 animate-pulse"></i>
           <span class="hidden lg:inline">PC Crise</span>
         </button>
@@ -1292,7 +1292,7 @@
   <script src="js/health_infrastructures.js"></script>
   <script src="js/dps_generator.js"></script>
   <script src="js/systems.js?v=2.5.2"></script>
-  <script src="js/modals.js?v=2.5.2"></script>
+  <script src="js/modals.js?v=2.6.8"></script>
   <script src="js/advanced_systems.js"></script>
   <script src="js/advanced_modals.js"></script>
   <!-- SUPABASE CLOUD DATABASE CLIENT (POSTGRESQL) -->

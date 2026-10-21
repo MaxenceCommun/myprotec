@@ -4103,21 +4103,55 @@ window.ProtecCriseLogistique = {
    */
   openPcCriseModal(game, crisisId = null) {
     if (!game) game = window.game;
+    if (!game) return;
     this.injectState(game);
 
-    if (!game.activeCrises || game.activeCrises.length === 0) {
+    let crisis = null;
+    if (crisisId) {
+      crisis = (game.activeCrises || []).find(c => c.id === crisisId) || (game.missions || []).find(m => m.id === crisisId);
+    }
+    if (!crisis) {
+      crisis = (game.activeCrises || []).find(c => c.status === 'active') || (game.activeCrises || [])[0];
+    }
+
+    if (!crisis) {
+      // Vérifier s'il y a une mission de crise active dans game.missions
+      const missionCrisis = (game.missions || []).find(m => 
+        (m.type === 'crise' || m.isCrisis || m.urgency === 'critique') && 
+        ['ongoing', 'prealerte', 'declenche', 'en_cours', 'dispatched', 'planifie'].includes(m.status)
+      );
+      if (missionCrisis) {
+        if (typeof game.openMissionDetails === 'function') {
+          game.openMissionDetails(missionCrisis.id);
+          return;
+        }
+      }
       // Proposer de déclencher une crise d'exercice si aucune crise active
       this.renderCrisisSelectorModal(game);
       return;
     }
 
-    let crisis = null;
-    if (crisisId) {
-      crisis = game.activeCrises.find(c => c.id === crisisId);
+    // Sécurisation exhaustive des propriétés requises pour le rendu sans plantage
+    crisis.phases = Array.isArray(crisis.phases) && crisis.phases.length > 0 ? crisis.phases : [
+      {
+        nom: 'Phase 1 : Déploiement & Évaluation',
+        direction: 'montante',
+        ordre_radio: crisis.desc || crisis.scenarioText || 'Mise en place du dispositif opérationnel de crise.',
+        sous_missions: []
+      }
+    ];
+    crisis.currentPhaseIndex = Number.isInteger(crisis.currentPhaseIndex) ? crisis.currentPhaseIndex : 0;
+    if (crisis.currentPhaseIndex >= crisis.phases.length) {
+      crisis.currentPhaseIndex = Math.max(0, crisis.phases.length - 1);
     }
-    if (!crisis) {
-      crisis = game.activeCrises.find(c => c.status === 'active') || game.activeCrises[0];
-    }
+    crisis.reserve = crisis.reserve || { onBase: [], astreinteDomicile: [] };
+    if (!Array.isArray(crisis.reserve.onBase)) crisis.reserve.onBase = [];
+    if (!Array.isArray(crisis.reserve.astreinteDomicile)) crisis.reserve.astreinteDomicile = [];
+    crisis.mobilisation = crisis.mobilisation || { deltaMaxMinutes: 30, mode: 'ciblee', mobilisedVolunteerIds: [] };
+    if (!Array.isArray(crisis.mobilisation.mobilisedVolunteerIds)) crisis.mobilisation.mobilisedVolunteerIds = [];
+    if (!Array.isArray(crisis.journal_crise)) crisis.journal_crise = [];
+    crisis.autorite_demandeur = crisis.autorite_demandeur || crisis.authorityLabel || crisis.authority || 'Préfecture';
+    crisis.titre = crisis.titre || crisis.title || 'Plan d’Urgence / Crise Majeure';
 
     const containerId = 'pc-crise-modal-backdrop';
     let modalEl = document.getElementById(containerId);
@@ -4128,8 +4162,16 @@ window.ProtecCriseLogistique = {
       document.body.appendChild(modalEl);
     }
 
-    modalEl.innerHTML = this.renderPcCriseModalHtml(game, crisis);
-    if (window.lucide) window.lucide.createIcons();
+    try {
+      modalEl.innerHTML = this.renderPcCriseModalHtml(game, crisis);
+      if (window.lucide) window.lucide.createIcons();
+    } catch (err) {
+      console.error('[PC Crise] Erreur lors du rendu de la modale PC Crise:', err);
+      if (typeof game.openMissionDetails === 'function' && crisis.id) {
+        modalEl.remove();
+        game.openMissionDetails(crisis.id);
+      }
+    }
   },
 
   /**

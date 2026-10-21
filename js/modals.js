@@ -502,6 +502,54 @@ window.ProtecModals = {
         game.completeMission(mission);
       });
     }
+  },
+
+  // OUVERTURE ROBUSTE DU POSTE DE COMMANDE DE CRISE (PC CRISE)
+  openPcCrise(game, crisisId = null) {
+    if (!game) game = window.game;
+    if (!game) return;
+
+    // Si un ID de crise spécifique est fourni
+    if (crisisId) {
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+        const crisis = (game.activeCrises || []).find(c => c.id === crisisId);
+        if (crisis) {
+          window.ProtecCriseLogistique.openPcCriseModal(game, crisisId);
+          return;
+        }
+      }
+      const mission = (game.missions || []).find(m => m.id === crisisId);
+      if (mission && typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(mission.id);
+        return;
+      }
+    }
+
+    // 1. Priorité aux crises logistiques actives
+    const activeLogisticsCrisis = (game.activeCrises || []).find(c => c.status === 'active') || (game.activeCrises || [])[0];
+    if (activeLogisticsCrisis && window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+      window.ProtecCriseLogistique.openPcCriseModal(game, activeLogisticsCrisis.id);
+      return;
+    }
+
+    // 2. Si aucune crise logistique mais qu'une mission de crise / critique est active dans les missions
+    const activeMissionCrisis = (game.missions || []).find(m => 
+      (m.type === 'crise' || m.isCrisis || m.urgency === 'critique') && 
+      ['ongoing', 'prealerte', 'declenche', 'en_cours', 'dispatched', 'planifie'].includes(m.status)
+    );
+    if (activeMissionCrisis) {
+      if (typeof game.openMissionDetails === 'function') {
+        game.openMissionDetails(activeMissionCrisis.id);
+        return;
+      }
+    }
+
+    // 3. Sinon, ouvrir la modale PC Crise (qui proposera les scénarios d'exercice / réquisition)
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+      window.ProtecCriseLogistique.openPcCriseModal(game, null);
+    } else {
+      game.showToast('Module PC Crise', 'Poste de Commandement de Crise initialisé.', 'blue');
+    }
   }
 };
 
@@ -956,12 +1004,20 @@ window.ProtecQuickDispatch = {
 
   // 7. OUVERTURE DU POSTE DE COMMANDE DE CRISE (PC CRISE)
   openPcCrise(game, crisisId = null) {
-    if (!game) game = window.game;
-    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+    if (window.ProtecModals && typeof window.ProtecModals.openPcCrise === 'function') {
+      window.ProtecModals.openPcCrise(game, crisisId);
+    } else if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
       window.ProtecCriseLogistique.openPcCriseModal(game, crisisId);
-    } else {
-      game.showToast('Module PC Crise', 'Initialisation du Poste de Commandement...', 'blue');
     }
+  }
+};
+
+// Raccourci global direct
+window.openPcCrise = function(game, crisisId = null) {
+  if (window.ProtecModals && typeof window.ProtecModals.openPcCrise === 'function') {
+    window.ProtecModals.openPcCrise(game, crisisId);
+  } else if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openPcCriseModal === 'function') {
+    window.ProtecCriseLogistique.openPcCriseModal(game, crisisId);
   }
 };
 
