@@ -24,6 +24,7 @@ window.ProtecCrisisRadio = {
 
   apiBaseUrl: null,
   activeEngine: 'piper', // 'piper' ou 'webspeech'
+  selectedModel: 'mls',  // 'mls' (48 voix d'élite filtrées sans souffle), 'siwis' (studio pro), 'upmc' (homme/femme)
 
   // =========================================================================
   // 1. ATTRIBUTION DES VOIX NATURELLES & CLAIRES (SÉLECTION D'ÉLITE DU MODÈLE fr_FR-mls-medium)
@@ -134,6 +135,8 @@ window.ProtecCrisisRadio = {
       const stored = localStorage.getItem('protec_crisis_radio_enabled');
       // Activé par défaut si non spécifié
       this.enabled = stored !== null ? stored === 'true' : true;
+      const storedModel = localStorage.getItem('protec_crisis_voice_model');
+      if (storedModel) this.selectedModel = storedModel;
     } catch (e) {
       this.enabled = true;
     }
@@ -489,20 +492,45 @@ window.ProtecCrisisRadio = {
     }
   },
 
+  setVoiceModel(modelKey) {
+    this.selectedModel = modelKey || 'mls';
+    try {
+      localStorage.setItem('protec_crisis_voice_model', this.selectedModel);
+    } catch (e) {}
+    this.updateHudState();
+    if (window.game && typeof window.game.showToast === 'function') {
+      const labels = {
+        'mls': 'Multilocuteur Élite (48 voix pures sans souffle)',
+        'siwis': 'Studio Siwis (Voix féminine cristalline)',
+        'upmc': 'Studio UPMC (Voix radio Sorbonne)',
+        'tom': 'Studio Tom (Voix masculine nette)'
+      };
+      window.game.showToast('Profil Vocal Piper', labels[this.selectedModel] || this.selectedModel, 'blue');
+    }
+  },
+
+  cycleVoiceModel() {
+    const list = ['mls', 'siwis', 'upmc', 'tom'];
+    const curIdx = list.indexOf(this.selectedModel);
+    const nextModel = list[(curIdx + 1) % list.length];
+    this.setVoiceModel(nextModel);
+  },
+
   /**
    * Synthétise et diffuse le message vocal :
-   * Tente d'abord le serveur Piper TTS (modèle fr_FR-mls-medium avec 125 locuteurs et cache),
+   * Tente d'abord le serveur Piper TTS (modèle sélectionné avec suppression des bruits d'aspiration),
    * sinon bascule instantanément sur la synthèse Web Speech API passée dans les filtres radio.
    */
   async speakWithRadioEffect(tx) {
     const text = tx.cleanText;
     const speakerId = tx.speakerId;
+    const model = this.selectedModel || 'mls';
 
     // A. Tenter la requête API Piper TTS officielle
     let playedViaServer = false;
     try {
       const base = await this.resolveApiBaseUrl();
-      const url = `${base}/api/crisis/tts?speaker=${speakerId}&text=${encodeURIComponent(text)}`;
+      const url = `${base}/api/crisis/tts?speaker=${speakerId}&text=${encodeURIComponent(text)}&model=${model}`;
       const res = await fetch(url);
       
       if (res.ok) {
@@ -514,7 +542,7 @@ window.ProtecCrisisRadio = {
             const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
             this.activeEngine = 'piper';
             this.updateHudState();
-            console.log(`🎙️ [Radio de Crise] Diffusion réussie via Piper TTS fr_FR-mls-medium (Voix #${speakerId}) : "${text.slice(0, 45)}..."`);
+            console.log(`🎙️ [Radio de Crise] Diffusion réussie via Piper TTS [${model.toUpperCase()}] (Voix #${speakerId}) : "${text.slice(0, 45)}..."`);
             await this.playDecodedAudioBuffer(audioBuffer);
             playedViaServer = true;
           }
@@ -848,9 +876,9 @@ window.ProtecCrisisRadio = {
               <span>● TX RADIO ACTIVE</span>
               <span id="crisis-radio-hud-channel" class="text-slate-400 font-mono text-[9px]">CANAL CRISE</span>
             </span>
-            <span id="crisis-radio-hud-engine-badge" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">
-              🎙️ Piper TTS
-            </span>
+            <button type="button" id="crisis-radio-hud-engine-badge" onclick="window.ProtecCrisisRadio.cycleVoiceModel()" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer active:scale-95 shadow-2xs" title="Cliquer pour changer de modèle vocal (MLS 48 voix / Siwis Studio / UPMC)">
+              🎙️ Piper [MLS]
+            </button>
           </div>
           <div class="flex items-center gap-1.5">
             <span id="crisis-radio-hud-queue-badge" class="hidden text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
@@ -920,9 +948,10 @@ window.ProtecCrisisRadio = {
       if (chanEl) chanEl.textContent = this.currentTransmission.channel || 'CANAL CRISE';
       if (engineEl) {
         const spk = this.currentTransmission.speakerId !== undefined ? this.currentTransmission.speakerId : '?';
+        const modelLabel = (this.selectedModel || 'mls').toUpperCase();
         if (this.activeEngine === 'piper') {
-          engineEl.textContent = `🎙️ Piper TTS (#${spk})`;
-          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40';
+          engineEl.textContent = `🎙️ ${modelLabel} (#${spk})`;
+          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer active:scale-95 shadow-2xs';
         } else {
           engineEl.textContent = `⚠️ Fallback WebSpeech`;
           engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40';

@@ -12,23 +12,14 @@ if (!fs.existsSync(TTS_CACHE_DIR)) {
   fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
 }
 
-function getPiperConfig() {
+function getPiperConfig(requestedModel = 'mls') {
   const customBin = process.env.PIPER_BIN;
-  const customModel = process.env.PIPER_MODEL;
-
   const candidateBins = [
     customBin,
     path.join(__dirname, 'bin', 'piper', 'piper.exe'),
     path.join(__dirname, 'bin', 'piper', 'piper'),
     'piper.exe',
     'piper'
-  ].filter(Boolean);
-
-  const candidateModels = [
-    customModel,
-    path.join(__dirname, 'models', 'piper', 'fr_FR-mls-medium.onnx'),
-    path.join(__dirname, 'models', 'fr_FR-mls-medium.onnx'),
-    path.join(__dirname, 'fr_FR-mls-medium.onnx')
   ].filter(Boolean);
 
   let foundBin = null;
@@ -39,19 +30,32 @@ function getPiperConfig() {
     }
   }
 
-  let foundModel = null;
-  for (const m of candidateModels) {
-    if (fs.existsSync(m)) {
-      foundModel = m;
-      break;
+  // Dictionnaire des modèles disponibles
+  const modelsMap = {
+    'siwis': path.join(__dirname, 'models', 'piper', 'fr_FR-siwis-medium.onnx'),
+    'upmc': path.join(__dirname, 'models', 'piper', 'fr_FR-upmc-medium.onnx'),
+    'tom': path.join(__dirname, 'models', 'piper', 'fr_FR-tom-medium.onnx'),
+    'mls': path.join(__dirname, 'models', 'piper', 'fr_FR-mls-medium.onnx')
+  };
+
+  const reqKey = String(requestedModel || 'mls').toLowerCase();
+  let chosenModel = modelsMap[reqKey];
+  if (!chosenModel || !fs.existsSync(chosenModel)) {
+    // Fallback sur le premier modèle présent
+    for (const [key, p] of Object.entries(modelsMap)) {
+      if (fs.existsSync(p)) {
+        chosenModel = p;
+        break;
+      }
     }
   }
 
   return {
     bin: foundBin || 'piper',
     isPiperInstalled: !!foundBin,
-    model: foundModel,
-    isModelPresent: !!foundModel,
+    model: chosenModel,
+    isModelPresent: !!chosenModel,
+    availableModels: Object.keys(modelsMap).filter(k => fs.existsSync(modelsMap[k])),
     cacheDir: TTS_CACHE_DIR
   };
 }
@@ -1692,7 +1696,8 @@ const server = http.createServer((req, res) => {
       success: true,
       piperInstalled: config.isPiperInstalled,
       modelPresent: config.isModelPresent,
-      model: 'fr_FR-mls-medium',
+      model: path.basename(config.model || 'fr_FR-mls-medium.onnx', '.onnx'),
+      availableModels: config.availableModels || ['mls'],
       speakersCount: 125,
       cachedFilesCount: cachedCount,
       cacheDir: TTS_CACHE_DIR
@@ -1700,10 +1705,10 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Génération ou Récupération en Cache Audio TTS (Piper TTS fr_FR-mls-medium)
+  // Génération ou Récupération en Cache Audio TTS (Piper TTS haute fidélité)
   if (url === '/api/crisis/tts' && (req.method === 'GET' || req.method === 'POST' || req.method === 'HEAD')) {
     const handleTts = (params) => {
-      let { text, speaker, rate } = params;
+      let { text, speaker, rate, model: reqModel } = params;
       if (!text) {
         sendJson(res, 400, { success: false, error: 'Paramètre "text" requis.' });
         return;
@@ -1711,11 +1716,13 @@ const server = http.createServer((req, res) => {
       text = String(text).trim();
       let speakerId = parseInt(speaker, 10);
       if (isNaN(speakerId) || speakerId < 0) speakerId = 0;
-      if (speakerId > 124) speakerId = speakerId % 125;
+
+      const modelKey = String(reqModel || 'mls').toLowerCase();
+      const piperCfg = getPiperConfig(modelKey);
 
       // Hachage MD5 déterministe pour le fichier en cache
       const cleanText = text.toLowerCase().replace(/\s+/g, ' ');
-      const hash = crypto.createHash('md5').update(`${speakerId}:${cleanText}`).digest('hex');
+      const hash = crypto.createHash('md5').update(`${modelKey}:${speakerId}:${cleanText}`).digest('hex');
       const cachedFile = path.join(TTS_CACHE_DIR, `${hash}.wav`);
 
       // 1. Si le fichier audio est déjà présent dans le cache serveur
@@ -1728,6 +1735,7 @@ const server = http.createServer((req, res) => {
             'Cache-Control': 'public, max-age=31536000',
             'Access-Control-Allow-Origin': '*',
             'X-TTS-Cached': '1',
+            'X-TTS-Model': modelKey,
             'X-TTS-Speaker': String(speakerId)
           });
           if (req.method === 'HEAD') {
@@ -1748,23 +1756,30 @@ const server = http.createServer((req, res) => {
         return;
       }
 
-      // 2. Si non en cache, générer avec Piper TTS officiel (fr_FR-mls-medium)
-      const piperCfg = getPiperConfig();
+      // 2. Si non en cache, générer avec Piper TTS
       if (piperCfg.isPiperInstalled && piperCfg.isModelPresent) {
         try {
           const piperArgs = [
             '--model', piperCfg.model,
-            '--speaker', String(speakerId),
             '--length_scale', '0.92',
+            '--noise_scale', '0.0', // Élimine complètement les souffles et bruits d'aspiration
+            '--noise_w', '0.0',     // Stabilise les durées de phonèmes
             '--output_file', cachedFile
           ];
+
+          // Seuls les modèles multilocuteurs (MLS et UPMC) acceptent --speaker
+          const isMultiSpeaker = piperCfg.model.includes('mls') || piperCfg.model.includes('upmc');
+          if (isMultiSpeaker) {
+            piperArgs.push('--speaker', String(speakerId));
+          }
+
           const proc = spawn(piperCfg.bin, piperArgs);
           proc.stdin.write(text, 'utf-8');
           proc.stdin.end();
 
           proc.on('close', (code) => {
             if (code === 0 && fs.existsSync(cachedFile)) {
-              console.log(`🎙️ [Piper TTS] Audio généré avec succès [Voix #${speakerId}] : "${text.slice(0, 50)}..."`);
+              console.log(`🎙️ [Piper TTS] (${modelKey}) Audio généré avec succès [Voix #${speakerId}] : "${text.slice(0, 50)}..."`);
               const stat = fs.statSync(cachedFile);
               res.writeHead(200, {
                 'Content-Type': 'audio/wav',
@@ -1772,11 +1787,12 @@ const server = http.createServer((req, res) => {
                 'Cache-Control': 'public, max-age=31536000',
                 'Access-Control-Allow-Origin': '*',
                 'X-TTS-Cached': '0',
+                'X-TTS-Model': modelKey,
                 'X-TTS-Speaker': String(speakerId)
               });
               fs.createReadStream(cachedFile).pipe(res);
             } else {
-              console.warn(`⚠️ [Piper TTS] Code de sortie ${code} pour la voix #${speakerId}`);
+              console.warn(`⚠️ [Piper TTS] Code de sortie ${code} pour le modèle ${modelKey} (voix #${speakerId})`);
               sendJson(res, 200, {
                 success: true,
                 cached: false,
@@ -1814,7 +1830,7 @@ const server = http.createServer((req, res) => {
         fallback: true,
         speaker: speakerId,
         text: text,
-        hint: 'Piper TTS modèle fr_FR-mls-medium - fallback client actif'
+        hint: 'Piper TTS modèle fr_FR - fallback client actif'
       });
     };
 
@@ -1823,7 +1839,8 @@ const server = http.createServer((req, res) => {
       handleTts({
         text: urlObj.searchParams.get('text'),
         speaker: urlObj.searchParams.get('speaker') || '0',
-        rate: urlObj.searchParams.get('rate') || '1.0'
+        rate: urlObj.searchParams.get('rate') || '1.0',
+        model: urlObj.searchParams.get('model') || 'mls'
       });
       return;
     } else {
