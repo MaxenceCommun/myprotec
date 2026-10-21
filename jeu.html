@@ -26,6 +26,23 @@
     html.pwa-installed .pwa-install-trigger {
       display: none !important;
     }
+  
+    .custom-transit-tooltip,
+    .leaflet-tooltip.custom-transit-tooltip {
+      background: rgba(15, 23, 42, 0.96) !important;
+      color: #f8fafc !important;
+      border: 1.5px solid rgba(255, 255, 255, 0.22) !important;
+      border-radius: 14px !important;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.65), 0 8px 10px -6px rgba(0, 0, 0, 0.5) !important;
+      padding: 9px 12px !important;
+      backdrop-filter: blur(8px) !important;
+    }
+    .leaflet-tooltip-top.custom-transit-tooltip:before {
+      border-top-color: rgba(15, 23, 42, 0.96) !important;
+    }
+    .leaflet-tooltip-bottom.custom-transit-tooltip:before {
+      border-bottom-color: rgba(15, 23, 42, 0.96) !important;
+    }
   </style>
 
   <!-- Tailwind CSS CDN -->
@@ -1371,7 +1388,7 @@
   <script src="js/departements.js"></script>
   <script src="js/health_infrastructures.js"></script>
   <script src="js/dps_generator.js"></script>
-  <script src="js/systems.js?v=2.6.9"></script>
+  <script src="js/systems.js?v=2.7.2"></script>
   <script src="js/modals.js?v=2.6.8"></script>
   <script src="js/advanced_systems.js?v=2.6.1"></script>
   <script src="js/advanced_modals.js?v=2.6.1"></script>

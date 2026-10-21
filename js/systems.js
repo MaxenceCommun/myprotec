@@ -228,8 +228,8 @@ window.ProtecSystems = {
       : (transit.statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal');
 
     const initialSpeedLabel = (transit.distHighwayKm || 0) > 0.5 
-      ? `${transit.speedUrbanKmh || 42} km/h (Urbain) / ${transit.speedHighwayKmh || 105} km/h (Autoroute)` 
-      : `~${transit.speedUrbanKmh || 42} km/h`;
+      ? `${transit.speedUrbanKmh || 50} km/h (Urbain) / ${transit.speedHighwayKmh || 105} km/h (Autoroute)` 
+      : `~${transit.speedUrbanKmh || 50} km/h`;
 
     const remainingSec = Math.max(0, Math.round(((transit.durationMs || 60000) - (Date.now() - (transit.startTime || Date.now()))) / 1000));
 
@@ -302,7 +302,7 @@ window.ProtecSystems = {
         // --- CAS 1 : VÉHICULE EN COURS DE DÉPLACEMENT ---
         let currentPos = null;
         let isHighwayCurrent = false;
-        let currentSegmentSpeed = t.speedUrbanKmh || 42;
+        let currentSegmentSpeed = t.speedUrbanKmh || 50;
 
         if (Array.isArray(t.segments) && t.segments.length > 0 && Array.isArray(t.cumulativeTimeSec)) {
           let segIdx = 0;
@@ -324,7 +324,7 @@ window.ProtecSystems = {
             seg.p0[1] + (seg.p1[1] - seg.p0[1]) * segFrac
           ];
           isHighwayCurrent = !!seg.isHighway;
-          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 42);
+          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 50);
         } else if (Array.isArray(t.routeCoords) && t.routeCoords.length > 0) {
           const floatStep = progress * (t.routeCoords.length - 1);
           const idx0 = Math.floor(floatStep);
@@ -765,7 +765,7 @@ window.ProtecSystems = {
     //     * 42 km/h sous gyrophare urgent, 30 km/h en conduite normale
     // - Variable autoroute dédiée à vitesse augmentée :
     //     * 105 km/h sous gyrophare urgent, 80 km/h en conduite normale
-    const speedUrbanKmh = canUseEmergencySpeed ? 42 : 30;
+    const speedUrbanKmh = canUseEmergencySpeed ? 50 : 30;
     const speedHighwayKmh = canUseEmergencySpeed ? 105 : 80;
 
     let totalTimeUrbanSec = 0;
@@ -826,24 +826,24 @@ window.ProtecSystems = {
     const initialSpeedLabel = distHighwayKm > 0.5 ? `${speedUrbanKmh} km/h (Urbain) / ${speedHighwayKmh} km/h (Autoroute)` : `~${speedUrbanKmh} km/h`;
 
     marker.bindTooltip(`
-      <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+      <div style="font-family: inherit; font-size: 11px; line-height: 1.45; padding: 2px; min-width: 250px; color: #f8fafc;">
         <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
-          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${canUseEmergencySpeed ? '#ef4444' : (isEmergency ? '#eab308' : '#0284c7')};"></span>
-          <strong style="color: #0f172a; font-size: 12px;">${vehicle.name}</strong>
+          <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ${canUseEmergencySpeed ? '#ef4444' : (isEmergency ? '#f59e0b' : '#38bdf8')}; box-shadow: 0 0 8px ${canUseEmergencySpeed ? 'rgba(239,68,68,0.8)' : 'rgba(56,189,248,0.8)'};"></span>
+          <strong style="color: #ffffff; font-size: 12.5px; font-weight: 900; letter-spacing: -0.01em;">${vehicle.name}</strong>
         </div>
-        <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
-        <div style="color: #475569; font-size: 10px; margin-top: 1px;">${modeLabel}</div>
-        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ${initialSpeedLabel} • Reste : <strong>${this.formatTravelDistance(distKm)}</strong> (${this.formatTravelTime(baseDurationSec)})</div>
-        ${distHighwayKm > 0.3 ? `<div style="color: #0369a1; font-size: 9.5px; margin-top: 1px;">Tronçon : ${distUrbanKm.toFixed(1)} km urbain + <strong>${distHighwayKm.toFixed(1)} km autoroute</strong></div>` : ''}
-        ${mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${mission.title}</div>` : ''}
-        <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+        <div style="color: #60a5fa; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
+        <div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">${modeLabel}</div>
+        <div style="color: #e2e8f0; font-size: 10.5px; margin-top: 3px;">Vitesse : <strong style="color: #38bdf8;">${initialSpeedLabel}</strong> • Reste : <strong style="color: #38bdf8;">${this.formatTravelDistance(distKm)}</strong> (<span style="color: #fbbf24; font-weight: 800;">${this.formatTravelTime(baseDurationSec)}</span>)</div>
+        ${distHighwayKm > 0.3 ? `<div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">Itinéraire : ${distUrbanKm.toFixed(1)} km urbain + <strong style="color: #38bdf8;">${distHighwayKm.toFixed(1)} km autoroute</strong></div>` : ''}
+        ${mission?.title ? `<div style="color: #f1f5f9; font-size: 10.5px; margin-top: 3px; font-weight: 700; line-height: 1.3;">🎯 Mission : <span style="color: #fca5a5;">${mission.title}</span></div>` : ''}
+        <div style="margin-top: 7px; padding: 5px 8px; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 9.5px; text-align: center; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 2px 4px rgba(0,0,0,0.35); cursor: pointer;">
           👉 Cliquer pour tracer le trajet & retrouver la mission
         </div>
       </div>
     `, {
       direction: 'top',
       offset: [0, -22],
-      className: 'glass-panel p-2 shadow-xl border border-white/80'
+      className: 'custom-transit-tooltip'
     });
 
     const transit = {
@@ -1002,7 +1002,7 @@ window.ProtecSystems = {
             seg.p0[1] + (seg.p1[1] - seg.p0[1]) * segFrac
           ];
           isHighwayCurrent = !!seg.isHighway;
-          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 42);
+          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 50);
           t.currentStep = segIdx;
           t.currentIsHighway = isHighwayCurrent;
           t.speedKmh = currentSegmentSpeed;
@@ -1059,43 +1059,43 @@ window.ProtecSystems = {
           const specLabel = t.evacData?.specialtyInfo?.label || t.mission?.evacHospitalData?.specialtyInfo?.label || 'Urgences Générales';
           const specClass = t.evacData?.specialtyInfo?.badgeClass || 'bg-blue-100 text-blue-900 border-blue-300';
           
-          let statusBadgeText = '🚑 En route vers la Mission';
+          let statusBadgeText = '<span style="color: #38bdf8; font-weight: 800;">🚑 En route vers la Mission</span>';
           if (t.statusTarget === 4) {
             statusBadgeText = `
-              <div class="space-y-0.5 mt-0.5">
-                <div class="font-bold text-red-600 flex items-center gap-1">🚨 Évacuation vers : <span class="text-slate-900">${hospName}</span></div>
-                <div class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[8.5px] font-black border ${specClass}">
+              <div style="margin-top: 3px;">
+                <div style="color: #f87171; font-weight: 900; display: flex; align-items: center; gap: 4px;">🚨 Évacuation vers : <span style="color: #ffffff;">${hospName}</span></div>
+                <div style="display: inline-block; padding: 1.5px 7px; border-radius: 5px; font-size: 9px; font-weight: 800; background: rgba(56,189,248,0.2); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); margin-top: 2px;">
                   Pôle : ${specLabel}
                 </div>
               </div>
             `;
           } else if (t.statusTarget === 6) {
-            statusBadgeText = '<div class="text-[9px] font-bold text-slate-500">🏠 Retour vers l’Antenne</div>';
+            statusBadgeText = '<span style="color: #94a3b8; font-weight: 800;">🏠 Retour vers l’Antenne</span>';
           }
 
           const stName = t.stationName || 'Mon Antenne';
 
           const speedBadge = isHighwayCurrent
-            ? `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 5px; background: #0284c7; color: white; font-weight: 800; font-size: 9.5px; box-shadow: 0 1px 3px rgba(2,132,199,0.35);">🛣️ AUTOROUTE : ${currentSegmentSpeed} km/h (Accélération)</span>`
-            : `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border-radius: 5px; background: #64748b; color: white; font-weight: 800; font-size: 9.5px;">🏙️ ZONE URBAINE : ${currentSegmentSpeed} km/h</span>`;
+            ? `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2.5px 7px; border-radius: 6px; background: #0284c7; color: #ffffff; font-weight: 900; font-size: 10px; box-shadow: 0 1px 3px rgba(2,132,199,0.5);">🛣️ AUTOROUTE : ${currentSegmentSpeed} km/h (Accélération)</span>`
+            : `<span style="display: inline-flex; align-items: center; gap: 4px; padding: 2.5px 7px; border-radius: 6px; background: ${t.isEmergency ? '#ea580c' : '#475569'}; color: #ffffff; font-weight: 900; font-size: 10px;">🏙️ ZONE URBAINE : ${currentSegmentSpeed} km/h</span>`;
 
           const highwayDetail = (t.distHighwayKm && t.distHighwayKm > 0.3)
-            ? `<div style="color: #0369a1; font-size: 9.5px; margin-top: 2px;">Itinéraire : ${t.distUrbanKm.toFixed(1)} km urbain + <strong>${t.distHighwayKm.toFixed(1)} km autoroute</strong></div>`
+            ? `<div style="color: #94a3b8; font-size: 10px; margin-top: 2px;">Itinéraire : ${t.distUrbanKm.toFixed(1)} km urbain + <strong style="color: #38bdf8;">${t.distHighwayKm.toFixed(1)} km autoroute</strong></div>`
             : '';
 
           t.marker.setTooltipContent(`
-            <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+            <div style="font-family: inherit; font-size: 11px; line-height: 1.45; padding: 2px; min-width: 250px; color: #f8fafc;">
               <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
-                <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${t.isEmergency ? '#ef4444' : '#0284c7'};"></span>
-                <strong style="color: #0f172a; font-size: 12px;">${t.vehicle.name}</strong>
+                <span style="display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: ${t.isEmergency ? '#ef4444' : '#38bdf8'}; box-shadow: 0 0 8px ${t.isEmergency ? 'rgba(239,68,68,0.8)' : 'rgba(56,189,248,0.8)'};"></span>
+                <strong style="color: #ffffff; font-size: 12.5px; font-weight: 900; letter-spacing: -0.01em;">${t.vehicle.name}</strong>
               </div>
-              <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stName} (Mon Antenne)</div>
-              <div style="margin-top: 3px; margin-bottom: 3px;">${speedBadge}</div>
-              <div style="color: #475569; font-size: 10px; margin-top: 1px;">Trajet restant : <strong>${this.formatTravelDistance(remainingKm)}</strong> (${this.formatTravelTime(remainingSec)})</div>
+              <div style="color: #60a5fa; font-weight: 800; font-size: 11px;">📍 Antenne : ${stName} (Mon Antenne)</div>
+              <div style="margin-top: 4px; margin-bottom: 4px;">${speedBadge}</div>
+              <div style="color: #e2e8f0; font-size: 10.5px; margin-top: 2px;">Trajet restant : <strong style="color: #38bdf8;">${this.formatTravelDistance(remainingKm)}</strong> (<span style="color: #fbbf24; font-weight: 800;">${this.formatTravelTime(remainingSec)}</span>)</div>
               ${highwayDetail}
-              ${t.mission?.title ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${t.mission.title}</div>` : ''}
-              ${t.statusTarget === 4 ? statusBadgeText : `<div class="text-[9px] font-bold text-slate-500">${statusBadgeText}</div>`}
-              <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+              ${t.mission?.title ? `<div style="color: #f1f5f9; font-size: 10.5px; margin-top: 3px; font-weight: 700; line-height: 1.3;">🎯 Mission : <span style="color: #fca5a5;">${t.mission.title}</span></div>` : ''}
+              <div style="margin-top: 3px;">${statusBadgeText}</div>
+              <div style="margin-top: 7px; padding: 5px 8px; background: linear-gradient(135deg, #1d4ed8, #2563eb); color: #ffffff; border-radius: 8px; font-weight: 800; font-size: 9.5px; text-align: center; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 2px 4px rgba(0,0,0,0.35); cursor: pointer;">
                 👉 Cliquer pour tracer le trajet & retrouver la mission
               </div>
             </div>
@@ -1250,7 +1250,7 @@ window.ProtecSystems = {
       }
     });
 
-    const speedUrbanKmh = isEmergency ? 42 : 30;
+    const speedUrbanKmh = isEmergency ? 50 : 30;
     const speedHighwayKmh = isEmergency ? 105 : 80;
 
     let totalTimeUrbanSec = 0;
