@@ -130,6 +130,315 @@ window.ProtecSystems = {
     }).join('');
   },
 
+  // =========================================================================
+  // PERSISTANCE DES DÉPLACEMENTS DE VÉHICULES (ANTI-DISPARITION AU RELOAD / F5)
+  // Calcule la position exacte sur la carte via l'heure de départ, l'heure d'arrivée,
+  // et les coordonnées d'origine et de destination.
+  // =========================================================================
+
+  getActiveTransitsToSave(game) {
+    if (!game || !Array.isArray(game.transits)) return [];
+    return game.transits
+      .filter(t => !t.isRemote && t.vehicleId && t.startTime)
+      .map(t => ({
+        id: t.id,
+        vehicleId: t.vehicleId,
+        vehicleName: t.vehicle?.name || t.vehicleName,
+        vehicleType: t.vehicle?.type || t.vehicleType,
+        beacons: t.vehicle?.beacons || t.beacons || null,
+        origin: t.origin || (t.routeCoords ? { lat: t.routeCoords[0][0], lng: t.routeCoords[0][1] } : null),
+        dest: t.dest || (t.routeCoords ? { lat: t.routeCoords[t.routeCoords.length - 1][0], lng: t.routeCoords[t.routeCoords.length - 1][1] } : null),
+        missionId: t.mission?.id || t.missionId || null,
+        missionTitle: t.mission?.title || t.missionTitle || null,
+        missionType: t.mission?.type || t.missionType || null,
+        statusTarget: t.statusTarget,
+        isEmergency: !!t.isEmergency,
+        hasBeacon: !!t.hasBeacon,
+        startTime: t.startTime,
+        durationMs: t.durationMs,
+        totalDurationSec: t.totalDurationSec,
+        speedUrbanKmh: t.speedUrbanKmh,
+        speedHighwayKmh: t.speedHighwayKmh,
+        stationName: t.stationName || 'Mon Antenne',
+        routeCoords: t.routeCoords,
+        segments: t.segments,
+        cumulativeTimeSec: t.cumulativeTimeSec,
+        distKm: t.distKm,
+        distHighwayKm: t.distHighwayKm,
+        distUrbanKm: t.distUrbanKm,
+        timeHighwaySec: t.timeHighwaySec,
+        timeUrbanSec: t.timeUrbanSec,
+        evacData: t.evacData || null
+      }));
+  },
+
+  saveActiveTransits(game) {
+    if (!game) return;
+    try {
+      const active = this.getActiveTransitsToSave(game);
+      localStorage.setItem('protec_active_transits', JSON.stringify(active));
+      sessionStorage.setItem('protec_active_transits', JSON.stringify(active));
+    } catch (e) {
+      console.warn('Erreur sauvegarde transits:', e);
+    }
+  },
+
+  createTransitPolyline(game, transit) {
+    if (!transit || !Array.isArray(transit.routeCoords) || transit.routeCoords.length === 0) return null;
+    const isEmergency = !!transit.isEmergency;
+    return L.polyline(transit.routeCoords, {
+      color: isEmergency ? '#dc2626' : '#0284c7',
+      weight: isEmergency ? 5 : 3.5,
+      opacity: isEmergency ? 0.85 : 0.65,
+      dashArray: isEmergency ? null : '6, 6',
+      className: isEmergency ? 'route-line-animated' : 'route-line-standard'
+    });
+  },
+
+  createVehicleTransitMarker(game, transit, currentPos) {
+    if (!game || !game.map || !transit || !currentPos) return null;
+    const vehicle = transit.vehicle;
+    const isEmergency = !!transit.isEmergency;
+    const vehName = vehicle?.name || transit.vehicleName || 'Véhicule';
+    const vehType = vehicle?.type || transit.vehicleType || 'VPSP';
+    const stationName = transit.stationName || 'Mon Antenne';
+
+    const imgUrl = vehicle?.image || (game.getVehicleImage ? game.getVehicleImage(vehType) : `images/vehicles/${vehType}.png`);
+    const iconHtml = `
+      <div class="vehicle-compact-marker ${isEmergency ? 'is-emergency' : ''}" title="${vehName} • ${stationName}">
+        ${this.getVehicleBeaconsHTML(vehicle || { type: vehType, name: vehName, beacons: transit.beacons }, isEmergency)}
+        <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
+      </div>
+    `;
+
+    const icon = L.divIcon({
+      html: iconHtml,
+      className: 'vehicle-leaflet-icon-clean',
+      iconSize: [40, 40],
+      iconAnchor: [20, 20]
+    });
+
+    const marker = L.marker(currentPos, {
+      icon: icon,
+      zIndexOffset: isEmergency ? 1200 : 800
+    }).addTo(game.map);
+
+    const modeLabel = isEmergency
+      ? (transit.statusTarget === 4 ? 'Statut 4 : Évacuation CHU (Gyrophare)' : 'Statut 2 : Départ Urgence (Gyrophare)')
+      : (transit.statusTarget === 6 ? 'Statut 6 : Retour Antenne (Normal)' : 'Statut 2 : Déplacement Normal');
+
+    const initialSpeedLabel = (transit.distHighwayKm || 0) > 0.5 
+      ? `${transit.speedUrbanKmh || 42} km/h (Urbain) / ${transit.speedHighwayKmh || 105} km/h (Autoroute)` 
+      : `~${transit.speedUrbanKmh || 42} km/h`;
+
+    const remainingSec = Math.max(0, Math.round(((transit.durationMs || 60000) - (Date.now() - (transit.startTime || Date.now()))) / 1000));
+
+    marker.bindTooltip(`
+      <div style="font-family: inherit; font-size: 11px; line-height: 1.4; padding: 2px;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 3px;">
+          <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${isEmergency ? '#ef4444' : '#0284c7'};"></span>
+          <strong style="color: #0f172a; font-size: 12px;">${vehName}</strong>
+        </div>
+        <div style="color: #0055b8; font-weight: 800; font-size: 11px;">📍 Antenne : ${stationName} (Mon Antenne)</div>
+        <div style="color: #475569; font-size: 10px; margin-top: 1px;">${modeLabel}</div>
+        <div style="color: #0284c7; font-size: 10px; margin-top: 1px;">Vitesse : ${initialSpeedLabel} • Reste : <strong>${this.formatTravelDistance(transit.distKm || 5)}</strong> (${this.formatTravelTime(remainingSec)})</div>
+        ${transit.missionTitle ? `<div style="color: #334155; font-size: 10px; margin-top: 2px; font-weight: 600;">🎯 Mission : ${transit.missionTitle}</div>` : ''}
+        <div style="margin-top: 5px; padding: 3px 6px; background: #eff6ff; color: #1d4ed8; border-radius: 6px; font-weight: 800; font-size: 9px; text-align: center; border: 1px solid #bfdbfe;">
+          👉 Cliquer pour tracer le trajet & retrouver la mission
+        </div>
+      </div>
+    `, {
+      direction: 'top',
+      offset: [0, -22],
+      className: 'glass-panel p-2 shadow-xl border border-white/80'
+    });
+
+    return marker;
+  },
+
+  restoreActiveTransits(game) {
+    if (!game || !game.map) return;
+    let savedRaw = null;
+    try {
+      savedRaw = sessionStorage.getItem('protec_active_transits') || localStorage.getItem('protec_active_transits');
+    } catch (e) {}
+    if (!savedRaw) return;
+
+    let savedList = [];
+    try {
+      savedList = JSON.parse(savedRaw);
+    } catch (e) {
+      return;
+    }
+    if (!Array.isArray(savedList) || savedList.length === 0) return;
+
+    const now = Date.now();
+    const remainingToSave = [];
+
+    savedList.forEach(t => {
+      if (!t || !t.vehicleId) return;
+
+      const vehicle = (game.vehicles || []).find(v => v.id === t.vehicleId) ||
+                      (game.vehicles || []).find(v => v.name === t.vehicleName) || {
+                        id: t.vehicleId,
+                        name: t.vehicleName || 'Véhicule',
+                        type: t.vehicleType || 'VPSP',
+                        status: t.statusTarget === 6 ? 'transit_retour' : 'transit'
+                      };
+
+      const mission = (game.missions || []).find(m => m.id === t.missionId) || {
+        id: t.missionId,
+        title: t.missionTitle || 'Intervention',
+        type: t.missionType || 'samu'
+      };
+
+      const elapsedMs = Math.max(0, now - (t.startTime || now));
+      const gameSpeed = Math.max(1, game.speed || 1);
+      const elapsedGameSec = (elapsedMs / 1000) * gameSpeed;
+      const totalDurationSec = t.totalDurationSec || (t.durationMs ? ((t.durationMs / 1000) * gameSpeed) : 60);
+      const progress = Math.min(1, elapsedGameSec / totalDurationSec);
+
+      if (progress < 1) {
+        // --- CAS 1 : VÉHICULE EN COURS DE DÉPLACEMENT ---
+        let currentPos = null;
+        let isHighwayCurrent = false;
+        let currentSegmentSpeed = t.speedUrbanKmh || 42;
+
+        if (Array.isArray(t.segments) && t.segments.length > 0 && Array.isArray(t.cumulativeTimeSec)) {
+          let segIdx = 0;
+          for (let s = 0; s < t.segments.length; s++) {
+            if (elapsedGameSec >= t.cumulativeTimeSec[s] && elapsedGameSec < t.cumulativeTimeSec[s + 1]) {
+              segIdx = s;
+              break;
+            }
+            if (s === t.segments.length - 1) segIdx = s;
+          }
+          const seg = t.segments[segIdx];
+          const t0 = t.cumulativeTimeSec[segIdx] || 0;
+          const t1 = t.cumulativeTimeSec[segIdx + 1] || (t0 + 1);
+          const segDelta = Math.max(0.001, t1 - t0);
+          const segFrac = Math.min(1, Math.max(0, (elapsedGameSec - t0) / segDelta));
+
+          currentPos = [
+            seg.p0[0] + (seg.p1[0] - seg.p0[0]) * segFrac,
+            seg.p0[1] + (seg.p1[1] - seg.p0[1]) * segFrac
+          ];
+          isHighwayCurrent = !!seg.isHighway;
+          currentSegmentSpeed = seg.isHighway ? (t.speedHighwayKmh || 105) : (t.speedUrbanKmh || 42);
+        } else if (Array.isArray(t.routeCoords) && t.routeCoords.length > 0) {
+          const floatStep = progress * (t.routeCoords.length - 1);
+          const idx0 = Math.floor(floatStep);
+          const idx1 = Math.min(t.routeCoords.length - 1, idx0 + 1);
+          const frac = floatStep - idx0;
+          const p0 = t.routeCoords[idx0] || t.routeCoords[0];
+          const p1 = t.routeCoords[idx1] || p0;
+          currentPos = [
+            p0[0] + (p1[0] - p0[0]) * frac,
+            p0[1] + (p1[1] - p0[1]) * frac
+          ];
+        } else if (t.origin && t.dest) {
+          currentPos = [
+            t.origin.lat + (t.dest.lat - t.origin.lat) * progress,
+            t.origin.lng + (t.dest.lng - t.origin.lng) * progress
+          ];
+        }
+
+        if (!currentPos) return;
+
+        vehicle.lat = currentPos[0];
+        vehicle.lng = currentPos[1];
+        vehicle.status = t.statusTarget === 6 ? 'transit_retour' : 'en_route';
+
+        const polyline = this.createTransitPolyline(game, t);
+        const marker = this.createVehicleTransitMarker(game, {
+          ...t,
+          vehicle: vehicle,
+          polyline: polyline
+        }, currentPos);
+
+        const restoredTransit = {
+          ...t,
+          vehicle: vehicle,
+          mission: mission,
+          marker: marker,
+          polyline: polyline,
+          speedKmh: currentSegmentSpeed,
+          currentIsHighway: isHighwayCurrent,
+          onArrival: () => {
+            this.handleRestoredArrival(game, t, vehicle, mission);
+          }
+        };
+
+        if (marker) {
+          marker.on('click', () => {
+            game._lastMarkerClickTime = Date.now();
+            this.toggleTransitPolyline(game, restoredTransit);
+          });
+        }
+
+        if (!Array.isArray(game.transits)) game.transits = [];
+        if (!game.transits.some(tr => tr.vehicleId === t.vehicleId)) {
+          game.transits.push(restoredTransit);
+        }
+        remainingToSave.push(t);
+
+      } else {
+        // --- CAS 2 : LE VÉHICULE EST ARRIVÉ PENDANT LA FERMETURE / ACTUALISATION ---
+        if (t.dest) {
+          vehicle.lat = t.dest.lat;
+          vehicle.lng = t.dest.lng;
+        }
+        this.handleRestoredArrival(game, t, vehicle, mission);
+      }
+    });
+
+    try {
+      localStorage.setItem('protec_active_transits', JSON.stringify(remainingToSave));
+      sessionStorage.setItem('protec_active_transits', JSON.stringify(remainingToSave));
+    } catch (e) {}
+
+    if (game.transits && game.transits.length > 0) {
+      this.ensureTransitLoop(game);
+    }
+  },
+
+  handleRestoredArrival(game, t, vehicle, mission) {
+    if (!game) return;
+    const baseStation = (game.stations || []).find(s => s.id === vehicle?.stationId) || game.stations?.[0] || { lat: 48.8566, lng: 2.3522 };
+    const crewVols = (game.volunteers || []).filter(v => (v.assignedVehicleId === vehicle?.id) || (mission?.assignedCrew?.volunteers || []).includes(v.id));
+
+    if (t.statusTarget === 2) {
+      if (vehicle) vehicle.status = 'sur_les_lieux';
+      if (mission?.type === 'samu' && typeof game.handleSamuArrivalOnScene === 'function') {
+        game.handleSamuArrivalOnScene(mission, vehicle, crewVols, baseStation);
+      } else {
+        if (vehicle) vehicle.status = 'mission';
+        game.showToast?.('Arrivée sur les Lieux 🎯', `${vehicle?.name || 'Le véhicule'} est arrivé sur « ${mission?.title || 'la mission'} ».`, 'green');
+      }
+    } else if (t.statusTarget === 4) {
+      if (vehicle) vehicle.status = 'urgences_chu';
+      const hospital = t.evacData?.hospital || { lat: vehicle?.lat || 48.85, lng: vehicle?.lng || 2.35, name: 'Centre Hospitalier' };
+      if (mission?.type === 'samu' && typeof game.handleSamuArrivalHospital === 'function') {
+        game.handleSamuArrivalHospital(mission, vehicle, crewVols, baseStation, hospital);
+      } else {
+        game.showToast?.('Arrivée Urgences 🏥', `${vehicle?.name || 'Le véhicule'} est arrivé aux urgences.`, 'green');
+      }
+    } else if (t.statusTarget === 6) {
+      if (vehicle) vehicle.status = 'dispo';
+      if (mission?.type === 'samu' && typeof game.handleSamuReturnBase === 'function') {
+        game.handleSamuReturnBase(mission, vehicle, crewVols, baseStation);
+      } else {
+        game.showToast?.('Retour Antenne 🏠', `${vehicle?.name || 'Le véhicule'} a regagné sa base.`, 'blue');
+      }
+    } else {
+      if (vehicle) vehicle.status = 'dispo';
+    }
+
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+    if (typeof game.renderMissions === 'function') game.renderMissions();
+    if (typeof game.saveGame === 'function') game.saveGame();
+  },
+
   // 1. Initialisation de l'état étendu dans le jeu
   injectState(game) {
     if (!game.transits) game.transits = [];
@@ -570,12 +879,15 @@ window.ProtecSystems = {
       currentIsHighway: false,
       polyline: polyline,
       marker: marker,
+      origin: originCoords,
+      dest: destCoords,
       evacData: mission?.evacHospitalData || null,
       stationName: stationName,
       onArrival: onArrivalCallback
     };
 
     game.transits.push(transit);
+    this.saveActiveTransits(game);
 
     // Cadrage automatique de la carte Leaflet sur le trajet
     if (game.map && polyline) {
@@ -809,6 +1121,7 @@ window.ProtecSystems = {
         if (t.polyline && game.map && game.map.hasLayer(t.polyline)) game.map.removeLayer(t.polyline);
         if (t.marker && game.map) game.map.removeLayer(t.marker);
         game.transits.splice(i, 1);
+        this.saveActiveTransits(game);
 
         if (t.isRemote) {
           if (typeof t.onArrival === 'function') {

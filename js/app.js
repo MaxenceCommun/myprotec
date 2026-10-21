@@ -1726,6 +1726,11 @@ class ProtecGame {
     this.disperseOverlappingMissions();
     this.sanitizeMissionLocationsAndAddresses();
     this.renderMissions();
+
+    // Restauration intelligente des véhicules en déplacement sur la carte après actualisation (F5 / reload)
+    if (window.ProtecSystems && typeof window.ProtecSystems.restoreActiveTransits === 'function') {
+      window.ProtecSystems.restoreActiveTransits(this);
+    }
     
     // Purge et assainissement complet des renforts
     this.sanitizeRenforts();
@@ -1944,7 +1949,8 @@ class ProtecGame {
       const moneyVal = (this.resources?.money !== undefined) ? this.resources.money : 40000;
       const criticalPayload = {
         _isCriticalFallback: true,
-        savedAt: Date.now(),
+        activeTransits: (window.ProtecSystems && typeof window.ProtecSystems.getActiveTransitsToSave === 'function') ? window.ProtecSystems.getActiveTransitsToSave(this) : [],
+          savedAt: Date.now(),
         money: moneyVal,
         resources: {
           money: moneyVal,
