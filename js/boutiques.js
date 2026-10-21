@@ -686,7 +686,8 @@ window.ProtecBoutiques = {
       || window.ProtecAdvanced?.getGarageCapacity?.(game, station?.id)
       || 2;
     const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === station?.id || (Array.isArray(station?.vehicles) && station.vehicles.includes(v.id))));
-    const usedGarageSlots = stationVehicles.length;
+    const inDeliveryVehicles = (game.deliveries || []).filter(d => d.status === 'in_transit' && d.type === 'vehicle' && d.stationId === station?.id);
+    const usedGarageSlots = stationVehicles.length + inDeliveryVehicles.length;
     const isGarageFull = usedGarageSlots >= maxGarageSlots;
     const freeSlots = Math.max(0, maxGarageSlots - usedGarageSlots);
 

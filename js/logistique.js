@@ -1157,7 +1157,41 @@ window.ProtecLogistique = {
         hasDelivered = true;
 
         const station = (game.stations || []).find(s => s.id === d.stationId) || game.stations[0];
-        if (station) {
+        if (d.type === 'vehicle' && d.vehicleData) {
+          // Intégration définitive du véhicule réceptionné dans le garage de l'antenne
+          const veh = d.vehicleData;
+          if (!Array.isArray(game.vehicles)) game.vehicles = [];
+          if (!game.vehicles.some(v => v.id === veh.id)) {
+            veh.status = 'dispo';
+            veh.stationId = station ? station.id : d.stationId;
+            game.vehicles.push(veh);
+          }
+          if (station) {
+            if (!Array.isArray(station.vehicles)) station.vehicles = [];
+            if (!station.vehicles.includes(veh.id)) {
+              station.vehicles.push(veh.id);
+            }
+          }
+
+          if (typeof game.showToast === 'function') {
+            game.showToast(
+              '🚑 Véhicule Réceptionné au Garage !',
+              `Le convoi est arrivé ! Votre ${veh.name} (${veh.model || veh.label}) vient d'être stationné au garage de « ${station ? station.name : d.stationName} ». Il est prêt pour les interventions !`,
+              'green'
+            );
+          }
+          if (window.ProtecNotifications) {
+            window.ProtecNotifications.notifyCategory(
+              'logistique',
+              '🚑 Véhicule Arrivé au Garage !',
+              `Le ${veh.name} (${veh.model || veh.label}) est désormais en dotation à « ${station ? station.name : d.stationName} ».`,
+              `vehicle-arrived-notif-${veh.id}`
+            );
+          }
+          if (typeof game.renderStations === 'function') {
+            game.renderStations();
+          }
+        } else if (station) {
           this.ensureStationStock(station, game);
           Object.entries(d.items || {}).forEach(([itemId, qty]) => {
             const targetId = (itemId === 'stock_materiels_ps') ? 'caisse_rearmement' : itemId;
@@ -1193,24 +1227,24 @@ window.ProtecLogistique = {
               game.stockMaterielsPS = station.stockMaterielsPS;
             }
           });
-        }
 
-        this.syncToGlobalLogistics(game);
+          this.syncToGlobalLogistics(game);
 
-        if (typeof game.showToast === 'function') {
-          game.showToast(
-            '📦 Commande Réceptionnée !',
-            `Le colis « ${d.orderNumber} » vient d'être livré à « ${d.stationName} ». Le matériel a été rangé dans le stock de l'antenne.`,
-            'green'
-          );
-        }
-        if (window.ProtecNotifications) {
-          window.ProtecNotifications.notifyCategory(
-            'logistique',
-            '📦 Commande Réceptionnée !',
-            `Le colis « ${d.orderNumber} » est arrivé à ${d.stationName}. Matériel rangé dans le stock de l'antenne.`,
-            `delivery-arrived-notif-${d.id}`
-          );
+          if (typeof game.showToast === 'function') {
+            game.showToast(
+              '📦 Commande Réceptionnée !',
+              `Le colis « ${d.orderNumber} » vient d'être livré à « ${d.stationName} ». Le matériel a été rangé dans le stock de l'antenne.`,
+              'green'
+            );
+          }
+          if (window.ProtecNotifications) {
+            window.ProtecNotifications.notifyCategory(
+              'logistique',
+              '📦 Commande Réceptionnée !',
+              `Le colis « ${d.orderNumber} » est arrivé à ${d.stationName}. Matériel rangé dans le stock de l'antenne.`,
+              `delivery-arrived-notif-${d.id}`
+            );
+          }
         }
       }
     });
@@ -1261,9 +1295,7 @@ window.ProtecLogistique = {
 
       const timerEl = document.getElementById(`delivery-timer-${d.id}`);
       if (timerEl) {
-        const m = Math.floor(remainingSec / 60);
-        const s = remainingSec % 60;
-        timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        timerEl.textContent = this.formatDeliveryTime(remainingSec);
       }
       const progressEl = document.getElementById(`delivery-progress-${d.id}`);
       if (progressEl) {
@@ -2034,19 +2066,19 @@ window.ProtecLogistique = {
                       <!-- En-tête commande -->
                       <div class="flex items-center justify-between gap-2 flex-wrap border-b border-slate-100 pb-2.5">
                         <div class="flex items-center gap-2.5">
-                          <div class="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center font-black">
-                            <i data-lucide="truck" class="w-5 h-5"></i>
+                          <div class="w-9 h-9 rounded-xl ${d.type === 'vehicle' ? (d.isUsed ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-pc-blue') : 'bg-amber-100 text-amber-700'} flex items-center justify-center font-black">
+                            <i data-lucide="${d.type === 'vehicle' ? (d.isUsed ? 'car' : 'truck') : 'truck'}" class="w-5 h-5"></i>
                           </div>
                           <div>
-                            <div class="flex items-center gap-2">
-                              <span class="text-xs font-black text-slate-900 font-mono">Colis #${d.orderNumber}</span>
-                              <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-300/80 flex items-center gap-1">
-                                <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
-                                En route
+                            <div class="flex items-center gap-2 flex-wrap">
+                              <span class="text-xs font-black text-slate-900 font-mono">${d.type === 'vehicle' ? (d.isUsed ? 'Convoi Occasion' : 'Acheminement Véhicule') : 'Colis'} #${d.orderNumber}</span>
+                              <span class="px-2 py-0.5 rounded-full text-[10px] font-black ${d.type === 'vehicle' ? (d.isUsed ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-300') : 'bg-amber-100 text-amber-800 border-amber-300/80'} border flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full ${d.type === 'vehicle' ? 'bg-pc-blue animate-pulse' : 'bg-amber-500 animate-pulse'}"></span>
+                                ${d.type === 'vehicle' ? (d.isUsed ? 'En convoyage routier' : 'En transit usine') : 'En route'}
                               </span>
                             </div>
                             <div class="text-[11px] text-slate-500 mt-0.5">
-                              Destination : <strong class="text-slate-800">${d.stationName}</strong> • Commandé à ${orderDate}
+                              Destination : <strong class="text-slate-800">${d.stationName}</strong> • ${d.type === 'vehicle' && d.isUsed ? `Origine : <strong class="text-slate-700">${d.sellerStationName || 'Antenne Vendeuse'}</strong> (${d.distKm || 0} km)` : `Commandé à ${orderDate}`}
                             </div>
                           </div>
                         </div>
@@ -2065,17 +2097,17 @@ window.ProtecLogistique = {
                       <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
                         <div class="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex flex-col items-center gap-1">
                           <i data-lucide="package-check" class="w-4 h-4 text-emerald-600"></i>
-                          <span>1. Préparation FNPC</span>
+                          <span>${d.type === 'vehicle' ? (d.isUsed ? '1. Cession & Clés' : '1. Aménagement Usine') : '1. Préparation FNPC'}</span>
                           <span class="text-[9px] text-emerald-600 font-mono">Terminée</span>
                         </div>
                         <div class="p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 flex flex-col items-center gap-1">
-                          <i data-lucide="truck" class="w-4 h-4 text-amber-600 animate-bounce"></i>
-                          <span>2. Convoi Routier</span>
+                          <i data-lucide="${d.type === 'vehicle' ? (d.isUsed ? 'car' : 'truck') : 'truck'}" class="w-4 h-4 text-amber-600 animate-bounce"></i>
+                          <span>${d.type === 'vehicle' ? (d.isUsed ? '2. Convoyage Routier' : '2. Convoi Porte-Engins') : '2. Convoi Routier'}</span>
                           <span id="delivery-percent-${d.id}" class="text-[9px] text-amber-700 font-mono font-black">${progress}%</span>
                         </div>
                         <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 flex flex-col items-center gap-1">
                           <i data-lucide="warehouse" class="w-4 h-4 text-slate-400"></i>
-                          <span>3. Stockage Réserve</span>
+                          <span>${d.type === 'vehicle' ? '3. Remisage Hangar' : '3. Stockage Réserve'}</span>
                           <span class="text-[9px] text-slate-400 font-mono">En attente</span>
                         </div>
                       </div>
@@ -2091,16 +2123,25 @@ window.ProtecLogistique = {
                         </div>
                       </div>
 
-                      <!-- Contenu du colis -->
+                      <!-- Contenu du colis ou véhicule -->
                       <div class="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-xs flex-wrap">
                         <div class="flex items-center gap-2 flex-wrap">
-                          <span class="text-[11px] font-bold text-slate-500">Contenu :</span>
-                          <span class="text-[11px] text-slate-700 font-medium">${d.itemsSummary || 'Matériels divers'}</span>
+                          ${d.type === 'vehicle' && d.vehicleData?.image ? `
+                            <img src="${d.vehicleData.image}" alt="${d.vehicleData.name}" class="w-12 h-8 object-contain rounded-lg bg-slate-100 border p-0.5" />
+                          ` : ''}
+                          <div>
+                            <span class="text-[11px] font-bold text-slate-500">${d.type === 'vehicle' ? 'Véhicule :' : 'Contenu :'}</span>
+                            <span class="text-[11px] text-slate-800 font-extrabold ml-1">${d.type === 'vehicle' ? `${d.vehicleData?.name || d.itemsSummary} (${d.vehicleData?.model || ''})` : (d.itemsSummary || 'Matériels divers')}</span>
+                          </div>
                         </div>
                         <div class="text-right text-[11px] font-mono">
-                          <span class="text-slate-400">Total : </span>
+                          <span class="text-slate-400">Valeur : </span>
                           <strong class="text-slate-900 font-black">${d.totalCost.toLocaleString('fr-FR')} €</strong>
-                          <span class="text-[10px] text-slate-400">(${d.shippingFee === 0 ? 'Port offert' : `Frais port : ${d.shippingFee} €`})</span>
+                          ${d.type === 'vehicle' ? `
+                            <span class="text-[10px] text-emerald-600 font-bold block">${d.isUsed ? `Convoyage routier (${d.distKm} km)` : `Délai calendrier (${d.delayDays || 1}j)`}</span>
+                          ` : `
+                            <span class="text-[10px] text-slate-400">(${d.shippingFee === 0 ? 'Port offert' : `Frais port : ${d.shippingFee} €`})</span>
+                          `}
                         </div>
                       </div>
                     </div>
@@ -2139,7 +2180,7 @@ window.ProtecLogistique = {
                         </span>
                       </div>
                       
-                      <p class="text-[11px] text-slate-600 line-clamp-1">${d.itemsSummary || 'Articles livrés'}</p>
+                      <p class="text-[11px] text-slate-600 line-clamp-1">${d.type === 'vehicle' ? `🚑 ${d.vehicleData?.name || d.itemsSummary} (${d.vehicleData?.model || ''}) - Stationné au garage` : (d.itemsSummary || 'Articles livrés')}</p>
                       
                       <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10.5px] text-slate-400">
                         <span>${d.stationName} • ${deliveredDate}</span>

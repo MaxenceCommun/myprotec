@@ -507,7 +507,8 @@ window.ProtecAdvancedModals = {
     }
 
     const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === st?.id || (Array.isArray(st?.vehicles) && st.vehicles.includes(v.id))));
-    const usedSlots = stationVehicles.length;
+    const inDeliveryVehicles = (game.deliveries || []).filter(d => d.status === 'in_transit' && d.type === 'vehicle' && d.stationId === st?.id);
+    const usedSlots = stationVehicles.length + inDeliveryVehicles.length;
 
     const currentShopMode = this.shopMode || 'models';
     const activeFilter = this.vehicleFilter || 'all';

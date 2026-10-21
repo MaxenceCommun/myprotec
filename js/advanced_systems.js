@@ -1828,10 +1828,12 @@ window.ProtecAdvanced = {
       if (!station.vehicles.includes(v.id)) station.vehicles.push(v.id);
     });
 
-    // Vérifier la capacité réelle du garage
+    // Vérifier la capacité réelle du garage (y compris livraisons de véhicules en cours)
     const maxSlots = this.getGarageCapacity(game, station.id);
-    if (stationVehicles.length >= maxSlots) {
-      game.showToast('Garage saturé !', `Votre garage est plein (${stationVehicles.length}/${maxSlots} places). Agrandissez le hangar dans l'aménagement du local !`, 'orange');
+    const inDeliveryVehicles = (game.deliveries || []).filter(d => d.status === 'in_transit' && d.type === 'vehicle' && d.stationId === station.id);
+    const totalPlanned = stationVehicles.length + inDeliveryVehicles.length;
+    if (totalPlanned >= maxSlots) {
+      game.showToast('Garage saturé !', `Votre garage est plein (${totalPlanned}/${maxSlots} places, dont ${inDeliveryVehicles.length} en cours de livraison). Agrandissez le hangar dans l'aménagement du local !`, 'orange');
       return;
     }
 
@@ -1884,15 +1886,41 @@ window.ProtecAdvanced = {
       window.ProtecLogistique.normalizeVehicle(newVeh);
     }
 
-    game.vehicles.push(newVeh);
-    station.vehicles.push(vehId);
+    // Délai de livraison basé sur le calendrier du jeu (24h à 72h selon le type)
+    if (!Array.isArray(game.deliveries)) game.deliveries = [];
+    const isHeavy = ['FLIT', 'VALOG', 'PCM', 'VST'].includes(vehicleType) || variantOptions?.licenseRequired === 'C';
+    const isAmbulance = vehicleType === 'VPSP' || variantOptions?.type === 'VPSP';
+    const delayDays = isHeavy ? 3 : (isAmbulance ? 2 : 1);
+    const durationSec = delayDays * 86400; // 24h, 48h ou 72h selon le type
+
+    const delivery = {
+      id: `deliv-veh-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      orderNumber: `VEH-${Date.now().toString(36).toUpperCase()}`,
+      type: 'vehicle',
+      isUsed: false,
+      vehicleData: newVeh,
+      delayDays: delayDays,
+      durationSeconds: durationSec,
+      etaTimestamp: Date.now() + (durationSec * 1000),
+      stationId: station.id,
+      stationName: station.name,
+      stationCity: station.city,
+      carrier: `Concessionnaire Flotte & Carrossier Agréé (${delayDays}j calendrier)`,
+      supplierName: 'Concessionnaire Flotte Sécurité Civile',
+      totalCost: finalCost,
+      shippingFee: 0,
+      itemsSummary: `1x ${newVeh.label} (${newVeh.model})`,
+      status: 'in_transit',
+      createdAt: Date.now()
+    };
+    game.deliveries.unshift(delivery);
 
     // Enregistrement dans le Grand Livre comptable
     if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
       window.ProtecFinances.recordTransaction(
         game,
         -finalCost,
-        `Acquisition Véhicule : ${newVeh.name} (${newVeh.model})`,
+        `Commande Véhicule Neuf : ${newVeh.name} (${newVeh.model})`,
         'vehicule',
         `ACHAT-${vehId}`,
         'Centrale d’Achat Réseau'
@@ -1904,7 +1932,7 @@ window.ProtecAdvanced = {
     game.renderStations();
     game.saveGame();
     game.syncPlayerToServer();
-    game.showToast('Véhicule en Dotation !', `${cat.icon || '🚑'} ${newVeh.name} (${newVeh.model}) est stationné au garage de l’antenne !`, 'green');
+    game.showToast('Véhicule Commandé ! 🚚', `${cat.icon || '🚑'} ${newVeh.name} (${newVeh.model}) est en commande d’usine (${delayDays}j calendrier). Suivez son convoi dans le Suivi des Livraisons !`, 'green');
     if (typeof game.openStationDetails === 'function') {
       game.openStationDetails(station.id);
     }

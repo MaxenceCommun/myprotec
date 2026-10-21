@@ -1966,15 +1966,15 @@ window.ProtecCriseLogistique = {
 
         <!-- État de réarmement des véhicules engagés -->
         ${hasUnrearmed ? `
-          <div class="p-3.5 rounded-2xl bg-amber-50 border-2 border-amber-400 text-amber-950 text-xs shadow-sm space-y-2">
+          <div class="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-400 dark:border-amber-700/80 text-amber-950 dark:text-amber-100 text-xs shadow-sm space-y-2">
             <div class="flex items-center justify-between">
-              <span class="font-black text-amber-900 flex items-center gap-1.5">
-                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i>
+              <span class="font-black text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
                 ⚠️ VÉHICULE NON RÉARMÉ SUR CE DISPOSITIF
               </span>
-              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-200 text-amber-900">Vigilance</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-200 dark:bg-amber-900/80 text-amber-900 dark:text-amber-200 border dark:border-amber-700">Vigilance</span>
             </div>
-            <p class="text-[11px] text-amber-800 leading-snug">
+            <p class="text-[11px] text-amber-800 dark:text-amber-200/90 leading-snug">
               ${unrearmedVehs.map(v => `<strong>${v.name}</strong> (Armement : ${v.armementLevel || 70}%)`).join(', ')} n'ont pas été réarmés après leur précédente intervention.
             </p>
 
@@ -1986,12 +1986,13 @@ window.ProtecCriseLogistique = {
                   <span>Réarmer sur zone via le ${armedLogVeh.name} LOG</span>
                 </button>
               ` : `
-                <div class="p-2 rounded-xl bg-amber-100/80 border border-amber-300 text-[11px] text-amber-900 font-semibold flex items-center gap-1.5">
-                  <i data-lucide="info" class="w-3.5 h-3.5 text-amber-700 shrink-0"></i>
-                  <span>Réarmement sur zone impossible : aucun véhicule LOG armé (VTU avec Kit DPS) n'est présent sur les lieux. Le véhicule doit se réarmer au local.</span>
+                <div class="p-2.5 rounded-xl bg-amber-100/90 dark:bg-amber-900/50 border border-amber-300 dark:border-amber-700 text-[11px] text-amber-950 dark:text-amber-100 font-semibold flex items-center gap-2 shadow-xs">
+                  <i data-lucide="info" class="w-4 h-4 text-amber-700 dark:text-amber-400 shrink-0"></i>
+                  <span class="leading-relaxed">Réarmement sur zone impossible : aucun véhicule LOG armé (VTU avec Kit DPS) n'est présent sur les lieux. Le véhicule doit se réarmer au local.</span>
                 </div>
               `}
             </div>
+          </div>
         ` : ''}
       </div>
     `;

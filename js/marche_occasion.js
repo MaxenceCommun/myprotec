@@ -776,8 +776,11 @@ window.ProtecMarcheOccasion = {
     }
 
     let ok = false;
+    const confirmDesc = (listing.category === 'vehicle')
+      ? `Confirmez-vous l'achat de « ${itemNom} » pour ${price.toLocaleString('fr-FR')} € ?\nLe véhicule sera convoyé par trajet routier depuis l'antenne vendeuse jusqu'à votre garage.`
+      : `Confirmez-vous l'achat de « ${itemNom} » pour ${price.toLocaleString('fr-FR')} € ?\nLe bien sera immédiatement transféré et rattaché au stock de votre antenne.`;
     if (window.ProtecDialog) {
-      ok = await window.ProtecDialog.confirm(`Confirmez-vous l'achat de « ${itemNom} » pour ${price.toLocaleString('fr-FR')} € ?\nLe bien sera immédiatement transféré et rattaché à votre antenne.`, 'Achat d’Occasion');
+      ok = await window.ProtecDialog.confirm(confirmDesc, 'Achat d’Occasion');
     } else {
       ok = window.confirm(`Acheter « ${itemNom} » pour ${price.toLocaleString('fr-FR')} € ?`);
     }
@@ -823,22 +826,71 @@ window.ProtecMarcheOccasion = {
     game.updateStatsUI();
     game.saveGame();
 
-    game.showToast('Acquisition Réussie ! 🚗', `« ${itemNom} » a été ajouté à votre antenne pour ${price.toLocaleString('fr-FR')} €.`, 'green');
+    if (listing.category !== 'vehicle') {
+      game.showToast('Acquisition Réussie ! 📦', `« ${itemNom} » a été ajouté au stock de votre antenne pour ${price.toLocaleString('fr-FR')} €.`, 'green');
+    }
     this.renderBodyContent(game);
   },
 
-  // Intégration d'un véhicule acheté dans la flotte du joueur
+  // Intégration d'un véhicule d'occasion acheté avec temps de trajet routier réel entre antennes
   integratePurchasedVehicle(listing, game) {
     const d = listing.item_data || {};
-    const primaryStation = (game.stations && game.stations[0]) || { id: 'st_primary', name: 'Antenne' };
+    const primaryStation = (game.stations && (game.stations.find(s => s.id === game.selectedStationId) || game.stations[0])) || { id: 'st_primary', name: 'Antenne', departmentCode: '54' };
     
-    // Génération du nouvel indicatif adapté à la ville/antenne de l'acheteur (seul le propriétaire change)
+    // Vérification de la capacité du garage (y compris véhicules en transit)
+    const maxGarageSlots = window.ProtecLocaux?.getGarageCapacity?.(game, primaryStation.id)
+      || window.ProtecAdvanced?.getGarageCapacity?.(game, primaryStation.id)
+      || 2;
+    const stationVehicles = (game.vehicles || []).filter(v => v && (v.stationId === primaryStation.id || (Array.isArray(primaryStation.vehicles) && primaryStation.vehicles.includes(v.id))));
+    const inDeliveryVehicles = (game.deliveries || []).filter(del => del.status === 'in_transit' && del.type === 'vehicle' && del.stationId === primaryStation.id);
+    const totalPlanned = stationVehicles.length + inDeliveryVehicles.length;
+
+    if (totalPlanned >= maxGarageSlots) {
+      game.showToast('Garage saturé !', `Le garage de l’antenne ${primaryStation.name} est plein (${totalPlanned}/${maxGarageSlots} places dont ${inDeliveryVehicles.length} en transit).`, 'orange');
+      // Remboursement de la transaction si saturé
+      game.resources.money += Number(listing.price || 0);
+      return false;
+    }
+
+    // Coordonnées Antenne Acheteuse (Destination)
+    let destLat = primaryStation.lat;
+    let destLng = primaryStation.lng;
+    if (!destLat || !destLng) {
+      const dept = window.ProtecDepartements?.getByCode?.(primaryStation.departmentCode || game.player?.departmentCode || '54');
+      if (dept) { destLat = dept.lat; destLng = dept.lng; }
+    }
+
+    // Coordonnées Antenne Vendeuse (Origine)
+    let sellerLat = listing.seller_lat;
+    let sellerLng = listing.seller_lng;
+    const sellerDept = listing.seller_dept || '75';
+    if (!sellerLat || !sellerLng) {
+      const sellerStation = (game.allianceStations || []).concat(game.stations || []).find(st => st.id === listing.seller_antenne_id);
+      if (sellerStation && sellerStation.lat && sellerStation.lng) {
+        sellerLat = sellerStation.lat;
+        sellerLng = sellerStation.lng;
+      } else {
+        const dept = window.ProtecDepartements?.getByCode?.(sellerDept);
+        if (dept) { sellerLat = dept.lat; sellerLng = dept.lng; }
+      }
+    }
+
+    // Calcul de la distance kilométrique réelle entre les deux antennes
+    let distKm = 35;
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function' && destLat && destLng && sellerLat && sellerLng) {
+      distKm = window.ProtecDepartements.calculateDistance(sellerLat, sellerLng, destLat, destLng);
+    }
+    distKm = Math.max(5, parseFloat(distKm.toFixed(1)));
+
+    // Temps de trajet routier : ~80 km/h vitesse moyenne de convoi (minimum 3 minutes)
+    const transitMinutes = Math.max(3, Math.round((distKm / 80) * 60));
+    const durationSec = transitMinutes * 60;
+
+    // Génération du nouvel indicatif adapté à la ville/antenne de l'acheteur
     const vehicleType = (listing.item_type || 'VPSP').toUpperCase();
     const newCallsign = game.generateVehicleCallsign ? game.generateVehicleCallsign(vehicleType, primaryStation.id, primaryStation) : `${vehicleType} Occasion`;
 
-    // Préservation stricte du kilométrage réel d'origine
     const km = Number(d.mileage !== undefined ? d.mileage : (d.kilometrage !== undefined ? d.kilometrage : 118400));
-    // Préservation stricte des options, kits et équipements achetés par le vendeur
     const hasTowHitch = Boolean(d.hasTowHitch || d.options?.includes('Attelage remorque'));
     const isPCM = Boolean(d.isCommandement || d.hasCommandementKit || d.options?.some(opt => typeof opt === 'string' && (opt.includes('Commandement') || opt.includes('PCM'))));
     const preservedOptions = Array.isArray(d.options) && d.options.length > 0 ? [...d.options] : [
@@ -878,12 +930,53 @@ window.ProtecMarcheOccasion = {
       reqSkills: vehicleType === 'VPSP' ? ['permis_vpsp'] : ['permis_b']
     };
 
-    if (!game.vehicles) game.vehicles = [];
-    game.vehicles.push(newVehicle);
+    // Création de la livraison de convoyage routier dans game.deliveries
+    if (!Array.isArray(game.deliveries)) game.deliveries = [];
+    const sellerStationLabel = listing.seller_station_name || `Antenne (Dép. ${sellerDept})`;
+    const durationLabel = transitMinutes >= 60 ? `${Math.floor(transitMinutes / 60)}h ${String(transitMinutes % 60).padStart(2, '0')}m` : `${transitMinutes} min`;
 
-    if (primaryStation.vehicles && !primaryStation.vehicles.includes(newVehicle.id)) {
-      primaryStation.vehicles.push(newVehicle.id);
+    const delivery = {
+      id: `deliv-occ-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      orderNumber: `CONVOI-OCC-${Date.now().toString(36).toUpperCase()}`,
+      type: 'vehicle',
+      isUsed: true,
+      vehicleData: newVehicle,
+      distKm: distKm,
+      transitMinutes: transitMinutes,
+      durationSeconds: durationSec,
+      etaTimestamp: Date.now() + (durationSec * 1000),
+      stationId: primaryStation.id,
+      stationName: primaryStation.name,
+      sellerStationName: sellerStationLabel,
+      carrier: `Convoyage Routier Bénévoles (${distKm} km - ~80 km/h)`,
+      supplierName: `Cession Bourse d'Occasion (${sellerStationLabel})`,
+      totalCost: Number(listing.price || 0),
+      shippingFee: 0,
+      itemsSummary: `1x ${newVehicle.label} (${newVehicle.model}) - Occasion révisée`,
+      status: 'in_transit',
+      createdAt: Date.now()
+    };
+    game.deliveries.unshift(delivery);
+
+    // Enregistrement dans le Grand Livre comptable
+    if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
+      window.ProtecFinances.recordTransaction(
+        game,
+        -Number(listing.price || 0),
+        `Acquisition Occasion : ${newVehicle.name} (${newVehicle.model})`,
+        'vehicule',
+        `ACHAT-OCC-${newVehicle.id}`,
+        sellerStationLabel
+      );
     }
+
+    game.showToast(
+      'Convoyage en Route ! 🚗',
+      `« ${newVehicle.model} » acheté ! Convoyage routier en cours depuis ${sellerStationLabel} (${distKm} km, trajet estimé à ~${durationLabel}). Suivez le déplacement dans l'onglet Livraisons !`,
+      'green'
+    );
+
+    return true;
   },
 
   // Intégration d'un matériel ou meuble acheté
@@ -1315,6 +1408,8 @@ window.ProtecMarcheOccasion = {
       seller_name: currentUserName,
       seller_station_name: station.name,
       seller_dept: game.player?.departmentCode || '54',
+      seller_lat: station.lat || null,
+      seller_lng: station.lng || null,
       category: category,
       item_type: itemType,
       item_data: itemData,
