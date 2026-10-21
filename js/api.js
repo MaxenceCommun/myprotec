@@ -125,28 +125,44 @@
         const interventions = await API.getInterventions();
         console.log(`[API MyProtec] ${interventions.length} intervention(s) reçue(s) du backend :`, interventions);
 
-        if (Array.isArray(interventions)) {
-          const game = this._gameRef || window.game;
-          interventions.forEach(interv => {
-            this.syncInterventionIntoGame(interv, false);
-          });
+        this.backendInterventions = Array.isArray(interventions) ? interventions : [];
 
-          if (game) {
-            this.purgeUnconventionedMissions(game);
-          }
-
-          this.refreshUI();
+        // RÈGLE ABSOLUE : Les interventions globales du serveur backend NE DOIVENT PAS être injectées
+        // automatiquement sur la carte du joueur local sans sollicitation ou sans session multijoueur active.
+        const game = this._gameRef || window.game;
+        if (game) {
+          this.purgeUnconventionedMissions(game);
         }
+
+        this.refreshUI();
       } catch (error) {
         console.error('[API MyProtec] Erreur lors du chargement des interventions:', error);
       }
     },
 
     /**
-     * Purge stricte des missions actives non conventionnées
+     * Purge stricte des missions actives non conventionnées et interventions backend orphelines
      */
     purgeUnconventionedMissions(game) {
       if (!game || !Array.isArray(game.missions)) return;
+
+      // 0. PURGE STRICTE ET DÉFINITIVE DES MISSIONS INJECTÉES DEPUIS LE SERVEUR OVH OU CRISES IMPOSÉES
+      const beforeCount = game.missions.length;
+      game.missions = game.missions.filter(m => {
+        if (!m) return false;
+        if (m.isBackendIntervention) return false;
+        if (String(m.id || '').startsWith('interv-')) return false;
+        if (String(m.id || '').startsWith('m-crise-')) return false;
+        const t = (m.title || '').toLowerCase();
+        if (t.includes('inondation de quartier') || t.includes('soutien logistique et hébergement')) return false;
+        return true;
+      });
+      if (game.missions.length < beforeCount) {
+        console.log(`[API MyProtec] Purge effectuée : ${beforeCount - game.missions.length} mission(s) backend / orpheline(s) retirée(s).`);
+        if (typeof game.renderMissions === 'function') game.renderMissions();
+        if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+      }
+
       const hasSamu = Boolean(game.samuConvention && game.samuConvention.signed && game.samuGarde && game.samuGarde.active);
       const hasSdis = Boolean(game.sdisConvention && game.sdisConvention.signed && game.sdisGarde && game.sdisGarde.active);
       const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
@@ -270,8 +286,7 @@
       const mission = game.missions.find(m => m.backendId == cleanId || m.id == id || m.id == `interv-${cleanId}`);
 
       if (!mission) {
-        console.log(`[API MyProtec] Mission #${cleanId} non trouvée en local, rechargement...`);
-        this.loadInitialInterventions();
+        // Mission non présente sur le poste local (intervention d'un autre secteur ou non suivie)
         return;
       }
 
@@ -482,40 +497,24 @@
         return existing;
       }
 
-      const newMission = {
-        id: missionId,
-        backendId: interv.id,
-        isBackendIntervention: true,
-        isRenfort: false,
-        title: sanitizedTitle,
-        desc: sanitizedDesc,
-        commune: interv.commune || 'Secteur d’intervention',
-        city: interv.commune || 'Secteur d’intervention',
-        address: interv.commune ? `${interv.commune} (Secteur d'intervention)` : 'Sur secteur',
-        lat: isNaN(lat) ? (game.stations?.[0]?.lat || 48.6921) : lat,
-        lng: isNaN(lng) ? (game.stations?.[0]?.lng || 6.1844) : lng,
-        type: missionType,
-        urgency: interv.gravite || 'moyen',
-        severity: interv.gravite || 'moyen',
-        status: clientStatus,
-        backendStatut: interv.statut,
-        requiredVehicles: reqVehicles,
-        requiredVolunteers: reqVolunteers,
-        requiredRanks: ['PSE1', 'PSE2'],
-        registeredVolunteers: [],
-        assignedCrew: { volunteers: [], vehicles: [] },
-        rewardMoney: 450 + (reqVehicles.length * 150),
-        rewardReputation: 25,
-        progress: (clientStatus === 'ongoing') ? 50 : 0,
-        isAlert: clientStatus === 'declenche',
-        createdAt: interv.created_at || new Date().toISOString(),
-        spawnedAt: interv.created_at ? new Date(interv.created_at).getTime() : Date.now(),
-        durationSeconds: 1800,
-        durationHours: 0.5
-      };
+      // Les interventions du serveur backend distant ne doivent pas être injectées de force dans la carte solo
+      if (!isNew) {
+        return null;
+      }
 
-      game.missions.push(newMission);
-      return newMission;
+      // Si c'est un nouvel événement temps réel reçu via websocket, on vérifie si la mission concerne le secteur du joueur
+      const primaryStation = game.stations?.[0];
+      if (primaryStation && interv.commune) {
+        const stationCity = (primaryStation.city || primaryStation.commune || primaryStation.name || '').toLowerCase();
+        const intervCity = (interv.commune || '').toLowerCase();
+        // Si ce n'est pas le même secteur et que ce n'est pas une crise majeure conventionnée
+        if (!intervCity.includes(stationCity) && !stationCity.includes(intervCity) && missionType !== 'crise') {
+          return null;
+        }
+      }
+
+      // Par défaut pour le mode solo, aucune mission backend non sollicitée n'est ajoutée
+      return null;
     },
 
     /**

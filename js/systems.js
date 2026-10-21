@@ -2427,18 +2427,21 @@ updateWeatherAndDayNight(game) {
       this.fetchRealWeather(game);
     }
 
-    // Déclenchement calibré d'une mission météo en cas de vigilance active (Jaune = rien, Orange = peu de chance, Rouge = moyennement)
+    // Les alertes météo extrêmes / réquisitions ne sont pas imposées automatiquement en boucle
+    // Elles ne se déclenchent que dans le cadre des scénarios choisis ou événements de crise majeurs encadrés.
+    /*
     if (game.clock && game.clock.second === 25 && (game.clock.minute % 4 === 0)) {
       if (game.weather && ['orange', 'red'].includes(game.weather.vigilance)) {
         let proba = 0;
-        if (game.weather.vigilance === 'red') proba = 0.28; // Moyennement en rouge
-        else if (game.weather.vigilance === 'orange') proba = 0.08; // Peu de chance en orange
+        if (game.weather.vigilance === 'red') proba = 0.28;
+        else if (game.weather.vigilance === 'orange') proba = 0.08;
         
         if (Math.random() < proba) {
           this.triggerWeatherEmergencyMission(game);
         }
       }
     }
+    */
 
     // Température réelle mesurée (avec léger ressenti selon l'heure)
     const currentTemp = Math.round(game.weather.temp != null ? game.weather.temp : 18);

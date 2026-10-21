@@ -1916,6 +1916,16 @@ class ProtecGame {
         this.history = this.history.slice(-15);
       }
       if (Array.isArray(this.missions)) {
+        // Purge stricte des missions backend / alertes non consenties
+        this.missions = this.missions.filter(m => {
+          if (!m) return false;
+          if (m.isBackendIntervention) return false;
+          if (String(m.id || '').startsWith('interv-')) return false;
+          if (String(m.id || '').startsWith('m-crise-')) return false;
+          const t = (m.title || '').toLowerCase();
+          if (t.includes('inondation de quartier') || t.includes('soutien logistique et hébergement')) return false;
+          return true;
+        });
         const active = this.missions.filter(m => m.status !== 'completed' && m.status !== 'canceled');
         const closed = this.missions.filter(m => m.status === 'completed' || m.status === 'canceled').slice(-10);
         this.missions = [...active, ...closed];
@@ -2216,7 +2226,18 @@ class ProtecGame {
         });
       }
 
-      // 3.bis Purge stricte DPS : AUCUN DPS NE DOIT SE LANCER EN ALERTE DIRECTE SANS DEVIS VALIDÉ
+      // 3.bis Purge stricte des missions distantes du backend OVH et crises imposées
+      this.missions = this.missions.filter(m => {
+        if (!m) return false;
+        if (m.isBackendIntervention) return false;
+        if (String(m.id || '').startsWith('interv-')) return false;
+        if (String(m.id || '').startsWith('m-crise-')) return false;
+        const t = (m.title || '').toLowerCase();
+        if (t.includes('inondation de quartier') || t.includes('soutien logistique et hébergement')) return false;
+        return true;
+      });
+
+      // 3.ter Purge stricte DPS : AUCUN DPS NE DOIT SE LANCER EN ALERTE DIRECTE SANS DEVIS VALIDÉ
       // Les seules alertes immédiates autorisées sont les crises (NOVI, inondations, recherches de personnes, violences urbaines, tempêtes...)
       const invalidAlertDps = this.missions.filter(m => m && m.type === 'dps' && (m.status === 'declenche' || m.status === 'prealerte' || m.isBackendIntervention || String(m.id).startsWith('interv-')));
       if (invalidAlertDps.length > 0) {
