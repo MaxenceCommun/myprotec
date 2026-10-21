@@ -18,6 +18,90 @@
  */
 
 window.ProtecFormations = {
+  // Variantes de dotation en mannequins de réanimation pour les lots pédagogiques
+  MANNEQUIN_VARIANTS: {
+    standard: {
+      id: 'standard',
+      name: 'Mannequins Mousse Standard',
+      shortName: 'Standard',
+      tier: 1,
+      cost: 0,
+      badge: 'De Série',
+      badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-800 dark:text-slate-300',
+      desc: 'Mannequins de massage cardiaque standards pour les gestes élémentaires (inclus de base).',
+      bonusRevPct: 0,
+      bonusRep: 0,
+      bonusTrainerMoral: 0
+    },
+    clicker: {
+      id: 'clicker',
+      name: 'Mannequins avec Clicker Mécanique',
+      shortName: 'Clicker Sonore',
+      tier: 2,
+      cost: 180,
+      badge: 'Retour Sonore (+5 Rép)',
+      badgeClass: 'bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950 dark:text-blue-300',
+      desc: 'Signal sonore automatique à la bonne profondeur de compression. Apprentissage facilité.',
+      bonusRevPct: 0,
+      bonusRep: 5,
+      bonusTrainerMoral: 5
+    },
+    qcpr: {
+      id: 'qcpr',
+      name: 'Mannequins Connectés QCPR (Tablette & App)',
+      shortName: 'QCPR Connecté ⭐',
+      tier: 3,
+      cost: 650,
+      badge: 'Haute Fidélité (+25% Recettes)',
+      badgeClass: 'bg-purple-100 text-purple-900 border-purple-300 dark:bg-purple-950 dark:text-purple-300',
+      desc: 'Capteurs connectés temps réel avec courbe de décompression et bilan stagiaire (+25% valorisation).',
+      bonusRevPct: 0.25,
+      bonusRep: 15,
+      bonusTrainerMoral: 10
+    }
+  },
+
+  getKitMannequinVariant(game, kitId) {
+    if (!game) game = window.game;
+    if (!game) return 'standard';
+    if (!game.trainingKitsVariants) game.trainingKitsVariants = {};
+    return game.trainingKitsVariants[kitId] || 'standard';
+  },
+
+  upgradeKitMannequin(game, kitId, targetVariantId) {
+    if (!game) game = window.game;
+    if (!game) return;
+    if (!this.MANNEQUIN_VARIANTS[targetVariantId]) return;
+    const currentVarId = this.getKitMannequinVariant(game, kitId);
+    if (currentVarId === targetVariantId) return;
+
+    const currentDef = this.MANNEQUIN_VARIANTS[currentVarId];
+    const targetDef = this.MANNEQUIN_VARIANTS[targetVariantId];
+    const upgradeCost = Math.max(0, targetDef.cost - currentDef.cost);
+
+    if (upgradeCost > 0) {
+      if (game.resources.money < upgradeCost) {
+        game.showToast('Trésorerie insuffisante', `L'amélioration vers « ${targetDef.name} » requiert ${upgradeCost.toLocaleString('fr-FR')} €.`, 'red');
+        return;
+      }
+      game.resources.money -= upgradeCost;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -upgradeCost, `Amélioration Lot Pédagogique (${kitId}) : ${targetDef.shortName}`, 'formation');
+      }
+    }
+
+    if (!game.trainingKitsVariants) game.trainingKitsVariants = {};
+    game.trainingKitsVariants[kitId] = targetVariantId;
+
+    if (game.equipmentTiers) {
+      game.equipmentTiers.mannequin_rcp_adulte = Math.max(game.equipmentTiers.mannequin_rcp_adulte || 1, targetDef.tier);
+    }
+
+    game.showToast('Lot Pédagogique Amélioré !', `Votre lot ${kitId} est désormais équipé de : ${targetDef.name}.`, 'green');
+    game.saveGame();
+    if (typeof this.renderModal === 'function') this.renderModal(game);
+  },
+
   catalog: [
     // --- GRAND PUBLIC & ENTREPRISES ---
     {
@@ -2311,8 +2395,11 @@ window.ProtecFormations = {
     let totalRevenue = 0;
     let netGain = 0;
 
-    // Prise en compte des gammes de matériel pédagogique (Mannequin RCP & DSA Formation)
-    const mannequinTier = (game.equipmentTiers && game.equipmentTiers.mannequin_rcp_adulte) || 1;
+    // Prise en compte des gammes et variantes de matériel pédagogique du kit utilisé
+    const kitRequiredId = course?.kitRequired || 'kit_pedago_psc';
+    const kitVarKey = this.getKitMannequinVariant(game, kitRequiredId);
+    const kitVar = this.MANNEQUIN_VARIANTS[kitVarKey] || this.MANNEQUIN_VARIANTS.standard;
+    const mannequinTier = kitVar.tier;
     const dsaTier = (game.equipmentTiers && game.equipmentTiers.dsa_formation) || 1;
 
     let tierNotice = '';
@@ -2324,10 +2411,10 @@ window.ProtecFormations = {
       totalRevenue += revFromExternals;
     }
 
-    // Bonus matériel sur recettes (facultatif : le Tier 1 est à 100%, le Tier 3 apporte un bonus)
-    if (mannequinTier === 3) {
-      totalRevenue = Math.round(totalRevenue * 1.25);
-      tierNotice += ' [QCPR Connecté : +25% valorisation]';
+    // Bonus matériel sur recettes (facultatif : Standard 100%, QCPR +25% de valorisation)
+    if (kitVar.bonusRevPct > 0) {
+      totalRevenue = Math.round(totalRevenue * (1 + kitVar.bonusRevPct));
+      tierNotice += ` [${kitVar.shortName} : +${Math.round(kitVar.bonusRevPct * 100)}% valorisation]`;
     }
 
     if (totalRevenue > 0) {
@@ -3537,16 +3624,37 @@ window.ProtecFormations = {
                         </div>
                       </div>
 
-                      <!-- Kit requis de la base -->
-                      ${course?.kitRequired ? `
-                        <div class="p-2 rounded-xl text-[10px] font-bold flex items-center justify-between ${hasKit ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-amber-50 text-amber-800 border border-amber-200'}">
-                          <span class="flex items-center gap-1">
-                            <i data-lucide="${hasKit ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5"></i>
-                            ${hasKit ? 'Lot pédagogique disponible :' : 'Lot requis à la base :'} ${course.kitName || course.kitRequired}
-                          </span>
-                          <span class="text-[9px] uppercase font-black">${hasKit ? 'En stock' : 'Manquant'}</span>
-                        </div>
-                      ` : ''}
+                      <!-- Kit requis de la base avec niveau de mannequin et upgrade -->
+                      ${course?.kitRequired ? (() => {
+                        const curVarKey = this.getKitMannequinVariant(game, course.kitRequired);
+                        const curVar = this.MANNEQUIN_VARIANTS[curVarKey] || this.MANNEQUIN_VARIANTS.standard;
+
+                        return `
+                          <div class="p-2.5 rounded-xl text-[10px] font-bold space-y-1.5 ${hasKit ? 'bg-emerald-50/80 dark:bg-emerald-950/40 text-emerald-900 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 border border-amber-200 dark:border-amber-800'}">
+                            <div class="flex items-center justify-between gap-1.5">
+                              <span class="flex items-center gap-1 min-w-0">
+                                <i data-lucide="${hasKit ? 'check-circle' : 'alert-triangle'}" class="w-3.5 h-3.5 ${hasKit ? 'text-emerald-600' : 'text-amber-600'} shrink-0"></i>
+                                <span class="truncate">${course.kitName || course.kitRequired}</span>
+                              </span>
+                              ${hasKit ? `
+                                <span class="px-2 py-0.5 rounded text-[9px] font-black uppercase shrink-0 ${curVar.badgeClass}">
+                                  ${curVar.shortName}
+                                </span>
+                              ` : `
+                                <span class="text-[9px] uppercase font-black shrink-0">Manquant</span>
+                              `}
+                            </div>
+                            ${hasKit && curVarKey !== 'qcpr' ? `
+                              <div class="flex items-center justify-between pt-1 border-t border-emerald-200/80 dark:border-emerald-800/80 text-[9.5px]">
+                                <span class="text-emerald-700 dark:text-emerald-300">Dotation : ${curVar.name}</span>
+                                <button type="button" onclick="window.ProtecFormations.upgradeKitMannequin(window.game, '${course.kitRequired}', 'qcpr')" class="px-2 py-0.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-black cursor-pointer shadow-2xs transition" title="Passer aux mannequins connectés QCPR (+25% valorisation)">
+                                  ⚡ Upgrader QCPR (+650 €)
+                                </button>
+                              </div>
+                            ` : ''}
+                          </div>
+                        `;
+                      })() : ''}
 
                       <!-- JAUGE DES 3 CATÉGORIES DE PLACES -->
                       <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-2 text-xs">

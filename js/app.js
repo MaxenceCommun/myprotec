@@ -12143,6 +12143,27 @@ class ProtecGame {
       window.ProtecEquipements.checkMissionLotBonus(this, mission);
     }
 
+    // 2e. BONUS DE CONFORT DES ÉQUIPEMENTS MÉDICAUX EMBARQUÉS SUR LES VÉHICULES ENGAGÉS
+    const allEngagedVehicles = (vehicles || [])
+      .map(v => typeof v === 'object' && v !== null ? v : (this.vehicles || []).find(x => x.id === v))
+      .filter(Boolean);
+    const hasSchillerVeh = allEngagedVehicles.some(v => v.hasSchillerT7 || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /schiller/i.test(o))));
+    const hasNIBPVeh = allEngagedVehicles.some(v => v.hasTensiometreAuto || (Array.isArray(v.installedOptions) && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))));
+
+    if (hasSchillerVeh) {
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 10, 'Bilan ECG instantané Schiller T7 embarqué');
+      }
+      crewVolunteers.forEach(vol => {
+        vol.moral = Math.min(100, (vol.moral || 75) + 6);
+        vol.motivation = vol.moral;
+      });
+    } else if (hasNIBPVeh) {
+      if (window.ProtecConventions) {
+        window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 5, 'Prise de constantes automatisée NIBP');
+      }
+    }
+
     // 3 & 4. RETOUR ROUTIER & DÉSENGAGEMENT DES VÉHICULES ET DE LEURS ÉQUIPAGES
     // RÈGLE OPÉRATIONNELLE :
     // - Si sur place : désengagement automatique (Statut 6 retour base).
@@ -25950,6 +25971,93 @@ class ProtecGame {
             </div>
           </div>
 
+          <!-- Armement Médical & Matériel de Confort (Facultatif sur VPSP) -->
+          ${v.type === 'VPSP' || (v.installedOptions && v.installedOptions.some(o => /vpsp|sanitaire/i.test(o))) ? `
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+              <div class="flex items-center justify-between">
+                <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
+                  <i data-lucide="stethoscope" class="w-4 h-4 text-emerald-600"></i>
+                  <span>Armement Médical & Confort Embarqué (Facultatif)</span>
+                </span>
+                <span class="text-[10px] text-slate-400 font-bold">Dotation VPSP</span>
+              </div>
+
+              <!-- Matériel réglementaire de base (présent de série) -->
+              <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200/90 text-[10.5px] flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                  <span class="text-base">🎒</span>
+                  <div>
+                    <h5 class="font-extrabold text-slate-900 leading-tight">Dotation Sanitaire Réglementaire (De Série)</h5>
+                    <p class="text-[9.5px] text-slate-500">Sac d'intervention complet, Bouteille O2 médicale, Tensiomètre manuel au stéthoscope, DAE de dotation, matériel d'immobilisation.</p>
+                  </div>
+                </div>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">De Série ✓</span>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <!-- Tensiomètre Automatique NIBP -->
+                <div class="p-2.5 rounded-xl border ${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'bg-sky-50/70 border-sky-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg ${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-sm">
+                      🩺
+                    </div>
+                    <div>
+                      <h5 class="text-xs font-black text-slate-900">Tensiomètre Auto NIBP</h5>
+                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'Embarqué (+5 Réputation SAMU)' : 'Non doté (Option confort)'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    ${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? `
+                      <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'tensiometre_auto', false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+                        Débarquer
+                      </button>
+                    ` : `
+                      ${(station?.stock?.tensiometre_auto || 0) > 0 ? `
+                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'tensiometre_auto', true, false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-sky-700 bg-sky-100 hover:bg-sky-200 border border-sky-300 transition cursor-pointer">
+                          Armer (${station.stock.tensiometre_auto})
+                        </button>
+                      ` : `
+                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'tensiometre_auto', true, true)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition cursor-pointer" title="Acheter et équiper pour 450 €">
+                          Équiper (450 €)
+                        </button>
+                      `}
+                    `}
+                  </div>
+                </div>
+
+                <!-- Moniteur ECG Multiparamétrique Schiller Touch 7 -->
+                <div class="p-2.5 rounded-xl border ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-50/70 border-purple-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
+                  <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-lg ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-sm">
+                      📟
+                    </div>
+                    <div>
+                      <h5 class="text-xs font-black text-slate-900">Schiller Touch 7 (ECG)</h5>
+                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'Embarqué (+10 SAMU, +6 Moral)' : 'Non doté (Moniteur pro)'}</p>
+                    </div>
+                  </div>
+                  <div>
+                    ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? `
+                      <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'schiller_t7', false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition cursor-pointer">
+                        Débarquer
+                      </button>
+                    ` : `
+                      ${(station?.stock?.schiller_t7 || 0) > 0 ? `
+                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'schiller_t7', true, false)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-purple-700 bg-purple-100 hover:bg-purple-200 border border-purple-300 transition cursor-pointer">
+                          Armer (${station.stock.schiller_t7})
+                        </button>
+                      ` : `
+                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'schiller_t7', true, true)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-300 transition cursor-pointer" title="Acheter et équiper pour 3 800 €">
+                          Équiper (3 800 €)
+                        </button>
+                      `}
+                    `}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Planning d'utilisation & Engagements du véhicule (Opérationnels + Réarmement) -->
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
             <div class="flex items-center justify-between">
@@ -26098,6 +26206,51 @@ class ProtecGame {
     `;
 
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  toggleVehicleMedicalOption(vehicleId, optionKey, isInstall, buyDirect = false) {
+    const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
+    if (!v) return;
+    const station = (this.stations || []).find(s => s.id === v.stationId) || this.stations?.[0];
+    if (!station) return;
+    if (!station.stock) station.stock = {};
+    if (!Array.isArray(v.installedOptions)) v.installedOptions = [];
+
+    const optDef = {
+      tensiometre_auto: { key: 'hasTensiometreAuto', name: 'Tensiomètre Automatique NIBP', cost: 450, stockKey: 'tensiometre_auto' },
+      schiller_t7: { key: 'hasSchillerT7', name: 'Moniteur ECG Schiller Touch 7', cost: 3800, stockKey: 'schiller_t7' }
+    }[optionKey];
+    if (!optDef) return;
+
+    if (isInstall) {
+      if (buyDirect) {
+        if (this.resources.money < optDef.cost) {
+          this.showToast('Trésorerie insuffisante', `L'acquisition de « ${optDef.name} » nécessite ${optDef.cost.toLocaleString('fr-FR')} €.`, 'red');
+          return;
+        }
+        this.resources.money -= optDef.cost;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(this, -optDef.cost, `Armement Véhicule (${v.name}) : ${optDef.name}`, 'logistique');
+        }
+      } else {
+        if ((station.stock[optDef.stockKey] || 0) <= 0) {
+          this.showToast('Matériel indisponible', `Aucun exemplaire de « ${optDef.name} » n'est disponible dans la réserve de l'antenne.`, 'orange');
+          return;
+        }
+        station.stock[optDef.stockKey]--;
+      }
+      v[optDef.key] = true;
+      if (!v.installedOptions.includes(optDef.name)) v.installedOptions.push(optDef.name);
+      this.showToast('Équipement armé !', `Le ${optDef.name} a été installé avec succès à bord du ${v.name}.`, 'green');
+    } else {
+      v[optDef.key] = false;
+      v.installedOptions = v.installedOptions.filter(o => o !== optDef.name);
+      station.stock[optDef.stockKey] = (station.stock[optDef.stockKey] || 0) + 1;
+      this.showToast('Équipement débarqué', `Le ${optDef.name} a été remis dans la réserve de l'antenne ${station.name}.`, 'blue');
+    }
+
+    this.saveGame();
+    this.openVehicleDetailsModal(vehicleId);
   }
 
   // --- RAFRAÎCHISSEMENT DOUX SANS RECHARGEMENT DE PAGE POUR LES MODALS OUVERTS ---

@@ -343,6 +343,20 @@ window.ProtecAdvancedModals = {
       cost: 1850,
       icon: '❄️',
       desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
+    },
+    tensiometre_auto: {
+      id: 'tensiometre_auto',
+      label: 'Tensiomètre Automatique NIBP Brassard',
+      cost: 450,
+      icon: '🩺',
+      desc: 'Mesure automatique et rapide de la tension artérielle (+5 réputation SAMU 15).'
+    },
+    schiller_t7: {
+      id: 'schiller_t7',
+      label: 'Moniteur Multiparamétrique ECG Schiller Touch 7',
+      cost: 3800,
+      icon: '📟',
+      desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
     }
   },
 
@@ -446,12 +460,22 @@ window.ProtecAdvancedModals = {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
     }
+    if (isVPSP && selOpts.tensiometre_auto) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.tensiometre_auto.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.tensiometre_auto.label);
+    }
+    if (isVPSP && selOpts.schiller_t7) {
+      optionsExtraCost += this.VEHICLE_OPTIONS.schiller_t7.cost;
+      activeOptionsList.push(this.VEHICLE_OPTIONS.schiller_t7.label);
+    }
 
     const customOptions = Object.assign({}, foundVariant, {
       cost: (foundVariant?.cost || 20000) + optionsExtraCost,
       hasTowHitch: finalTowHitch,
       hasLedBar: isVPSP || Boolean(selOpts.ledBar) || Boolean(foundVariant?.hasLedBar),
       hasConverter230v: true,
+      hasTensiometreAuto: isVPSP && Boolean(selOpts.tensiometre_auto),
+      hasSchillerT7: isVPSP && Boolean(selOpts.schiller_t7),
       installedOptions: activeOptionsList,
       capacity_log: foundVariant?.capacity_log || this.getVehicleLogCapacity(foundVariant)
     });
@@ -665,6 +689,12 @@ window.ProtecAdvancedModals = {
             if (selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
             }
+            if (isVPSP && selOpts.tensiometre_auto) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.tensiometre_auto.cost;
+            }
+            if (isVPSP && selOpts.schiller_t7) {
+              optionsExtraCost += this.VEHICLE_OPTIONS.schiller_t7.cost;
+            }
 
             const totalConfigCost = currentVariant.cost + optionsExtraCost;
 
@@ -853,7 +883,7 @@ window.ProtecAdvancedModals = {
                         onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'climatisation', '${st?.id}')"
                         class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                       >
-                        <span class="flex items-center gap-1.5"><span>❄️</span> Pack Climatisation / Webasto</span>
+                        <span class="flex items-center gap-1.5"><span>❄️</span> Climatisation / Webasto</span>
                         <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
                       </button>
 
@@ -862,6 +892,27 @@ window.ProtecAdvancedModals = {
                         <span class="flex items-center gap-1.5"><span>⚡</span> Convertisseur 230V Sinus</span>
                         <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                       </div>
+
+                      <!-- Options Médicales de Confort spécifiques VPSP -->
+                      ${isVPSP ? `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'tensiometre_auto', '${st?.id}')"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.tensiometre_auto ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
+                        >
+                          <span class="flex items-center gap-1.5"><span>🩺</span> Tensiomètre Auto NIBP</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.tensiometre_auto ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+450 €</span>
+                        </button>
+
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'schiller_t7', '${st?.id}')"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.schiller_t7 ? 'bg-purple-100/70 dark:bg-purple-950/50 border-purple-500 text-purple-900 dark:text-purple-200 font-black shadow-xs ring-1 ring-purple-400/50' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
+                        >
+                          <span class="flex items-center gap-1.5"><span>📟</span> Schiller Touch 7 (ECG)</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+3 800 €</span>
+                        </button>
+                      ` : ''}
                     </div>
                   </div>
                 </div>

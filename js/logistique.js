@@ -1226,6 +1226,15 @@ window.ProtecLogistique = {
               station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
               game.stockMaterielsPS = station.stockMaterielsPS;
             }
+
+            // Enregistrement de la variante de mannequin des kits de formation réceptionnés
+            if (targetId.startsWith('kit_pedago_') || targetId.startsWith('kit_')) {
+              const packItem = (d.itemsSummary || []).find(it => it.id === targetId || it.id === itemId);
+              if (packItem && packItem.mannequinVariant) {
+                if (!game.trainingKitsVariants) game.trainingKitsVariants = {};
+                game.trainingKitsVariants[targetId] = packItem.mannequinVariant;
+              }
+            }
           });
 
           this.syncToGlobalLogistics(game);

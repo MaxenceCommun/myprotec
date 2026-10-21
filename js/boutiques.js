@@ -16,6 +16,13 @@ window.ProtecBoutiques = {
   selectedStationId: null,
   cart: {}, // { [itemId]: { qty, shopId, itemData } }
   searchQuery: '',
+  selectedKitMannequin: {}, // { [kitId]: 'standard' | 'clicker' | 'qcpr' }
+
+  setKitMannequin(itemId, variantId) {
+    if (!this.selectedKitMannequin) this.selectedKitMannequin = {};
+    this.selectedKitMannequin[itemId] = variantId;
+    this.renderModal(window.game);
+  },
 
   // =========================================================================
   // 1. DÉFINITION DES MAGASINS SPÉCIALISÉS (GALERIES MARCHANDES)
@@ -428,7 +435,8 @@ window.ProtecBoutiques = {
         image: it.image,
         lucideIcon: it.icon,
         radioTech: it.customData?.radioTech,
-        radioCount: it.customData?.radioCount
+        radioCount: it.customData?.radioCount,
+        mannequinVariant: it.customData?.mannequinVariant
       });
     });
 
@@ -916,6 +924,26 @@ window.ProtecBoutiques = {
                               <span>${item.usage}</span>
                             </p>
                           ` : ''}
+
+                          <!-- Sélecteur de Variante de Mannequin pour Kits de Formation -->
+                          ${item.category === 'kits_formation' ? (() => {
+                            const curVar = (this.selectedKitMannequin && this.selectedKitMannequin[item.id]) || 'standard';
+                            const mVars = window.ProtecFormations?.MANNEQUIN_VARIANTS || {};
+
+                            return `
+                              <div class="mt-2.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 space-y-1.5">
+                                <div class="flex items-center justify-between text-[10px] font-black">
+                                  <span class="text-slate-600 dark:text-slate-300">Dotation Mannequins :</span>
+                                  <span class="text-pc-blue font-mono">${mVars[curVar]?.shortName || 'Standard'}</span>
+                                </div>
+                                <div class="grid grid-cols-3 gap-1 text-[9px] font-bold">
+                                  <button type="button" onclick="window.ProtecBoutiques.setKitMannequin('${item.id}', 'standard')" class="p-1 rounded-lg text-center transition cursor-pointer ${curVar === 'standard' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-100'}">Standard</button>
+                                  <button type="button" onclick="window.ProtecBoutiques.setKitMannequin('${item.id}', 'clicker')" class="p-1 rounded-lg text-center transition cursor-pointer ${curVar === 'clicker' ? 'bg-blue-600 text-white font-black shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-100'}">+Clicker (+180€)</button>
+                                  <button type="button" onclick="window.ProtecBoutiques.setKitMannequin('${item.id}', 'qcpr')" class="p-1 rounded-lg text-center transition cursor-pointer ${curVar === 'qcpr' ? 'bg-purple-600 text-white font-black shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 hover:bg-slate-100'}">+QCPR (+650€)</button>
+                                </div>
+                              </div>
+                            `;
+                          })() : ''}
                         </div>
 
                         <!-- Bas de carte : Prix & Panier -->
@@ -933,10 +961,21 @@ window.ProtecBoutiques = {
                                 <button onclick="window.ProtecBoutiques.updateCartQty('${item.id}', ${inCartQty + 1})" class="w-6 h-6 rounded-lg bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs flex items-center justify-center transition">+</button>
                               </div>
                             ` : `
-                              <button onclick="window.ProtecBoutiques.addToCart('${item.id}', 1, { name: '${item.name.replace(/'/g, "\\'")}', price: ${item.price}, unit: '${item.unit || 'lot'}', icon: '${item.lucideIcon || 'package'}', image: '${item.image || ''}', shopId: '${shop.id}', radioTech: '${item.radioTech || ''}', radioCount: ${item.radioCount || 0} })" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer">
-                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                                <span>Ajouter</span>
-                              </button>
+                              ${(() => {
+                                const isTrainingKit = item.category === 'kits_formation';
+                                const selVarKey = isTrainingKit ? ((this.selectedKitMannequin && this.selectedKitMannequin[item.id]) || 'standard') : null;
+                                const mVarDef = selVarKey ? (window.ProtecFormations?.MANNEQUIN_VARIANTS?.[selVarKey] || { cost: 0, shortName: '' }) : null;
+                                const extraCost = mVarDef ? mVarDef.cost : 0;
+                                const finalItemPrice = (item.price || 0) + extraCost;
+                                const displayName = isTrainingKit && extraCost > 0 ? `${item.name} (${mVarDef.shortName})` : item.name;
+
+                                return `
+                                  <button onclick="window.ProtecBoutiques.addToCart('${item.id}', 1, { name: '${displayName.replace(/'/g, "\\'")}', price: ${finalItemPrice}, unit: '${item.unit || 'lot'}', icon: '${item.lucideIcon || 'package'}', image: '${item.image || ''}', shopId: '${shop.id}', radioTech: '${item.radioTech || ''}', radioCount: ${item.radioCount || 0}, mannequinVariant: '${selVarKey || ''}' })" class="px-3 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer">
+                                    <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                    <span>Ajouter</span>
+                                  </button>
+                                `;
+                              })()}
                             `}
                           </div>
                         </div>
