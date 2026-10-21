@@ -2063,6 +2063,379 @@ window.ProtecAdvanced = {
     } catch (e) {
       console.warn('Erreur chargement catalogue personnalisé véhicules:', e);
     }
+  },
+
+  // =========================================================================
+  // SYSTÈME DE TUTORIEL DÉBUTANT PAS-À-PAS (PREMIÈRES ÉTAPES OBLIGATOIRES)
+  // Remplace les objectifs et défis quotidiens/hebdomadaires pour les joueurs débutants
+  // =========================================================================
+  isStarterGuideActive(game) {
+    if (!game) return false;
+    // Si expressément sauté ou déjà terminé
+    if (game.starterGuide?.skipped) return false;
+    if (game.starterGuide?.completed) return false;
+
+    // Pré-requis indispensables : intégration faite (antenne posée) ET convention d'AASC signée
+    const hasAntenna = Array.isArray(game.stations) && game.stations.length > 0;
+    const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
+    if (!hasAntenna || !hasAasc) return false;
+
+    // Joueurs confirmés historiques : si le joueur a déjà beaucoup progressé (> 8 missions terminées et >= 3 véhicules), marquer achevé
+    const completedMissions = (game.missions || []).filter(m => m.status === 'completed' || m.status === 'termine').length + (game.stats?.completedMissionsCount || 0);
+    const vehCount = (game.vehicles || []).length;
+    if (completedMissions >= 8 && vehCount >= 3 && !game.starterGuide) {
+      game.starterGuide = { completed: true, skipped: false, stepsClaimed: ['step_pub', 'step_rearm', 'step_params', 'step_vehicule', 'step_mission', 'step_formation'] };
+      return false;
+    }
+
+    return true;
+  },
+
+  getStarterGuideSteps(game) {
+    if (!game) return [];
+    if (!game.starterGuide) {
+      game.starterGuide = { completed: false, skipped: false, stepsClaimed: [] };
+    }
+    const claimedList = game.starterGuide.stepsClaimed || [];
+
+    // Détection en temps réel de chaque étape
+    const donePub = Boolean(
+      (game.communication?.postsHistory && game.communication.postsHistory.length > 0) ||
+      (game.communication?.activeCampaigns && game.communication.activeCampaigns.length > 0) ||
+      (game.socialPostsCount > 0) ||
+      (game.stats?.adsWatched > 0) ||
+      claimedList.includes('step_pub')
+    );
+
+    const doneRearm = Boolean(
+      (game.rearmWorkshops && game.rearmWorkshops.length > 0) ||
+      (game.vehicles && game.vehicles.some(v => (v.armementLevel || 0) >= 95 && v.isRearmed)) ||
+      (game.stats?.rearmCount > 0) ||
+      (game.logistics?.rearmKits?.dps > 0) ||
+      (game.logistics?.stockKits > 0) ||
+      claimedList.includes('step_rearm')
+    );
+
+    const doneParams = Boolean(
+      (game.poles && game.poles.length > 0) ||
+      game.antennaSettingsConfigured ||
+      (game.stationSettings && Object.keys(game.stationSettings).length > 0) ||
+      claimedList.includes('step_params')
+    );
+
+    const doneVehicule = Boolean(
+      (game.vehicles && game.vehicles.length >= 2) ||
+      (game.stats?.boughtVehiclesCount > 0) ||
+      claimedList.includes('step_vehicule')
+    );
+
+    const doneMission = Boolean(
+      (game.stats?.completedMissionsCount > 0) ||
+      (game.missions && game.missions.some(m => m.status === 'completed' || m.status === 'termine' || m.status === 'ongoing')) ||
+      claimedList.includes('step_mission')
+    );
+
+    const doneFormation = Boolean(
+      (game.sessionsFormation && game.sessionsFormation.length > 0) ||
+      (game.trainingSessions && game.trainingSessions.length > 0) ||
+      (game.stats?.formationsCount > 0) ||
+      claimedList.includes('step_formation')
+    );
+
+    return [
+      {
+        id: 'step_pub',
+        number: 1,
+        badge: 'Étape 1 • Communication & Notoriété',
+        icon: 'share-2',
+        color: 'text-sky-700 bg-sky-50 dark:bg-sky-950/60 border-sky-200 dark:border-sky-800',
+        title: 'Faire de la communication / publicité',
+        desc: 'Publiez votre premier message sur les réseaux sociaux ou lancez une campagne locale d’antenne pour vous faire connaître et attirer des demandes de secours.',
+        reward: 350,
+        isCompleted: donePub,
+        isClaimed: claimedList.includes('step_pub'),
+        actionLabel: 'Ouvrir Communication',
+        actionFn: "window.game.openModule('communication')"
+      },
+      {
+        id: 'step_rearm',
+        number: 2,
+        badge: 'Étape 2 • Préparation Opérationnelle',
+        icon: 'wrench',
+        color: 'text-amber-700 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800',
+        title: 'Préparer un réarmement de vos véhicules',
+        desc: 'Les interventions consomment du matériel de soins d’urgence. Ouvrez l’atelier de réarmement flotte ou préparez vos lots de secours pour vos prochains départs.',
+        reward: 400,
+        isCompleted: doneRearm,
+        isClaimed: claimedList.includes('step_rearm'),
+        actionLabel: 'Atelier de Réarmement',
+        actionFn: "window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)"
+      },
+      {
+        id: 'step_params',
+        number: 3,
+        badge: 'Étape 3 • Organisation & Pôles',
+        icon: 'settings',
+        color: 'text-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 border-indigo-200 dark:border-indigo-800',
+        title: 'Configurer vos paramètres & pôles d’antenne',
+        desc: 'Découvrez les pôles d’activité (RH, Logistique, Com, Opérations) et configurez les délégations de votre antenne associative.',
+        reward: 400,
+        isCompleted: doneParams,
+        isClaimed: claimedList.includes('step_params'),
+        actionLabel: 'Pôles & Paramètres',
+        actionFn: "window.game.openModule('poles')"
+      },
+      {
+        id: 'step_vehicule',
+        number: 4,
+        badge: 'Étape 4 • Renfort de Flotte',
+        icon: 'truck',
+        color: 'text-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-800',
+        title: 'Acheter un nouveau véhicule opérationnel',
+        desc: 'Étoffez votre parc automobile avec un second véhicule (VPSP de secours, VTU utilitaire, VTP transport ou VL) chez le concessionnaire ou d’occasion.',
+        reward: 600,
+        isCompleted: doneVehicule,
+        isClaimed: claimedList.includes('step_vehicule'),
+        actionLabel: 'Boutique Véhicules',
+        actionFn: "window.game.openModule('boutique_vehicules')"
+      },
+      {
+        id: 'step_mission',
+        number: 5,
+        badge: 'Étape 5 • Premiers Secours',
+        icon: 'shield-check',
+        color: 'text-rose-700 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-800',
+        title: 'Assurer une première mission de secours (DPS)',
+        desc: 'Validez un premier devis de poste de secours (DPS) ou engagez vos secouristes et véhicules sur une mission de terrain.',
+        reward: 500,
+        isCompleted: doneMission,
+        isClaimed: claimedList.includes('step_mission'),
+        actionLabel: 'Planning des Missions',
+        actionFn: "window.game.openModule('planning')"
+      },
+      {
+        id: 'step_formation',
+        number: 6,
+        badge: 'Étape 6 • Formation & Pédagogie',
+        icon: 'graduation-cap',
+        color: 'text-teal-700 bg-teal-50 dark:bg-teal-950/60 border-teal-200 dark:border-teal-800',
+        title: 'Organiser une session de formation',
+        desc: 'Ouvrez votre première session de formation (PSC 1, SST ou recyclage secouriste) pour former le grand public et qualifier vos équipiers.',
+        reward: 450,
+        isCompleted: doneFormation,
+        isClaimed: claimedList.includes('step_formation'),
+        actionLabel: 'Pôle Formations',
+        actionFn: "window.game.openModule('formation')"
+      }
+    ];
+  },
+
+  claimStarterStepReward(game, stepId) {
+    if (!game) return;
+    const steps = this.getStarterGuideSteps(game);
+    const step = steps.find(s => s.id === stepId);
+    if (!step) return;
+
+    if (step.isClaimed) {
+      game.showToast('Déjà Récupéré', 'La prime pour cette étape a déjà été versée.', 'blue');
+      return;
+    }
+
+    if (!step.isCompleted) {
+      game.showToast('Étape Non Accomplie', 'Accomplissez d’abord l’action requise avant de réclamer la dotation !', 'orange');
+      return;
+    }
+
+    if (!game.starterGuide) game.starterGuide = { completed: false, skipped: false, stepsClaimed: [] };
+    if (!Array.isArray(game.starterGuide.stepsClaimed)) game.starterGuide.stepsClaimed = [];
+
+    game.starterGuide.stepsClaimed.push(stepId);
+    game.resources.money = (game.resources.money || 0) + step.reward;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
+
+    // Vérifier si toutes les étapes sont désormais validées
+    const allClaimed = steps.every(s => s.id === stepId || s.isClaimed);
+    if (allClaimed) {
+      game.starterGuide.completed = true;
+      game.showToast('🏆 Guide de Démarrage Terminé !', 'Toutes les étapes fondatrices sont franchies ! Les Objectifs Quotidiens et Défis de la Semaine sont débloqués.', 'green');
+    } else {
+      game.showToast('Étape Validée ! 🎉', `+${step.reward} € ajoutés au compte de l’antenne !`, 'green');
+    }
+
+    game.updateStatsUI();
+    game.saveGame(true);
+
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+  },
+
+  skipStarterGuide(game) {
+    if (!game) return;
+    if (!game.starterGuide) game.starterGuide = { completed: false, skipped: true, stepsClaimed: [] };
+    game.starterGuide.skipped = true;
+    game.saveGame(true);
+    game.showToast('Tutoriel Passé', 'Accès direct débloqué aux Objectifs Quotidiens et Défis de la Semaine.', 'blue');
+
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+  },
+
+  resetStarterGuide(game) {
+    if (!game) return;
+    if (!game.starterGuide) game.starterGuide = {};
+    game.starterGuide.skipped = false;
+    game.starterGuide.completed = false;
+    game.saveGame(true);
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+  },
+
+  renderStarterGuideHTML(game) {
+    const steps = this.getStarterGuideSteps(game);
+    const completedCount = steps.filter(s => s.isClaimed || s.isCompleted).length;
+    const totalCount = steps.length;
+    const progressPct = Math.round((completedCount / totalCount) * 100);
+    const allClaimed = steps.every(s => s.isClaimed);
+
+    return `
+      <div class="space-y-4">
+        <!-- Bandeau d'en-tête du Guide de Démarrage -->
+        <div class="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-pc-blue/90 text-white border-2 border-indigo-400/40 shadow-xl space-y-3">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div class="space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500 text-white shadow-2xs">
+                  🧭 Guide de Démarrage Pas-à-Pas
+                </span>
+                <span class="text-[11px] font-mono font-bold text-indigo-200">
+                  Premières étapes obligatoires
+                </span>
+              </div>
+              <h3 class="text-base sm:text-lg font-black text-white">
+                Premières étapes pour lancer votre Antenne
+              </h3>
+              <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">
+                Ce guide non intrusif vous accompagne sur les actions fondamentales de gestion. Suivez les étapes pour toucher vos premières primes de démarrage ou passez directement aux objectifs si vous préférez être libre.
+              </p>
+            </div>
+
+            <div class="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
+              <button onclick="window.ProtecAdvanced.skipStarterGuide(window.game)" 
+                class="px-3.5 py-2 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/20 text-slate-200 hover:text-white border border-white/20 transition cursor-pointer flex items-center gap-1.5"
+                title="Passer ce guide et débloquer directement les Objectifs Quotidiens et Défis de la Semaine">
+                <span>Passer ce tutoriel</span>
+                <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+              </button>
+              <span class="text-[11px] font-mono font-bold text-amber-300">
+                ${completedCount} / ${totalCount} validée(s) (${progressPct}%)
+              </span>
+            </div>
+          </div>
+
+          <!-- Barre de progression générale -->
+          <div class="space-y-1 pt-1">
+            <div class="w-full bg-black/40 h-2.5 rounded-full overflow-hidden border border-white/10">
+              <div class="bg-gradient-to-r from-amber-400 via-emerald-400 to-teal-400 h-full rounded-full transition-all duration-500" style="width: ${progressPct}%"></div>
+            </div>
+          </div>
+        </div>
+
+        ${allClaimed ? `
+          <div class="p-4 rounded-3xl bg-emerald-50 border-2 border-emerald-400 text-emerald-950 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+            <div class="flex items-center gap-3">
+              <span class="text-2xl">🏆</span>
+              <div>
+                <h4 class="text-sm font-black text-emerald-900">Tutoriel de Démarrage 100% Accompli !</h4>
+                <p class="text-xs text-emerald-800">Votre antenne dispose des bases opérationnelles requises. Débloquez les défis réguliers dès maintenant !</p>
+              </div>
+            </div>
+            <button onclick="window.ProtecAdvanced.skipStarterGuide(window.game)" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition cursor-pointer shrink-0">
+              Passer aux Défis Quotidiens 🚀
+            </button>
+          </div>
+        ` : ''}
+
+        <!-- Grille des 6 Étapes Pas-à-Pas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          ${steps.map(s => {
+            const canClaim = s.isCompleted && !s.isClaimed;
+
+            return `
+              <div class="p-4 rounded-3xl glass-card border transition flex flex-col justify-between gap-3 ${
+                s.isClaimed 
+                  ? 'border-emerald-300 bg-emerald-50/20 opacity-90' 
+                  : (canClaim ? 'border-amber-400 ring-2 ring-amber-300/40 bg-amber-50/20 shadow-md' : 'border-slate-200/90')
+              }">
+                <div class="space-y-2">
+                  <div class="flex items-start justify-between gap-2">
+                    <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black border ${s.color}">
+                      ${s.badge}
+                    </span>
+                    <span class="font-mono font-black text-emerald-700 text-xs shrink-0 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
+                      +${s.reward} €
+                    </span>
+                  </div>
+
+                  <div class="space-y-1">
+                    <h4 class="text-xs font-black text-slate-900 flex items-center gap-1.5">
+                      <i data-lucide="${s.icon}" class="w-4 h-4 text-pc-blue shrink-0"></i>
+                      <span>${s.title}</span>
+                    </h4>
+                    <p class="text-[11px] text-slate-600 leading-snug">
+                      ${s.desc}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="space-y-2 pt-1 border-t border-slate-100">
+                  <div class="flex items-center justify-between gap-2">
+                    <button type="button" 
+                      onclick="${s.actionFn}" 
+                      class="flex-1 py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Aller vers cette fonctionnalité">
+                      <i data-lucide="external-link" class="w-3.5 h-3.5 text-slate-500"></i>
+                      <span>${s.actionLabel}</span>
+                    </button>
+
+                    ${s.isClaimed ? `
+                      <span class="px-3 py-1.5 rounded-xl bg-emerald-100 text-emerald-800 font-black text-[11px] flex items-center gap-1">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        <span>Validé ✓</span>
+                      </span>
+                    ` : canClaim ? `
+                      <button type="button" 
+                        onclick="window.ProtecAdvanced.claimStarterStepReward(window.game, '${s.id}')"
+                        class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] shadow-sm animate-bounce cursor-pointer flex items-center gap-1">
+                        <span>🎁 Réclamer</span>
+                      </button>
+                    ` : `
+                      <span class="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-[10.5px] font-semibold">
+                        À faire
+                      </span>
+                    `}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
   }
 };
 
