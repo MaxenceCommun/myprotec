@@ -16039,7 +16039,6 @@ class ProtecGame {
 
     const eventDayStr = day.toString().padStart(2, '0');
     const eventMonthStr = (month + 1).toString().padStart(2, '0');
-    const breadcrumbDateStr = `(du ${eventDayStr}/${eventMonthStr}/${year} au ${eventDayStr}/${eventMonthStr}/${year})`;
 
     const getVolunteerPhone = (v) => {
       if (v.phone) return v.phone;
@@ -16080,18 +16079,8 @@ class ProtecGame {
         <!-- ENCART DEBUG ADMIN TÉLÉMÉTRIE -->
         ${this.getMissionDebugDataHTML(mission)}
 
-        <!-- BREADCRUMB & ENTÊTE EPROTEC -->
-        <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 shadow-2xs">
-          <div class="flex items-center gap-1.5 min-w-0 text-[11px] text-slate-600 dark:text-slate-300 truncate">
-            <span class="hover:text-slate-900 dark:hover:text-white cursor-pointer font-semibold" onclick="window.game.closeDrawer()">Accueil</span>
-            <span class="text-slate-400 dark:text-slate-500">›</span>
-            <span class="hover:text-slate-900 dark:hover:text-white cursor-pointer font-semibold" onclick="window.game.setMissionDetailTab('info')">Activité</span>
-            <span class="text-slate-400 dark:text-slate-500">›</span>
-            <span class="text-amber-500 font-black">▲</span>
-            <span class="font-bold text-slate-900 dark:text-white truncate" title="${mission.title}">${mission.title}</span>
-            <span class="text-slate-500 dark:text-slate-400 hidden sm:inline text-[10px]">${breadcrumbDateStr}</span>
-          </div>
-        </div>
+        <!-- BARRE DE GOUVERNANCE & PRISE DE COMMANDEMENT TOUT EN HAUT -->
+        ${(mission.isCrisis || isCrisisMission || isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? window.ProtecCriseLogistique.renderCrisisCommandBannerHTML(this, mission) : ''}
         ${(mission.status === 'carence' || mission.status === 'annule_defaut' || mission.status === 'prealerte_levee') ? `
           <div class="p-3.5 rounded-2xl ${mission.status === 'prealerte_levee' ? 'bg-emerald-50 border border-emerald-300 text-emerald-950' : 'bg-rose-50 border border-rose-300 text-rose-950'} shadow-sm space-y-1.5">
             <div class="flex items-center justify-between">
@@ -16263,18 +16252,7 @@ class ProtecGame {
                 return '';
               })()}
               
-              <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between gap-3 text-xs">
-                <div class="flex items-center gap-2">
-                  <span class="relative flex h-2.5 w-2.5">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <div>
-                    <span class="font-bold text-slate-800 dark:text-slate-200">Prise en charge autonome</span>
-                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Les effectifs sur place gèrent les soins, bilans et évacuations de façon autonome.</div>
-                  </div>
-                </div>
-              </div>
+              
 
               <!-- Possibilité de demander / déployer des moyens supplémentaires pendant l'événement -->
               <div class="pt-2 border-t border-blue-100 flex items-center justify-between gap-2">
