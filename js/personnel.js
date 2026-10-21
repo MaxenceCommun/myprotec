@@ -3712,17 +3712,19 @@ window.ProtecPersonnel = {
   // Récupère les infos horaires d'une mission
   getMissionScheduleInfo(mission) {
     if (!mission) return { day: 1, month: 0, year: 2026, startHour: 14, endHour: 18, durationHours: 4, dateStr: 'Date inconnue', timeStr: '14h - 18h' };
-    const dateObj = mission.eventDate || mission.plannedDate || {};
-    const day = dateObj.day || 1;
-    const month = dateObj.month || 0;
-    const year = dateObj.year || 2026;
-    const startHour = mission.startHour !== undefined ? mission.startHour : (dateObj.hour !== undefined ? dateObj.hour : 14);
+    const isUrgent = ['declenche', 'prealerte', 'ongoing'].includes(mission.status) || mission.isCrisis || mission.type === 'crise';
+    const clock = window.game?.clock || {};
+    const dateObj = mission.eventDate || mission.plannedDate || (isUrgent ? { day: clock.day || 21, month: clock.month || 9, year: clock.year || 2026, hour: clock.hour || 14 } : {});
+    const day = dateObj.day || clock.day || 1;
+    const month = dateObj.month !== undefined ? dateObj.month : (clock.month !== undefined ? clock.month : 0);
+    const year = dateObj.year || clock.year || 2026;
+    const startHour = mission.startHour !== undefined ? mission.startHour : (dateObj.hour !== undefined ? dateObj.hour : (clock.hour || 14));
     const durationHours = mission.durationHours || Math.max(1, Math.round((mission.durationSeconds || (mission.duration * 60) || 14400) / 3600));
     const endHour = mission.endHour !== undefined ? mission.endHour : (startHour + durationHours);
 
     const monthNames = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
     const dateStr = `${day} ${monthNames[month] || ''} ${year}`;
-    const timeStr = `${String(startHour).padStart(2, '0')}h00 - ${String(endHour).padStart(2, '0')}h00 (${durationHours}h)`;
+    const timeStr = isUrgent ? 'Immédiat (En direct)' : `${String(startHour).padStart(2, '0')}h00 - ${String(endHour).padStart(2, '0')}h00 (${durationHours}h)`;
 
     return { day, month, year, startHour, endHour, durationHours, dateStr, timeStr };
   },
@@ -3801,25 +3803,32 @@ window.ProtecPersonnel = {
     const vol = (game.volunteers || []).find(v => v.id === volunteerId);
     if (!vol) return;
 
+    // Statuts admissibles pour une mission en cours ou planifiée
+    const activeStatuses = ['planifie', 'prealerte', 'declenche', 'ongoing'];
+
     // Trouver les missions où le bénévole est actuellement inscrit
     const assignedMissions = (game.missions || []).filter(m => 
-      (m.status === 'planifie' || m.status === 'prealerte') &&
+      activeStatuses.includes(m.status) &&
       (m.registeredVolunteers || []).includes(vol.id)
     );
 
-    if (assignedMissions.length === 0) {
-      game.showToast('Aucune Mission Assignée', `${vol.name} n'est actuellement inscrit(e) sur aucune mission planifiée.`, 'blue');
-      return;
+    let currentSourceMission = null;
+    if (sourceMissionId) {
+      currentSourceMission = (game.missions || []).find(m => m.id === sourceMissionId && (m.registeredVolunteers || []).includes(vol.id));
+    }
+    if (!currentSourceMission) {
+      currentSourceMission = assignedMissions[0];
     }
 
-    const currentSourceMission = sourceMissionId 
-      ? (assignedMissions.find(m => m.id === sourceMissionId) || assignedMissions[0])
-      : assignedMissions[0];
+    if (!currentSourceMission) {
+      game.showToast('Aucune Mission Assignée', `${vol.name} n'est actuellement inscrit(e) sur aucune mission active ou planifiée.`, 'blue');
+      return;
+    }
 
     // Trouver les missions cibles potentielles (incomplètes)
     const targetCandidates = (game.missions || []).filter(m => 
       m.id !== currentSourceMission.id &&
-      (m.status === 'planifie' || m.status === 'prealerte') &&
+      ['planifie', 'prealerte', 'declenche'].includes(m.status) &&
       (m.registeredVolunteers || []).length < (m.requiredVolunteers || 1)
     );
 
@@ -3834,46 +3843,46 @@ window.ProtecPersonnel = {
     modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in select-none';
 
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-white/80 space-y-5 animate-scale-up">
+      <div class="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 space-y-5 animate-scale-up">
         
         <!-- Header -->
-        <div class="flex items-start justify-between border-b border-slate-200/80 pb-4">
+        <div class="flex items-start justify-between border-b border-slate-200 dark:border-slate-800 pb-4">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 text-pc-blue flex items-center justify-center text-xl font-black">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-500/10 text-pc-blue dark:text-sky-400 flex items-center justify-center text-xl font-black">
               🔄
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Réaffectation de Mission</h3>
-              <p class="text-xs text-slate-500 font-semibold">Proposer à un bénévole de basculer sur une autre mission</p>
+              <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight">Demande de Réaffectation de Mission</h3>
+              <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold">Proposer à un bénévole de basculer sur une autre mission</p>
             </div>
           </div>
-          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center transition cursor-pointer">
             <i data-lucide="x" class="w-4 h-4"></i>
           </button>
         </div>
 
         <!-- Profil du Secouriste -->
-        <div class="p-3 rounded-2xl bg-slate-50/90 border border-slate-200 flex items-center justify-between text-xs">
+        <div class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
           <div class="flex items-center gap-2.5">
             ${game.getVolunteerAvatarHTML(vol, 'w-9 h-9')}
             <div>
-              <div class="font-black text-slate-900">${vol.name} <span class="text-[10px] text-slate-500 font-bold">• ${vol.rank}</span></div>
-              <div class="text-[10px] text-slate-500">Profil : <strong>${vol.dispoType || 'Secouriste'}</strong> • Motivation : ${vol.motivation || 80}%</div>
+              <div class="font-black text-slate-900 dark:text-white">${vol.name} <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">• ${vol.rank}</span></div>
+              <div class="text-[10px] text-slate-500 dark:text-slate-400">Profil : <strong>${vol.dispoType || 'Secouriste'}</strong> • Motivation : ${vol.motivation || 80}%</div>
             </div>
           </div>
-          <span class="px-2 py-1 rounded-xl text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+          <span class="px-2 py-1 rounded-xl text-[10px] font-black bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
             Libre de dire Oui ou Non
           </span>
         </div>
 
         <!-- Mission Actuelle Source -->
-        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 space-y-1">
-          <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-amber-800">
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-950 dark:text-amber-200 space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-black uppercase tracking-wider text-amber-800 dark:text-amber-400">
             <span>Mission d'Origine Actuelle</span>
-            <span class="px-1.5 py-0.2 rounded bg-amber-200 text-amber-900 font-mono text-[9px]">${schedA.dateStr}</span>
+            <span class="px-1.5 py-0.2 rounded bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono text-[9px]">${schedA.dateStr}</span>
           </div>
-          <h4 class="text-xs font-black text-slate-900">${currentSourceMission.title}</h4>
-          <div class="text-[11px] text-slate-600 font-semibold flex items-center gap-1.5 pt-0.5">
+          <h4 class="text-xs font-black text-slate-900 dark:text-white">${currentSourceMission.title}</h4>
+          <div class="text-[11px] text-slate-600 dark:text-slate-300 font-semibold flex items-center gap-1.5 pt-0.5">
             <span>⏱️ ${schedA.timeStr}</span>
             <span>•</span>
             <span class="truncate max-w-[200px]">📍 ${currentSourceMission.address || 'Lieu prévu'}</span>
@@ -3882,15 +3891,15 @@ window.ProtecPersonnel = {
 
         <!-- Choix de la Nouvelle Mission Cible -->
         <div class="space-y-2">
-          <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black">
+          <label class="block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 font-black">
             Sélectionner la Nouvelle Mission de Destination
           </label>
           ${targetCandidates.length === 0 ? `
-            <div class="p-4 rounded-2xl bg-slate-100 text-center text-xs text-slate-500 italic">
-              Aucune autre mission planifiée n'a de place disponible actuellement.
+            <div class="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-center text-xs text-slate-500 dark:text-slate-400 italic">
+              Aucune autre mission active ou planifiée n'a de place disponible actuellement.
             </div>
           ` : `
-            <select id="reassign-target-mission-id" onchange="window.ProtecPersonnel.updateTransferPreview('${vol.id}', '${currentSourceMission.id}', this.value)" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-pc-blue">
+            <select id="reassign-target-mission-id" onchange="window.ProtecPersonnel.updateTransferPreview('${vol.id}', '${currentSourceMission.id}', this.value)" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 font-bold text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-pc-blue">
               ${targetCandidates.map((tm, idx) => {
                 const compat = window.ProtecPersonnel.calculateTransferCompatibility(currentSourceMission, tm, vol);
                 const sB = compat.schedB;
@@ -3901,13 +3910,13 @@ window.ProtecPersonnel = {
         </div>
 
         <!-- Panneau Prévisionnel de Réponse du Bénévole -->
-        <div id="transfer-preview-box" class="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 space-y-1.5">
+        <div id="transfer-preview-box" class="p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-950 dark:text-emerald-200 space-y-1.5">
           <!-- Rempli dynamiquement -->
         </div>
 
         <!-- Boutons d'action -->
-        <div class="pt-3 border-t border-slate-200/80 flex items-center justify-end gap-2.5">
-          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+        <div class="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-2.5">
+          <button onclick="document.getElementById('reassign-volunteer-modal').remove()" class="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer">
             Annuler
           </button>
           ${targetCandidates.length > 0 ? `
@@ -3985,6 +3994,12 @@ window.ProtecPersonnel = {
       missionA.registeredVolunteers = (missionA.registeredVolunteers || []).filter(id => id !== vol.id);
       if (missionA.volunteerRoles && missionA.volunteerRoles[vol.id]) {
         delete missionA.volunteerRoles[vol.id];
+      }
+      if (Array.isArray(missionA.delayedVolunteers)) {
+        missionA.delayedVolunteers = missionA.delayedVolunteers.filter(d => d.volId !== vol.id && d.vol?.id !== vol.id);
+      }
+      if (Array.isArray(missionA.engagedVolunteers)) {
+        missionA.engagedVolunteers = missionA.engagedVolunteers.filter(id => id !== vol.id);
       }
 
       // 2. Ajouter sur la mission B
