@@ -188,8 +188,18 @@ window.ProtecCrisisRadio = {
       }
     }
 
-    // Vérification asynchrone et résolution automatique du serveur Piper TTS (en arrière-plan)
-    this.checkServerStatus();
+    // Vérification asynchrone uniquement en local si Piper TTS est explicitement demandé
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+    if (this.preferredEngine === 'piper' && isLocalhost && !isHttps) {
+      this.checkServerStatus();
+    } else {
+      // Mode standard SpeechSynthesis natif du navigateur (Web Speech API) sans aucune requête vers 8080
+      this.activeEngine = 'speechSynthesis';
+      this.serverStatus.checked = true;
+      this.serverStatus.available = false;
+    }
 
     // Montage du HUD radio flottant
     this.injectRadioHud();
@@ -248,8 +258,22 @@ window.ProtecCrisisRadio = {
   async resolveApiBaseUrl() {
     if (this.apiBaseUrl !== null) return this.apiBaseUrl;
 
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+    // En environnement Web / HTTPS (ex: https://myprotec.fr) ou si SpeechSynthesis est le moteur actif :
+    // Utilisation directe de SpeechSynthesis SANS aucune requête réseau vers localhost:8080
+    if (this.preferredEngine === 'speechSynthesis' || !isLocalhost || isHttps) {
+      this.apiBaseUrl = '';
+      this.serverStatus.checked = true;
+      this.serverStatus.available = false;
+      this.activeEngine = 'speechSynthesis';
+      return this.apiBaseUrl;
+    }
+
+    // Seulement en développement local HTTP sur machine dédiée si server.js est lancé :
     const candidates = [
-      '', // Relatif : si le client est servi directement par server.js
+      '',
       'http://localhost:8080',
       'http://127.0.0.1:8080'
     ];
@@ -258,11 +282,11 @@ window.ProtecCrisisRadio = {
       try {
         const testUrl = `${base}/api/crisis/tts/status`;
         const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 1200);
-        const res = await fetch(testUrl, { signal: controller.signal });
+        const tid = setTimeout(() => controller.abort(), 800);
+        const res = await fetch(testUrl, { signal: controller.signal }).catch(() => null);
         clearTimeout(tid);
-        if (res.ok) {
-          const data = await res.json();
+        if (res && res.ok) {
+          const data = await res.json().catch(() => null);
           if (data && data.success && data.piperInstalled && data.modelPresent) {
             this.apiBaseUrl = base;
             this.activeEngine = 'piper';
@@ -274,7 +298,7 @@ window.ProtecCrisisRadio = {
               speakersCount: data.speakersCount || 125,
               cachedFilesCount: data.cachedFilesCount || 0
             };
-            console.log(`🎙️ [Piper TTS] Moteur officiel fr_FR-mls-medium connecté avec succès (${base || 'origine locale'}). 125 voix haute fidélité actives.`);
+            console.log(`🎙️ [Piper TTS] Moteur connecté (${base || 'local'}).`);
             return this.apiBaseUrl;
           }
         }
@@ -284,8 +308,7 @@ window.ProtecCrisisRadio = {
     this.apiBaseUrl = '';
     this.serverStatus.checked = true;
     this.serverStatus.available = false;
-    this.activeEngine = 'webspeech';
-    console.warn('⚠️ [Radio de Crise] Serveur Piper TTS non joint sur le port 8080. Fallback vocal actif. (Assurez-vous que "node server.js" est lancé)');
+    this.activeEngine = 'speechSynthesis';
     return this.apiBaseUrl;
   },
 
@@ -684,8 +707,11 @@ window.ProtecCrisisRadio = {
     const text = tx.cleanText;
     const speakerId = tx.speakerId;
 
-    // A. Priorité à SpeechSynthesis si sélectionné (par défaut)
-    if (this.preferredEngine === 'speechSynthesis') {
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+
+    // A. Synthèse vocale native SpeechSynthesis (Web Speech API) par défaut ou en environnement Web
+    if (this.preferredEngine === 'speechSynthesis' || !isLocalhost || isHttps || !this.serverStatus?.available) {
       this.activeEngine = 'speechSynthesis';
       this.updateHudState();
       await this.speakViaWebSpeechRadio(text, speakerId, tx);

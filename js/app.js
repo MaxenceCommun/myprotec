@@ -1322,8 +1322,16 @@ class ProtecGame {
   
   // Synchronisation automatique des catalogues officiels (gyrophares, caractéristiques des véhicules) pour tous les joueurs (Web & Mobile)
   syncVehicleCatalogFromServer() {
+    const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const isNodePort = typeof window !== 'undefined' && window.location.port === '8080';
+    if (!isNodePort && !isLocalhost) {
+      // En production PWA / Web statique, le catalogue officiel est déjà chargé dans l'application
+      return;
+    }
+
     fetch('/api/catalogs')
       .then(res => res.ok ? res.json() : null)
+      .catch(() => null)
       .then(data => {
         if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
           if (window.ProtecAdvanced) {
