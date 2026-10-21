@@ -17362,12 +17362,12 @@ class ProtecGame {
                                 ${isMotorizedPreset ? '<span class="text-[8px] font-black text-amber-700 dark:text-amber-400 uppercase bg-amber-100 dark:bg-amber-900/60 px-1.5 py-0.2 rounded">Sans engin</span>' : ''}
                               </div>
                               <select onchange="window.game.setTeamVehicle('${mission.id}', '${team.id}', this.value)" class="text-[10px] font-black px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border ${isMotorizedPreset ? 'border-amber-300 dark:border-amber-500/50' : 'border-slate-300 dark:border-slate-600'} cursor-pointer focus:ring-1 focus:ring-pc-blue w-full shadow-2xs">
-                                <option value="" selected>-- ${isMotorizedPreset ? 'Sélectionner un véhicule (VPSP, VTU...)' : 'Aucun véhicule assigné'} --</option>
+                                <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200" selected>-- ${isMotorizedPreset ? 'Sélectionner un véhicule (VPSP, VTU...)' : 'Aucun véhicule assigné'} --</option>
                                 ${selectableVehiclesForTeam.map(veh => {
                                   const armSummary = this.getVehicleArmamentSummary(veh);
                                   const armText = armSummary ? ` - ${armSummary}` : '';
                                   return `
-                                    <option value="${veh.id}">
+                                    <option value="${veh.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-200">
                                       ${veh.name} (${veh.type || 'Véhicule'})${armText} ${veh.isAlreadyEngaged ? '✓' : '(Dispo)'}
                                     </option>
                                   `;
@@ -17525,10 +17525,10 @@ class ProtecGame {
             ` : ''}
 
             <!-- TABLEAU EPROTEC DU PERSONNEL ENGAGÉ -->
-            <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-2xs">
+            <div class="overflow-x-auto rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xs">
               <table class="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr class="bg-slate-50 border-b border-slate-200 text-[10px] font-black uppercase text-slate-500">
+                  <tr class="bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">
                     <th class="py-2.5 px-3 w-10">Image</th>
                     <th class="py-2.5 px-3">Personnel</th>
                     <th class="py-2.5 px-3">Fonction</th>
@@ -17561,12 +17561,12 @@ class ProtecGame {
                     const isTransitEnRoute = Boolean(transit && nowTs < transit.arrivalBaseAt);
 
                     return `
-                      <tr class="hover:bg-slate-50/80 transition ${isRoleMissing && isEngaged ? 'bg-amber-50/20' : ''}">
+                      <tr class="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition ${isRoleMissing && isEngaged ? 'bg-amber-50/20 dark:bg-amber-950/30' : ''}">
                         <td class="py-2 px-3">
                           ${this.getVolunteerAvatarHTML(v, 'w-8 h-8 text-xs')}
                         </td>
                         <td class="py-2 px-3">
-                          <div class="font-bold text-slate-900 leading-tight">${v.name}</div>
+                          <div class="font-bold text-slate-900 dark:text-white leading-tight">${v.name}</div>
                           ${(() => {
                             if (!isCrisisMission) return '';
                             const rawHome = v.adresse ? `${v.adresse}, ${v.commune || ''}` : (v.homeAddress || v.commune || 'Domicile');
@@ -17662,10 +17662,10 @@ class ProtecGame {
                         </td>
                         <td class="py-2 px-3">
                           <div class="flex items-center gap-1.5">
-                            <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-lg ${!roleQualif.qualified ? 'bg-amber-50 text-amber-950 border-amber-400 ring-1 ring-amber-400' : (isRoleMissing && isEngaged ? 'bg-amber-100 text-amber-900 border-amber-400 ring-1 ring-amber-400' : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-800')} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[160px]">
-                              <option value="" ${!currentRole ? 'selected' : ''}>⚠️ Rôle à choisir...</option>
+                            <select onchange="window.game.setVolunteerMissionRole('${mission.id}', '${v.id}', this.value)" class="text-[10px] font-bold px-2 py-1 rounded-lg ${!roleQualif.qualified ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-950 dark:text-amber-200 border-amber-400 dark:border-amber-600 ring-1 ring-amber-400' : (isRoleMissing && isEngaged ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border-amber-400 dark:border-amber-600 ring-1 ring-amber-400' : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-slate-100')} border cursor-pointer focus:ring-1 focus:ring-pc-blue max-w-[130px] sm:max-w-[160px]">
+                              <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-amber-300" ${!currentRole ? 'selected' : ''}>⚠️ Rôle à choisir...</option>
                               ${rolesList.map(r => `
-                                <option value="${r.id}" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
+                                <option value="${r.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" ${r.id === currentRole ? 'selected' : ''}>${r.label}</option>
                               `).join('')}
                             </select>
                             ${(!roleQualif.qualified) ? `
@@ -17680,15 +17680,15 @@ class ProtecGame {
                             <select
                               onchange="window.game.setVolunteerCrisisTeam('${mission.id}', '${v.id}', this.value)"
                               ${isAssignedTeamDeparted ? 'disabled title="Véhicule déjà parti : l\'équipe ne peut plus être modifiée !"' : 'title="Affecter ce secouriste à une équipe ou un véhicule"'}
-                              class="text-[10px] font-bold px-2 py-1 rounded-lg ${assignedTeam ? (isAssignedTeamDeparted ? 'bg-slate-100 text-slate-500 border-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-800 border-emerald-300 cursor-pointer') : 'bg-slate-50 text-slate-500 border-slate-300 cursor-pointer'} border focus:ring-1 focus:ring-pc-blue max-w-[150px]">
-                              <option value="" ${!assignedTeam ? 'selected' : ''}>⚠️ Aucune équipe</option>
+                              class="text-[10px] font-bold px-2 py-1 rounded-lg ${assignedTeam ? (isAssignedTeamDeparted ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-300 dark:border-slate-600 cursor-not-allowed' : 'bg-emerald-50 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-200 border-emerald-300 dark:border-emerald-600 cursor-pointer') : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-300 border-slate-300 dark:border-slate-600 cursor-pointer'} border focus:ring-1 focus:ring-pc-blue max-w-[150px]">
+                              <option value="" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-amber-300" ${!assignedTeam ? 'selected' : ''}>⚠️ Aucune équipe</option>
                               ${crisisTeamsList.map(t => {
                                 const tDep = mission.crisisTeamDeployments?.[t.id];
                                 const isTDeparted = tDep && nowTs >= tDep.vehicleDepartureAt;
                                 const isSelected = assignedTeam && assignedTeam.id === t.id;
                                 const icon = t.type === 'vpsp' ? '🚑 ' : t.type === 'psa' ? '🏢 ' : t.type === 'binome' ? '🚶 ' : (t.isVehicleTeam ? '🚒 ' : '👥 ');
                                 return `
-                                  <option value="${t.id}" ${isSelected ? 'selected' : ''} ${isTDeparted && !isSelected ? 'disabled' : ''}>
+                                  <option value="${t.id}" class="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100" ${isSelected ? 'selected' : ''} ${isTDeparted && !isSelected ? 'disabled' : ''}>
                                     ${icon}${t.label || t.name} ${isTDeparted ? '(Déjà parti 🚫)' : ''}
                                   </option>
                                 `;
