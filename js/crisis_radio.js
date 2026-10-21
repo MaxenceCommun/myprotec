@@ -26,47 +26,55 @@ window.ProtecCrisisRadio = {
   activeEngine: 'piper', // 'piper' ou 'webspeech'
 
   // =========================================================================
-  // 1. ATTRIBUTION DES VOIX (MODÈLE fr_FR-mls-medium : 125 IDENTIFIANTS)
+  // 1. ATTRIBUTION DES VOIX NATURELLES & CLAIRES (SÉLECTION D'ÉLITE DU MODÈLE fr_FR-mls-medium)
   // =========================================================================
   
-  // Voix fixes pour les autorités institutionnelles et les partenaires régaliens
+  // 48 voix françaises natives filtrées par audit pour leur diction fluide, naturelle et dynamique
+  CLEAR_SPEAKERS: [
+    70, 85, 91, 30, 75, 95, 46, 33, 28, 13, 50, 11, 36, 9, 21, 54, 41, 3, 88, 38,
+    29, 45, 55, 39, 72, 37, 82, 67, 86, 78, 34, 0, 104, 122, 2, 60, 20, 17, 31, 56,
+    123, 4, 26, 52, 57, 63, 64, 73
+  ],
+
+  // Voix fixes optimisées pour les autorités et partenaires régaliens
   INSTITUTIONAL_SPEAKERS: {
-    // 🏛️ Autorités Préfectorales & Gouvernance
-    'prefet': 10,                 // Voix grave, autoritaire et solennelle
-    'prefecture': 10,
-    'cabinet_prefet': 10,
+    // 🏛️ Autorités Préfectorales & Gouvernance (Voix masculine posée et solennelle)
+    'prefet': 70,                 // Voix claire, calme et autoritaire
+    'prefecture': 70,
+    'cabinet_prefet': 70,
     'sidpc': 3,                   // Service Interministériel de Défense et de Protection Civile
     'siras': 3,
     'cellule_crise': 3,
     'cod': 3,                     // Centre Opérationnel Départemental
     
     // 🚑 Régulation Médicale & Secours Publics
-    'samu': 24,                   // Régulateur médical SAMU / Centre 15
-    'medecin_regulateur': 24,
+    'samu': 30,                   // Régulateur médical SAMU / Centre 15 (Dynamique et nette)
+    'medecin_regulateur': 30,
     'codis': 28,                  // Centre Opérationnel Départemental d'Incendie et de Secours (18/112)
     'sdis': 28,
-    'cos': 78,                    // Commandant des Opérations de Secours sur site
-    'cump': 42,                   // Cellule d'Urgence Médico-Psychologique
+    'cos': 78,                    // Commandant des Opérations de Secours sur site (Ferme et précis)
+    'cump': 85,                   // Cellule d'Urgence Médico-Psychologique (Voix douce et posée)
     
     // 🏢 Collectivités & Partenaires Opérationnels
-    'mairie': 14,                 // Permanence communale / Gestion du gymnase / CAI
-    'police': 66,                 // Police Nationale / Gendarmerie (sécurisation des périmètres)
-    'gendarmerie': 66,
-    'sncf': 88,                   // Permanence de crise ferroviaire
+    'mairie': 88,                 // Permanence communale / Gestion du gymnase / CAI
+    'police': 75,                 // Police Nationale / Gendarmerie (sécurisation)
+    'gendarmerie': 75,
+    'sncf': 38,                   // Permanence de crise ferroviaire
     
     // 🛡️ Cadres de permanence et coordination interne Protection Civile
     'cadre_astreinte': 52,        // Cadre de permanence départementale Protec
     'chef_dispositif': 78,        // Chef de dispositif associatif
     'officier_liaison': 52,       // Officier de liaison Protec auprès du préfet
-    'coordinateur_cai': 14        // Responsable du Centre d'Accueil des Impliqués
+    'coordinateur_cai': 88        // Responsable du Centre d'Accueil des Impliqués
   },
 
   /**
-   * Calcule un identifiant de voix persistant et unique pour un bénévole (modulo 125)
-   * Le même bénévole garde systématiquement la même voix tout au long du jeu.
+   * Calcule un identifiant de voix persistant et unique pour un bénévole
+   * Garanti d'appartenir exclusivement au pool d'élite des voix françaises naturelles et claires.
    */
   getVolunteerSpeakerId(volunteer) {
-    if (!volunteer) return 5;
+    const pool = this.CLEAR_SPEAKERS;
+    if (!volunteer) return pool[0];
     const rawKey = String(
       volunteer.id || 
       volunteer.matricule || 
@@ -75,15 +83,15 @@ window.ProtecCrisisRadio = {
       'vol_def'
     );
     
-    // Algorithme de hachage djb2 robuste pour répartir uniformément sur les 125 locuteurs
+    // Algorithme de hachage djb2 pour répartir équitablement sur les voix d'élite
     let hash = 5381;
     for (let i = 0; i < rawKey.length; i++) {
       hash = ((hash << 5) + hash) + rawKey.charCodeAt(i);
       hash |= 0;
     }
     
-    // Modulo 125 garanti positif : renvoie un entier entre 0 et 124
-    return Math.abs(hash) % 125;
+    const index = Math.abs(hash) % pool.length;
+    return pool[index];
   },
 
   /**
@@ -93,7 +101,7 @@ window.ProtecCrisisRadio = {
     if (volunteer) {
       return this.getVolunteerSpeakerId(volunteer);
     }
-    if (!source) return 3;
+    if (!source) return this.INSTITUTIONAL_SPEAKERS['sidpc'];
 
     const s = String(source).toLowerCase();
     if (s.includes('préfet') || s.includes('prefet') || s.includes('cabinet')) return this.INSTITUTIONAL_SPEAKERS['prefet'];
@@ -107,13 +115,14 @@ window.ProtecCrisisRadio = {
     if (s.includes('sncf') || s.includes('gare')) return this.INSTITUTIONAL_SPEAKERS['sncf'];
     if (s.includes('police') || s.includes('gendarmerie')) return this.INSTITUTIONAL_SPEAKERS['police'];
 
-    // Hachage textuel générique si source inconnue
+    // Hachage textuel générique vers le pool des voix claires
     let hash = 0;
     for (let i = 0; i < s.length; i++) {
       hash = ((hash << 5) - hash) + s.charCodeAt(i);
       hash |= 0;
     }
-    return Math.abs(hash) % 125;
+    const pool = this.CLEAR_SPEAKERS;
+    return pool[Math.abs(hash) % pool.length];
   },
 
   // =========================================================================
@@ -255,46 +264,41 @@ window.ProtecCrisisRadio = {
   },
 
   /**
-   * Applique le graphe de filtres radio analogique (Walkie-talkie / VHF / PMR)
-   * Coupe les sous-basses < 420 Hz, coupe les aigus > 3200 Hz, accentue les médiums et sature légèrement
+   * Filtre radio tactique clair et haute intelligibilité :
+   * Conserve la chaleur des voix humaines (dès 220 Hz) et la netteté des consonnes (jusqu'à 4500 Hz)
+   * sans aucune distorsion destructive.
    */
   connectRadioFx(ctx, sourceNode, destNode) {
-    // 1. Coupe-bas (Passe-haut) à 420 Hz
+    // 1. Coupe-bas doux à 220 Hz pour éliminer les grondements sans étouffer la voix
     const highpass = ctx.createBiquadFilter();
     highpass.type = 'highpass';
-    highpass.frequency.value = 420;
-    highpass.Q.value = 0.9;
+    highpass.frequency.value = 220;
+    highpass.Q.value = 0.7;
 
-    // 2. Coupe-haut (Passe-bas) à 3200 Hz
+    // 2. Coupe-haut doux à 4500 Hz pour préserver les consonnes et la clarté
     const lowpass = ctx.createBiquadFilter();
     lowpass.type = 'lowpass';
-    lowpass.frequency.value = 3200;
-    lowpass.Q.value = 1.1;
+    lowpass.frequency.value = 4500;
+    lowpass.Q.value = 0.8;
 
-    // 3. Résonance micro radio à 1800 Hz
+    // 3. Légère présence vocale radio à 2400 Hz (+1.5 dB)
     const peaking = ctx.createBiquadFilter();
     peaking.type = 'peaking';
-    peaking.frequency.value = 1800;
-    peaking.Q.value = 1.2;
-    peaking.gain.value = 4.0;
+    peaking.frequency.value = 2400;
+    peaking.Q.value = 1.0;
+    peaking.gain.value = 1.5;
 
-    // 4. Distorsion analogique harmonique
-    const waveshaper = ctx.createWaveShaper();
-    waveshaper.curve = this.makeDistortionCurve(18);
-    waveshaper.oversample = '2x';
-
-    // 5. Gain final
+    // 4. Gain final
     const gainNode = ctx.createGain();
     gainNode.gain.value = this.volume || 0.9;
 
     sourceNode.connect(highpass);
     highpass.connect(lowpass);
     lowpass.connect(peaking);
-    peaking.connect(waveshaper);
-    waveshaper.connect(gainNode);
+    peaking.connect(gainNode);
     gainNode.connect(destNode);
 
-    return { highpass, lowpass, peaking, waveshaper, gainNode };
+    return { highpass, lowpass, peaking, gainNode };
   },
 
   /**

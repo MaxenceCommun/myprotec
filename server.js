@@ -1755,6 +1755,7 @@ const server = http.createServer((req, res) => {
           const piperArgs = [
             '--model', piperCfg.model,
             '--speaker', String(speakerId),
+            '--length_scale', '0.92',
             '--output_file', cachedFile
           ];
           const proc = spawn(piperCfg.bin, piperArgs);
