@@ -431,13 +431,23 @@
         return { isDevis: true, devis: existingDevis, missionType: 'dps' };
       }
 
-      // 1. Mission SAMU : Exige impérativement Convention Cadre SAMU signée ET garde VPSP active
+      // 1. Mission SAMU : Exige impérativement Convention Cadre SAMU signée ET garde VPSP active ET vecteur VPSP disponible
       if (missionType === 'samu') {
         const hasSamuConv = Boolean(game.samuConvention && game.samuConvention.signed);
-        const hasSamuGarde = Boolean(game.samuGarde && game.samuGarde.active);
-        const hasVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP');
+        const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(game) : null;
+        const hasSamuGarde = Boolean((game.samuGarde && game.samuGarde.active) || activeGuard);
+        const isVehicleDispo = (v) => Boolean(
+          v &&
+          v.type === 'VPSP' &&
+          v.status !== 'mission' &&
+          v.status !== 'transit' &&
+          !v.isBrokenDown &&
+          !v.isUnavailable &&
+          !v.isUnderRepair
+        );
+        const hasDispoVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => isVehicleDispo(v));
 
-        if (!hasSamuConv || !hasSamuGarde || !hasVpsp) {
+        if (!hasSamuConv || !hasSamuGarde || !hasDispoVpsp) {
           if (existing) {
             game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
           }

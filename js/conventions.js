@@ -209,12 +209,12 @@ window.ProtecConventions = {
             <div class="flex items-center justify-between font-black text-indigo-950">
               <span class="flex items-center gap-1.5">
                 <span>🛡️</span>
-                <span>Plafonds Contractuels de Crise (Plan ORSEC & Réquisitions)</span>
+                <span>Plafonds Contractuels de Crise (Plan ORSEC & Plan NOVI - Réquisitions Préfet)</span>
               </span>
               <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Capacité Départementale Garantie</span>
             </div>
             <p class="text-[10.5px] text-slate-600 leading-tight">
-              Cette convention cadre délimite le contingent maximal que la Préfecture, la Police et la Gendarmerie sont légalement habilitées à requérir auprès de l’APC.
+              Cette convention cadre délimite le contingent maximal que la Préfecture (Plans ORSEC & NOVI), la Police et la Gendarmerie sont légalement habilitées à requérir auprès de l’APC.
             </p>
             <div class="pt-1 border-t border-indigo-200/80 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] text-slate-700 font-semibold">
               <div>👥 <strong>Effectif max garanti :</strong> <span class="text-indigo-900 font-bold">${prefLimits.maxVolunteers} secouristes</span></div>
@@ -284,8 +284,8 @@ window.ProtecConventions = {
               </div>
 
               <div>
-                <h5 class="text-xs font-black text-slate-900">Convention Cadre SAMU 15 (Permanence & Gardes VPSP)</h5>
-                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un VPSP armé pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
+                <h5 class="text-xs font-black text-slate-900">Convention Cadre SAMU 15 (Gardes & Départs Réflexes VPSP)</h5>
+                <p class="text-[11px] text-slate-600 mt-1">Mise à disposition conventionnée d'un vecteur VPSP armé pour départs réflexes et interventions d'urgence sous régulation médicale 15.</p>
               </div>
 
               <!-- PÉRIMÈTRE & EXIGENCES IMPOSÉS PAR L'AUTORITÉ (ÉVOLUTIF) -->
@@ -306,8 +306,8 @@ window.ProtecConventions = {
                   <div>👥 <strong>Équipage mini :</strong> <span class="text-indigo-900 font-bold">3 secouristes (dont 1 CE/PSE2)</span></div>
                 </div>
                 <div class="pt-1.5 border-t border-sky-200/80 text-[10px] text-slate-700 flex items-center justify-between font-semibold">
-                  <span>🛡️ <strong>Plafond Conventionné Plan NOVI :</strong></span>
-                  <span class="text-indigo-950 font-bold">Max ${samuLimits.maxVolunteers} secouristes • ${samuLimits.maxVpsp} VPSP • ${samuLimits.maxVtu} VTU (PMA)</span>
+                  <span>🛡️ <strong>Engagement Garde SAMU 15 :</strong></span>
+                  <span class="text-indigo-950 font-bold">Départs réflexes par vecteur VPSP armé (3 secouristes) • Urgences 15</span>
                 </div>
               </div>
 

@@ -2230,7 +2230,7 @@ class ProtecGame {
         });
       }
 
-      // 3.bis Retrait des exigences de moyens LOG (VTU/VTP) sur toutes les crises
+      // 3.bis Retrait des exigences de moyens LOG (VTU/VTP) sur toutes les crises & migration Plan NOVI sous Préfecture
       if (Array.isArray(this.missions)) {
         this.missions.forEach(m => {
           if (m && (m.type === 'crise' || m.isCrisis || m.isEmergencyPlan)) {
@@ -2240,6 +2240,20 @@ class ProtecGame {
             if (m.requiredAssets) {
               m.requiredAssets.vtu = 0;
               m.requiredAssets.vtp = 0;
+            }
+            // Règle opérationnelle : C'est la Préfecture qui gère le déclenchement des AASC sur les plans NOVI
+            if ((m.title && (m.title.includes('Plan NOVI') || m.title.includes('NOVI'))) || m.id === 'accident_peripherique' || m.id === 'accident_novi' || (typeof m.id === 'string' && m.id.includes('novi'))) {
+              if (m.origin === 'samu' || m.authority === 'samu' || (m.authorityLabel && m.authorityLabel.includes('SAMU'))) {
+                const deptCode = String(m.departmentCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
+                const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
+                m.origin = 'prefecture';
+                m.authority = 'prefecture';
+                m.authorityLabel = isParisArea ? 'Préfecture de Police (Plan NOVI)' : 'Préfecture (Plan NOVI)';
+                m.authorityBadgeBg = 'bg-indigo-50 text-indigo-800 border-indigo-300';
+                if (m.scenarioText && m.scenarioText.includes('Le SAMU')) {
+                  m.scenarioText = m.scenarioText.replace(/Le SAMU (15|de Paris) (déclenche|préalerte)/g, 'La Préfecture réquisitionne');
+                }
+              }
             }
           }
         });
@@ -10415,38 +10429,35 @@ class ProtecGame {
       };
     }
 
-    // 3. Convention Cadre SAMU 15 (Plan NOVI, Norias sanitaires, Accueil impliqués CUMP)
-    if (['samu', 'cump', 'novi'].includes(key)) {
+    // 3. Convention Cadre SAMU 15 (Gardes & Départs Réflexes par vecteur conventionné)
+    if (['samu', 'cump'].includes(key)) {
       const isSigned = Boolean(this.samuConvention?.signed);
-      const isAasc = Boolean(this.aascConvention?.signed);
       const hasCump = Boolean(this.cumpConvention?.signed);
       const maxVolunteers = isSigned 
-        ? Math.max(6, Math.min(Math.round(apcCap.totalVolunteers * 0.55), 12)) 
-        : Math.max(4, Math.min(6, apcCap.totalVolunteers));
-      const maxVpsp = isSigned 
-        ? Math.max(1, Math.min(Math.max(1, Math.round(apcCap.totalVpsp * 0.55)), apcCap.totalVpsp)) 
-        : Math.min(1, apcCap.totalVpsp);
+        ? Math.max(3, Math.min(Math.round(apcCap.totalVolunteers * 0.35), 6)) 
+        : Math.max(3, Math.min(4, apcCap.totalVolunteers));
+      const maxVpsp = isSigned ? Math.max(1, Math.min(1, apcCap.totalVpsp)) : 0;
       const maxVtu = 0;
       const maxVtp = 0;
-      const maxChuPlaces = Math.min(40, Math.max(15, apcCap.totalStations * 15));
+      const maxChuPlaces = 0;
 
       return {
         authority: 'samu',
         conventionKey: 'samuConvention',
-        conventionTitle: 'Convention Cadre SAMU 15 (Gardes & Plan NOVI)',
+        conventionTitle: 'Convention Cadre SAMU 15 (Gardes & Départs Réflexes)',
         isSigned,
         hasCump,
-        authorized: isSigned || isAasc,
+        authorized: false, // Le SAMU ne déclenche pas de crise NOVI / AASC : réservé exclusivement aux gardes et départs réflexes par vecteur conventionné
         maxVolunteers,
         maxVpsp,
         maxVtu,
         maxVtp,
         maxChuPlaces,
-        pmaAuthorized: true,
+        pmaAuthorized: false,
         cynoAuthorized: false,
         droneAuthorized: false,
-        conventionBadge: isSigned ? 'SAMU 15 [Convention Cadre]' : 'SAMU 15 [Concours AASC Réflexe]',
-        summary: `Plafond Conventionné SAMU 15 : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU (PMA inclus)`
+        conventionBadge: isSigned ? 'SAMU 15 [Convention Gardes]' : 'SAMU 15 [Non Conventionné]',
+        summary: isSigned ? 'Convention Cadre SAMU 15 : Départs réflexes par vecteur VPSP armé lors des gardes opérationnelles' : 'Convention non signée (Aucun déclenchement réflexe SAMU)'
       };
     }
 
@@ -10493,7 +10504,7 @@ class ProtecGame {
     return {
       authority: 'prefecture',
       conventionKey: 'aascConvention',
-      conventionTitle: 'Convention Préfectorale d’AASC (Dispositif ORSEC)',
+      conventionTitle: 'Convention Préfectorale d’AASC (ORSEC & Plan NOVI)',
       isSigned: isAascSigned,
       authorized: isAascSigned,
       maxVolunteers,
@@ -10504,8 +10515,8 @@ class ProtecGame {
       pmaAuthorized: true,
       cynoAuthorized: false,
       droneAuthorized: true,
-      conventionBadge: 'Préfecture [Convention ORSEC AASC]',
-      summary: `Plafond Conventionné Plan ORSEC : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU, ${maxChuPlaces} places CHU`
+      conventionBadge: 'Préfecture [Convention ORSEC & NOVI]',
+      summary: `Plafond Conventionné Préfecture (Plan ORSEC & Plan NOVI) : max ${maxVolunteers} secouristes, ${maxVpsp} VPSP, ${maxVtu} VTU, ${maxChuPlaces} places CHU`
     };
   }
 
@@ -10803,25 +10814,22 @@ class ProtecGame {
       }
     }
 
-    // 5. Accident NOVI (Convention Cadre SAMU 15 / Centre 15)
-    const samuLimits = this.getCrisisConventionLimits('samu', deptCode);
-    if (samuLimits.authorized) {
-      const noviVols = samuLimits.maxVolunteers;
-      const noviVpsp = samuLimits.maxVpsp;
-      const noviVtu = samuLimits.maxVtu;
-      const noviVtp = samuLimits.maxVtp;
-      const noviChu = samuLimits.maxChuPlaces;
+    // 5. Plan NOVI (Déclenchement Préfecture / Préfecture de Police sous convention AASC)
+    if (prefLimits.authorized) {
+      const noviVols = prefLimits.maxVolunteers;
+      const noviVpsp = prefLimits.maxVpsp;
+      const noviChu = prefLimits.maxChuPlaces;
       const noviVehicles = ['VPSP'];
 
       if (isParisArea) {
         scenarios.push({
           id: 'accident_peripherique',
-          origin: 'samu',
-          authority: 'samu',
-          authorityLabel: 'SAMU de Paris (Centre 15 / Plan NOVI)',
-          authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+          origin: 'prefecture',
+          authority: 'prefecture',
+          authorityLabel: 'Préfecture de Police (Plan NOVI)',
+          authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
           title: 'Carambolage Multiple sur le Boulevard Périphérique (Plan NOVI)',
-          scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le SAMU de Paris déclenche la Protection Civile selon les plafonds conventionnés pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
+          scenarioText: 'Grave carambolage impliquant un autocar et plusieurs véhicules de tourisme sur le Boulevard Périphérique extérieur. Nombreuses victimes en cours de tri médical par le SAMU 75 et la BSPP. Le Préfet de Police active le Plan NOVI et réquisitionne la Protection Civile dans le cadre de la convention AASC pour prépositionner des VPSP sanitaires, monter un Poste Médical Avancé (PMA) et assurer les norias d’évacuation vers les hôpitaux de l’AP-HP.',
           assignedMissions: [
             'Soutien Sanitaire et Grande Noria d’évacuation vers hôpitaux AP-HP',
             'Montage et armement d’un Poste Médical Avancé (PMA)',
@@ -10838,19 +10846,19 @@ class ProtecGame {
           },
           requiredVolunteers: noviVols,
           requiredVehicles: noviVehicles,
-          scale: `Plan NOVI SAMU [${samuLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
+          scale: `Plan NOVI Préfecture de Police [${prefLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
           rewardMoney: Math.round(650 + (noviVols * 25)),
           rewardReputation: 45
         });
       } else {
         scenarios.push({
           id: 'accident_novi',
-          origin: 'samu',
-          authority: 'samu',
-          authorityLabel: 'SAMU Centre 15 (Plan NOVI)',
-          authorityBadgeBg: 'bg-rose-50 text-rose-800 border-rose-300',
+          origin: 'prefecture',
+          authority: 'prefecture',
+          authorityLabel: 'Préfecture (Plan NOVI)',
+          authorityBadgeBg: 'bg-indigo-50 text-indigo-800 border-indigo-300',
           title: 'Carambolage Multiple sur Voie Rapide (Plan NOVI)',
-          scenarioText: 'Grave carambolage impliquant un autocar de ligne et plusieurs véhicules de tourisme sur voie rapide. Nombreuses victimes en cours de tri médical par les équipes SMUR et sapeurs-pompiers. Le SAMU 15 préalerte la Protection Civile selon la convention cadre pour prépositionner des VPSP sanitaires, un lot PMA d’urgence et assurer la noria d’évacuation vers les centres hospitaliers.',
+          scenarioText: 'Grave carambolage impliquant un autocar de ligne et plusieurs véhicules de tourisme sur voie rapide. Nombreuses victimes en cours de tri médical par les équipes SMUR et sapeurs-pompiers. Le Préfet active le Plan NOVI et réquisitionne la Protection Civile selon la convention cadre AASC pour prépositionner des VPSP sanitaires, un lot PMA d’urgence et assurer la noria d’évacuation vers les centres hospitaliers.',
           assignedMissions: [
             'Soutien Sanitaire et Grande Noria d’évacuation vers CHU',
             'Montage et armement d’un Poste Médical Avancé (PMA)',
@@ -10867,7 +10875,7 @@ class ProtecGame {
           },
           requiredVolunteers: noviVols,
           requiredVehicles: noviVehicles,
-          scale: `Plan NOVI SAMU [${samuLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
+          scale: `Plan NOVI Préfecture [${prefLimits.conventionBadge}] : Plafond ${noviVols} secouristes, ${noviVehicles.join('/')}`,
           rewardMoney: Math.round(620 + (noviVols * 25)),
           rewardReputation: 45
         });
@@ -15776,6 +15784,21 @@ class ProtecGame {
           return;
         }
         return;
+      }
+
+      // Normalisation : Le Plan NOVI relève exclusivement de la Préfecture (ou Préfecture de Police)
+      if ((mission.title && (mission.title.includes('Plan NOVI') || mission.title.includes('NOVI'))) || mission.id === 'accident_peripherique' || mission.id === 'accident_novi' || (typeof mission.id === 'string' && mission.id.includes('novi'))) {
+        if (mission.origin === 'samu' || mission.authority === 'samu' || (mission.authorityLabel && mission.authorityLabel.includes('SAMU'))) {
+          const deptCode = String(mission.departmentCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '75');
+          const isParisArea = ['75', '92', '93', '94'].includes(deptCode);
+          mission.origin = 'prefecture';
+          mission.authority = 'prefecture';
+          mission.authorityLabel = isParisArea ? 'Préfecture de Police (Plan NOVI)' : 'Préfecture (Plan NOVI)';
+          mission.authorityBadgeBg = 'bg-indigo-50 text-indigo-800 border-indigo-300';
+          if (mission.scenarioText && mission.scenarioText.includes('Le SAMU')) {
+            mission.scenarioText = mission.scenarioText.replace(/Le SAMU (15|de Paris) (déclenche|préalerte)/g, 'La Préfecture réquisitionne');
+          }
+        }
       }
 
       if (!Array.isArray(mission.registeredVolunteers)) {
@@ -28695,18 +28718,46 @@ class ProtecGame {
   triggerRandomSamuEmergency() {
     if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.samuConvention || !this.samuConvention.signed) return;
-    if (!this.samuGarde || !this.samuGarde.active) return;
+
+    const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
+    const isGuardActive = Boolean(activeGuard || (this.samuGarde && this.samuGarde.active));
+    if (!isGuardActive) return;
+
+    // CONTRÔLE STRICT : VÉRIFIER QU'UN VECTEUR VPSP EST RÉELLEMENT DISPONIBLE AVANT TOUT DÉCLENCHEMENT
+    const isVehicleDispo = (v) => Boolean(
+      v &&
+      v.type === 'VPSP' &&
+      v.status !== 'mission' &&
+      v.status !== 'transit' &&
+      !v.isBrokenDown &&
+      !v.isUnavailable &&
+      !v.isUnderRepair
+    );
+
+    const guardVehId = activeGuard?.assignedCrew?.vehicles?.[0]?.id || this.samuGarde?.vehicleId;
+    const guardVehicle = guardVehId ? (this.vehicles || []).find(v => v.id === guardVehId) : null;
+    const availableVpsp = (guardVehicle && isVehicleDispo(guardVehicle))
+      ? guardVehicle
+      : (this.vehicles || []).find(v => isVehicleDispo(v));
+
+    if (!availableVpsp) {
+      // AUCUN VECTEUR DISPONIBLE : NE PAS DÉCLENCHER D'INTERVENTION SAMU !
+      return;
+    }
 
     // CONTRÔLE STRICT DU NOMBRE DE VECTEURS PROTEC ALLOUÉS AU SAMU
     // Dans la réalité, le SAMU sait exactement combien de vecteurs Protec il a sous contrat (généralement 1 VPSP).
     // RÈGLE : Il n'y a JAMAIS plus d'interventions en même temps que de vecteurs demandés.
-    const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
-    const maxSamuVectors = Math.max(1, (activeGuard?.assignedCrew?.vehicles?.length || (activeGuard?.requiredVehicles?.length) || 1));
-    const activeStandardSamu = (this.missions || []).filter(m => m.type === 'samu' && !m.isRenfort && !m.isGarde && (m.status === 'ongoing' || m.status === 'planifie'));
+    const activeStandardSamu = (this.missions || []).filter(m => 
+      (m.type === 'samu' || m.type === 'garde_samu') && 
+      !m.isRenfort && 
+      !m.isGarde && 
+      ['ongoing', 'transit', 'sur_place', 'transport_chu', 'retour_base', 'planifie'].includes(m.status)
+    );
+    const totalDispoVpsps = (this.vehicles || []).filter(v => isVehicleDispo(v)).length;
 
-    if (activeStandardSamu.length >= maxSamuVectors) {
-      // Tous les vecteurs Protec conventionnés sont déjà engagés en intervention !
-      // Le SAMU peut toutefois, assez rarement, solliciter l'antenne pour un renfort rapide par manque de vecteur.
+    if (totalDispoVpsps === 0 || activeStandardSamu.length >= totalDispoVpsps) {
+      // Tous les vecteurs Protec disponibles sont déjà engagés en intervention !
       this.maybeTriggerSamuRenfortRequest();
       return;
     }
@@ -28800,10 +28851,8 @@ class ProtecGame {
       const currentPosture = triggerCheck.posture || posture;
       const isBaseReady = (currentPosture === 'base' || currentPosture === 'poste');
 
-      // Trouver un VPSP disponible pour la mission
-      const vpsp = (activeGuard && activeGuard.assignedCrew?.vehicles?.[0]) || 
-                   (this.samuGarde?.vehicleId ? this.vehicles.find(v => v.id === this.samuGarde.vehicleId) : null) || 
-                   this.vehicles.find(v => v.type === 'VPSP' && v.status !== 'mission');
+      // Vecteur VPSP disponible vérifié
+      const vpsp = availableVpsp;
 
       if (vpsp && vpsp.status !== 'mission' && isBaseReady) {
         // Posture À la base prêt à partir : Départ réflexe 100% automatique !

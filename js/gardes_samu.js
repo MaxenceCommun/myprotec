@@ -320,8 +320,8 @@ window.ProtecGardesSamu = {
 
     const emergencies = [
       {
-        title: 'Alerte Sanitaire : Déclenchement d’Urgence Astreinte NOVI',
-        desc: 'Accident ferroviaire / carambolage autoroutier. Le SAMU 15 réquisitionne d’urgence les vecteurs VPSP d’astreinte des AASC pour évacuation vers les CHU.',
+        title: 'Alerte Sanitaire : Déclenchement d’Urgence Astreinte VPSP',
+        desc: 'Pic d’urgences pré-hospitalières et débordement sanitaire. Le SAMU 15 réquisitionne d’urgence les vecteurs VPSP d’astreinte des AASC pour évacuation vers les CHU.',
         risk: 'critique',
         durHours: 4,
         reward: 580
@@ -444,6 +444,26 @@ window.ProtecGardesSamu = {
     if (!guardMission) return { canTrigger: false, reason: 'Aucune garde active' };
     const registeredIds = guardMission.registeredVolunteers || [];
     
+    // VÉRIFICATION DU VECTEUR VPSP DISPONIBLE AVANT TOUT DÉCLENCHEMENT
+    const isVehicleDispo = (v) => Boolean(
+      v &&
+      v.type === 'VPSP' &&
+      v.status !== 'mission' &&
+      v.status !== 'transit' &&
+      !v.isBrokenDown &&
+      !v.isUnavailable &&
+      !v.isUnderRepair
+    );
+    const assignedVeh = guardMission.assignedCrew?.vehicles?.[0];
+    const hasDispoVpsp = (assignedVeh && isVehicleDispo(assignedVeh)) || (game.vehicles || []).some(v => isVehicleDispo(v));
+
+    if (!hasDispoVpsp) {
+      return {
+        canTrigger: false,
+        reason: 'Aucun vecteur VPSP n’est disponible (en mission, en transit ou indisponible).'
+      };
+    }
+
     // RÈGLE D'OR : SI PERSONNE D'INSCRIT -> AUCUN DÉCLENCHEMENT
     if (registeredIds.length === 0) {
       return {
