@@ -6979,6 +6979,163 @@ class ProtecGame {
   }
 
   // Vérification de la couverture des moyens pour une mission (souple et modulaire)
+  // Détection du logisticien déployé sur une mission (crise ou standard)
+  getMissionLogistician(mission) {
+    if (!mission) return null;
+    const assignedIds = mission.registeredVolunteers || [];
+    if (assignedIds.length === 0) return null;
+    const vols = (this.volunteers || []).filter(v => assignedIds.includes(v.id));
+
+    // 1. Bénévole explicitement désigné comme logisticien sur cette mission
+    const roles = mission.volunteerRoles || {};
+    for (const v of vols) {
+      const r = String(roles[v.id] || v.role || '').toLowerCase();
+      if (r === 'logisticien' || r.includes('logist') || r.includes('matériel')) {
+        return v;
+      }
+    }
+
+    // 2. Bénévole affecté sur un véhicule logistique (VTU, FLIT, VAHU, VST, VTL, VALOG)
+    const vehIds = mission.assignedVehicleIds || [];
+    const assignedVehs = (this.vehicles || []).filter(veh => vehIds.includes(veh.id));
+    const logVeh = assignedVehs.find(veh => {
+      const t = (veh.type || '').toUpperCase();
+      return ['VTU', 'FLIT', 'VAHU', 'VST', 'VTL', 'VALOG', 'LOG'].includes(t) || (veh.capacity_log > 0) || (veh.types && veh.types.includes('LOG'));
+    });
+
+    if (logVeh) {
+      const logVol = vols.find(v => (v.skills || []).some(s => String(s).toLowerCase().includes('log')) || v.trait === 'bricoleur' || v.trait === 'organise') || vols[0];
+      return logVol || null;
+    }
+
+    // 3. Bénévole déployé sur une VL / VLC avec profil logistique ou soutien
+    const vlVeh = assignedVehs.find(veh => {
+      const t = (veh.type || '').toUpperCase();
+      return ['VL', 'VLC', 'VLM'].includes(t);
+    });
+    if (vlVeh) {
+      const logVol = vols.find(v => {
+        const r = String(roles[v.id] || v.role || '').toLowerCase();
+        return r.includes('log') || (v.skills || []).some(s => String(s).toLowerCase().includes('log'));
+      });
+      if (logVol) return logVol;
+    }
+
+    return null;
+  }
+
+  // Surveillance et alertes proactives par le logisticien sur place (crises & toutes missions)
+  updateMissionLogisticianSurveillance(mission) {
+    if (!mission || mission.status !== 'ongoing') return;
+    const logistician = this.getMissionLogistician(mission);
+    if (!logistician) return;
+
+    const now = Date.now();
+    if (!mission.lastLogisticianCheck) {
+      mission.lastLogisticianCheck = now;
+      return;
+    }
+
+    // Intervalle d'évaluation : toutes les 60 secondes réelles
+    if (now - mission.lastLogisticianCheck < 60000) return;
+    mission.lastLogisticianCheck = now;
+
+    // 1. Détection de fatigue et usure des secouristes sur le terrain
+    const assignedIds = mission.registeredVolunteers || [];
+    const otherVols = (this.volunteers || []).filter(v => assignedIds.includes(v.id) && v.id !== logistician.id);
+    const exhaustedVol = otherVols.find(v => (v.energy !== undefined && v.energy <= 45) || (v.stress !== undefined && v.stress >= 70));
+
+    if (exhaustedVol) {
+      const cooldownKey = `lastFatigueAlert_${mission.id}`;
+      if (!this[cooldownKey] || now - this[cooldownKey] > 180000) {
+        this[cooldownKey] = now;
+        this.notifyLogisticianReport(
+          mission, 
+          logistician, 
+          'fatigue', 
+          `Attention PC, l'équipe sur place commence à fatiguer (${exhaustedVol.name} à ${exhaustedVol.energy || 40}% d'énergie). Prévoyez une relève d'effectifs pour maintenir l'efficacité !`
+        );
+        return;
+      }
+    }
+
+    // 2. Détection de manque de moyens matériels ou kits logistiques
+    const cov = this.checkMissionMoyensCoverage(mission);
+    if (cov && !cov.logSatisfied) {
+      const cooldownKey = `lastMatAlert_${mission.id}`;
+      if (!this[cooldownKey] || now - this[cooldownKey] > 240000) {
+        this[cooldownKey] = now;
+        this.notifyLogisticianReport(
+          mission, 
+          logistician, 
+          'materiel', 
+          `Besoin de réapprovisionnement matériel sur le dispositif (${cov.needs.reqLogKits} lots requis). Déployez un véhicule logistique en renfort !`
+        );
+        return;
+      }
+    }
+
+    // 3. Détection de besoin de VPSP sanitaire
+    if (cov && !cov.psSatisfied) {
+      const cooldownKey = `lastPsAlert_${mission.id}`;
+      if (!this[cooldownKey] || now - this[cooldownKey] > 240000) {
+        this[cooldownKey] = now;
+        this.notifyLogisticianReport(
+          mission, 
+          logistician, 
+          'sanitaire', 
+          `Le flux de victimes sur le dispositif nécessite une ambulance VPSP supplémentaire en renfort.`
+        );
+        return;
+      }
+    }
+
+    // 4. Point logistique régulier (toutes les 5 minutes)
+    const cooldownReport = `lastRavitaillement_${mission.id}`;
+    if (!this[cooldownReport] || now - this[cooldownReport] > 300000) {
+      this[cooldownReport] = now;
+      this.notifyLogisticianReport(
+        mission, 
+        logistician, 
+        'ravitaillement', 
+        `Point logistique terrain : distribution d'eau et de collations effectuée auprès des secouristes. Dispositif opérationnel.`
+      );
+    }
+  }
+
+  // Émission d'une alerte/rapport du logisticien (Toast + Main Courante + Radio)
+  notifyLogisticianReport(mission, logistician, type, message) {
+    const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const toastTitle = `📦 Logisticien Terrain (${logistician.name.split(' ')[0]})`;
+
+    // Notification Toast au joueur
+    this.showToast(toastTitle, `[${mission.title}] ${message}`, type === 'fatigue' || type === 'materiel' ? 'orange' : 'blue');
+
+    // Ajout dans la Main Courante
+    if (!Array.isArray(mission.operationalLog)) mission.operationalLog = [];
+    mission.operationalLog.unshift({
+      timestamp: Date.now(),
+      time: timeStr,
+      source: `Logisticien (${logistician.name})`,
+      text: message,
+      type: type === 'fatigue' || type === 'materiel' ? 'alert' : 'info'
+    });
+
+    // Transmission Radio si le module radio est actif
+    if (window.ProtecCrisisRadio && typeof window.ProtecCrisisRadio.transmit === 'function') {
+      window.ProtecCrisisRadio.transmit({
+        text: `Ici le logisticien ${logistician.name.split(' ')[0]} sur place. ${message}`,
+        source: `Logisticien (${logistician.name})`,
+        role: 'Logistique Terrain',
+        channel: 'CANAL LOGISTIQUE'
+      });
+    }
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+      window.ProtecAudio.playRadioBeep();
+    }
+  }
+
   checkMissionMoyensCoverage(mission) {
     const needs = this.getMissionRequiredNeeds(mission);
     const assignedVehs = (mission.assignedVehicleIds || [])
@@ -16107,15 +16264,17 @@ class ProtecGame {
                 return '';
               })()}
               
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Déclencher le transport sanitaire vers les Urgences de l'Hôpital de secteur">
-                  <i data-lucide="siren" class="w-4 h-4"></i>
-                  <span>Évacuer vers CHU (Statut 4)</span>
-                </button>
-                <button onclick="window.game.completeInterventionOnSite('${mission.id}')" class="py-2 px-3 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer" title="Victime soignée et laissée sur place après accord de la régulation SAMU 15">
-                  <i data-lucide="check-circle" class="w-4 h-4"></i>
-                  <span>Laissé sur Place / Clôturer</span>
-                </button>
+              <div class="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/60 flex items-center justify-between gap-3 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="relative flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <div>
+                    <span class="font-bold text-slate-800 dark:text-slate-200">Prise en charge autonome</span>
+                    <div class="text-[11px] text-slate-500 dark:text-slate-400">Les effectifs sur place gèrent les soins, bilans et évacuations de façon autonome.</div>
+                  </div>
+                </div>
               </div>
 
               <!-- Possibilité de demander / déployer des moyens supplémentaires pendant l'événement -->
@@ -27263,6 +27422,9 @@ class ProtecGame {
             }
             return;
           }
+
+          // Surveillance proactive par le logisticien déployé sur la mission (crises & toutes missions)
+          this.updateMissionLogisticianSurveillance(m);
 
           // Mission de Sinistre / Crise : Pas de fin arbitraire fixe, Main courante évolutive
           if ((m.isCrisis || ['crise', 'pompiers', 'meteo'].includes(m.type)) && window.ProtecCriseLogistique) {

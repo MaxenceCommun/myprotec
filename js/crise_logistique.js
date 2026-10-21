@@ -2162,23 +2162,36 @@ window.ProtecCriseLogistique = {
             }
           }
 
-          // Le joueur local a la main (ou la crise est vacante) : afficher les commandes de gestion
-          return `
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button onclick="window.ProtecCriseLogistique.performTeamRotation(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white text-xs font-black shadow-md transition flex items-center justify-center gap-1.5 cursor-pointer">
-                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                <span>Relève d'Équipe (Rotation)</span>
-              </button>
-              ${mission.crisisCanClose ? `
-                <button onclick="window.ProtecCriseLogistique.completeCrisisMission(window.game, '${mission.id}')" class="py-2.5 px-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white text-xs font-black shadow-lg animate-pulse transition flex items-center justify-center gap-1.5 cursor-pointer">
+          // Rôle du joueur : Pilotage des effectifs, moyens et logistique.
+          // Les effectifs sur place gèrent les soins, évacuations sanitaires et rotations en totale autonomie.
+          const logistician = (typeof game.getMissionLogistician === 'function') ? game.getMissionLogistician(mission) : null;
+
+          if (mission.crisisCanClose) {
+            return `
+              <div class="space-y-2">
+                <button onclick="window.ProtecCriseLogistique.completeCrisisMission(window.game, '${mission.id}')" class="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:brightness-110 text-white text-xs sm:text-sm font-black shadow-lg animate-pulse transition flex items-center justify-center gap-2 cursor-pointer">
                   <i data-lucide="check-circle-2" class="w-4 h-4"></i>
-                  <span>Clôturer le Dispositif (Accord COS)</span>
+                  <span>Clôturer le Dispositif (Accord COS & Équipes sur place)</span>
                 </button>
+              </div>
+            `;
+          }
+
+          return `
+            <div class="p-3 rounded-2xl bg-slate-100 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3 text-xs flex-wrap">
+              <div class="flex items-center gap-2 text-slate-700 dark:text-slate-300 font-bold">
+                <i data-lucide="shield-check" class="w-4 h-4 text-emerald-500 shrink-0"></i>
+                <span>Dispositif autonome : les équipes sur place gèrent soins, évacuations et rotations.</span>
+              </div>
+              ${logistician ? `
+                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-black bg-cyan-500/10 dark:bg-cyan-950/70 text-cyan-800 dark:text-cyan-300 border border-cyan-500/30 shrink-0 shadow-2xs">
+                  <i data-lucide="package" class="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400"></i>
+                  <span>Logisticien actif : ${logistician.name}</span>
+                </span>
               ` : `
-                <button onclick="window.game.evacuateToNearestHospital('${mission.id}', '${mission.assignedCrew?.vehicles[0]?.id}')" class="py-2.5 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white text-xs font-black shadow transition flex items-center justify-center gap-1.5 cursor-pointer">
-                  <i data-lucide="siren" class="w-4 h-4"></i>
-                  <span>Évacuer Victime CH (Statut 4)</span>
-                </button>
+                <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 italic">
+                  💡 Aucun logisticien (déployez un VTU ou une VL avec logisticien pour être notifié des besoins)
+                </span>
               `}
             </div>
           `;
