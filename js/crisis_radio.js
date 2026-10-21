@@ -22,6 +22,9 @@ window.ProtecCrisisRadio = {
   startRadioAudio: null,
   serverStatus: { checked: false, available: false, model: 'fr_FR-mls-medium', speakersCount: 125 },
 
+  apiBaseUrl: null,
+  activeEngine: 'piper', // 'piper' ou 'webspeech'
+
   // =========================================================================
   // 1. ATTRIBUTION DES VOIX (MODÈLE fr_FR-mls-medium : 125 IDENTIFIANTS)
   // =========================================================================
@@ -133,31 +136,64 @@ window.ProtecCrisisRadio = {
       this.startRadioAudio.volume = 0.85;
     } catch (e) {}
 
-    // Vérification asynchrone du serveur Piper TTS
+    // Vérification asynchrone et résolution automatique du serveur Piper TTS
     this.checkServerStatus();
 
     // Montage du HUD radio flottant
     this.injectRadioHud();
   },
 
-  async checkServerStatus() {
-    try {
-      const res = await fetch('/api/crisis/tts/status');
-      if (res.ok) {
-        const data = await res.json();
-        this.serverStatus = {
-          checked: true,
-          available: !!data.piperInstalled,
-          modelPresent: !!data.modelPresent,
-          model: data.model || 'fr_FR-mls-medium',
-          speakersCount: data.speakersCount || 125,
-          cachedFilesCount: data.cachedFilesCount || 0
-        };
-      }
-    } catch (e) {
-      this.serverStatus.checked = true;
-      this.serverStatus.available = false;
+  /**
+   * Détecte intelligemment l'URL du serveur Piper TTS :
+   * Fonctionne que le jeu soit ouvert sur http://localhost:8080, http://localhost:5500 (Live Server),
+   * http://127.0.0.1:3000, ou tout autre port local de dev.
+   */
+  async resolveApiBaseUrl() {
+    if (this.apiBaseUrl !== null) return this.apiBaseUrl;
+
+    const candidates = [
+      '', // Relatif : si le client est servi directement par server.js
+      'http://localhost:8080',
+      'http://127.0.0.1:8080'
+    ];
+
+    for (const base of candidates) {
+      try {
+        const testUrl = `${base}/api/crisis/tts/status`;
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 1200);
+        const res = await fetch(testUrl, { signal: controller.signal });
+        clearTimeout(tid);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success && data.piperInstalled && data.modelPresent) {
+            this.apiBaseUrl = base;
+            this.activeEngine = 'piper';
+            this.serverStatus = {
+              checked: true,
+              available: true,
+              modelPresent: true,
+              model: data.model || 'fr_FR-mls-medium',
+              speakersCount: data.speakersCount || 125,
+              cachedFilesCount: data.cachedFilesCount || 0
+            };
+            console.log(`🎙️ [Piper TTS] Moteur officiel fr_FR-mls-medium connecté avec succès (${base || 'origine locale'}). 125 voix haute fidélité actives.`);
+            return this.apiBaseUrl;
+          }
+        }
+      } catch (err) {}
     }
+
+    this.apiBaseUrl = '';
+    this.serverStatus.checked = true;
+    this.serverStatus.available = false;
+    this.activeEngine = 'webspeech';
+    console.warn('⚠️ [Radio de Crise] Serveur Piper TTS non joint sur le port 8080. Fallback vocal actif. (Assurez-vous que "node server.js" est lancé)');
+    return this.apiBaseUrl;
+  },
+
+  async checkServerStatus() {
+    return await this.resolveApiBaseUrl();
   },
 
   toggle() {
@@ -458,10 +494,11 @@ window.ProtecCrisisRadio = {
     const text = tx.cleanText;
     const speakerId = tx.speakerId;
 
-    // A. Tenter la requête API Piper TTS mise en cache
+    // A. Tenter la requête API Piper TTS officielle
     let playedViaServer = false;
     try {
-      const url = `/api/crisis/tts?speaker=${speakerId}&text=${encodeURIComponent(text)}`;
+      const base = await this.resolveApiBaseUrl();
+      const url = `${base}/api/crisis/tts?speaker=${speakerId}&text=${encodeURIComponent(text)}`;
       const res = await fetch(url);
       
       if (res.ok) {
@@ -471,21 +508,29 @@ window.ProtecCrisisRadio = {
           const ctx = this.getAudioContext();
           if (ctx) {
             const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
+            this.activeEngine = 'piper';
+            this.updateHudState();
+            console.log(`🎙️ [Radio de Crise] Diffusion réussie via Piper TTS fr_FR-mls-medium (Voix #${speakerId}) : "${text.slice(0, 45)}..."`);
             await this.playDecodedAudioBuffer(audioBuffer);
             playedViaServer = true;
           }
         }
       }
     } catch (e) {
-      // Fallback direct
+      console.warn('⚠️ [Radio de Crise] Échec appel Piper TTS serveur, bascule fallback:', e);
       playedViaServer = false;
     }
 
     if (playedViaServer) return;
 
-    // B. Fallback Web Speech API haut de gamme avec modulation de timbre selon le speakerId
+    // B. Fallback Web Speech API avec modulation de timbre
+    this.activeEngine = 'webspeech';
+    this.updateHudState();
+    console.warn(`⚠️ [Radio de Crise] Diffusion en mode Fallback WebSpeech (Voix #${speakerId})`);
     await this.speakViaWebSpeechRadio(text, speakerId);
   },
+
+  currentAudioSourceNode: null,
 
   playDecodedAudioBuffer(audioBuffer) {
     return new Promise(resolve => {
@@ -494,9 +539,13 @@ window.ProtecCrisisRadio = {
 
       const source = ctx.createBufferSource();
       source.buffer = audioBuffer;
+      this.currentAudioSourceNode = source;
       this.connectRadioFx(ctx, source, ctx.destination);
 
-      source.onended = () => resolve();
+      source.onended = () => {
+        this.currentAudioSourceNode = null;
+        resolve();
+      };
       source.start(0);
     });
   },
@@ -597,6 +646,13 @@ window.ProtecCrisisRadio = {
   },
 
   skip() {
+    if (this.currentAudioSourceNode) {
+      try {
+        this.currentAudioSourceNode.stop();
+        this.currentAudioSourceNode.disconnect();
+      } catch (e) {}
+      this.currentAudioSourceNode = null;
+    }
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -611,6 +667,52 @@ window.ProtecCrisisRadio = {
   clearQueue() {
     this.queue = [];
     this.skip();
+  },
+
+  /**
+   * Réécoute instantanée d'un message radio de la main courante
+   * Compatible avec encodage URI ou texte brut
+   */
+  replay(rawText, rawSource, speakerId = null) {
+    if (!rawText) return;
+    let text = String(rawText);
+    try {
+      if (text.includes('%')) text = decodeURIComponent(text);
+    } catch (e) {}
+
+    let source = rawSource ? String(rawSource) : 'PC Opérationnel';
+    try {
+      if (source.includes('%')) source = decodeURIComponent(source);
+    } catch (e) {}
+
+    // S'assurer que le contexte Web Audio est débloqué suite au clic utilisateur
+    this.getAudioContext();
+
+    // Si la radio globale était sur "mute", on active temporairement
+    if (!this.enabled) {
+      this.enabled = true;
+    }
+
+    // Interrompt le message en cours pour jouer la réécoute immédiatement
+    if (this.isProcessing) {
+      this.skip();
+    }
+
+    const resolvedSpeaker = (speakerId !== null && speakerId !== undefined) 
+      ? speakerId 
+      : this.resolveSpeakerId(source);
+
+    this.transmit({
+      text: text,
+      source: source,
+      speakerId: resolvedSpeaker,
+      priority: true,
+      channel: 'RÉÉCOUTE RADIO'
+    });
+
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Radio Tactique', `Réécoute du message [${source}] 🎙️`, 'blue');
+    }
   },
 
   // =========================================================================
@@ -742,6 +844,9 @@ window.ProtecCrisisRadio = {
               <span>● TX RADIO ACTIVE</span>
               <span id="crisis-radio-hud-channel" class="text-slate-400 font-mono text-[9px]">CANAL CRISE</span>
             </span>
+            <span id="crisis-radio-hud-engine-badge" class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40">
+              🎙️ Piper TTS
+            </span>
           </div>
           <div class="flex items-center gap-1.5">
             <span id="crisis-radio-hud-queue-badge" class="hidden text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
@@ -803,11 +908,22 @@ window.ProtecCrisisRadio = {
     const textEl = document.getElementById('crisis-radio-hud-text');
     const chanEl = document.getElementById('crisis-radio-hud-channel');
     const queueEl = document.getElementById('crisis-radio-hud-queue-badge');
+    const engineEl = document.getElementById('crisis-radio-hud-engine-badge');
 
     if (this.currentTransmission) {
       if (srcEl) srcEl.textContent = this.currentTransmission.source;
       if (textEl) textEl.textContent = `« ${this.currentTransmission.text} »`;
       if (chanEl) chanEl.textContent = this.currentTransmission.channel || 'CANAL CRISE';
+      if (engineEl) {
+        const spk = this.currentTransmission.speakerId !== undefined ? this.currentTransmission.speakerId : '?';
+        if (this.activeEngine === 'piper') {
+          engineEl.textContent = `🎙️ Piper TTS (#${spk})`;
+          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-500/40';
+        } else {
+          engineEl.textContent = `⚠️ Fallback WebSpeech`;
+          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40';
+        }
+      }
     }
 
     if (queueEl) {

@@ -2326,10 +2326,21 @@ window.ProtecCriseLogistique = {
                                (l.type === 'alert' ? 'border-l-4 border-l-rose-500 bg-rose-50/60 dark:bg-rose-950/30 border-slate-200/60 dark:border-rose-900/40' : 
                                (l.type === 'milestone' ? 'border-l-4 border-l-pc-blue bg-blue-50/60 dark:bg-blue-950/30 border-slate-200/60 dark:border-blue-900/40' : 'border-l-4 border-l-slate-400 dark:border-l-slate-500 bg-white dark:bg-slate-800/90 border-slate-200/60 dark:border-slate-700/80'));
               return `
-                <div class="p-2.5 rounded-xl border ${borderCol} text-xs space-y-0.5 shadow-sm">
-                  <div class="flex items-center justify-between">
-                    <span class="font-extrabold text-slate-900 dark:text-white text-[11px]">${l.source || 'PC Opérationnel'}</span>
-                    <span class="text-[9px] font-mono text-slate-400 dark:text-slate-400">${l.time}</span>
+                <div class="p-2.5 rounded-xl border ${borderCol} text-xs space-y-1 shadow-sm group hover:border-slate-400 dark:hover:border-slate-600 transition">
+                  <div class="flex items-center justify-between gap-2">
+                    <span class="font-extrabold text-slate-900 dark:text-white text-[11px] truncate">${l.source || 'PC Opérationnel'}</span>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="text-[9px] font-mono text-slate-400 dark:text-slate-400">${l.time}</span>
+                      <button type="button" 
+                              onclick="event.stopPropagation(); window.ProtecCrisisRadio && window.ProtecCrisisRadio.replay(this.dataset.text, this.dataset.source);"
+                              data-text="${encodeURIComponent(l.text || '')}"
+                              data-source="${encodeURIComponent(l.source || 'PC Opérationnel')}"
+                              class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 dark:bg-cyan-950/70 dark:hover:bg-cyan-900/90 text-cyan-700 dark:text-cyan-300 border border-cyan-500/25 dark:border-cyan-500/40 hover:border-cyan-500 transition text-[10px] font-bold cursor-pointer active:scale-95 shadow-2xs"
+                              title="Réécouter cette transmission vocale (Piper TTS)">
+                        <i data-lucide="volume-2" class="w-3 h-3 text-cyan-600 dark:text-cyan-400"></i>
+                        <span>Réécouter</span>
+                      </button>
+                    </div>
                   </div>
                   <p class="text-[11px] text-slate-600 dark:text-slate-200 leading-snug">${l.text}</p>
                 </div>
@@ -4487,10 +4498,21 @@ window.ProtecCriseLogistique = {
                   if (log.type === 'alert') { badgeColor = 'bg-amber-950 text-amber-300 border-amber-800'; borderLeft = 'border-amber-500'; }
 
                   return `
-                    <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 border-l-4 ${borderLeft} space-y-1 text-xs">
-                      <div class="flex items-center justify-between text-[10px]">
-                        <span class="font-black text-slate-300">${log.source}</span>
-                        <span class="text-slate-400 font-mono">${log.time}</span>
+                    <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 border-l-4 ${borderLeft} space-y-1 text-xs group hover:border-slate-700 transition">
+                      <div class="flex items-center justify-between gap-2 text-[10px]">
+                        <span class="font-black text-slate-300 truncate">${log.source}</span>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                          <span class="text-slate-400 font-mono">${log.time}</span>
+                          <button type="button" 
+                                  onclick="event.stopPropagation(); window.ProtecCrisisRadio && window.ProtecCrisisRadio.replay(this.dataset.text, this.dataset.source);"
+                                  data-text="${encodeURIComponent(log.text || '')}"
+                                  data-source="${encodeURIComponent(log.source || 'PC Opérationnel')}"
+                                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 hover:border-cyan-400 transition text-[10px] font-bold cursor-pointer active:scale-95 shadow-2xs"
+                                  title="Réécouter cette transmission vocale (Piper TTS)">
+                            <i data-lucide="volume-2" class="w-3 h-3 text-cyan-400"></i>
+                            <span>Réécouter</span>
+                          </button>
+                        </div>
                       </div>
                       <p class="text-slate-200 leading-snug">${log.text}</p>
                     </div>

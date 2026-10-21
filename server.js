@@ -1701,7 +1701,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Génération ou Récupération en Cache Audio TTS (Piper TTS fr_FR-mls-medium)
-  if (url === '/api/crisis/tts' && (req.method === 'GET' || req.method === 'POST')) {
+  if (url === '/api/crisis/tts' && (req.method === 'GET' || req.method === 'POST' || req.method === 'HEAD')) {
     const handleTts = (params) => {
       let { text, speaker, rate } = params;
       if (!text) {
@@ -1730,6 +1730,10 @@ const server = http.createServer((req, res) => {
             'X-TTS-Cached': '1',
             'X-TTS-Speaker': String(speakerId)
           });
+          if (req.method === 'HEAD') {
+            res.end();
+            return;
+          }
           fs.createReadStream(cachedFile).pipe(res);
           return;
         } catch (readErr) {
@@ -1737,7 +1741,14 @@ const server = http.createServer((req, res) => {
         }
       }
 
-      // 2. Si non en cache, tenter Piper TTS s'il est configuré
+      // Si HEAD et pas en cache
+      if (req.method === 'HEAD') {
+        res.writeHead(404, { 'Access-Control-Allow-Origin': '*' });
+        res.end();
+        return;
+      }
+
+      // 2. Si non en cache, générer avec Piper TTS officiel (fr_FR-mls-medium)
       const piperCfg = getPiperConfig();
       if (piperCfg.isPiperInstalled && piperCfg.isModelPresent) {
         try {
@@ -1747,11 +1758,12 @@ const server = http.createServer((req, res) => {
             '--output_file', cachedFile
           ];
           const proc = spawn(piperCfg.bin, piperArgs);
-          proc.stdin.write(text);
+          proc.stdin.write(text, 'utf-8');
           proc.stdin.end();
 
           proc.on('close', (code) => {
             if (code === 0 && fs.existsSync(cachedFile)) {
+              console.log(`🎙️ [Piper TTS] Audio généré avec succès [Voix #${speakerId}] : "${text.slice(0, 50)}..."`);
               const stat = fs.statSync(cachedFile);
               res.writeHead(200, {
                 'Content-Type': 'audio/wav',
@@ -1763,6 +1775,7 @@ const server = http.createServer((req, res) => {
               });
               fs.createReadStream(cachedFile).pipe(res);
             } else {
+              console.warn(`⚠️ [Piper TTS] Code de sortie ${code} pour la voix #${speakerId}`);
               sendJson(res, 200, {
                 success: true,
                 cached: false,
@@ -1775,7 +1788,8 @@ const server = http.createServer((req, res) => {
             }
           });
 
-          proc.on('error', () => {
+          proc.on('error', (err) => {
+            console.error('⚠️ [Piper TTS] Erreur spawn:', err);
             sendJson(res, 200, {
               success: true,
               cached: false,
@@ -1787,7 +1801,7 @@ const server = http.createServer((req, res) => {
           });
           return;
         } catch (e) {
-          // Erreur d'exécution -> fallback
+          console.error('⚠️ [Piper TTS] Exception:', e);
         }
       }
 
