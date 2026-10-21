@@ -2318,19 +2318,19 @@ window.ProtecCriseLogistique = {
             <span class="text-[10px] font-mono text-pc-blue font-bold animate-pulse">● EN DIRECT</span>
           </div>
 
-          <div class="space-y-2 max-h-64 overflow-y-auto pr-1 bg-slate-50/70 dark:bg-slate-900/90 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
+          <div class="space-y-2 max-h-64 overflow-y-auto pr-1 bg-slate-100/90 dark:bg-slate-950/90 p-3 rounded-2xl border border-slate-200 dark:border-slate-800">
             ${logs.length === 0 ? `
               <div class="text-center text-slate-400 text-xs py-4">Attente des premiers messages radio...</div>
             ` : logs.map(l => {
-              const borderCol = l.type === 'success' ? 'border-l-4 border-l-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/30 border-slate-200/60 dark:border-emerald-900/40' : 
-                               (l.type === 'alert' ? 'border-l-4 border-l-rose-500 bg-rose-50/60 dark:bg-rose-950/30 border-slate-200/60 dark:border-rose-900/40' : 
-                               (l.type === 'milestone' ? 'border-l-4 border-l-pc-blue bg-blue-50/60 dark:bg-blue-950/30 border-slate-200/60 dark:border-blue-900/40' : 'border-l-4 border-l-slate-400 dark:border-l-slate-500 bg-white dark:bg-slate-800/90 border-slate-200/60 dark:border-slate-700/80'));
+              const borderCol = l.type === 'success' ? 'border-l-4 border-l-emerald-500 bg-emerald-50 dark:bg-emerald-950/60 border-emerald-200 dark:border-emerald-900/60' : 
+                               (l.type === 'alert' ? 'border-l-4 border-l-rose-500 bg-rose-50 dark:bg-rose-950/60 border-rose-200 dark:border-rose-900/60' : 
+                               (l.type === 'milestone' ? 'border-l-4 border-l-pc-blue bg-blue-50 dark:bg-blue-950/60 border-blue-200 dark:border-blue-900/60' : 'border-l-4 border-l-slate-400 dark:border-l-slate-600 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'));
               return `
-                <div class="p-2.5 rounded-xl border ${borderCol} text-xs space-y-1 shadow-sm group hover:border-slate-400 dark:hover:border-slate-600 transition">
+                <div class="p-2.5 rounded-xl border ${borderCol} text-xs space-y-1 shadow-sm group hover:border-slate-400 dark:hover:border-slate-700 transition">
                   <div class="flex items-center justify-between gap-2">
                     <span class="font-extrabold text-slate-900 dark:text-white text-[11px] truncate">${l.source || 'PC Opérationnel'}</span>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                      <span class="text-[9px] font-mono text-slate-400 dark:text-slate-400">${l.time}</span>
+                      <span class="text-[9px] font-mono text-slate-500 dark:text-slate-400">${l.time}</span>
                       <button type="button" 
                               onclick="event.stopPropagation(); window.ProtecCrisisRadio && window.ProtecCrisisRadio.replay(this.dataset.text, this.dataset.source);"
                               data-text="${encodeURIComponent(l.text || '')}"
@@ -2342,7 +2342,7 @@ window.ProtecCriseLogistique = {
                       </button>
                     </div>
                   </div>
-                  <p class="text-[11px] text-slate-600 dark:text-slate-200 leading-snug">${l.text}</p>
+                  <p class="text-[11px] text-slate-700 dark:text-slate-200 leading-snug">${l.text}</p>
                 </div>
               `;
             }).join('')}
