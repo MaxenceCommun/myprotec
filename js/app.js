@@ -27801,13 +27801,13 @@ class ProtecGame {
       }
 
       // 3d. GESTION DES CRISES MAJEURES & PLANS D'URGENCE (AASC, SNCF, CUMP)
-      // RÈGLE MÉTIER STRICTE : Moins d'une crise par jour en moyenne, exclusivement en journée ou en soirée (8h-22h).
-      if (this.clock.second === 20 && this.clock.minute % 30 === 0) {
+      // RÈGLE MÉTIER STRICTE : Test très fréquent toutes les 10 secondes avec probabilité infinitésimale
+      // calibrée pour conserver exactement le même taux global (moins d'une crise par jour, ~40% sur la journée 8h-22h).
+      if (this.clock.second % 10 === 0) {
         if (this.canTriggerDailyCrisis()) {
-          // Tirage calibré : ~2% de chance toutes les 30 min (sur les 28 créneaux de 8h à 22h,
-          // cela donne ~40% de chance d'apparition sur l'ensemble de la journée = 1 crise tous les 2 à 3 jours).
+          // 0.0001013 par tirage de 10s (5040 tirages de 8h à 22h) = (1 - 0.0001013)^5040 = ~60.4% sans crise => ~39.6% de chance par jour
           const crisisMultiplier = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('criseChanceMultiplier', 1.0) : 1.0;
-          const baseChance = 0.02 * crisisMultiplier;
+          const baseChance = 0.0001013 * crisisMultiplier;
 
           if (Math.random() < baseChance) {
             const hasAasc = Boolean(this.aascConvention && this.aascConvention.signed);
