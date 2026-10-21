@@ -14189,8 +14189,7 @@ class ProtecGame {
       if (nowTs >= existing.arrivalBaseAt) {
         this.showToast('Déjà à la base', `${volName} est déjà arrivé(e) à la base d'antenne.`, 'blue');
       } else {
-        const minsLeft = Math.max(1, Math.ceil((existing.arrivalBaseAt - nowTs) / 60000));
-        this.showToast('En route', `${volName} est en cours de trajet vers la base (~${minsLeft} min restante(s)).`, 'blue');
+                this.centerMapOnVolunteerTransit(mission.id, volId);
       }
       return;
     }
@@ -17457,9 +17456,9 @@ class ProtecGame {
                               if (isTransitEnRoute) {
                                 const minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
                                 return `
-                                  <span class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-500 text-white uppercase tracking-wider flex items-center gap-1">
+                                  <button type="button" onclick="window.game.centerMapOnVolunteerTransit('${mission.id}', '${v.id}')" class="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-500 hover:bg-amber-600 text-white uppercase tracking-wider flex items-center gap-1 cursor-pointer transition shadow-xs hover:scale-105 active:scale-95" title="Cliquer pour voir la position approximative en direct sur la carte">
                                     <span class="w-1.5 h-1.5 rounded-full bg-white animate-ping"></span> 🚗 En route (~${minsLeft} min)
-                                  </span>
+                                  </button>
                                 `;
                               }
                               if (isCrisisMission && (isUrgentOrPrealert || (mission.smsCampaignActive || (mission.smsResponses && mission.smsResponses.length > 0)) || dispoDomicileVols.some(x => x.id === v.id))) {
@@ -17540,7 +17539,7 @@ class ProtecGame {
                                 if (isTransitEnRoute) {
                                   const minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
                                   return `
-                                    <button type="button" onclick="window.game.callVolunteerToBase('${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition flex items-center gap-1 cursor-pointer" title="En transit depuis son domicile vers la base">
+                                    <button type="button" onclick="window.game.centerMapOnVolunteerTransit('${mission.id}', '${v.id}')" class="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition flex items-center gap-1 cursor-pointer" title="Cliquer pour voir la position en direct sur la carte">
                                       <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
                                       <span>En route (~${minsLeft} min)</span>
                                     </button>
@@ -26163,6 +26162,99 @@ class ProtecGame {
   // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR LA POSITION D'UN VÉHICULE ---
   
   // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
+  
+  // --- GÉOLOCALISATION ET VISUALISATION DU BÉNÉVOLE EN TRANSIT SUR LA CARTE ---
+  centerMapOnVolunteerTransit(missionId, volId) {
+    if (!volId) return;
+
+    const mission = (this.missions || []).find(m => m.id === missionId) || (this.missions || []).find(m => m.volunteerTransit && m.volunteerTransit[volId]) || this.missions?.[0];
+    const vol = (this.volunteers || []).find(v => v.id === volId);
+    if (!vol) return;
+
+    const transit = mission?.volunteerTransit?.[vol.id] || (mission?.volunteerTransit && Object.values(mission.volunteerTransit).find(t => t.volId === vol.id));
+    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+
+    // Déterminer la station d'antenne de destination
+    const station = (this.stations || []).find(s => s.id === vol.stationId) 
+      || (this.stations || []).find(s => s.id === mission?.stationId) 
+      || this.stations?.[0]
+      || { lat: 48.6921, lng: 6.1844, name: 'Base Antenne' };
+
+    const baseLat = Number(station.lat || 48.6921);
+    const baseLng = Number(station.lng || 6.1844);
+
+    // S'assurer de la présence du domicile du bénévole
+    if (!vol.coords_domicile && window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      window.ProtecPersonnel.ensureVolunteerResidence(vol, this);
+    }
+
+    const homeLat = Number(vol.coords_domicile?.lat || vol.lat || (baseLat + 0.025));
+    const homeLng = Number(vol.coords_domicile?.lng || vol.lng || (baseLng + 0.025));
+
+    // Calcul de la progression en direct (entre 5% et 95% si en route)
+    let progress = 0.5;
+    let minsLeft = vol.temps_ralliement_minutes || 8;
+
+    if (transit && transit.departedDomicileAt && transit.arrivalBaseAt) {
+      const total = Math.max(1000, transit.arrivalBaseAt - transit.departedDomicileAt);
+      const elapsed = nowTs - transit.departedDomicileAt;
+      progress = Math.max(0.05, Math.min(0.95, elapsed / total));
+      minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
+    }
+
+    // Coordonnées interpolées estimées sur le trajet domicile ➔ base
+    const approxLat = homeLat + (baseLat - homeLat) * progress;
+    const approxLng = homeLng + (baseLng - homeLng) * progress;
+
+    // Fermer les fenêtres ouvertes pour dévoiler la carte
+    if (typeof this.closeModal === 'function') this.closeModal();
+    if (typeof this.closeDrawer === 'function') this.closeDrawer();
+    const mainModal = document.getElementById('main-modal');
+    if (mainModal) mainModal.classList.add('hidden');
+
+    // Déplacement fluide de la caméra vers la position approximative
+    if (this.map && typeof this.map.flyTo === 'function') {
+      const targetZoom = Math.max(this.map.getZoom(), 15);
+      this.map.flyTo([approxLat, approxLng], targetZoom, { duration: 1.2 });
+
+      // Balise visuelle éphémère (s'efface automatiquement après 6 secondes)
+      if (typeof L !== 'undefined' && L.divIcon) {
+        if (this._tempVolunteerTransitMarker) {
+          try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
+          this._tempVolunteerTransitMarker = null;
+        }
+
+        const modeIcon = vol.mode_transport === 'moto' ? '🏍️' : (vol.mode_transport === 'velo' ? '🚲' : '🚗');
+        const icon = L.divIcon({
+          className: 'temp-volunteer-ping',
+          html: `<div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+            <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-amber-400 opacity-75"></span>
+            <div class="relative px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-black shadow-xl border-2 border-white flex items-center gap-1.5 whitespace-nowrap">
+              <span>${modeIcon}</span>
+              <span>${vol.name.split(' ')[0]} (~<span class="mono-num">${minsLeft}</span> min)</span>
+            </div>
+          </div>`,
+          iconSize: [1, 1],
+          iconAnchor: [0, 0]
+        });
+
+        this._tempVolunteerTransitMarker = L.marker([approxLat, approxLng], { icon }).addTo(this.map);
+        setTimeout(() => {
+          if (this._tempVolunteerTransitMarker) {
+            try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
+            this._tempVolunteerTransitMarker = null;
+          }
+        }, 6500);
+      }
+
+      this.showToast(
+        `🚗 ${vol.name} en route`,
+        `Position estimée en direct sur le trajet domicile ➔ ${station.name || 'base'} (~reste ${minsLeft} min, parcours à ${Math.round(progress * 100)}%).`,
+        'orange'
+      );
+    }
+  }
+
   centerMapOnVolunteerAddress(volunteerId, isCandidate = false) {
     if (!volunteerId) return;
 
