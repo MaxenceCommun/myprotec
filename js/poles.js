@@ -655,28 +655,41 @@ window.ProtecPoles = {
     game.saveGame();
   },
 
-  // 4.4 Réarmement et désinfection des ambulances
+  // 4.4 Réarmement et désinfection des ambulances via des Missions Logistique
   executeTaskRearmement(game, pole, config, vols) {
     if (!Array.isArray(game.vehicles)) return;
     const threshold = config.autoRestockThreshold || 85;
     const toRestock = game.vehicles.filter(v => {
-      const isAtBase = v.status === 'dispo' || v.status === 'base' || !v.status;
-      return isAtBase && ((v.consumablesPercent || 100) < threshold || (v.oxygenPercent || 100) < threshold || v.needsRestock);
+      const isAtBase = v.status === 'dispo' || v.status === 'base' || v.status === 'a_rearme' || !v.status;
+      const armLevel = v.armementLevel !== undefined ? v.armementLevel : (v.consumablesPercent !== undefined ? v.consumablesPercent : 100);
+      return isAtBase && (armLevel < threshold || v.needsRearming || v.a_rearme || v.isRearmed === false);
     });
 
     if (toRestock.length === 0) return;
     const veh = toRestock[0];
-    veh.consumablesPercent = 100;
-    veh.oxygenPercent = 100;
-    veh.needsRestock = false;
-    veh.lastRestockAt = Date.now();
 
-    pole.actionLogs.unshift({
-      time: Date.now(),
-      text: `Réarmement complet et désinfection de ${veh.name || veh.type}.`
-    });
-    game.saveGame();
-    game.showToast('🔧 Réarmement Flotte', `Le ${pole.name} a réarmé et désinfecté l'ambulance ${veh.name || veh.type}.`, 'teal');
+    // Création d'une vraie mission logistique d'atelier au planning
+    if (typeof game.createRearmamentLogisticsMission === 'function') {
+      const mission = game.createRearmamentLogisticsMission(veh.id, true, pole);
+      if (mission) {
+        pole.actionLogs.unshift({
+          time: Date.now(),
+          text: `Planification de l'atelier logistique de réarmement pour ${veh.name || veh.type}.`
+        });
+        game.saveGame();
+      }
+    } else {
+      veh.armementLevel = 100;
+      veh.consumablesPercent = 100;
+      veh.needsRearming = false;
+      veh.isRearmed = true;
+      pole.actionLogs.unshift({
+        time: Date.now(),
+        text: `Réarmement complet et désinfection de ${veh.name || veh.type}.`
+      });
+      game.saveGame();
+      game.showToast('🔧 Réarmement Flotte', `Le ${pole.name} a réarmé et désinfecté l'ambulance ${veh.name || veh.type}.`, 'teal');
+    }
   },
 
   // 4.5 Approvisionnements & commandes de consommables

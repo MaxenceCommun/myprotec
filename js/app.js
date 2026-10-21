@@ -7996,6 +7996,173 @@ class ProtecGame {
     this.saveGame();
   }
 
+  // =========================================================================
+  // SYSTÈME OFFICIEL DE RÉARMEMENT DES VÉHICULES VIA MISSIONS LOGISTIQUE
+  // Permet aux bénévoles de s'inscrire à l'atelier de réarmement au garage.
+  // Peut devenir 100% automatique si l'antenne dispose d'un Responsable Logistique en poste.
+  // =========================================================================
+
+  createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null) {
+    const veh = (this.vehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return null;
+
+    // Vérifier si une mission de réarmement est déjà en cours ou planifiée pour ce véhicule
+    const existing = (this.missions || []).find(m => 
+      (m.isRearmamentWorkshop || m.type === 'logistique' || m.type === 'rearmement') &&
+      m.status !== 'completed' && m.status !== 'canceled' &&
+      (m.targetVehicleId === veh.id || (Array.isArray(m.targetVehicleIds) && m.targetVehicleIds.includes(veh.id)))
+    );
+
+    if (existing) {
+      if (!autoCreated) {
+        this.showToast('Atelier Déjà Planifié 🛠️', `Un atelier logistique de réarmement est déjà programmé pour ${veh.name}.`, 'blue');
+        if (typeof this.openMissionDetails === 'function') {
+          this.openMissionDetails(existing.id);
+        }
+      }
+      return existing;
+    }
+
+    const st = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, city: 'Antenne Locale', name: 'Antenne' };
+    const now = Date.now();
+    const missionId = `m-log-rearm-${veh.id}-${now}`;
+
+    const mission = {
+      id: missionId,
+      type: 'logistique',
+      category: 'logistique',
+      categoryLabel: '📦 Logistique - Atelier de Réarmement',
+      title: `Atelier Logistique : Réarmement ${veh.name}`,
+      desc: `Réarmement, désinfection et remise à niveau complète de la dotation (pansements, compresses, désinfectant, O2) pour ${veh.name} (${veh.model || veh.type}) au garage de l'antenne. Inscription des bénévoles ouverte.`,
+      targetVehicleId: veh.id,
+      targetVehicleIds: [veh.id],
+      isRearmamentWorkshop: true,
+      status: 'planifie',
+      progress: 0,
+      requiredVolunteers: 1,
+      maxVolunteers: 2,
+      requiredRanks: ['Stagiaire', 'PSE1', 'PSE2', 'Logisticien'],
+      registeredVolunteers: [],
+      assignedCrew: { volunteers: [], vehicles: [veh] },
+      durationMinutes: 30,
+      durationSeconds: 120, // 2 minutes réelles pour une expérience fluide
+      duration: 3,
+      scale: 'LOGISTIQUE',
+      rewardMoney: 0,
+      rewardReputation: 10,
+      address: st.name ? `${st.name} (Garage Atelier)` : 'Garage de l’antenne',
+      city: st.city || 'Local Antenne',
+      lat: Number(st.lat || 48.6921),
+      lng: Number(st.lng || 6.1844),
+      eventDate: { ...(this.clock || {}) },
+      createdAt: now,
+      autoCreatedByResp: Boolean(autoCreated)
+    };
+
+    if (!Array.isArray(this.missions)) this.missions = [];
+    this.missions.unshift(mission);
+
+    // Si créé automatiquement par le responsable logistique, on tente d'y pré-inscrire un bénévole disponible du pôle
+    if (autoCreated && pole) {
+      const poleMembers = (this.volunteers || []).filter(v => 
+        (v.status === 'dispo' || !v.status) &&
+        (v.poleId === pole.id || (Array.isArray(pole.memberIds) && pole.memberIds.includes(v.id)))
+      );
+      if (poleMembers.length > 0) {
+        mission.registeredVolunteers.push(poleMembers[0].id);
+        poleMembers[0].status = 'mission';
+      }
+    }
+
+    this.renderMissions();
+    this.updateStatsUI();
+    this.saveGame();
+
+    if (!autoCreated) {
+      this.showToast('Mission Logistique Créée ! 📦', `L'atelier de réarmement pour ${veh.name} est au planning. Vos bénévoles peuvent s'y inscrire !`, 'green');
+      if (window.ProtecAudio && typeof window.ProtecAudio.playClickSound === 'function') {
+        window.ProtecAudio.playClickSound();
+      }
+      if (typeof this.openMissionDetails === 'function') {
+        this.openMissionDetails(mission.id);
+      }
+    }
+
+    return mission;
+  }
+
+  // Détection d'un Responsable Logistique en poste pour la gestion automatique
+  hasActiveLogisticsResponsible() {
+    // 1. Vérification dans les Pôles d'antenne (ProtecPoles)
+    if (Array.isArray(this.poles)) {
+      const logPole = this.poles.find(p => p.category === 'logistique' || (Array.isArray(p.includedTaskIds) && p.includedTaskIds.includes('log_rearmement')));
+      if (logPole) {
+        const assignedVols = (this.volunteers || []).filter(v => v.poleId === logPole.id || (Array.isArray(logPole.memberIds) && logPole.memberIds.includes(v.id)));
+        const hasStaff = Boolean(logPole.leaderId || assignedVols.length > 0);
+        const taskConfig = logPole.tasksConfig?.log_rearmement || {};
+        const isAutoEnabled = taskConfig.autoRestock !== false;
+        if (hasStaff && isAutoEnabled) {
+          const leaderVol = (this.volunteers || []).find(v => v.id === logPole.leaderId) || assignedVols[0];
+          return { active: true, name: leaderVol ? leaderVol.name : 'Responsable Logistique', pole: logPole, leader: leaderVol };
+        }
+      }
+    }
+
+    // 2. Vérification dans le Bureau d'antenne
+    if (this.bureau?.chefLogId) {
+      const leaderVol = (this.volunteers || []).find(v => v.id === this.bureau.chefLogId);
+      if (leaderVol) {
+        return { active: true, name: leaderVol.name, pole: null, leader: leaderVol };
+      }
+    }
+
+    // 3. Vérification des rôles / compétences des bénévoles
+    const respVol = (this.volunteers || []).find(v => v.role === 'responsable_logistique' || v.isRespLog || (Array.isArray(v.skills) && v.skills.includes('resp_log')));
+    if (respVol) {
+      return { active: true, name: respVol.name, pole: null, leader: respVol };
+    }
+
+    return { active: false, name: null };
+  }
+
+  // Vérification périodique du réarmement automatique par le Responsable Logistique
+  checkAutoLogisticsRearmament() {
+    const resp = this.hasActiveLogisticsResponsible();
+    if (!resp.active) return;
+
+    if (!Array.isArray(this.vehicles) || this.vehicles.length === 0) return;
+
+    // Trouver les véhicules au garage nécessitant un réarmement (< 85%)
+    const needRearm = this.vehicles.filter(v => {
+      const isAtBase = v.status === 'dispo' || v.status === 'base' || v.status === 'a_rearme' || !v.status;
+      const armLevel = v.armementLevel !== undefined ? v.armementLevel : (v.consumablesPercent !== undefined ? v.consumablesPercent : 100);
+      return isAtBase && (armLevel < 85 || v.needsRearming || v.a_rearme || v.isRearmed === false);
+    });
+
+    if (needRearm.length === 0) return;
+
+    const targetVeh = needRearm[0];
+    const armLevel = targetVeh.armementLevel !== undefined ? targetVeh.armementLevel : (targetVeh.consumablesPercent !== undefined ? targetVeh.consumablesPercent : 100);
+
+    // Vérifier si un atelier existe déjà
+    const hasMission = (this.missions || []).some(m => 
+      (m.isRearmamentWorkshop || m.type === 'logistique' || m.type === 'rearmement') &&
+      m.status !== 'completed' && m.status !== 'canceled' &&
+      (m.targetVehicleId === targetVeh.id || (Array.isArray(m.targetVehicleIds) && m.targetVehicleIds.includes(targetVeh.id)))
+    );
+
+    if (!hasMission) {
+      const mission = this.createRearmamentLogisticsMission(targetVeh.id, true, resp.pole);
+      if (mission && resp.pole && Array.isArray(resp.pole.actionLogs)) {
+        resp.pole.actionLogs.unshift({
+          time: Date.now(),
+          text: `Atelier logistique planifié automatiquement pour ${targetVeh.name} (Armement : ${armLevel}%).`
+        });
+      }
+      this.showToast('📦 Gestion Logistique Automatique', `${resp.name} a planifié l'atelier de réarmement pour ${targetVeh.name} (Armement: ${armLevel}%).`, 'teal');
+    }
+  }
+
   // Comparaison calendaire robuste pour détecter d'éventuels conflits d'engagement
   isSameMissionDate(d1, d2) {
     if (!d1 || !d2) return false;
@@ -11701,6 +11868,26 @@ class ProtecGame {
   completeMission(mission) {
     if (mission.type === 'travaux' && window.ProtecLocaux && typeof window.ProtecLocaux.onTravauxMissionCompleted === 'function') {
       window.ProtecLocaux.onTravauxMissionCompleted(this, mission);
+    }
+
+    // Résolution d'un Atelier Logistique de Réarmement
+    if (mission.isRearmamentWorkshop || mission.type === 'logistique' || mission.type === 'rearmement') {
+      const targetIds = mission.targetVehicleIds || (mission.targetVehicleId ? [mission.targetVehicleId] : []);
+      targetIds.forEach(tId => {
+        const targetVeh = (this.vehicles || []).find(v => v.id === tId);
+        if (targetVeh) {
+          targetVeh.armementLevel = 100;
+          targetVeh.consumablesPercent = 100;
+          targetVeh.isRearmed = true;
+          targetVeh.needsRearming = false;
+          targetVeh.a_rearme = false;
+          targetVeh.lastRearmedAt = Date.now();
+          if (targetVeh.status === 'a_rearme' || targetVeh.status === 'transit') {
+            targetVeh.status = 'dispo';
+          }
+        }
+      });
+      this.showToast('Atelier Logistique Achevé 📦', `Le réarmement et la désinfection sont terminés. Le véhicule est 100% opérationnel !`, 'green');
     }
     mission.status = 'completed';
     // Synchronisation du statut "terminee" avec le backend dédié OVH
@@ -25832,22 +26019,68 @@ class ProtecGame {
     const cmdLeader = isVLC && window.ProtecCommandement ? window.ProtecCommandement.getLeader(this, v) : null;
     const isCmdEligible = window.ProtecCommandement && window.ProtecCommandement.isEligible(v);
 
-    // Planning d'utilisation & missions de logistique / réarmement prévues
+    // Planning d'utilisation & missions prévues (DPS, SAMU, SDIS, Maraudes, Crises, Formations, Ateliers Logistiques)
     const vehicleMissions = (this.missions || []).filter(m => {
       if (this.isMissionTerminated(m)) return false;
-      // 1. Mission d'atelier de réarmement flotte
-      if (m.isRearmamentWorkshop || m.type === 'rearmement') {
-        return Array.isArray(m.targetVehicleIds) && m.targetVehicleIds.includes(v.id);
+      // 1. Mission d'atelier logistique de réarmement flotte
+      if (m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique') {
+        if (m.targetVehicleId === v.id) return true;
+        if (Array.isArray(m.targetVehicleIds) && m.targetVehicleIds.includes(v.id)) return true;
       }
-      // 2. Missions où le véhicule est engagé
+      // 2. Missions opérationnelles où le véhicule est engagé
       if (Array.isArray(m.vehicles) && m.vehicles.includes(v.id)) return true;
       if (Array.isArray(m.assignedVehicles) && m.assignedVehicles.includes(v.id)) return true;
+      if (Array.isArray(m.assignedVehicleIds) && m.assignedVehicleIds.includes(v.id)) return true;
+      if (m.assignedCrew && Array.isArray(m.assignedCrew.vehicles) && m.assignedCrew.vehicles.some(x => (x?.id || x) === v.id)) return true;
       if (m.vehicleFunctions && m.vehicleFunctions[v.id]) return true;
       if (m.targetVehicleId === v.id) return true;
       // 3. Équipes avec ce véhicule
       if (Array.isArray(m.teams) && m.teams.some(t => t.vehicleId === v.id)) return true;
       return false;
     });
+
+    // Formations mobilisant ce véhicule (Convoyage matériel & malles B2B/Intra)
+    if (Array.isArray(this.formationB2BProposals)) {
+      this.formationB2BProposals.forEach(p => {
+        if ((p.vehicleId === v.id || p.vehicle_id === v.id) && (p.status === 'in_progress' || p.status === 'signe')) {
+          vehicleMissions.push({
+            id: p.id,
+            isFormationB2B: true,
+            type: 'formation',
+            title: `Formation ${p.training_type || 'Secourisme'} chez ${p.client_name || 'Entreprise'}`,
+            status: p.status === 'in_progress' ? 'en_cours' : 'planifie',
+            eventTime: p.scheduled_date ? `${p.scheduled_date} (${p.start_time || '09h00'})` : 'Date convenue',
+            vehicleFunctions: { [v.id]: 'Convoyage malles & matériel pédagogique' }
+          });
+        }
+      });
+    }
+
+    // Garde active SAMU 15 (si le véhicule est le vecteur VPSP de permanence)
+    if (this.samuGarde && this.samuGarde.active && Array.isArray(this.samuGarde.assignedVehicles) && this.samuGarde.assignedVehicles.includes(v.id)) {
+      vehicleMissions.unshift({
+        id: 'samu-garde-active',
+        isSamuGardeActive: true,
+        type: 'samu',
+        title: `Garde Régulée SAMU 15 (Astreinte VPSP Active)`,
+        status: 'en_cours',
+        eventTime: 'Garde opérationnelle en cours',
+        vehicleFunctions: { [v.id]: 'Vecteur Ambulancier de Garde' }
+      });
+    }
+
+    // Garde active SDIS 18 (si le véhicule est posté ou en caserne)
+    if (this.sdisGarde && this.sdisGarde.active && (this.sdisGarde.vehicleId === v.id || (Array.isArray(this.sdisGarde.assignedVehicles) && this.sdisGarde.assignedVehicles.includes(v.id)))) {
+      vehicleMissions.unshift({
+        id: 'sdis-garde-active',
+        isSdisGardeActive: true,
+        type: 'pompiers',
+        title: `Garde Opérationnelle SDIS Pompiers (Caserne)`,
+        status: 'en_cours',
+        eventTime: 'Garde postée pompiers en cours',
+        vehicleFunctions: { [v.id]: 'Vecteur Prompt Secours' }
+      });
+    }
 
     const modalId = 'vehicle-details-modal';
     let modal = document.getElementById(modalId);
@@ -25937,19 +26170,67 @@ class ProtecGame {
             </div>
           </div>
 
-          <!-- Jauge d'état mécanique -->
-          <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-            <div class="flex items-center justify-between text-xs">
-              <span class="font-extrabold text-slate-700 flex items-center gap-1.5">
-                <span>🔩</span> État Mécanique & Entretien
-              </span>
-              <span class="font-mono font-black ${(v.mechanical || 90) > 70 ? 'text-emerald-600' : ((v.mechanical || 90) > 40 ? 'text-amber-600' : 'text-red-600')}">
-                ${v.mechanical || 90}%
-              </span>
+          <!-- Double Jauge : État Mécanique & Armement (%) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <!-- 1. État Mécanique -->
+            <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-extrabold text-slate-700 flex items-center gap-1.5">
+                  <span>🔩</span> État Mécanique
+                </span>
+                <span class="font-mono font-black ${(v.mechanical || 90) > 70 ? 'text-emerald-600' : ((v.mechanical || 90) > 40 ? 'text-amber-600' : 'text-red-600')}">
+                  ${v.mechanical || 90}%
+                </span>
+              </div>
+              <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                <div class="h-full rounded-full transition-all duration-300 ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-slate-400">
+                <span>Contrôle & Révision</span>
+                <span class="font-bold ${(v.mechanical || 90) > 70 ? 'text-emerald-700' : 'text-amber-700'}">${(v.mechanical || 90) > 70 ? 'Bon état' : 'Révision conseillée'}</span>
+              </div>
             </div>
-            <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
-              <div class="h-full rounded-full transition-all duration-300 ${(v.mechanical || 90) > 70 ? 'bg-emerald-500' : ((v.mechanical || 90) > 40 ? 'bg-amber-500' : 'bg-red-500')}" style="width: ${v.mechanical || 90}%"></div>
-            </div>
+
+            <!-- 2. Armement & Dotation Sanitaire (%) -->
+            ${(() => {
+              const armPct = Math.min(100, Math.max(0, Math.round(v.armementLevel !== undefined ? v.armementLevel : (v.consumablesPercent !== undefined ? v.consumablesPercent : 100))));
+              const isWellArmed = armPct >= 80;
+              const isMedArmed = armPct >= 40 && armPct < 80;
+              const armBarColor = isWellArmed ? 'bg-emerald-500' : (isMedArmed ? 'bg-amber-500' : 'bg-red-500');
+              const armTextColor = isWellArmed ? 'text-emerald-600' : (isMedArmed ? 'text-amber-600' : 'text-red-600');
+              const armStatusText = isWellArmed ? '100% Opérationnel' : (isMedArmed ? 'Réassort conseillé' : 'Réarmement Requis');
+              const hasPendingRearm = (this.missions || []).some(m => (m.isRearmamentWorkshop || m.type === 'logistique' || m.type === 'rearmement') && m.status !== 'completed' && (m.targetVehicleId === v.id || (m.targetVehicleIds && m.targetVehicleIds.includes(v.id))));
+
+              return `
+                <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                  <div class="flex items-center justify-between text-xs">
+                    <span class="font-extrabold text-slate-700 flex items-center gap-1.5">
+                      <span>🎒</span> Armement & Dotation
+                    </span>
+                    <span class="font-mono font-black ${armTextColor}">
+                      ${armPct}%
+                    </span>
+                  </div>
+                  <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                    <div class="h-full rounded-full transition-all duration-300 ${armBarColor}" style="width: ${armPct}%"></div>
+                  </div>
+                  <div class="flex items-center justify-between text-[10px]">
+                    <span class="font-bold ${armTextColor}">${armStatusText}</span>
+                    ${armPct < 100 ? `
+                      ${hasPendingRearm ? `
+                        <span class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">🛠️ Atelier Prévu</span>
+                      ` : `
+                        <button type="button" onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" class="text-amber-700 hover:text-amber-900 font-black underline cursor-pointer" title="Créer un atelier logistique pour réarmer ce véhicule">
+                          + Réarmer (Mission Logistique)
+                        </button>
+                      `}
+                    ` : `
+                      <span class="text-emerald-700 font-bold">Complet ✓</span>
+                    `}
+                  </div>
+                </div>
+              `;
+            })()}
           </div>
 
           <!-- Transmissions & Informatique Embarquée (Armement Facultatif) -->
@@ -26100,62 +26381,83 @@ class ProtecGame {
             </div>
           ` : ''}
 
-          <!-- Planning d'utilisation & Engagements du véhicule (Opérationnels + Réarmement) -->
+          <!-- Planning d'utilisation & Engagements du véhicule (Formation, DPS, SAMU, SDIS, Maraudes, Crise, Logistique) -->
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
             <div class="flex items-center justify-between">
               <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
                 <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
-                <span>Planning d'Utilisation & Engagements (${vehicleMissions.length})</span>
+                <span>Planning des Missions & Engagements (${vehicleMissions.length})</span>
               </span>
-              ${vehicleMissions.some(m => m.isRearmamentWorkshop || m.type === 'rearmement') ? `
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1">
-                  <i data-lucide="wrench" class="w-3 h-3 text-amber-600"></i>
-                  <span>Réarmement prévu</span>
-                </span>
-              ` : ''}
+              <span class="text-[10px] text-slate-400 font-bold">Affectations Véhicule</span>
             </div>
 
             ${vehicleMissions.length === 0 ? `
-              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-1">
-                <p class="text-xs font-bold text-slate-700">Aucun engagement ni réarmement planifié</p>
-                <p class="text-[10px] text-slate-500">Ce véhicule est actuellement libre au garage pour être engagé sur un dispositif ou réarmé.</p>
+              <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-1">
+                <p class="text-xs font-bold text-slate-700">Aucun engagement ni mission planifiée</p>
+                <p class="text-[10.5px] text-slate-500">Ce véhicule est actuellement libre au garage pour être engagé sur un DPS, une formation, une garde ou un atelier logistique.</p>
               </div>
             ` : `
-              <div class="space-y-2 max-h-48 overflow-y-auto pr-1">
+              <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
                 ${vehicleMissions.map(m => {
-                  const isRearm = Boolean(m.isRearmamentWorkshop || m.type === 'rearmement');
-                  const slotStr = typeof this.formatMissionTimeSlot === 'function' ? this.formatMissionTimeSlot(m) : (m.eventTime || 'Horaire fixé');
+                  const isRearm = Boolean(m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique');
+                  const isFormation = m.type === 'formation' || m.isFormationB2B;
+                  const isSamu = m.type === 'samu' || m.isSamuGardeActive;
+                  const isSdis = m.type === 'pompiers' || m.isSdisGardeActive;
+                  const isSocial = m.type === 'social';
+                  const isCrisis = Boolean(m.type === 'crise' || m.isCrisis);
+                  const slotStr = m.eventTime || (typeof this.formatMissionTimeSlot === 'function' ? this.formatMissionTimeSlot(m) : 'Horaire planifié');
                   const vehRole = (m.vehicleFunctions && m.vehicleFunctions[v.id]) || '';
 
+                  let badgeLabel = 'DPS';
+                  let badgeClass = 'bg-blue-100 text-blue-900 border-blue-300';
+                  if (isRearm) {
+                    badgeLabel = 'Atelier Logistique';
+                    badgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
+                  } else if (isFormation) {
+                    badgeLabel = 'Formation';
+                    badgeClass = 'bg-indigo-100 text-indigo-900 border-indigo-300';
+                  } else if (isSamu) {
+                    badgeLabel = 'SAMU 15';
+                    badgeClass = 'bg-orange-100 text-orange-900 border-orange-300';
+                  } else if (isSdis) {
+                    badgeLabel = 'SDIS 18';
+                    badgeClass = 'bg-red-100 text-red-900 border-red-300';
+                  } else if (isSocial) {
+                    badgeLabel = 'Maraude';
+                    badgeClass = 'bg-purple-100 text-purple-900 border-purple-300';
+                  } else if (isCrisis) {
+                    badgeLabel = 'Crise';
+                    badgeClass = 'bg-rose-100 text-rose-900 border-rose-300';
+                  }
+
+                  const clickHandler = isFormation
+                    ? `window.game.openModule('formation'); document.getElementById('${modalId}').remove();`
+                    : (m.isSamuGardeActive || m.isSdisGardeActive
+                      ? `window.game.openModule('conventions'); document.getElementById('${modalId}').remove();`
+                      : `window.game.openMissionDetails('${m.id}'); document.getElementById('${modalId}').remove();`);
+
                   return `
-                    <div onclick="window.game.openMissionDetails('${m.id}'); document.getElementById('${modalId}').remove();" class="p-2.5 rounded-xl border ${isRearm ? 'bg-amber-50/70 border-amber-200 hover:border-amber-300' : 'bg-slate-50 border-slate-200 hover:border-pc-blue/50'} hover:shadow-xs transition cursor-pointer flex flex-col gap-1" title="Cliquer pour ouvrir la mission">
+                    <div onclick="${clickHandler}" class="p-2.5 rounded-xl border ${isRearm ? 'bg-amber-50/70 border-amber-200 hover:border-amber-400' : 'bg-slate-50 border-slate-200 hover:border-pc-blue/50'} hover:shadow-xs transition cursor-pointer flex flex-col gap-1" title="Cliquer pour afficher la mission">
                       <div class="flex items-center justify-between gap-2">
                         <div class="flex items-center gap-1.5 min-w-0">
-                          ${isRearm ? `
-                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase bg-amber-200 text-amber-900 shrink-0 flex items-center gap-0.5">
-                              <i data-lucide="wrench" class="w-2.5 h-2.5"></i>
-                              <span>Atelier Logistique</span>
-                            </span>
-                          ` : `
-                            <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase ${m.type === 'samu' ? 'bg-orange-100 text-orange-800' : m.type === 'pompiers' ? 'bg-red-100 text-red-800' : (m.type === 'crise' || m.isCrisis) ? 'bg-rose-100 text-rose-800' : 'bg-blue-100 text-blue-800'} shrink-0">
-                              ${m.type === 'samu' ? 'SAMU 15' : m.type === 'pompiers' ? 'SDIS 18' : (m.type === 'crise' || m.isCrisis) ? 'Crise' : 'DPS'}
-                            </span>
-                          `}
+                          <span class="px-1.5 py-0.2 rounded text-[9px] font-black uppercase border shrink-0 ${badgeClass}">
+                            ${badgeLabel}
+                          </span>
                           <strong class="text-xs font-black text-slate-900 truncate">${m.title}</strong>
                         </div>
-                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${m.status === 'en_cours' ? 'bg-emerald-500 text-white animate-pulse' : (m.status === 'prealerte' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700')}">
-                          ${m.status === 'en_cours' ? 'En cours' : (m.status === 'prealerte' ? 'Préalerte' : (m.status === 'declenche' ? 'Déclenché' : 'Planifié'))}
+                        <span class="px-1.5 py-0.5 rounded text-[9px] font-black shrink-0 ${m.status === 'en_cours' || m.status === 'ongoing' ? 'bg-emerald-500 text-white animate-pulse' : (m.status === 'prealerte' ? 'bg-amber-500 text-white' : 'bg-slate-200 text-slate-700')}">
+                          ${m.status === 'en_cours' || m.status === 'ongoing' ? 'En cours' : (m.status === 'prealerte' ? 'Préalerte' : (m.status === 'declenche' ? 'Déclenché' : 'Planifié'))}
                         </span>
                       </div>
                       <div class="flex items-center justify-between text-[10px] text-slate-500 flex-wrap gap-1">
                         <span class="flex items-center gap-1">
                           <i data-lucide="clock" class="w-3 h-3 text-slate-400"></i>
-                          <span>${isRearm ? `Durée atelier : ~${m.durationMinutes || 60} min` : slotStr}</span>
+                          <span>${isRearm ? `Durée atelier : ~${m.durationMinutes || 30} min` : slotStr}</span>
                         </span>
                         ${isRearm ? `
-                          <span class="font-bold text-amber-800">🛠️ Réarmement & Désinfection prévus</span>
+                          <span class="font-bold text-amber-800">🛠️ Inscription bénévoles ouverte</span>
                         ` : (vehRole ? `
-                          <span class="font-medium text-slate-600 truncate max-w-[200px]">${vehRole}</span>
+                          <span class="font-medium text-slate-600 truncate max-w-[220px]">${vehRole}</span>
                         ` : '')}
                       </div>
                     </div>
@@ -26195,15 +26497,15 @@ class ProtecGame {
             </button>
           ` : ''}
 
-          ${(v.type === 'VPSP' || v.hasPsEquipment) && ((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false) ? `
+          ${((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false || v.consumablesPercent < 100) ? `
             <button 
               type="button" 
-              onclick="if(window.ProtecCriseLogistique){ window.ProtecCriseLogistique.openCreateRearmamentModal(window.game); } document.getElementById('${modalId}').remove();" 
-              class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition flex items-center gap-1 cursor-pointer shadow-xs"
-              title="Planifier une mission d'atelier au local pour réarmer ce véhicule"
+              onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" 
+              class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Créer une mission logistique d'atelier au garage pour réarmer ce véhicule"
             >
               <i data-lucide="wrench" class="w-3.5 h-3.5"></i>
-              <span>Planifier Réarmement</span>
+              <span>Planifier Réarmement (Mission Logistique)</span>
             </button>
           ` : ''}
 
@@ -26634,6 +26936,11 @@ class ProtecGame {
       const currentTime = now.getTime();
 
       // 1. Progression des missions en cours (Vraie durée & Main Courante de Crise)
+      // Vérification du réarmement logistique automatique (si Responsable Logistique en poste)
+      if (this.clock.second % 15 === 0) {
+        this.checkAutoLogisticsRearmament();
+      }
+
       this.missions.forEach(m => {
         if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit) {
           const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
