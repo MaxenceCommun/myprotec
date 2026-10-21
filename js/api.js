@@ -151,12 +151,54 @@
       const hasSdis = Boolean(game.sdisConvention && game.sdisConvention.signed && game.sdisGarde && game.sdisGarde.active);
       const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
 
+      // 1. RÈGLE STRICTE DPS : Un DPS ne doit JAMAIS être lancé en alerte directe sans validation de devis par le joueur !
+      // Les seuls missions d'alerte immédiate sont les crises (NOVI, inondations, recherches de personnes, violences urbaines, tempêtes...).
+      const invalidAlertDps = game.missions.filter(m => m && m.type === 'dps' && (m.status === 'declenche' || m.status === 'prealerte' || m.isBackendIntervention || String(m.id).startsWith('interv-')));
+      if (invalidAlertDps.length > 0) {
+        console.log(`[API MyProtec] Détection et retrait de ${invalidAlertDps.length} mission(s) DPS lancée(s) en alerte directe sans devis.`);
+        if (!Array.isArray(game.devis)) game.devis = [];
+        invalidAlertDps.forEach(dps => {
+          const devId = `dev-${dps.id}`;
+          if (!game.devis.some(d => d.id === devId || d.id === dps.id || (dps.backendId && d.backendId == dps.backendId))) {
+            const dev = {
+              id: devId,
+              backendId: dps.backendId || null,
+              clientName: dps.clientName || 'Organisateur de l’événement',
+              clientType: 'association',
+              eventName: dps.title,
+              durationHours: dps.durationHours || 6,
+              lat: dps.lat,
+              lng: dps.lng,
+              publicCount: '1 500 personnes',
+              scale: dps.scale || 'DPS-PE (4 secouristes + VPSP)',
+              requiredVolunteers: dps.requiredVolunteers || 4,
+              requiredRanks: ['CE', 'PSE2', 'PSE1'],
+              requiredVehicles: (dps.requiredVehicles && dps.requiredVehicles.length > 0) ? dps.requiredVehicles : ['VPSP'],
+              status: 'pending',
+              address: dps.address || 'Sur site',
+              mealsProvidedByOrganizer: true,
+              proposedPrice: dps.rewardMoney || 950,
+              createdAt: Date.now()
+            };
+            if (typeof game.calculateBareme === 'function') {
+              dev.bareme = game.calculateBareme(dev);
+              dev.proposedPrice = dev.bareme?.totalBareme || dev.proposedPrice;
+            }
+            if (typeof game.enrichMissionLocationWithCity === 'function') {
+              game.enrichMissionLocationWithCity(dev);
+            }
+            game.devis.push(dev);
+          }
+        });
+        game.missions = game.missions.filter(m => !invalidAlertDps.includes(m));
+      }
+
+      // 2. Filtrage des conventions SAMU, SDIS et Crises
       game.missions = game.missions.filter(m => {
         if (!m) return false;
         if ((m.type === 'samu' || m.type === 'garde_samu') && !hasSamu) return false;
         if ((m.type === 'pompiers' || m.type === 'garde_sdis') && !hasSdis) return false;
         if (m.type === 'crise' && !hasAasc) return false;
-        // Aucun verrou sur les DPS : chaque antenne reçoit régulièrement ses demandes de DPS
         return true;
       });
     },
@@ -168,21 +210,39 @@
       if (!intervention || !intervention.id) return;
       const game = this._gameRef || window.game;
 
-      const mission = this.syncInterventionIntoGame(intervention, true);
+      const result = this.syncInterventionIntoGame(intervention, true);
+      if (!result) return;
 
-      // Alerte sonore
+      const rawTitle = intervention.titre || 'Intervention';
+      const cleanTitle = rawTitle.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\brenfort\s+poste\b/gi, 'Poste').replace(/\brenfort\s+/gi, '').trim();
+
+      // CAS 1 : C'EST UNE DEMANDE DE DPS -> PAS D'ALERTE D'URGENCE DIRECTE, NOTIFICATION DE DEVIS COMMERCIALE
+      if (result.isDevis || result.type === 'dps' || result.missionType === 'dps') {
+        const devId = result.devis?.id || `dev-interv-${intervention.id}`;
+        if (window.ProtecNotifications && typeof window.ProtecNotifications.notifyCategory === 'function') {
+          window.ProtecNotifications.notifyCategory('finances', '📋 NOUVELLE DEMANDE DE DEVIS DPS', `${cleanTitle} à ${intervention.commune || 'Secteur'}. À étudier et valider dans le module Devis.`, devId);
+        }
+        if (game && typeof game.showToast === 'function') {
+          game.showToast('📋 Nouvelle Demande de Devis DPS', `« ${cleanTitle} » à ${intervention.commune || 'Secteur'}. Rendez-vous dans le module Devis pour le chiffrer et le valider.`, 'blue', {
+            target: { type: 'devis', id: devId }
+          });
+        }
+        this.refreshUI();
+        return;
+      }
+
+      // CAS 2 : CRISES MAJEURES & URGENCES CONVENTIONNÉES (NOVI, Inondations, Recherches, Violences Urbaines, Tempêtes, SAMU, SDIS)
+      // Seules ces interventions peuvent sonner l'alerte opérationnelle immédiate !
       if (window.ProtecAudio && typeof window.ProtecAudio.playAlertSound === 'function') {
         try { window.ProtecAudio.playAlertSound(); } catch (e) {}
       } else if (game && typeof game.playSound === 'function') {
         try { game.playSound('alert'); } catch (e) {}
       }
 
-      // Notification visuelle Push & Toasts (titre assaini, aucun faux 'Renfort DPS' généré automatiquement)
-      const rawTitle = intervention.titre || 'Intervention';
-      const cleanTitle = rawTitle.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\brenfort\s+poste\b/gi, 'Poste').replace(/\brenfort\s+/gi, '').trim();
       const severityUpper = (intervention.gravite || 'Urgence').toUpperCase();
-      const title = `🚨 NOUVELLE INTERVENTION (${severityUpper})`;
-      const desc = `${cleanTitle} à ${intervention.commune || 'Secteur'}. Moyens : ${(intervention.vehicules_requis || []).join(', ') || 'Équipe de secours'}`;
+      const isCrisis = result.type === 'crise';
+      const title = isCrisis ? `🔴 ALERTE CRISE MAJEURE (${severityUpper})` : `🚨 NOUVELLE INTERVENTION (${severityUpper})`;
+      const desc = `${cleanTitle} à ${intervention.commune || 'Secteur'}. Moyens requis : ${(intervention.vehicules_requis || []).join(', ') || 'Équipe de secours'}`;
 
       if (window.ProtecNotifications && typeof window.ProtecNotifications.notifyCategory === 'function') {
         window.ProtecNotifications.notifyCategory('alert', title, desc, `interv-${intervention.id}`);
@@ -192,7 +252,7 @@
 
       if (game && typeof game.showToast === 'function') {
         game.showToast(title, desc, 'red', {
-          target: { type: 'mission', id: mission.id }
+          target: { type: 'mission', id: result.id }
         });
       }
 
@@ -281,13 +341,25 @@
       const sanitizedDesc = rawDesc.replace(/\brenfort\s+dps\b/gi, 'DPS').replace(/\ben\s+renfort\s+dps\b/gi, 'en poste de secours').trim();
 
       // Détermination rigoureuse du type de mission
-      let missionType = 'pompiers';
       const titleLower = sanitizedTitle.toLowerCase();
-      if (/dps|poste de secours|sportif|course|trail|match|stade/i.test(titleLower)) {
-        missionType = 'dps';
-      } else if (/hébergement|soutien logistique|crise|inondation|évacuation|plan blanc|novi/i.test(titleLower)) {
+      const descLower = sanitizedDesc.toLowerCase();
+      const allText = `${titleLower} ${descLower}`;
+
+      // 1. Détection prioritaire des VRAIES CRISES (les seules missions qui doivent se lancer comme des alertes immédiates)
+      const isCrisis = /crise|inondation|crue|novi|recherche|disparition|violence|urbain|émeute|tempête|ouragan|cyclone|catastrophe|sinistre|effondrement|explosion|sauvetage|déblaiement|hébergement|accueil des impliqués|soutien logistique|plan blanc|orsec|alerte rouge|catnat/i.test(allText);
+
+      // 2. Détection des DPS (événements sportifs, culturels, rassemblements du public)
+      const isDPS = /dps|poste de secours|sportif|course|trail|match|stade|concert|festival|brocante|foire|marathon|triathlon|fête|rassemblement|événement|manif|spectacle/i.test(allText);
+
+      // 3. Détection des urgences SAMU 15
+      const isSamu = reqVehicles.includes('VPSP') || /détresse|malaise|cardiaque|avc|respiratoire|smur|samu|urgence vitale|étouffement|inconscient|coma/i.test(allText);
+
+      let missionType = 'pompiers';
+      if (isCrisis) {
         missionType = 'crise';
-      } else if (reqVehicles.includes('VPSP') || /détresse|malaise|cardiaque|avc|respiratoire|smur|samu|urgence vitale/i.test(titleLower)) {
+      } else if (isDPS) {
+        missionType = 'dps';
+      } else if (isSamu) {
         missionType = 'samu';
       }
 
@@ -298,6 +370,52 @@
 
       let existing = game.missions.find(m => m.id === missionId || m.backendId == cleanId);
 
+      // RÈGLE D'OR DPS :
+      // UN DPS NE DOIT JAMAIS SE LANCER EN ALERTE DIRECTE DANS LES MISSIONS OPÉRATIONNELLES SANS VALIDATION DE DEVIS !
+      // Si une demande de DPS arrive, elle est obligatoirement orientée vers le module DEVIS (game.devis).
+      if (missionType === 'dps') {
+        if (existing) {
+          game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
+        }
+        if (!Array.isArray(game.devis)) game.devis = [];
+        const devisId = `dev-interv-${cleanId}`;
+        let existingDevis = game.devis.find(d => d.id === devisId || d.backendId == cleanId);
+        if (!existingDevis) {
+          const newDevis = {
+            id: devisId,
+            backendId: cleanId,
+            clientName: interv.client || interv.organisateur || 'Organisateur de l’événement',
+            clientType: 'association',
+            eventName: sanitizedTitle,
+            durationHours: 6,
+            lat: isNaN(lat) ? (game.stations?.[0]?.lat || 48.6921) : lat,
+            lng: isNaN(lng) ? (game.stations?.[0]?.lng || 6.1844) : lng,
+            publicCount: '1 500 personnes',
+            scale: 'DPS-PE (4 secouristes + VPSP)',
+            requiredVolunteers: reqVolunteers || 4,
+            requiredRanks: ['CE', 'PSE2', 'PSE1'],
+            requiredVehicles: reqVehicles.length > 0 ? reqVehicles : ['VPSP'],
+            status: 'pending',
+            address: interv.commune ? `${interv.commune} (Secteur d'intervention)` : 'Sur site',
+            mealsProvidedByOrganizer: true,
+            proposedPrice: 1200 + (reqVehicles.length * 200),
+            createdAt: Date.now()
+          };
+          if (typeof game.calculateBareme === 'function') {
+            newDevis.bareme = game.calculateBareme(newDevis);
+            newDevis.proposedPrice = newDevis.bareme?.totalBareme || newDevis.proposedPrice;
+          }
+          if (typeof game.enrichMissionLocationWithCity === 'function') {
+            game.enrichMissionLocationWithCity(newDevis);
+          }
+          game.devis.push(newDevis);
+          if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+          if (typeof game.saveGame === 'function') game.saveGame();
+          existingDevis = newDevis;
+        }
+        return { isDevis: true, devis: existingDevis, missionType: 'dps' };
+      }
+
       // 1. Mission SAMU : Exige impérativement Convention Cadre SAMU signée ET garde VPSP active
       if (missionType === 'samu') {
         const hasSamuConv = Boolean(game.samuConvention && game.samuConvention.signed);
@@ -305,20 +423,18 @@
         const hasVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP');
 
         if (!hasSamuConv || !hasSamuGarde || !hasVpsp) {
-          // Si le joueur n'a pas conventionné le SAMU ou n'a pas de garde VPSP déclarée, il ne reçoit aucun appel 15
           if (existing) {
             game.missions = game.missions.filter(m => m.id !== missionId && m.backendId != cleanId);
           }
           return null;
         }
 
-        // Règle opérationnelle stricte : Pas plus d'interventions SAMU simultanées que de vecteurs VPSP de garde
         const maxVectors = (game.samuGarde && game.samuGarde.assignedVehicles && game.samuGarde.assignedVehicles.length > 0)
           ? game.samuGarde.assignedVehicles.length
           : 1;
         const activeSamu = (game.missions || []).filter(m => m.type === 'samu' && (m.status === 'ongoing' || m.status === 'declenche' || m.status === 'planifie') && m.id !== missionId && m.backendId != cleanId);
         if (activeSamu.length >= maxVectors && !existing) {
-          return null; // Vecteur VPSP déjà engagé
+          return null;
         }
       }
 
@@ -344,9 +460,6 @@
           return null;
         }
       }
-
-      // 4. Mission DPS : Aucun verrou matériel préalable.
-      // Chaque antenne reçoit régulièrement ses demandes de DPS. Les renforts sont gérés manuellement par les joueurs.
 
       if (existing) {
         existing.title = sanitizedTitle || existing.title;

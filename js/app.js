@@ -2208,6 +2208,48 @@ class ProtecGame {
         });
       }
 
+      // 3.bis Purge stricte DPS : AUCUN DPS NE DOIT SE LANCER EN ALERTE DIRECTE SANS DEVIS VALIDÉ
+      // Les seules alertes immédiates autorisées sont les crises (NOVI, inondations, recherches de personnes, violences urbaines, tempêtes...)
+      const invalidAlertDps = this.missions.filter(m => m && m.type === 'dps' && (m.status === 'declenche' || m.status === 'prealerte' || m.isBackendIntervention || String(m.id).startsWith('interv-')));
+      if (invalidAlertDps.length > 0) {
+        console.log(`[MyProtec] Assainissement : migration de ${invalidAlertDps.length} DPS d'alerte non devisé(s) vers le module Devis.`);
+        if (!Array.isArray(this.devis)) this.devis = [];
+        invalidAlertDps.forEach(dps => {
+          const devId = `dev-${dps.id}`;
+          if (!this.devis.some(d => d.id === devId || d.id === dps.id || (dps.backendId && d.backendId == dps.backendId))) {
+            const dev = {
+              id: devId,
+              backendId: dps.backendId || null,
+              clientName: dps.clientName || 'Organisateur de l’événement',
+              clientType: 'association',
+              eventName: dps.title,
+              durationHours: dps.durationHours || 6,
+              lat: dps.lat,
+              lng: dps.lng,
+              publicCount: '1 500 personnes',
+              scale: dps.scale || 'DPS-PE (4 secouristes + VPSP)',
+              requiredVolunteers: dps.requiredVolunteers || 4,
+              requiredRanks: ['CE', 'PSE2', 'PSE1'],
+              requiredVehicles: (dps.requiredVehicles && dps.requiredVehicles.length > 0) ? dps.requiredVehicles : ['VPSP'],
+              status: 'pending',
+              address: dps.address || 'Sur site',
+              mealsProvidedByOrganizer: true,
+              proposedPrice: dps.rewardMoney || 950,
+              createdAt: Date.now()
+            };
+            if (typeof this.calculateBareme === 'function') {
+              dev.bareme = this.calculateBareme(dev);
+              dev.proposedPrice = dev.bareme?.totalBareme || dev.proposedPrice;
+            }
+            if (typeof this.enrichMissionLocationWithCity === 'function') {
+              this.enrichMissionLocationWithCity(dev);
+            }
+            this.devis.push(dev);
+          }
+        });
+        this.missions = this.missions.filter(m => !invalidAlertDps.includes(m));
+      }
+
       // 4. Assainissement progression nouvelle antenne : pas de devis pending sans visibilité
       const hasComm = !!(this.resources?.campaigns?.social || this.resources?.campaigns?.posters || this.resources?.campaigns?.presse || (this.activeCampaigns || []).length > 0);
       const hasSite = !!(this.antenneWebsite && this.antenneWebsite.published && (this.antenneWebsite.freshness || 0) >= 40);

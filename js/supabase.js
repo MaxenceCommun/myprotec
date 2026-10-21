@@ -490,7 +490,7 @@ window.ProtecSupabase = {
 
             const realMission = {
               id: mId,
-              type: isSamuType ? 'samu' : (isPompierType ? 'pompiers' : 'dps'),
+              type: isSamuType ? 'samu' : (isPompierType ? 'pompiers' : 'crise'),
               category: 'urgences',
               title: notifData.title?.replace(/^[🚨🔔🚑🚒⚠️🏆📢\s]+/, '') || (isSamuType ? 'Détresse Respiratoire à Domicile' : 'Intervention Prioritaire'),
               desc: notifData.message || notifData.body || 'Mission d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
