@@ -23,7 +23,12 @@ window.ProtecCrisisRadio = {
   serverStatus: { checked: false, available: false, model: 'fr_FR-mls-medium', speakersCount: 125 },
 
   apiBaseUrl: null,
-  activeEngine: 'piper', // 'piper' ou 'webspeech'
+  activeEngine: 'speechSynthesis', // 'speechSynthesis' ou 'piper'
+  preferredEngine: 'speechSynthesis', // Défini par défaut sur SpeechSynthesis
+  selectedVoiceName: null,
+  selectedVoiceIndex: 0,
+  frenchVoices: [],
+  activeUtterance: null,
   selectedModel: 'mls',  // 'mls' (48 voix d'élite filtrées sans souffle), 'siwis' (studio pro), 'upmc' (homme/femme)
 
   // =========================================================================
@@ -156,8 +161,13 @@ window.ProtecCrisisRadio = {
       this.enabled = stored !== null ? stored === 'true' : true;
       const storedModel = localStorage.getItem('protec_crisis_voice_model');
       if (storedModel) this.selectedModel = storedModel;
+      const storedEngine = localStorage.getItem('protec_tts_engine');
+      if (storedEngine) this.preferredEngine = storedEngine;
+      const storedVoice = localStorage.getItem('protec_speech_voice_name');
+      if (storedVoice) this.selectedVoiceName = storedVoice;
     } catch (e) {
       this.enabled = true;
+      this.preferredEngine = 'speechSynthesis';
     }
 
     // Préchargement du son start_radio.mp3
@@ -167,11 +177,67 @@ window.ProtecCrisisRadio = {
       this.startRadioAudio.volume = 0.85;
     } catch (e) {}
 
-    // Vérification asynchrone et résolution automatique du serveur Piper TTS
+    // Détection et écoute des voix SpeechSynthesis natives du système
+    if ('speechSynthesis' in window) {
+      this.loadVoices();
+      if (window.speechSynthesis.onvoiceschanged !== undefined) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.loadVoices();
+          this.updateHudState();
+        };
+      }
+    }
+
+    // Vérification asynchrone et résolution automatique du serveur Piper TTS (en arrière-plan)
     this.checkServerStatus();
 
     // Montage du HUD radio flottant
     this.injectRadioHud();
+  },
+
+  /**
+   * Charge et trie les voix françaises de SpeechSynthesis du système
+   */
+  loadVoices() {
+    if (!('speechSynthesis' in window)) return [];
+    try {
+      const all = window.speechSynthesis.getVoices() || [];
+      const fr = all.filter(v => v.lang && v.lang.toLowerCase().startsWith('fr'));
+      
+      // Trier pour mettre les voix de meilleure diction en premier
+      fr.sort((a, b) => {
+        const score = (v) => {
+          const n = (v.name || '').toLowerCase();
+          let s = 0;
+          if (n.includes('natural')) s += 50;
+          if (n.includes('online')) s += 30;
+          if (n.includes('google')) s += 20;
+          if (n.includes('denise') || n.includes('henri')) s += 15;
+          if (n.includes('paul') || n.includes('julie') || n.includes('hortense')) s += 10;
+          return s;
+        };
+        return score(b) - score(a);
+      });
+
+      this.frenchVoices = fr;
+
+      if (this.selectedVoiceName && fr.length > 0) {
+        const foundIdx = fr.findIndex(v => v.name === this.selectedVoiceName);
+        if (foundIdx !== -1) {
+          this.selectedVoiceIndex = foundIdx;
+        }
+      }
+    } catch (e) {
+      console.warn('Erreur détection voix SpeechSynthesis:', e);
+    }
+    return this.frenchVoices;
+  },
+
+  getFrenchVoices() {
+    if (!this.frenchVoices || this.frenchVoices.length === 0) {
+      return this.loadVoices();
+    }
+    return this.frenchVoices;
   },
 
   /**
@@ -529,23 +595,105 @@ window.ProtecCrisisRadio = {
   },
 
   cycleVoiceModel() {
-    const list = ['mls', 'siwis', 'upmc', 'tom'];
-    const curIdx = list.indexOf(this.selectedModel);
-    const nextModel = list[(curIdx + 1) % list.length];
-    this.setVoiceModel(nextModel);
+    const frVoices = this.getFrenchVoices();
+
+    // 1. Si nous sommes en mode SpeechSynthesis
+    if (this.preferredEngine === 'speechSynthesis' || this.activeEngine === 'speechSynthesis') {
+      if (frVoices.length > 1 && this.selectedVoiceIndex < frVoices.length - 1) {
+        // Voix française suivante du système
+        this.selectedVoiceIndex++;
+        const nextVoice = frVoices[this.selectedVoiceIndex];
+        this.selectedVoiceName = nextVoice.name;
+        try { localStorage.setItem('protec_speech_voice_name', nextVoice.name); } catch (e) {}
+        this.updateHudState();
+        if (window.game && typeof window.game.showToast === 'function') {
+          window.game.showToast('Voix SpeechSynthesis', `${nextVoice.name} (${this.selectedVoiceIndex + 1}/${frVoices.length}) 🔊`, 'cyan');
+        }
+        return;
+      } else {
+        // Fin des voix SpeechSynthesis -> Basculer sur le moteur Piper TTS si disponible
+        this.preferredEngine = 'piper';
+        try { localStorage.setItem('protec_tts_engine', 'piper'); } catch (e) {}
+        this.activeEngine = 'piper';
+        this.updateHudState();
+        if (window.game && typeof window.game.showToast === 'function') {
+          window.game.showToast('Moteur TTS', 'Bascule vers Piper TTS (Modèle local) 🎙️', 'blue');
+        }
+        return;
+      }
+    } else {
+      // 2. Si nous étions sur Piper, revenir sur SpeechSynthesis première voix
+      this.preferredEngine = 'speechSynthesis';
+      this.selectedVoiceIndex = 0;
+      if (frVoices.length > 0) {
+        this.selectedVoiceName = frVoices[0].name;
+        try { localStorage.setItem('protec_speech_voice_name', frVoices[0].name); } catch (e) {}
+      }
+      try { localStorage.setItem('protec_tts_engine', 'speechSynthesis'); } catch (e) {}
+      this.activeEngine = 'speechSynthesis';
+      this.updateHudState();
+      const firstVoice = frVoices[0]?.name || 'Voix native';
+      if (window.game && typeof window.game.showToast === 'function') {
+        window.game.showToast('Moteur TTS', `Bascule vers SpeechSynthesis (${firstVoice}) 🔊`, 'cyan');
+      }
+    }
+  },
+
+  /**
+   * Teste immédiatement la synthèse vocale avec la voix active
+   */
+  testSpeech(customText = null) {
+    const text = customText || "PC de crise à toutes les unités, test de transmission radio sur le réseau tactique. Message 5 sur 5.";
+    
+    // Débloquer le contexte audio si nécessaire
+    this.getAudioContext();
+
+    if (!this.enabled) {
+      this.enabled = true;
+      try { localStorage.setItem('protec_crisis_radio_enabled', 'true'); } catch (e) {}
+    }
+
+    if (this.isProcessing) {
+      this.skip();
+    }
+
+    const frVoices = this.getFrenchVoices();
+    const curVoice = frVoices[this.selectedVoiceIndex]?.name || 'Voix par défaut';
+    const isSpeech = (this.preferredEngine === 'speechSynthesis');
+    const engineLabel = isSpeech ? `SpeechSynthesis [${curVoice}]` : `Piper TTS [${(this.selectedModel || 'mls').toUpperCase()}]`;
+
+    if (window.game && typeof window.game.showToast === 'function') {
+      window.game.showToast('Test Vocal Radio', `Écoute avec : ${engineLabel} 🎙️`, 'blue');
+    }
+
+    this.transmit({
+      text: text,
+      source: 'PC de Crise (Test)',
+      role: 'Commandement',
+      priority: true,
+      channel: 'TEST TACTIQUE'
+    });
   },
 
   /**
    * Synthétise et diffuse le message vocal :
-   * Tente d'abord le serveur Piper TTS (modèle sélectionné avec suppression des bruits d'aspiration),
-   * sinon bascule instantanément sur la synthèse Web Speech API passée dans les filtres radio.
+   * Priorité à SpeechSynthesis (API native du navigateur) comme demandé par l'utilisateur,
+   * avec possibilité de bascule vers Piper TTS.
    */
   async speakWithRadioEffect(tx) {
     const text = tx.cleanText;
     const speakerId = tx.speakerId;
-    const model = this.selectedModel || 'mls';
 
-    // A. Tenter la requête API Piper TTS officielle
+    // A. Priorité à SpeechSynthesis si sélectionné (par défaut)
+    if (this.preferredEngine === 'speechSynthesis') {
+      this.activeEngine = 'speechSynthesis';
+      this.updateHudState();
+      await this.speakViaWebSpeechRadio(text, speakerId, tx);
+      return;
+    }
+
+    // B. Sinon appel API Piper TTS local officiel
+    const model = this.selectedModel || 'mls';
     let playedViaServer = false;
     try {
       const base = await this.resolveApiBaseUrl();
@@ -561,24 +709,22 @@ window.ProtecCrisisRadio = {
             const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
             this.activeEngine = 'piper';
             this.updateHudState();
-            console.log(`🎙️ [Radio de Crise] Diffusion réussie via Piper TTS [${model.toUpperCase()}] (Voix #${speakerId}) : "${text.slice(0, 45)}..."`);
+            console.log(`🎙️ [Radio de Crise] Diffusion via Piper TTS [${model.toUpperCase()}] : "${text.slice(0, 45)}..."`);
             await this.playDecodedAudioBuffer(audioBuffer);
             playedViaServer = true;
           }
         }
       }
     } catch (e) {
-      console.warn('⚠️ [Radio de Crise] Échec appel Piper TTS serveur, bascule fallback:', e);
       playedViaServer = false;
     }
 
     if (playedViaServer) return;
 
-    // B. Fallback Web Speech API avec modulation de timbre
-    this.activeEngine = 'webspeech';
+    // Repli instantané sur SpeechSynthesis si échec serveur
+    this.activeEngine = 'speechSynthesis';
     this.updateHudState();
-    console.warn(`⚠️ [Radio de Crise] Diffusion en mode Fallback WebSpeech (Voix #${speakerId})`);
-    await this.speakViaWebSpeechRadio(text, speakerId);
+    await this.speakViaWebSpeechRadio(text, speakerId, tx);
   },
 
   currentAudioSourceNode: null,
@@ -602,55 +748,74 @@ window.ProtecCrisisRadio = {
   },
 
   /**
-   * Fallback Web Speech API calibré avec paramètres vocaux persistants selon le locuteur
+   * Synthèse vocale SpeechSynthesis native ultra-claire et sans bruit de souffle parasite
    */
-  speakViaWebSpeechRadio(text, speakerId) {
+  speakViaWebSpeechRadio(text, speakerId, tx = null) {
     return new Promise(resolve => {
       if (!('speechSynthesis' in window)) {
-        setTimeout(resolve, 1500);
+        console.warn('SpeechSynthesis non supporté sur ce navigateur.');
+        setTimeout(resolve, 1200);
         return;
       }
 
-      // Interrompre une synthèse précédente résiduelle
+      // Interrompre toute synthèse en cours
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = 'fr-FR';
 
-      // Modulation déterministe du pitch (timbre) et du débit selon les 125 voix
-      // Permet de simuler 125 voix distinctes même sans Piper
-      const pitchMod = 0.85 + (speakerId % 9) * 0.05; // 0.85 à 1.25
-      const rateMod = 0.95 + ((speakerId * 7) % 5) * 0.04; // 0.95 à 1.15
-
-      utterance.pitch = pitchMod;
-      utterance.rate = rateMod;
-
-      // Recherche d'une voix française disponible
-      const voices = window.speechSynthesis.getVoices();
-      const frVoices = voices.filter(v => v.lang && (v.lang.startsWith('fr') || v.lang.startsWith('FR')));
+      // Recherche et attribution de la voix française sélectionnée
+      const frVoices = this.getFrenchVoices();
+      let chosenVoice = null;
       if (frVoices.length > 0) {
-        utterance.voice = frVoices[speakerId % frVoices.length];
+        if (this.selectedVoiceName) {
+          chosenVoice = frVoices.find(v => v.name === this.selectedVoiceName) || frVoices[0];
+        } else if (this.selectedVoiceIndex >= 0 && this.selectedVoiceIndex < frVoices.length) {
+          chosenVoice = frVoices[this.selectedVoiceIndex];
+        } else {
+          chosenVoice = frVoices[0];
+        }
       }
 
-      // Générer un très léger souffle radio de fond pendant que la synthèse parle
-      const stopNoise = this.playContinuousRadioStatic();
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      // Nuance subtile et réaliste sans distorsion robotique
+      const pitchOffset = ((speakerId % 5) - 2) * 0.015;
+      utterance.pitch = Math.max(0.95, Math.min(1.05, 1.0 + pitchOffset));
+      utterance.rate = 1.02; // Débit posé et naturel
+      utterance.volume = 1.0;
+
+      // Note : AUCUN souffle blanc ni bruit d'aspiration artificiel pour une voix limpide et intelligible
+
+      // Conserver une référence d'instance pour contrer le bug de Garbage Collection de Chrome
+      this.activeUtterance = utterance;
 
       let isFinished = false;
       const finish = () => {
         if (!isFinished) {
           isFinished = true;
-          if (stopNoise) stopNoise();
+          this.activeUtterance = null;
           resolve();
         }
       };
 
       utterance.onend = finish;
-      utterance.onerror = finish;
+      utterance.onerror = (e) => {
+        console.warn('SpeechSynthesis utterance event error:', e);
+        finish();
+      };
+
+      // Si le moteur était suspendu par le navigateur, reprendre
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume();
+      }
 
       window.speechSynthesis.speak(utterance);
 
-      // Sécurité timeout calculée sur la longueur du texte
-      const maxDuration = Math.max(2500, (text.length / 10) * 1000);
+      // Timeout de sécurité proportionnel à la longueur du texte
+      const maxDuration = Math.max(3000, (text.length / 7) * 1000);
       setTimeout(finish, maxDuration);
     });
   },
@@ -900,6 +1065,9 @@ window.ProtecCrisisRadio = {
             </button>
           </div>
           <div class="flex items-center gap-1.5">
+            <button type="button" onclick="window.ProtecCrisisRadio.testSpeech()" class="px-2 py-0.5 rounded-lg bg-cyan-900/60 hover:bg-cyan-800 text-[10px] font-bold text-cyan-200 hover:text-white transition border border-cyan-500/40 cursor-pointer active:scale-95" title="Tester immédiatement la voix TTS active">
+              Test 🎙️
+            </button>
             <span id="crisis-radio-hud-queue-badge" class="hidden text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 border border-slate-700">
               +0 en attente
             </span>
@@ -966,14 +1134,20 @@ window.ProtecCrisisRadio = {
       if (textEl) textEl.textContent = `« ${this.currentTransmission.text} »`;
       if (chanEl) chanEl.textContent = this.currentTransmission.channel || 'CANAL CRISE';
       if (engineEl) {
-        const spk = this.currentTransmission.speakerId !== undefined ? this.currentTransmission.speakerId : '?';
-        const modelLabel = (this.selectedModel || 'mls').toUpperCase();
-        if (this.activeEngine === 'piper') {
-          engineEl.textContent = `🎙️ ${modelLabel} (#${spk})`;
-          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer active:scale-95 shadow-2xs';
+        if (this.preferredEngine === 'speechSynthesis' || this.activeEngine === 'speechSynthesis') {
+          const frVoices = this.getFrenchVoices();
+          const curVoice = frVoices[this.selectedVoiceIndex];
+          let vName = curVoice ? curVoice.name.replace(/Microsoft |Google |\(France\)|\(fr-FR\)/gi, '').trim() : 'Système';
+          if (vName.length > 16) vName = vName.substring(0, 15) + '…';
+          engineEl.textContent = `🔊 Speech: ${vName}`;
+          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 border border-emerald-500/40 transition cursor-pointer active:scale-95 shadow-2xs';
+          engineEl.title = `Moteur actif : SpeechSynthesis natif (${curVoice?.name || 'Voix par défaut'}). Cliquez pour changer de voix ou de moteur.`;
         } else {
-          engineEl.textContent = `⚠️ Fallback WebSpeech`;
-          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-500/40';
+          const spk = this.currentTransmission.speakerId !== undefined ? this.currentTransmission.speakerId : '?';
+          const modelLabel = (this.selectedModel || 'mls').toUpperCase();
+          engineEl.textContent = `🎙️ Piper [${modelLabel}] (#${spk})`;
+          engineEl.className = 'text-[9px] font-bold px-1.5 py-0.5 rounded bg-cyan-950/80 hover:bg-cyan-900 text-cyan-300 border border-cyan-500/40 transition cursor-pointer active:scale-95 shadow-2xs';
+          engineEl.title = `Moteur actif : Piper TTS local. Cliquez pour basculer sur SpeechSynthesis.`;
         }
       }
     }

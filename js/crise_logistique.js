@@ -4198,6 +4198,12 @@ window.ProtecCriseLogistique = {
               <span class="${window.ProtecCrisisRadio?.enabled ? 'text-cyan-300 font-black' : 'text-slate-400'}">${window.ProtecCrisisRadio?.enabled ? 'ACTIVE 🎙️' : 'OFF 🔇'}</span>
             </button>
 
+            <!-- Bouton Test Immédiat SpeechSynthesis -->
+            <button onclick="window.ProtecCrisisRadio && window.ProtecCrisisRadio.testSpeech()" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border text-xs font-bold transition shadow-xs bg-cyan-950/50 hover:bg-cyan-900/80 text-cyan-200 border-cyan-500/40" title="Tester la synthèse vocale SpeechSynthesis en direct">
+              <i data-lucide="play-circle" class="w-3.5 h-3.5 text-cyan-400"></i>
+              <span class="hidden md:inline">Test Voix</span>
+            </button>
+
             <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs">
               <span class="text-slate-400 font-medium">Phase : <strong class="text-white">${crisis.currentPhaseIndex + 1}/${phasesCount}</strong></span>
               <span class="text-slate-400 font-medium">Engagés : <strong class="text-emerald-400">${engagedCount}</strong></span>
