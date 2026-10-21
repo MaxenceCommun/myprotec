@@ -12106,6 +12106,22 @@ class ProtecGame {
     }
   }
 
+
+  // Clôture explicite par le joueur d'un dispositif en cours
+  confirmCloseOngoingMission(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId);
+    if (!mission) return;
+
+    if (mission.isCrisis || mission.type === 'crise') {
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.completeCrisisMission === 'function') {
+        window.ProtecCriseLogistique.completeCrisisMission(this, mission.id);
+        return;
+      }
+    }
+
+    this.showToast('🏁 Dispositif Clôturé', `Le dispositif « ${mission.title} » est clos. Fin d'intervention et retour des moyens.`, 'green');
+    this.completeMission(mission);
+  }
   completeMission(mission) {
     if (mission.type === 'travaux' && window.ProtecLocaux && typeof window.ProtecLocaux.onTravauxMissionCompleted === 'function') {
       window.ProtecLocaux.onTravauxMissionCompleted(this, mission);
@@ -12712,50 +12728,53 @@ class ProtecGame {
 
     // 2. LES MOYENS PAS SUR PLACE (EN TRANSIT OU ENCORE À LA BASE)
     if (notOnSceneVehicles.length > 0) {
-      if (hasCommandPost) {
-        // SI POSTE DE COMMANDEMENT SUR PLACE : TRANSMISSION AUTOMATIQUE DE L'ORDRE À TOUS !
-        notOnSceneVehicles.forEach(({ veh, isTransit }) => {
-          if (isTransit) {
-            // Demi-tour immédiat vers la base
-            const transitObj = Array.isArray(this.transits) ? this.transits.find(t => t.vehicle?.id === veh.id && t.statusTarget === 2) : null;
-            const curPos = (transitObj?.marker && transitObj.marker.getLatLng) ? transitObj.marker.getLatLng() : { lat: veh.lat, lng: veh.lng };
-            const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
-            if (transitObj) {
-              if (transitObj.polyline && this.map) this.map.removeLayer(transitObj.polyline);
-              if (transitObj.marker && this.map) this.map.removeLayer(transitObj.marker);
-              this.transits = this.transits.filter(t => t !== transitObj);
-            }
-            veh.status = 'transit';
-            veh.currentMissionId = null;
-            window.ProtecSystems?.startTransit(this, veh, { lat: curPos.lat, lng: curPos.lng }, { lat: baseStation.lat, lng: baseStation.lng }, mission, 6, () => {
-              veh.status = 'dispo';
-              this.showToast('Véhicule Rentré', `${veh.name} a regagné l'antenne sur ordre du Poste de Commandement.`, 'blue');
-            });
-          } else {
-            veh.status = 'dispo';
-            veh.currentMissionId = null;
+      // Transmission systématique de l'ordre de désengagement et repli à l'ensemble des moyens
+      notOnSceneVehicles.forEach(({ veh, isTransit }) => {
+        if (isTransit) {
+          // Demi-tour immédiat vers la base (Statut 6 retour)
+          const transitObj = Array.isArray(this.transits) ? this.transits.find(t => t.vehicle?.id === veh.id && t.statusTarget === 2) : null;
+          const curPos = (transitObj?.marker && transitObj.marker.getLatLng) ? transitObj.marker.getLatLng() : { lat: veh.lat, lng: veh.lng };
+          const baseStation = (this.stations || []).find(s => s.id === veh.stationId) || this.stations?.[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne' };
+          if (transitObj) {
+            if (transitObj.polyline && this.map) this.map.removeLayer(transitObj.polyline);
+            if (transitObj.marker && this.map) this.map.removeLayer(transitObj.marker);
+            this.transits = this.transits.filter(t => t !== transitObj);
           }
-        });
+          veh.status = 'transit';
+          veh.currentMissionId = null;
+          veh.missionId = null;
+          window.ProtecSystems?.startTransit(this, veh, { lat: curPos.lat, lng: curPos.lng }, { lat: baseStation.lat, lng: baseStation.lng }, mission, 6, () => {
+            veh.status = 'dispo';
+            this.showToast('Véhicule Rentré', `${veh.name} a regagné l'antenne suite à la clôture du dispositif.`, 'blue');
+          });
+        } else {
+          veh.status = 'dispo';
+          veh.currentMissionId = null;
+          veh.missionId = null;
+        }
+      });
 
-        // Bénévoles non véhiculés non encore sur place : libérés immédiatement
-        const unassigned = crewVolunteers.filter(v => !assignedVolIds.has(v.id));
-        unassigned.forEach(v => {
-          v.status = 'dispo';
-          v.currentMissionId = null;
-        });
+      // Bénévoles non véhiculés non encore sur place : libérés immédiatement
+      const unassigned = crewVolunteers.filter(v => !assignedVolIds.has(v.id));
+      unassigned.forEach(v => {
+        v.status = 'dispo';
+        v.currentMissionId = null;
+        v.missionId = null;
+      });
 
+      mission.pendingManualDisengage = false;
+
+      if (hasCommandPost) {
         this.showToast(
           '📡 Poste de Commandement sur Place',
           'Fin d’événement : Ordre de désengagement général transmis automatiquement par le PC à l’ensemble des moyens (sur site, en transit et à la base).',
           'purple'
         );
       } else {
-        // PAS DE POSTE DE COMMANDEMENT SUR PLACE : DÉSENGAGEMENT MANUEL PAR LE JOUEUR !
-        mission.pendingManualDisengage = true;
         this.showToast(
-          '⚠️ Fin d’événement sans PC sur place',
-          'L’événement est clos mais aucun Poste de Commandement n’était sur les lieux : les véhicules et personnels non arrivés sur site restent mobilisés jusqu’à votre désengagement manuel.',
-          'orange'
+          '🏁 Dispositif Clôturé',
+          'Fin d’événement : ordre de repli général transmis. Tous les véhicules et effectifs rentrent à l’antenne.',
+          'green'
         );
       }
     } else {
@@ -12764,11 +12783,28 @@ class ProtecGame {
       unassignedVols.forEach(v => {
         v.status = 'dispo';
         v.currentMissionId = null;
+        v.missionId = null;
         if (window.ProtecPersonnel) {
           window.ProtecPersonnel.applyMissionExertion(v, mission, !!aep2Specialist, this.weather);
         }
       });
     }
+
+    // Sécurité opérationnelle absolue : Libération de tout véhicule ou bénévole resté assigné à cette mission
+    (this.vehicles || []).forEach(v => {
+      if (v.currentMissionId === mission.id || v.missionId === mission.id) {
+        if (v.status === 'mission' || v.status === 'sur_les_lieux') v.status = 'dispo';
+        v.currentMissionId = null;
+        v.missionId = null;
+      }
+    });
+    (this.volunteers || []).forEach(v => {
+      if (v.currentMissionId === mission.id || v.missionId === mission.id) {
+        if (v.status === 'mission' || v.status === 'sur_les_lieux') v.status = 'dispo';
+        v.currentMissionId = null;
+        v.missionId = null;
+      }
+    });
 
     // Consommation de matériel de secours
     if (window.ProtecSystems) {
@@ -12820,8 +12856,69 @@ class ProtecGame {
     // Démobilisation propre des éventuels renforts extérieurs engagés
     this.demobilizeMissionReinforcements(mission);
 
+    // Clôture explicite des indicateurs de la mission
+    mission.status = 'completed';
+    mission.isCompleted = true;
+    mission.isFinished = true;
+    mission.closed = true;
+    mission.crisisCanClose = false;
+    mission.pendingManualDisengage = false;
+    mission.completedAt = Date.now();
+
     // Retrait immédiat de la mission terminée de la liste active pour ne plus jamais l'afficher
     this.missions = (this.missions || []).filter(m => m.id !== mission.id && !this.isMissionTerminated(m));
+
+    // Archivage dans pastMissions si disponible
+    if (!Array.isArray(this.pastMissions)) this.pastMissions = [];
+    if (!this.pastMissions.some(p => p.id === mission.id)) {
+      this.pastMissions.unshift({ ...mission });
+      if (this.pastMissions.length > 50) this.pastMissions.pop();
+    }
+
+    // Clôture et retrait immédiats de activeCrises pour éteindre le bouton PC Crise
+    if (Array.isArray(this.activeCrises)) {
+      this.activeCrises.forEach(c => {
+        if (c.id === mission.id) {
+          c.status = 'terminee';
+          c.endedAt = Date.now();
+          c.crisisCanClose = false;
+        }
+      });
+      this.activeCrises = this.activeCrises.filter(c => c.id !== mission.id && c.status === 'active');
+    }
+
+    // Nettoyage de tous les marqueurs Leaflet sur la carte
+    if (mission.marker && this.map) {
+      try { this.map.removeLayer(mission.marker); } catch (e) {}
+    }
+    if (this.markers?.missions?.[mission.id] && this.map) {
+      try { this.map.removeLayer(this.markers.missions[mission.id]); } catch (e) {}
+      delete this.markers.missions[mission.id];
+    }
+    if (mission._timelineMarker && this.map) {
+      try { this.map.removeLayer(mission._timelineMarker); } catch (e) {}
+      delete mission._timelineMarker;
+    }
+    if (this.missionsClusterGroup) {
+      try {
+        const layers = this.missionsClusterGroup.getLayers();
+        layers.forEach(l => {
+          if (l.missionId === mission.id || l._missionId === mission.id) {
+            this.missionsClusterGroup.removeLayer(l);
+          }
+        });
+      } catch (e) {}
+    }
+
+    // Fermeture du drawer contextuel s'il ciblait cette mission
+    if (this.selectedMissionId === mission.id) {
+      this.closeDrawer();
+      this.selectedMissionId = null;
+    }
+
+    // Fermeture de la modale du PC Crise si ouverte
+    const pcModal = document.getElementById('pc-crise-modal-backdrop');
+    if (pcModal) pcModal.remove();
 
     // Nettoyage immédiat des épingles si la mission était épinglée
     if (Array.isArray(this.pinnedMissionIds) && this.pinnedMissionIds.includes(mission.id)) {
@@ -12835,6 +12932,8 @@ class ProtecGame {
     this.renderStations();
     this.renderMissions();
     this.updateStatsUI();
+    this.updateMissionCounts();
+    this.updateDockAndFiltersVisibility();
     this.saveGame();
   }
 
@@ -18753,6 +18852,20 @@ class ProtecGame {
             `}
           `
         )}
+      `;
+    } else if (mission.status === 'ongoing') {
+      footer.innerHTML = `
+        <div class="flex items-center gap-2 w-full">
+          <button onclick="window.game.closeDrawer()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
+          <button onclick="window.game.centerMapOnMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center justify-center gap-1 shrink-0" title="Centrer la carte sur la mission">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-700"></i>
+            <span>Carte</span>
+          </button>
+          <button onclick="window.game.confirmCloseOngoingMission('${mission.id}')" class="flex-1 py-2.5 px-3 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer">
+            <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+            <span>Clôturer le Dispositif</span>
+          </button>
+        </div>
       `;
     } else if (mission.pendingManualDisengage) {
       footer.innerHTML = `

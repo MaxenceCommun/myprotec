@@ -2376,7 +2376,7 @@ window.ProtecCriseLogistique = {
   // Clôture définitive de la crise une fois autorisée par le COS
   completeCrisisMission(game, missionId) {
     if (!game) game = window.game;
-    const mission = (game.missions || []).find(m => m.id === missionId);
+    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     const myId = game.player?.id || 'usr_local';
@@ -2385,15 +2385,41 @@ window.ProtecCriseLogistique = {
       return;
     }
 
+    mission.status = 'terminee';
+    mission.crisisCanClose = false;
+    mission.endedAt = Date.now();
+
+    // Clôture et retrait immédiats de game.activeCrises
+    if (Array.isArray(game.activeCrises)) {
+      game.activeCrises.forEach(c => {
+        if (c.id === missionId || c.id === mission.id) {
+          c.status = 'terminee';
+          c.crisisCanClose = false;
+          c.endedAt = Date.now();
+        }
+      });
+      game.activeCrises = game.activeCrises.filter(c => c.id !== missionId && c.id !== mission.id && c.status === 'active');
+    }
+
+    // Fermeture immédiate de tous les drawers et modales du PC Crise
+    const pcModal = document.getElementById('pc-crise-modal-backdrop');
+    if (pcModal) pcModal.remove();
+    const modal = document.getElementById('mission-modal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+    const firstDrawer = document.getElementById('context-drawer');
+    if (firstDrawer) {
+      firstDrawer.classList.add('hidden');
+      firstDrawer.classList.remove('flex');
+    }
+    if (typeof game.closeDrawer === 'function') game.closeDrawer();
+    if (typeof game.closeModal === 'function') game.closeModal();
+
     // Délégation impérative au gestionnaire global pour assurer le retour routier physique des véhicules et équipages
     if (typeof game.completeMission === 'function') {
       game.completeMission(mission);
-      if (typeof game.closeDrawer === 'function') game.closeDrawer();
-      const modal = document.getElementById('mission-modal');
-      if (modal) {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
-      }
       return;
     }
 
@@ -2453,15 +2479,15 @@ window.ProtecCriseLogistique = {
     game.showToast('Dispositif Clôturé avec Succès ! 🏆', `Fin de mission validée. +${rewardMoney} € versés à l'antenne, équipes de retour disponibles.`, 'green');
     
     if (typeof game.closeDrawer === 'function') game.closeDrawer();
-    const modal = document.getElementById('mission-modal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('flex');
+    const missionModal = document.getElementById('mission-modal');
+    if (missionModal) {
+      missionModal.classList.add('hidden');
+      missionModal.classList.remove('flex');
     }
-    const drawer = document.getElementById('context-drawer');
-    if (drawer) {
-      drawer.classList.add('hidden');
-      drawer.classList.remove('flex');
+    const secondaryDrawer = document.getElementById('context-drawer');
+    if (secondaryDrawer) {
+      secondaryDrawer.classList.add('hidden');
+      secondaryDrawer.classList.remove('flex');
     }
 
     game.saveGame();
@@ -3809,6 +3835,14 @@ window.ProtecCriseLogistique = {
    */
   concludeCrisisSuccess(game, crisis) {
     crisis.status = 'terminee';
+    crisis.crisisCanClose = false;
+    crisis.endedAt = Date.now();
+    if (Array.isArray(game.activeCrises)) {
+      game.activeCrises = game.activeCrises.filter(c => c.id !== crisis.id && c.status === 'active');
+    }
+    const pcModal = document.getElementById('pc-crise-modal-backdrop');
+    if (pcModal) pcModal.remove();
+
     this.logCrisisRadio(crisis, crisis.autorite_demandeur, 'MISSION ACCOMPLIE : Fin du plan d\'urgence. Félicitations des autorités pour le professionnalisme des équipes.', 'success');
 
     const rewards = crisis.recompenses || {};
