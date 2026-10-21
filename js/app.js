@@ -6895,30 +6895,30 @@ class ProtecGame {
         if (mission.requiredAssets.cyno > 0) needsCyno = true;
         reqLogKits = mission.requiredAssets.vtu || (mission.requiredAssets.chu_places > 0 ? 2 : 1);
         if (mission.requiredAssets.chu_places > 0) {
-          logKitNames = ['Kit Hébergement Urgence', 'Kit Accueil Sinistrés'];
+          logKitNames = [`Kit Hébergement Urgence (${mission.requiredAssets.chu_places} lits)`, 'Kit Accueil Sinistrés (1 lot)'];
         } else {
-          logKitNames = ['Lot Matériel Logistique & Intervention'];
+          logKitNames = ['Lot Matériel Logistique & Intervention (1 lot)'];
         }
       } else {
         if (title.includes('recherche')) {
           needsPS = false; // Pas d'ambulance obligatoire au départ d'une recherche pédestre
           reqLogKits = 1;  // 1 kit matériel de recherche & éclairage (transportable dans n'importe quel véhicule LOG)
-          logKitNames = ['Lot Recherche & Éclairage Nocturne'];
+          logKitNames = ['Lot Recherche & Éclairage Nocturne (1 lot)'];
           needsDrone = desc.includes('drone');
           needsCyno = desc.includes('cyno') || desc.includes('chien');
         } else if (title.includes('crue') || title.includes('inondation')) {
           needsPS = true;
           reqPSCount = 1;
           reqLogKits = 2; // Kit pompage + kit accueil
-          logKitNames = ['Lot Pompage & Assèchement', 'Kit Accueil Sinistrés'];
+          logKitNames = ['Lot Pompage & Assèchement (1 kit)', 'Kit Accueil Sinistrés (1 kit)'];
         } else if (title.includes('novi') || title.includes('carambolage') || title.includes('attentat')) {
           needsPS = true;
           reqPSCount = 2;
           reqLogKits = 1; // Lot PMA
-          logKitNames = ['Lot PMA (Poste Médical Avancé)'];
+          logKitNames = ['Lot PMA - Poste Médical Avancé (1 lot)'];
         } else {
           reqLogKits = 1;
-          logKitNames = ['Lot Matériel Logistique & Abri'];
+          logKitNames = ['Lot Matériel Logistique & Abri (1 lot)'];
         }
       }
     } else {
@@ -6933,20 +6933,20 @@ class ProtecGame {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 2);
         reqLogKits = Math.max(reqLogKits, 2); // Lot A + Lot B
-        logKitNames = ['Lot A (Secours & Réanimation)', 'Lot B (Brancardage & Immobilisation)'];
+        logKitNames = ['Lot A - Secours & DAE (1 lot)', 'Lot B - Brancardage (1 lot)'];
       } else if (scale.includes('ME')) {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 1);
         reqLogKits = Math.max(reqLogKits, 1); // Lot A
-        logKitNames = ['Lot A (Secours & Premiers Soins)'];
+        logKitNames = ['Lot A - Secours & DAE (1 lot)'];
       } else if (scale.includes('PE')) {
         needsPS = true;
         reqPSCount = Math.max(reqPSCount, 1);
         if (reqLogKits > 0) {
-          logKitNames = ['Lot A (Secours d’Urgence)'];
+          logKitNames = ['Lot A - Secours d’Urgence (1 lot)'];
         }
       } else if (reqLogKits > 0 && logKitNames.length === 0) {
-        logKitNames = ['Lot Matériel DPS'];
+        logKitNames = ['Lot Matériel DPS (1 lot)'];
       }
     }
 
@@ -16619,25 +16619,45 @@ class ProtecGame {
                 </span>
               </div>
 
-              <div class="grid grid-cols-2 gap-2 text-xs">
-                <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">Moyens Opérationnels Requis</span>
-                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                  <span class="text-[9px] uppercase font-black text-slate-500 dark:text-slate-400 block">Moyens Opérationnels Requis</span>
+                  <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     ${(() => {
                       const cov = this.checkMissionMoyensCoverage(mission);
                       const tags = [];
-                      if (cov.needs.needsPS) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 text-pc-blue border border-blue-200">🚑 PS</span>');
-                      if (cov.needs.reqLogKits > 0) tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-800 border border-amber-200">📦 LOG (${cov.needs.reqLogKits} kit${cov.needs.reqLogKits > 1 ? 's' : ''})</span>`);
-                      if (cov.needs.needsHR) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">🏔️ HR 4x4</span>');
-                      if ((mission.requiredVehicles || []).includes('PCM')) tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">📡 PCM</span>');
-                      if (tags.length === 0) return '<span class="text-[10px] text-slate-500">Poste fixe / Pédestre</span>';
+                      const reqPS = cov.needs.reqPSCount || (mission.requiredAssets?.vpsp) || 1;
+                      const reqLog = cov.needs.reqLogKits || 1;
+                      
+                      if (cov.needs.needsPS) {
+                        tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-blue-100 dark:bg-blue-950/70 text-pc-blue dark:text-sky-300 border border-blue-200 dark:border-blue-700">🚑 PS (${reqPS} VPSP)</span>`);
+                      }
+                      if (cov.needs.reqLogKits > 0) {
+                        tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">📦 LOG (${reqLog} kit${reqLog > 1 ? 's' : ''})</span>`);
+                      }
+                      if (cov.needs.needsHR) {
+                        tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">🏔️ HR (1 VLHR 4x4)</span>');
+                      }
+                      if ((mission.requiredVehicles || []).includes('PCM')) {
+                        tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">📡 PCM (1 Poste Commandement)</span>');
+                      }
+                      if (cov.needs.needsDrone || mission.requiredAssets?.drone) {
+                        tags.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-sky-100 dark:bg-sky-950/70 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-700">🚁 Drone (1 vecteur)</span>');
+                      }
+                      if (cov.needs.needsCyno || (mission.requiredAssets?.cyno > 0)) {
+                        const cynoCount = mission.requiredAssets?.cyno || 1;
+                        tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">🐕 Cyno (${cynoCount} équipe${cynoCount > 1 ? 's' : ''})</span>`);
+                      }
+                      if (tags.length === 0) {
+                        return `<span class="text-[10px] text-slate-500 dark:text-slate-400">Poste fixe / Pédestre (${mission.requiredVolunteers || 4} secouristes)</span>`;
+                      }
                       return tags.join('');
                     })()}
                   </div>
                 </div>
                 <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
-                  <span class="text-[9px] uppercase font-black text-slate-400 block">Lots RNMSC</span>
-                  <div class="flex items-center gap-1 mt-1 flex-wrap">
+                  <span class="text-[9px] uppercase font-black text-slate-500 dark:text-slate-400 block">Lots RNMSC</span>
+                  <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     ${(() => {
                       const cov = this.checkMissionMoyensCoverage(mission);
                       const lotsBadges = [];
@@ -16648,24 +16668,32 @@ class ProtecGame {
                       if (isCrisis) {
                         if (cov.needs.logKitNames && cov.needs.logKitNames.length > 0) {
                           cov.needs.logKitNames.forEach(kitName => {
-                            lotsBadges.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">${kitName}</span>`);
+                            let displayName = kitName;
+                            if (!displayName.includes('(')) {
+                              if (displayName.includes('Hébergement') && mission.requiredAssets?.chu_places > 0) {
+                                displayName = `${displayName} (${mission.requiredAssets.chu_places} lits)`;
+                              } else {
+                                displayName = `${displayName} (1 lot)`;
+                              }
+                            }
+                            lotsBadges.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">${displayName}</span>`);
                           });
                         } else {
-                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300">Lot Crise</span>');
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">Lot Crise (1 lot)</span>');
                         }
                       } else {
                         // Lot A : toujours présent sur les DPS (Secours d'Urgence intégrant DAE & O2)
-                        lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">Lot A</span>');
+                        lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">Lot A - Secours (1 lot)</span>');
 
                         // Lot B : si configuré ou si échelle ME / GE
                         const needsLotB = configured.includes('lot_b') || scale.includes('ME') || scale.includes('GE') || (cov.needs.reqLogKits >= 2);
                         if (needsLotB) {
-                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">Lot B</span>');
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">Lot B - Brancardage (1 lot)</span>');
                         }
 
                         // Lot C / Tente PMA si configuré
                         if (configured.includes('tente') || configured.includes('lot_c') || scale.includes('GE')) {
-                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">Tente PMA</span>');
+                          lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">Tente PMA (1 structure)</span>');
                         }
                       }
                       return lotsBadges.join('');
@@ -16674,7 +16702,7 @@ class ProtecGame {
                 </div>
               </div>
 
-              <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-pc-blue font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <button type="button" onclick="window.game.setMissionDetailTab('logistique')" class="w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-pc-blue dark:text-sky-300 font-extrabold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
                 <i data-lucide="truck" class="w-3.5 h-3.5"></i>
                 <span>Gérer les Véhicules, Matériels & Consommables →</span>
               </button>
