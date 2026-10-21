@@ -2094,7 +2094,16 @@ window.ProtecAdvanced = {
   getStarterGuideSteps(game) {
     if (!game) return [];
     if (!game.starterGuide) {
-      game.starterGuide = { completed: false, skipped: false, stepsClaimed: [] };
+      try {
+        const stored = localStorage.getItem('protec_starter_guide_save');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.starterGuide) game.starterGuide = parsed.starterGuide;
+        }
+      } catch (e) {}
+      if (!game.starterGuide) {
+        game.starterGuide = { completed: false, skipped: false, stepsClaimed: [] };
+      }
     }
     const claimedList = game.starterGuide.stepsClaimed || [];
 
@@ -2261,6 +2270,14 @@ window.ProtecAdvanced = {
     } else {
       game.showToast('Étape Validée ! 🎉', `+${step.reward} € ajoutés au compte de l’antenne !`, 'green');
     }
+
+    // Sauvegarde locale instantanée de secours
+    try {
+      localStorage.setItem('protec_starter_guide_save', JSON.stringify({
+        starterGuide: game.starterGuide,
+        savedAt: Date.now()
+      }));
+    } catch (e) {}
 
     game.updateStatsUI();
     game.saveGame(true);

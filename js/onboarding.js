@@ -97,6 +97,40 @@ window.ProtecOnboarding = {
     }
   },
 
+  // Sauvegarde instantanée de la progression totale dans le localStorage (Résilience totale en cas de fermeture)
+  saveProgress() {
+    try {
+      localStorage.setItem('protec_onboarding_step', String(this.currentStep || 1));
+      if (this.volunteersList && this.volunteersList.length > 0) {
+        localStorage.setItem('protec_onboarding_volunteers', JSON.stringify(this.volunteersList));
+      }
+      if (this.placementData && this.placementData.lat) {
+        localStorage.setItem('protec_onboarding_placement', JSON.stringify(this.placementData));
+      }
+      if (this.roomsConfig && this.roomsConfig.length > 0) {
+        localStorage.setItem('protec_onboarding_rooms', JSON.stringify(this.roomsConfig));
+      }
+      if (this.placedFurniture) {
+        localStorage.setItem('protec_onboarding_furniture', JSON.stringify(this.placedFurniture));
+      }
+      if (this.selectedRoomId) {
+        localStorage.setItem('protec_onboarding_selected_room', this.selectedRoomId);
+      }
+      localStorage.setItem('protec_onboarding_fnpc_signed', this.fnpcSigned ? 'true' : 'false');
+      if (this.fnpcSignatureDataUrl) {
+        localStorage.setItem('protec_onboarding_fnpc_sig_data', this.fnpcSignatureDataUrl);
+      }
+      if (this.teamName) {
+        localStorage.setItem('protec_station_name', this.teamName);
+      }
+      if (this.deptCode) {
+        localStorage.setItem('protec_department_code', this.deptCode);
+      }
+    } catch (e) {
+      console.warn('[ProtecOnboarding] Erreur lors de la sauvegarde de progression:', e);
+    }
+  },
+
   // Initialisation du Tuto à 4 étapes avec persistance et reprise transparente
   showWizard(game, options = {}) {
     this.game = game || window.game;
@@ -106,6 +140,12 @@ window.ProtecOnboarding = {
     let savedStep = 1;
     let savedVolunteers = null;
     let savedPlacement = null;
+    let savedRooms = null;
+    let savedFurniture = null;
+    let savedSelectedRoom = null;
+    let savedFnpcSigned = false;
+    let savedFnpcSigData = null;
+
     try {
       const storedStep = localStorage.getItem('protec_onboarding_step');
       if (storedStep) savedStep = parseInt(storedStep, 10) || 1;
@@ -113,6 +153,16 @@ window.ProtecOnboarding = {
       if (storedVols) savedVolunteers = JSON.parse(storedVols);
       const storedPlacement = localStorage.getItem('protec_onboarding_placement');
       if (storedPlacement) savedPlacement = JSON.parse(storedPlacement);
+      const storedRooms = localStorage.getItem('protec_onboarding_rooms');
+      if (storedRooms) savedRooms = JSON.parse(storedRooms);
+      const storedFurniture = localStorage.getItem('protec_onboarding_furniture');
+      if (storedFurniture) savedFurniture = JSON.parse(storedFurniture);
+      const storedSelectedRoom = localStorage.getItem('protec_onboarding_selected_room');
+      if (storedSelectedRoom) savedSelectedRoom = storedSelectedRoom;
+      const storedFnpcSigned = localStorage.getItem('protec_onboarding_fnpc_signed');
+      if (storedFnpcSigned === 'true') savedFnpcSigned = true;
+      const storedFnpcSigData = localStorage.getItem('protec_onboarding_fnpc_sig_data');
+      if (storedFnpcSigData) savedFnpcSigData = storedFnpcSigData;
     } catch (e) {}
 
     // Restauration de l'équipe configurée ou génération unique initiale (SANS régénération intempestive)
@@ -167,23 +217,58 @@ window.ProtecOnboarding = {
     }
     this.updatePlacementCoords(this.placementData.lat, this.placementData.lng);
 
-    // Le bâtiment démarre TOTALEMENT VIDE avec les pièces de base prêtes à être configurées
-    this.placedFurniture = [];
-    this.selectedRoomId = 'room_1';
-    this.roomsConfig = [
-      { id: 'room_1', name: 'Salle 1', type: 'libre', label: 'Libre', area: 19.3, icon: '🚪', color: '#131b2e' },
-      { id: 'room_2', name: 'Salle 2', type: 'libre', label: 'Libre', area: 20.2, icon: '🚪', color: '#131b2e' },
-      { id: 'room_3', name: 'Salle 3', type: 'libre', label: 'Libre', area: 45.1, icon: '🚪', color: '#131b2e' }
-    ];
+    // Restauration ou initialisation des pièces et du mobilier du bâtiment
+    if (Array.isArray(savedRooms) && savedRooms.length > 0) {
+      this.roomsConfig = savedRooms;
+    } else {
+      this.roomsConfig = [
+        { id: 'room_1', name: 'Salle 1', type: 'libre', label: 'Libre', area: 19.3, icon: '🚪', color: '#131b2e' },
+        { id: 'room_2', name: 'Salle 2', type: 'libre', label: 'Libre', area: 20.2, icon: '🚪', color: '#131b2e' },
+        { id: 'room_3', name: 'Salle 3', type: 'libre', label: 'Libre', area: 45.1, icon: '🚪', color: '#131b2e' }
+      ];
+    }
 
-    const modal = document.getElementById('onboarding-modal');
-    if (!modal) return;
+    if (Array.isArray(savedFurniture)) {
+      this.placedFurniture = savedFurniture;
+    } else {
+      this.placedFurniture = [];
+    }
+
+    if (savedSelectedRoom) {
+      this.selectedRoomId = savedSelectedRoom;
+    } else {
+      this.selectedRoomId = 'room_1';
+    }
+
+    if (savedFnpcSigned) {
+      this.fnpcSigned = true;
+      this.fnpcSignatureDataUrl = savedFnpcSigData;
+    }
+
+    let modal = document.getElementById('onboarding-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'onboarding-modal';
+      modal.className = 'fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md overflow-y-auto';
+      document.body.appendChild(modal);
+    }
 
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     modal.style.zIndex = '99999';
 
     this.renderWizard();
+
+    // Si le joueur a rechargé la page directement à l'étape 2 ou 4, réactiver les moteurs correspondants
+    if (this.currentStep === 2) {
+      setTimeout(() => {
+        this.initStep2Map();
+      }, 150);
+    } else if (this.currentStep === 4) {
+      setTimeout(() => {
+        this.initStep4Signature();
+      }, 120);
+    }
   },
 
   setStep(step) {
@@ -196,13 +281,7 @@ window.ProtecOnboarding = {
       }
     }
     this.currentStep = Math.max(1, Math.min(4, step));
-    try {
-      localStorage.setItem('protec_onboarding_step', String(this.currentStep));
-      localStorage.setItem('protec_onboarding_volunteers', JSON.stringify(this.volunteersList));
-      if (this.placementData && this.placementData.lat) {
-        localStorage.setItem('protec_onboarding_placement', JSON.stringify(this.placementData));
-      }
-    } catch (e) {}
+    this.saveProgress();
     this.renderWizard();
 
     // Si on arrive à l'étape 2, initialiser la carte Leaflet
@@ -413,13 +492,17 @@ window.ProtecOnboarding = {
 
   updateVolunteerName(volId, newName) {
     const v = this.volunteersList.find(x => x.id === volId);
-    if (v) v.name = newName.trim() || 'Bénévole Secouriste';
+    if (v) {
+      v.name = newName.trim() || 'Bénévole Secouriste';
+      this.saveProgress();
+    }
   },
 
   updateVolunteerAvatar(volId, newAvatar) {
     const v = this.volunteersList.find(x => x.id === volId);
     if (v) {
       v.avatar = newAvatar;
+      this.saveProgress();
       this.renderWizard();
     }
   },
@@ -1246,6 +1329,7 @@ window.ProtecOnboarding = {
     }
 
     this.updateValidationUI(validation);
+    this.saveProgress();
   },
 
   getDepartmentsList() {
@@ -1651,6 +1735,7 @@ window.ProtecOnboarding = {
 
   selectRoom(roomId) {
     this.selectedRoomId = roomId;
+    this.saveProgress();
     this.renderWizard();
   },
 
@@ -1662,6 +1747,7 @@ window.ProtecOnboarding = {
       r.label = t.label;
       r.icon = t.icon;
       r.color = t.color;
+      this.saveProgress();
       this.renderWizard();
     }
   },
@@ -1687,6 +1773,7 @@ window.ProtecOnboarding = {
       room: roomId
     });
 
+    this.saveProgress();
     this.renderWizard();
   },
 
@@ -1694,6 +1781,7 @@ window.ProtecOnboarding = {
     const f = this.placedFurniture.find(x => x.id === furnId);
     if (f) {
       f.room = newRoomId;
+      this.saveProgress();
       this.renderWizard();
     }
   },
@@ -1702,6 +1790,7 @@ window.ProtecOnboarding = {
     const idx = this.placedFurniture.findIndex(x => x.id === furnId || x.typeId === furnId);
     if (idx !== -1) {
       this.placedFurniture.splice(idx, 1);
+      this.saveProgress();
       this.renderWizard();
     }
   },
@@ -2144,6 +2233,11 @@ window.ProtecOnboarding = {
       localStorage.removeItem('protec_onboarding_step');
       localStorage.removeItem('protec_onboarding_volunteers');
       localStorage.removeItem('protec_onboarding_placement');
+      localStorage.removeItem('protec_onboarding_rooms');
+      localStorage.removeItem('protec_onboarding_furniture');
+      localStorage.removeItem('protec_onboarding_selected_room');
+      localStorage.removeItem('protec_onboarding_fnpc_signed');
+      localStorage.removeItem('protec_onboarding_fnpc_sig_data');
     } catch (e) {}
 
     const modal = document.getElementById('onboarding-modal');
