@@ -627,7 +627,11 @@ window.ProtecAdvanced = {
       image: 'images/vehicles/master3_vpsp.png',
       icon: '🚑',
       speedKmH: 85,
-      specialty: 'Transport Sanitaire & SAMU 15'
+      specialty: 'Transport Sanitaire & SAMU 15',
+      beacons: [
+        { id: 'b_vpsp_1', x: 42.0, y: 12.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_vpsp_2', x: 58.0, y: 12.0, delay: 0.18, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ]
     },
     {
       type: 'VL',
@@ -647,7 +651,11 @@ window.ProtecAdvanced = {
       image: 'images/vehicles/VL.png',
       icon: '🚗',
       speedKmH: 100,
-      specialty: 'Reconnaissance & Commandement'
+      specialty: 'Reconnaissance & Commandement',
+      beacons: [
+        { id: 'b_vl_1', x: 44.0, y: 11.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_vl_2', x: 56.0, y: 11.0, delay: 0.20, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ]
     },
     {
       type: 'VLHR',
@@ -667,7 +675,11 @@ window.ProtecAdvanced = {
       image: 'images/vehicles/VLHR.png',
       icon: '🚙',
       speedKmH: 90,
-      specialty: 'Accès Tout-Terrain & Crues'
+      specialty: 'Accès Tout-Terrain & Crues',
+      beacons: [
+        { id: 'b_vlhr_1', x: 43.0, y: 11.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_vlhr_2', x: 57.0, y: 11.0, delay: 0.18, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ]
     },
     {
       type: 'VTU',

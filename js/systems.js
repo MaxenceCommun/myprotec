@@ -34,6 +34,50 @@ window.ProtecSystems = {
     ]
   },
 
+  // Rendu dynamique des gyrophares personnalisés configurés par l'admin avec décalage de synchronisation
+  getVehicleBeaconsHTML(vehicle, isEmergency = true) {
+    if (!isEmergency) return '';
+    if (!vehicle) return '';
+
+    let beacons = vehicle.beacons;
+    if (!Array.isArray(beacons) || beacons.length === 0) {
+      const catalog = window.ProtecAdmin?.vehiclesCache || window.ProtecAdvanced?.vehicleCatalog || [];
+      const match = catalog.find(m => m.type === vehicle.type || m.name === vehicle.name);
+      if (match && Array.isArray(match.beacons) && match.beacons.length > 0) {
+        beacons = match.beacons;
+      }
+    }
+
+    if (!Array.isArray(beacons) || beacons.length === 0) {
+      return `
+        <div class="vehicle-roof-beacon"></div>
+        <div class="vehicle-roof-beacon-halo"></div>
+      `;
+    }
+
+    return beacons.map((b, idx) => {
+      const x = typeof b.x === 'number' ? b.x : 50;
+      const y = typeof b.y === 'number' ? b.y : 10;
+      const delay = typeof b.delay === 'number' ? b.delay : ((idx * 0.16) % 0.6);
+      const dur = b.duration || 0.36;
+      let colorHex = b.colorHex;
+      if (!colorHex) {
+        if (b.color === 'orange') colorHex = '#ff9900';
+        else if (b.color === 'red') colorHex = '#ff2222';
+        else if (b.color === 'white') colorHex = '#ffffff';
+        else colorHex = '#00e1ff';
+      }
+      const haloColor = b.color === 'orange' ? 'rgba(255, 150, 0, 0.85)' : (b.color === 'red' ? 'rgba(255, 30, 30, 0.85)' : (b.color === 'white' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 190, 255, 0.85)'));
+
+      return `
+        <div class="vehicle-custom-beacon-point" style="left: ${x}%; top: ${y}%;">
+          <div class="vehicle-custom-beacon-halo" style="animation-delay: -${delay}s; animation-duration: ${dur}s; background: radial-gradient(circle, ${haloColor} 0%, transparent 70%);"></div>
+          <div class="vehicle-custom-beacon-core" style="animation-delay: -${delay}s; animation-duration: ${dur}s; background-color: ${colorHex}; box-shadow: 0 0 6px 2px ${colorHex};"></div>
+        </div>
+      `;
+    }).join('');
+  },
+
   // 1. Initialisation de l'état étendu dans le jeu
   injectState(game) {
     if (!game.transits) game.transits = [];
@@ -302,10 +346,7 @@ window.ProtecSystems = {
     const imgUrl = vehicle.image || (game.getVehicleImage ? game.getVehicleImage(vehicle.type) : `images/vehicles/${vehicle.type || 'VPSP'}.png`);
     const iconHtml = `
       <div class="vehicle-compact-marker ${canUseEmergencySpeed ? 'is-emergency' : ''}" title="${vehicle.name} • ${stationName}">
-        ${canUseEmergencySpeed ? `
-          <div class="vehicle-roof-beacon"></div>
-          <div class="vehicle-roof-beacon-halo"></div>
-        ` : ''}
+        ${window.ProtecSystems.getVehicleBeaconsHTML(vehicle, canUseEmergencySpeed)}
         <img src="${imgUrl}" alt="${vehicle.name}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
       </div>
     `;
@@ -778,10 +819,7 @@ window.ProtecSystems = {
 
     const iconHtml = `
       <div class="vehicle-compact-marker is-remote ${isEmergency ? 'is-emergency' : ''}" title="${vehName}">
-        ${isEmergency ? `
-          <div class="vehicle-roof-beacon"></div>
-          <div class="vehicle-roof-beacon-halo"></div>
-        ` : ''}
+        ${window.ProtecSystems.getVehicleBeaconsHTML({ type: data.vehicleType, name: vehName }, isEmergency)}
         <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
       </div>
     `;
@@ -1123,8 +1161,7 @@ window.ProtecSystems = {
       const imgUrl = game?.getVehicleImage ? game.getVehicleImage(vType) : `images/vehicles/${vType}.png`;
       iconHtml = `
         <div class="vehicle-compact-marker is-emergency" title="${vehName}">
-          <div class="vehicle-roof-beacon"></div>
-          <div class="vehicle-roof-beacon-halo"></div>
+          ${window.ProtecSystems.getVehicleBeaconsHTML({ type: vType, name: vehName }, true)}
           <img src="${imgUrl}" alt="${vehName}" class="vehicle-compact-img" onerror="this.src='images/vehicles/VPSP.png'" />
         </div>
       `;

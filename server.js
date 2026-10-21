@@ -2279,6 +2279,10 @@ const server = http.createServer((req, res) => {
           }
         }
 
+        if (payload.type === 'vehicles' && payload.catalog !== undefined) payload.vehicles = payload.catalog;
+        if (payload.type === 'equipments' && payload.catalog !== undefined) payload.equipments = payload.catalog;
+        if (payload.type === 'badges' && payload.catalog !== undefined) payload.badges = payload.catalog;
+
         if (payload.vehicles !== undefined) db.data.customVehicleCatalog = payload.vehicles;
         if (payload.equipments !== undefined) db.data.customEquipmentCatalog = payload.equipments;
         if (payload.badges !== undefined) db.data.customBadgesCatalog = payload.badges;

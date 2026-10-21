@@ -5832,6 +5832,12 @@ window.ProtecAdmin = {
                 <span class="text-slate-400 font-bold block">Boule d'attelage</span>
                 <strong class="${v.hasTowHitch ? 'text-indigo-700' : 'text-slate-500'}">${hitch}</strong>
               </div>
+              <div class="p-1.5 rounded-lg bg-slate-50 border border-slate-100 col-span-2 sm:col-span-4 flex items-center justify-between">
+                <span class="text-slate-400 font-bold">Gyrophares d'urgence</span>
+                <strong class="${Array.isArray(v.beacons) && v.beacons.length > 0 ? 'text-cyan-600 font-black' : 'text-slate-400'}">
+                  ${Array.isArray(v.beacons) && v.beacons.length > 0 ? `🚨 ${v.beacons.length} gyrophare(s) configuré(s)` : '🔵 Gyrophare standard'}
+                </strong>
+              </div>
             </div>
           </div>
 
@@ -5851,7 +5857,227 @@ window.ProtecAdmin = {
     }).join('');
   },
 
-  openEditVehicleModal(index) {
+
+  // =========================================================================
+  // ÉDITEUR VISUEL DE GYROPHARES & DÉPHASAGE DE SYNCHRONISATION (ADMIN)
+  // =========================================================================
+  currentEditingBeacons: [],
+  selectedBeaconIndex: -1,
+
+  initBeaconEditor(beacons, defaultImg) {
+    this.currentEditingBeacons = Array.isArray(beacons) ? JSON.parse(JSON.stringify(beacons)) : [];
+    this.selectedBeaconIndex = -1;
+    setTimeout(() => {
+      this.renderBeaconEditor();
+    }, 50);
+  },
+
+  onBeaconStageClick(e) {
+    const stage = document.getElementById('adm-beacon-stage');
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    const xPct = Math.max(2, Math.min(98, Math.round((clickX / rect.width) * 1000) / 10));
+    const yPct = Math.max(2, Math.min(98, Math.round((clickY / rect.height) * 1000) / 10));
+
+    // Décalage temporel échelonné par défaut pour éviter tout clignotement simultané
+    const count = this.currentEditingBeacons.length;
+    const autoDelay = Math.round(((count * 0.18) % 0.6) * 100) / 100;
+
+    this.currentEditingBeacons.push({
+      id: 'b_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      x: xPct,
+      y: yPct,
+      delay: autoDelay,
+      color: 'blue',
+      colorHex: '#00e1ff',
+      duration: 0.36
+    });
+
+    this.selectedBeaconIndex = this.currentEditingBeacons.length - 1;
+    this.renderBeaconEditor();
+  },
+
+  renderBeaconEditor() {
+    const overlay = document.getElementById('adm-beacon-overlay');
+    const listContainer = document.getElementById('adm-beacons-list-container');
+    const badgeCount = document.getElementById('adm-beacons-count-badge');
+    if (badgeCount) {
+      badgeCount.textContent = `${this.currentEditingBeacons.length} gyrophare(s)`;
+    }
+
+    if (overlay) {
+      overlay.innerHTML = this.currentEditingBeacons.map((b, idx) => {
+        const isSel = (idx === this.selectedBeaconIndex);
+        const delay = typeof b.delay === 'number' ? b.delay : 0;
+        let colorHex = b.colorHex;
+        if (!colorHex) {
+          if (b.color === 'orange') colorHex = '#ff9900';
+          else if (b.color === 'red') colorHex = '#ff2222';
+          else if (b.color === 'white') colorHex = '#ffffff';
+          else colorHex = '#00e1ff';
+        }
+        const haloColor = b.color === 'orange' ? 'rgba(255, 150, 0, 0.85)' : (b.color === 'red' ? 'rgba(255, 30, 30, 0.85)' : (b.color === 'white' ? 'rgba(255, 255, 255, 0.85)' : 'rgba(0, 190, 255, 0.85)'));
+
+        return `
+          <div class="adm-beacon-marker ${isSel ? 'is-selected' : ''}" 
+               style="left: ${b.x}%; top: ${b.y}%;" 
+               onclick="event.stopPropagation(); window.ProtecAdmin.selectBeacon(${idx});"
+               title="Gyrophare #${idx + 1} (Décalage: +${Number(delay).toFixed(2)}s)">
+            <div class="adm-beacon-marker-halo" style="animation-delay: -${delay}s; background: radial-gradient(circle, ${haloColor} 0%, transparent 70%);"></div>
+            <div class="adm-beacon-marker-core" style="animation-delay: -${delay}s; background-color: ${colorHex}; box-shadow: 0 0 10px 2px ${colorHex};">
+              <span>${idx + 1}</span>
+            </div>
+            <span class="adm-beacon-badge-num">+${Number(delay).toFixed(2)}s</span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    if (listContainer) {
+      if (this.currentEditingBeacons.length === 0) {
+        listContainer.innerHTML = `
+          <div class="p-4 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-xs text-slate-400 italic">
+            Aucun gyrophare configuré sur ce véhicule. Cliquez directement sur l'image ci-dessus pour en placer un ou choisissez un préréglage.
+          </div>
+        `;
+        return;
+      }
+
+      listContainer.innerHTML = this.currentEditingBeacons.map((b, idx) => {
+        const isSel = (idx === this.selectedBeaconIndex);
+        const delay = typeof b.delay === 'number' ? b.delay : 0;
+        return `
+          <div class="p-3 rounded-2xl border ${isSel ? 'bg-cyan-950/40 border-cyan-500' : 'bg-slate-950/80 border-slate-800'} text-xs space-y-2 hover:border-slate-700 transition" onclick="window.ProtecAdmin.selectBeacon(${idx});">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-5 rounded-full bg-cyan-600 text-white font-black text-[10px] flex items-center justify-center">#${idx + 1}</span>
+                <strong class="font-extrabold text-slate-100">Gyrophare ${idx + 1}</strong>
+                <span class="text-[10px] font-mono text-cyan-300 font-bold">X: ${b.x}% | Y: ${b.y}%</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10.5px] font-mono font-black px-2 py-0.5 rounded-md bg-slate-800 text-cyan-300 border border-slate-700">
+                  ⚡ Décalage: +${Number(delay).toFixed(2)}s
+                </span>
+                <button type="button" onclick="event.stopPropagation(); window.ProtecAdmin.removeBeacon(${idx});" class="p-1 rounded-lg text-rose-400 hover:bg-rose-950/80 hover:text-rose-200 transition cursor-pointer" title="Supprimer ce point">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <!-- CURSEURS DE RÉGLAGE -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-[10.5px]">
+              <div>
+                <div class="flex items-center justify-between text-slate-400 mb-0.5">
+                  <span>Position X (Gauche-Droite) :</span>
+                  <span class="font-mono text-slate-200 font-bold">${b.x}%</span>
+                </div>
+                <input type="range" min="2" max="98" step="0.5" value="${b.x}" oninput="window.ProtecAdmin.updateBeaconProp(${idx}, 'x', parseFloat(this.value));" class="w-full accent-cyan-500 cursor-pointer" />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-slate-400 mb-0.5">
+                  <span>Position Y (Haut-Bas) :</span>
+                  <span class="font-mono text-slate-200 font-bold">${b.y}%</span>
+                </div>
+                <input type="range" min="2" max="98" step="0.5" value="${b.y}" oninput="window.ProtecAdmin.updateBeaconProp(${idx}, 'y', parseFloat(this.value));" class="w-full accent-cyan-500 cursor-pointer" />
+              </div>
+              <div>
+                <div class="flex items-center justify-between text-slate-400 mb-0.5">
+                  <span class="font-bold text-amber-300">Décalage de Synchro :</span>
+                  <span class="font-mono text-amber-300 font-black">+${Number(delay).toFixed(2)}s</span>
+                </div>
+                <input type="range" min="0" max="0.60" step="0.02" value="${delay}" oninput="window.ProtecAdmin.updateBeaconProp(${idx}, 'delay', parseFloat(this.value));" class="w-full accent-amber-500 cursor-pointer" title="Délai pour éviter que tous les feux ne clignotent en même temps" />
+              </div>
+            </div>
+
+            <!-- COULEUR DU GYROPHARE -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-[10px]">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-slate-400 font-semibold">Couleur :</span>
+                <label class="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" name="adm-beacon-col-${idx}" value="blue" ${(!b.color || b.color === 'blue') ? 'checked' : ''} onchange="window.ProtecAdmin.updateBeaconProp(${idx}, 'color', 'blue');" class="accent-cyan-500" />
+                  <span class="text-cyan-400 font-bold">Bleu Secours</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer ml-1.5">
+                  <input type="radio" name="adm-beacon-col-${idx}" value="orange" ${b.color === 'orange' ? 'checked' : ''} onchange="window.ProtecAdmin.updateBeaconProp(${idx}, 'color', 'orange');" class="accent-amber-500" />
+                  <span class="text-amber-400 font-bold">Orange Alerte</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer ml-1.5">
+                  <input type="radio" name="adm-beacon-col-${idx}" value="red" ${b.color === 'red' ? 'checked' : ''} onchange="window.ProtecAdmin.updateBeaconProp(${idx}, 'color', 'red');" class="accent-rose-500" />
+                  <span class="text-rose-400 font-bold">Rouge</span>
+                </label>
+                <label class="flex items-center gap-1 cursor-pointer ml-1.5">
+                  <input type="radio" name="adm-beacon-col-${idx}" value="white" ${b.color === 'white' ? 'checked' : ''} onchange="window.ProtecAdmin.updateBeaconProp(${idx}, 'color', 'white');" class="accent-slate-100" />
+                  <span class="text-slate-200 font-bold">Blanc Flash</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  },
+
+  selectBeacon(index) {
+    this.selectedBeaconIndex = index;
+    this.renderBeaconEditor();
+  },
+
+  updateBeaconProp(index, prop, value) {
+    if (!this.currentEditingBeacons[index]) return;
+    this.currentEditingBeacons[index][prop] = value;
+    if (prop === 'color') {
+      if (value === 'orange') this.currentEditingBeacons[index].colorHex = '#ff9900';
+      else if (value === 'red') this.currentEditingBeacons[index].colorHex = '#ff2222';
+      else if (value === 'white') this.currentEditingBeacons[index].colorHex = '#ffffff';
+      else this.currentEditingBeacons[index].colorHex = '#00e1ff';
+    }
+    this.renderBeaconEditor();
+  },
+
+  removeBeacon(index) {
+    this.currentEditingBeacons.splice(index, 1);
+    this.selectedBeaconIndex = -1;
+    this.renderBeaconEditor();
+  },
+
+  clearAllBeacons() {
+    this.currentEditingBeacons = [];
+    this.selectedBeaconIndex = -1;
+    this.renderBeaconEditor();
+  },
+
+  applyBeaconPreset(presetKey) {
+    if (presetKey === 'dual_roof') {
+      this.currentEditingBeacons = [
+        { id: 'b_' + Date.now() + '_1', x: 42.0, y: 12.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_2', x: 58.0, y: 12.0, delay: 0.18, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ];
+    } else if (presetKey === 'rampe_4') {
+      this.currentEditingBeacons = [
+        { id: 'b_' + Date.now() + '_1', x: 34.0, y: 11.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_2', x: 44.0, y: 11.0, delay: 0.14, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_3', x: 56.0, y: 11.0, delay: 0.28, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_4', x: 66.0, y: 11.0, delay: 0.42, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ];
+    } else if (presetKey === 'single_center') {
+      this.currentEditingBeacons = [
+        { id: 'b_' + Date.now() + '_1', x: 50.0, y: 10.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ];
+    } else if (presetKey === 'toit_calandre') {
+      this.currentEditingBeacons = [
+        { id: 'b_' + Date.now() + '_1', x: 40.0, y: 12.0, delay: 0.0, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_2', x: 60.0, y: 12.0, delay: 0.18, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_3', x: 43.0, y: 62.0, delay: 0.25, color: 'blue', colorHex: '#00e1ff', duration: 0.36 },
+        { id: 'b_' + Date.now() + '_4', x: 57.0, y: 62.0, delay: 0.42, color: 'blue', colorHex: '#00e1ff', duration: 0.36 }
+      ];
+    }
+    this.selectedBeaconIndex = -1;
+    this.renderBeaconEditor();
+  },
+
+    openEditVehicleModal(index) {
     const v = this.vehiclesCache[index];
     if (!v) return;
 
@@ -5931,8 +6157,64 @@ window.ProtecAdmin = {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image :</label>
-            <input type="text" id="adm-veh-image" value="${v.image || ''}" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-200 mb-0.5">Chemin ou URL de l'image :</label>
+            <input type="text" id="adm-veh-image" value="${v.image || ''}" oninput="const img = document.getElementById('adm-beacon-preview-img'); if(img) img.src = this.value;" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
+          </div>
+
+          <!-- SECTION CONFIGURATION DES GYROPHARES & DÉPHASAGE -->
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700/90 text-slate-100 space-y-3.5 shadow-md">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">🚨</span>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-wider text-cyan-300">Configuration des Gyrophares & Décalage</h4>
+                  <p class="text-[10px] text-slate-400">Cliquez sur l'image pour placer vos feux et réglez leur décalage de clignotement.</p>
+                </div>
+              </div>
+              <span id="adm-beacons-count-badge" class="px-2.5 py-1 rounded-full text-[10px] font-black bg-cyan-950 text-cyan-300 border border-cyan-800">
+                ${Array.isArray(v.beacons) ? v.beacons.length : 0} gyrophare(s)
+              </span>
+            </div>
+
+            <!-- SCÈNE INTERACTIVE DU VÉHICULE -->
+            <div class="relative w-full max-w-lg h-52 mx-auto rounded-2xl bg-slate-950 border-2 border-slate-700 overflow-hidden select-none cursor-crosshair flex items-center justify-center p-3 group"
+                 id="adm-beacon-stage"
+                 onclick="window.ProtecAdmin.onBeaconStageClick(event)"
+                 title="Cliquez n'importe où sur l'image pour ajouter un point de gyrophare">
+              <img id="adm-beacon-preview-img" src="${v.image || 'images/vehicles/VL.png'}" alt="${v.name}" class="max-w-full max-h-full object-contain pointer-events-none select-none transition" onerror="this.src='images/vehicles/VL.png'" />
+              <div id="adm-beacon-overlay" class="absolute inset-0 pointer-events-none"></div>
+              
+              <div class="absolute bottom-2 left-2 bg-slate-900/90 backdrop-blur-sm border border-slate-700 text-[9px] font-bold text-cyan-300 px-2 py-0.5 rounded-lg pointer-events-none flex items-center gap-1 shadow-md">
+                <span>➕ Cliquez sur le véhicule pour ajouter un gyrophare</span>
+              </div>
+            </div>
+
+            <!-- PRÉRÉGLAGES RAPIDES -->
+            <div class="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-800 text-[10.5px]">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-slate-400 font-bold">Préréglages :</span>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('dual_roof')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  ⚡ Toit Double Décalé (0s / 0.18s)
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('rampe_4')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🚨 4 Feux en Cascade
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('toit_calandre')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🚓 Toit + Calandre
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('single_center')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🔵 1 Central
+                </button>
+              </div>
+              <button type="button" onclick="window.ProtecAdmin.clearAllBeacons()" class="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold transition cursor-pointer">
+                🗑️ Tout effacer
+              </button>
+            </div>
+
+            <!-- LISTE DÉTAILLÉE DES GYROPHARES & SLIDERS DE DÉCALAGE -->
+            <div id="adm-beacons-list-container" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <!-- Rendu dynamique par renderBeaconEditor -->
+            </div>
           </div>
 
           <div>
@@ -5949,6 +6231,7 @@ window.ProtecAdmin = {
     `;
 
     modal.classList.remove('hidden');
+    this.initBeaconEditor(v.beacons, v.image);
   },
 
   async saveVehicleEdit(index) {
@@ -5966,6 +6249,16 @@ window.ProtecAdmin = {
     v.hasTowHitch = document.getElementById('adm-veh-hitch').value === 'true';
     v.image = document.getElementById('adm-veh-image').value.trim();
     v.desc = document.getElementById('adm-veh-desc').value.trim();
+    v.beacons = JSON.parse(JSON.stringify(this.currentEditingBeacons || []));
+
+    // Propagation immédiate aux véhicules des antennes du joueur
+    if (window.game && Array.isArray(window.game.vehicles)) {
+      window.game.vehicles.forEach(veh => {
+        if (veh.type === v.type || veh.name === v.name) {
+          veh.beacons = JSON.parse(JSON.stringify(v.beacons));
+        }
+      });
+    }
 
     document.getElementById('admin-edit-vehicle-modal')?.classList.add('hidden');
     await this.saveVehiclesCatalog();
@@ -6050,8 +6343,64 @@ window.ProtecAdmin = {
           </div>
 
           <div>
-            <label class="block font-bold text-slate-700 mb-0.5">Chemin ou URL de l'image :</label>
-            <input type="text" id="adm-new-veh-image" value="images/vehicles/VL.png" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 font-mono text-slate-800 bg-white" required />
+            <label class="block font-bold text-slate-700 dark:text-slate-200 mb-0.5">Chemin ou URL de l'image :</label>
+            <input type="text" id="adm-new-veh-image" value="images/vehicles/VL.png" oninput="const img = document.getElementById('adm-beacon-preview-img'); if(img) img.src = this.value;" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 font-mono text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800" required />
+          </div>
+
+          <!-- SECTION CONFIGURATION DES GYROPHARES & DÉPHASAGE -->
+          <div class="p-4 rounded-2xl bg-slate-900 border border-slate-700/90 text-slate-100 space-y-3.5 shadow-md">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+              <div class="flex items-center gap-2">
+                <span class="w-7 h-7 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center font-bold text-sm">🚨</span>
+                <div>
+                  <h4 class="text-xs font-black uppercase tracking-wider text-cyan-300">Configuration des Gyrophares & Décalage</h4>
+                  <p class="text-[10px] text-slate-400">Cliquez sur l'image pour placer vos feux et réglez leur décalage de clignotement.</p>
+                </div>
+              </div>
+              <span id="adm-beacons-count-badge" class="px-2.5 py-1 rounded-full text-[10px] font-black bg-cyan-950 text-cyan-300 border border-cyan-800">
+                0 gyrophare(s)
+              </span>
+            </div>
+
+            <!-- SCÈNE INTERACTIVE DU VÉHICULE -->
+            <div class="relative w-full max-w-lg h-52 mx-auto rounded-2xl bg-slate-950 border-2 border-slate-700 overflow-hidden select-none cursor-crosshair flex items-center justify-center p-3 group"
+                 id="adm-beacon-stage"
+                 onclick="window.ProtecAdmin.onBeaconStageClick(event)"
+                 title="Cliquez n'importe où sur l'image pour ajouter un point de gyrophare">
+              <img id="adm-beacon-preview-img" src="images/vehicles/VL.png" alt="Véhicule" class="max-w-full max-h-full object-contain pointer-events-none select-none transition" onerror="this.src='images/vehicles/VL.png'" />
+              <div id="adm-beacon-overlay" class="absolute inset-0 pointer-events-none"></div>
+              
+              <div class="absolute bottom-2 left-2 bg-slate-900/90 backdrop-blur-sm border border-slate-700 text-[9px] font-bold text-cyan-300 px-2 py-0.5 rounded-lg pointer-events-none flex items-center gap-1 shadow-md">
+                <span>➕ Cliquez sur le véhicule pour ajouter un gyrophare</span>
+              </div>
+            </div>
+
+            <!-- PRÉRÉGLAGES RAPIDES -->
+            <div class="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-800 text-[10.5px]">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="text-slate-400 font-bold">Préréglages :</span>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('dual_roof')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  ⚡ Toit Double Décalé (0s / 0.18s)
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('rampe_4')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🚨 4 Feux en Cascade
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('toit_calandre')" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🚓 Toit + Calandre
+                </button>
+                <button type="button" onclick="window.ProtecAdmin.applyBeaconPreset('single_center')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 font-bold transition cursor-pointer">
+                  🔵 1 Central
+                </button>
+              </div>
+              <button type="button" onclick="window.ProtecAdmin.clearAllBeacons()" class="px-2.5 py-1 rounded-lg bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-800 font-bold transition cursor-pointer">
+                🗑️ Tout effacer
+              </button>
+            </div>
+
+            <!-- LISTE DÉTAILLÉE DES GYROPHARES & SLIDERS DE DÉCALAGE -->
+            <div id="adm-beacons-list-container" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+              <!-- Rendu dynamique par renderBeaconEditor -->
+            </div>
           </div>
 
           <div>
@@ -6068,6 +6417,7 @@ window.ProtecAdmin = {
     `;
 
     modal.classList.remove('hidden');
+    this.initBeaconEditor([], 'images/vehicles/VL.png');
   },
 
   async saveNewVehicle() {
@@ -6083,7 +6433,8 @@ window.ProtecAdmin = {
       licenseLabel: lic === 'C' ? 'Permis C (Poids Lourd)' : (lic === 'Moto' ? 'Permis Moto' : (lic === 'None' ? 'Aucun Permis' : 'Permis B')),
       hasTowHitch: document.getElementById('adm-new-veh-hitch').value === 'true',
       image: document.getElementById('adm-new-veh-image').value.trim() || 'images/vehicles/VL.png',
-      desc: document.getElementById('adm-new-veh-desc').value.trim()
+      desc: document.getElementById('adm-new-veh-desc').value.trim(),
+      beacons: JSON.parse(JSON.stringify(this.currentEditingBeacons || []))
     };
 
     this.vehiclesCache.push(newVeh);
@@ -6311,7 +6662,7 @@ window.ProtecAdmin = {
       await fetch('/api/admin/catalogs/save', {
         method: 'POST',
         headers: this.getAuthHeaders(),
-        body: JSON.stringify({ type: 'vehicles', catalog: this.vehiclesCache })
+        body: JSON.stringify({ type: 'vehicles', vehicles: this.vehiclesCache, catalog: this.vehiclesCache })
       });
     } catch (e) {
       console.warn('Erreur sauvegarde catalogue véhicules:', e);
