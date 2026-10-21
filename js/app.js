@@ -2071,6 +2071,8 @@ class ProtecGame {
           rolesAccessMode: this.rolesAccessMode || 'validation',
           autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
           autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
+          lastCrisisCalendarDay: this.lastCrisisCalendarDay || null,
+          lastCrisisTimestamp: this.lastCrisisTimestamp || null,
           savedAt: Date.now()
         };
         this.safeSessionStorageSet('myprotec_instant_cache', JSON.stringify(cacheData), true);
@@ -2148,6 +2150,8 @@ class ProtecGame {
             if (c.rolesAccessMode) this.rolesAccessMode = c.rolesAccessMode;
             if (c.autoFormationActive !== undefined) this.autoFormationActive = c.autoFormationActive;
             if (c.autoLogisticsActive !== undefined) this.autoLogisticsActive = c.autoLogisticsActive;
+            if (c.lastCrisisCalendarDay) this.lastCrisisCalendarDay = c.lastCrisisCalendarDay;
+            if (c.lastCrisisTimestamp) this.lastCrisisTimestamp = c.lastCrisisTimestamp;
           }
         } catch (ce) {}
       }
@@ -8019,6 +8023,9 @@ class ProtecGame {
     );
 
     this.enrichMissionLocationWithCity(newMission);
+    const curDay = (this.clock && this.clock.year) ? `${this.clock.year}-${this.clock.month}-${this.clock.day}` : new Date().toISOString().slice(0, 10);
+    this.lastCrisisCalendarDay = curDay;
+    this.lastCrisisTimestamp = Date.now();
     this.missions.push(newMission);
     this.renderMissions();
     this.updateStatsUI();
@@ -10697,10 +10704,45 @@ class ProtecGame {
     return scenarios;
   }
 
+  // Contrôle strict de fréquence des crises : Moins d'une par jour en moyenne, en journée ou en soirée (8h-22h)
+  canTriggerDailyCrisis(ignoreHour = false) {
+    if (!this.stations || this.stations.length === 0) return false;
+
+    // 1. Plage horaire : Exclusivement en journée ou en soirée (8h00 à 22h00)
+    const hour = (this.clock && this.clock.hour !== undefined) ? this.clock.hour : new Date().getHours();
+    if (!ignoreHour && (hour < 8 || hour >= 22)) {
+      return false; // Zéro crise la nuit
+    }
+
+    // 2. Plafond strict : Au maximum 1 crise par jour calendaire
+    const curDay = (this.clock && this.clock.year) 
+      ? `${this.clock.year}-${this.clock.month}-${this.clock.day}` 
+      : new Date().toISOString().slice(0, 10);
+    if (this.lastCrisisCalendarDay === curDay) {
+      return false; // Déjà une crise survenue aujourd'hui
+    }
+
+    // 3. Délai de carence minimal de 20 heures entre deux crises
+    const nowMs = Date.now();
+    if (this.lastCrisisTimestamp && (nowMs - this.lastCrisisTimestamp < 20 * 3600 * 1000)) {
+      return false;
+    }
+
+    // 4. Aucune crise si une crise ou préalerte est déjà active sur la carte
+    const hasActiveCrisis = (this.missions || []).some(m => 
+      (m.type === 'crise' || m.isCrisis || m.isEmergencyPlan) && 
+      ['prealerte', 'declenche', 'ongoing', 'planifie'].includes(m.status)
+    );
+    if (hasActiveCrisis) return false;
+
+    return true;
+  }
+
   // Déclencheur officiel d'une Préalerte AASC (Veille Opérationnelle)
   async triggerAascPrealert(origin = null) {
     if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.stations || this.stations.length === 0) return;
+    if (!this.canTriggerDailyCrisis()) return;
 
     const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54');
 
@@ -27758,27 +27800,35 @@ class ProtecGame {
         }
       }
 
-      // 3d. Préalertes et ordres de mission gérés en direct par le backend dédié OVH
-      /*
-      if (this.clock.second === 20 && this.clock.minute % 8 === 0) {
-        const aascChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('aascPrealertChance', 0.35) : 0.35;
-        const sncfChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('sncfPrealertChance', 0.40) : 0.40;
-        if (this.stations.length > 0 && Math.random() < aascChance) {
-          if (this.sncfConvention && this.sncfConvention.signed && Math.random() < sncfChance) {
-            this.triggerSncfPrealert();
-          } else {
-            this.triggerAascPrealert();
-          }
-        }
-      }
-      */
+      // 3d. GESTION DES CRISES MAJEURES & PLANS D'URGENCE (AASC, SNCF, CUMP)
+      // RÈGLE MÉTIER STRICTE : Moins d'une crise par jour en moyenne, exclusivement en journée ou en soirée (8h-22h).
+      if (this.clock.second === 20 && this.clock.minute % 30 === 0) {
+        if (this.canTriggerDailyCrisis()) {
+          // Tirage calibré : ~2% de chance toutes les 30 min (sur les 28 créneaux de 8h à 22h,
+          // cela donne ~40% de chance d'apparition sur l'ensemble de la journée = 1 crise tous les 2 à 3 jours).
+          const crisisMultiplier = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('criseChanceMultiplier', 1.0) : 1.0;
+          const baseChance = 0.02 * crisisMultiplier;
 
-      // 3e. Déclenchement d'Ordre de Mission CUMP / CAI (si Convention AASC-CUMP signée)
-      if (this.clock.second === 40 && this.clock.minute % 12 === 0) {
-        const cumpChance = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('cumpAlertChance', 0.35) : 0.35;
-        if (this.stations.length > 0 && this.cumpConvention && this.cumpConvention.signed) {
-          if (Math.random() < cumpChance && window.ProtecCump && typeof window.ProtecCump.triggerCumpAlert === 'function') {
-            window.ProtecCump.triggerCumpAlert(this);
+          if (Math.random() < baseChance) {
+            const hasAasc = Boolean(this.aascConvention && this.aascConvention.signed);
+            const hasSncf = Boolean(this.sncfConvention && this.sncfConvention.signed);
+            const hasCump = Boolean(this.cumpConvention && this.cumpConvention.signed);
+
+            const pool = [];
+            if (hasAasc) pool.push('aasc');
+            if (hasSncf) pool.push('sncf');
+            if (hasCump) pool.push('cump');
+
+            if (pool.length > 0) {
+              const selected = pool[Math.floor(Math.random() * pool.length)];
+              if (selected === 'sncf') {
+                this.triggerSncfPrealert();
+              } else if (selected === 'cump' && window.ProtecCump && typeof window.ProtecCump.triggerCumpAlert === 'function') {
+                window.ProtecCump.triggerCumpAlert(this);
+              } else {
+                this.triggerAascPrealert();
+              }
+            }
           }
         }
       }

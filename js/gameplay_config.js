@@ -13,7 +13,7 @@
     criseChanceMultiplier: {
       category: 'alertes',
       label: 'Multiplicateur Crises & Plans NOVI',
-      desc: 'Multiplie la probabilité de survenue des catastrophes majeures et plans d\'urgence.',
+      desc: 'Multiplie la probabilité de survenue des catastrophes majeures et plans d\'urgence (calibré pour < 1 par jour en journée/soirée).',
       type: 'number',
       min: 0,
       max: 10,
@@ -85,7 +85,7 @@
       max: 1.0,
       step: 0.05,
       unit: '% (0-1)',
-      default: 0.35
+      default: 0.05
     },
     incidentMissionRate: {
       category: 'alertes',
