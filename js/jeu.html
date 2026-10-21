@@ -386,35 +386,35 @@
 
     <!-- Ligne 2 : Filtres de carte & Raccourcis secondaires (Défilant fluide sans déborder) -->
     <div class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 mobile-scroll-x w-full">
-      <button onclick="window.game.setFilter('all')" id="filter-btn-all" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold text-pc-blue border-pc-blue/40 shadow-sm flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+      <button onclick="window.game.setFilter('all')" id="filter-btn-all" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-200 border-slate-400/40 shadow-sm flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
         Toutes (<span id="count-all">0</span>)
       </button>
-      <button onclick="window.game.setFilter('dps')" id="filter-btn-dps" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-blue transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+      <button onclick="window.game.setFilter('dps')" id="filter-btn-dps" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-blue-400 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
         DPS (<span id="count-dps">0</span>)
       </button>
-      <button data-feature-key="samu" onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-pc-orange transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-pc-orange"></span>
+      <button data-feature-key="samu" onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-orange-400 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-orange-500"></span>
         SAMU 15 (<span id="count-samu">0</span>)
       </button>
-      <button data-feature-key="pompiers" onclick="window.game.setFilter('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-700 transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-red-700"></span>
+      <button data-feature-key="pompiers" onclick="window.game.setFilter('pompiers')" id="filter-btn-pompiers" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-red-400 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-red-600"></span>
         <span id="label-filter-pompiers">Garde SDIS</span> (<span id="count-pompiers">0</span>)
       </button>
-      <button data-feature-key="social" onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-purple-600 transition flex items-center gap-1.5 flex-shrink-0">
+      <button data-feature-key="social" onclick="window.game.setFilter('social')" id="filter-btn-social" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-purple-400 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-purple-600"></span>
         Social (<span id="count-social">0</span>)
       </button>
-      <button data-feature-key="crise" onclick="window.game.setFilter('crise')" id="filter-btn-crise" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-red-600 transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-red-600 animate-pulse"></span>
+      <button data-feature-key="crise" onclick="window.game.setFilter('crise')" id="filter-btn-crise" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-400 transition flex items-center gap-1.5 flex-shrink-0">
+        <span class="w-2 h-2 rounded-full bg-rose-600 animate-pulse"></span>
         Crise NOVI (<span id="count-crise">0</span>)
       </button>
-      <button onclick="window.game.setFilter('meteo')" id="filter-btn-meteo" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-sky-600 transition flex items-center gap-1.5 flex-shrink-0" title="Réquisitions Préfectorales & Engagements AASC">
-        <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-        Préfecture AASC (<span id="count-meteo">0</span>)
+      <button onclick="window.game.setFilter('meteo')" id="filter-btn-meteo" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-emerald-400 transition flex items-center gap-1.5 flex-shrink-0" title="Réquisitions Préfectorales & Gestion de Crise">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        Préfecture (<span id="count-meteo">0</span>)
       </button>
-      <button data-feature-key="renfort" onclick="window.game.setFilter('renfort')" id="filter-btn-renfort" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-amber-600 transition flex items-center gap-1.5 flex-shrink-0" title="Demandes de Renforts Réseau & Alliances">
+      <button data-feature-key="renfort" onclick="window.game.setFilter('renfort')" id="filter-btn-renfort" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-amber-400 transition flex items-center gap-1.5 flex-shrink-0" title="Demandes de Renforts Réseau & Alliances">
         <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
         Renforts (<span id="count-renforts">0</span>)
       </button>
@@ -1341,6 +1341,6 @@
   <script src="js/evenements_reels.js"></script>
   <script src="js/antenne_messages.js?v=2.5.4"></script>
   <script src="js/sms_mobilization.js?v=2.5.9"></script>
-  <script src="js/app.js?v=2.7.1"></script>
+  <script src="js/app.js?v=2.7.3"></script>
 </body>
 </html>

@@ -27364,15 +27364,29 @@ class ProtecGame {
       this.dpsFilterMode = 'all';
     }
 
+    const filterThemes = {
+      all: { border: 'border-slate-400/50', text: 'text-slate-200' },
+      dps: { border: 'border-blue-500/50', text: 'text-blue-400' },
+      samu: { border: 'border-orange-500/50', text: 'text-orange-400' },
+      pompiers: { border: 'border-red-500/50', text: 'text-red-400' },
+      social: { border: 'border-purple-500/50', text: 'text-purple-400' },
+      crise: { border: 'border-rose-500/50', text: 'text-rose-400' },
+      meteo: { border: 'border-emerald-500/50', text: 'text-emerald-400' },
+      renfort: { border: 'border-amber-500/50', text: 'text-amber-400' }
+    };
+
+    const allActiveBorders = Object.values(filterThemes).map(t => t.border);
+    const allActiveTexts = Object.values(filterThemes).map(t => t.text);
+
     ['all', 'dps', 'samu', 'meteo', 'pompiers', 'social', 'crise', 'renfort'].forEach(f => {
       const btn = document.getElementById(`filter-btn-${f}`);
       if (!btn) return;
+      const theme = filterThemes[f] || filterThemes.all;
+      btn.classList.remove(...allActiveBorders, ...allActiveTexts, 'border-pc-blue/40', 'text-pc-blue', 'text-slate-600', 'font-semibold', 'font-bold');
       if (f === this.currentFilter) {
-        btn.classList.add('border-pc-blue/40', 'text-pc-blue', 'font-bold');
-        btn.classList.remove('text-slate-600', 'font-semibold');
+        btn.classList.add(theme.border, theme.text, 'font-bold');
       } else {
-        btn.classList.remove('border-pc-blue/40', 'text-pc-blue', 'font-bold');
-        btn.classList.add('text-slate-600', 'font-semibold');
+        btn.classList.add('text-slate-400', 'font-semibold');
       }
     });
 
@@ -30520,7 +30534,7 @@ class ProtecGame {
     const dpsBtn = document.getElementById('filter-btn-dps');
     if (dpsBtn) {
       dpsBtn.innerHTML = `
-        <span class="w-2 h-2 rounded-full bg-pc-blue"></span>
+        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
         <span>DPS (<span id="count-dps">${dpsCount}</span>)</span>
       `;
       dpsBtn.title = `Filtrer les DPS (${dpsCount} dispositif(s) au total)`;
