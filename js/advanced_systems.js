@@ -2113,16 +2113,23 @@ window.ProtecAdvanced = {
     if (game.starterGuide?.skipped) return false;
     if (game.starterGuide?.completed) return false;
 
-    // Pré-requis indispensables : intégration faite (antenne posée) ET convention d'AASC signée
+    // Pré-requis indispensables : intégration faite (antenne posée)
     const hasAntenna = Array.isArray(game.stations) && game.stations.length > 0;
-    const hasAasc = Boolean(game.aascConvention && game.aascConvention.signed);
-    if (!hasAntenna || !hasAasc) return false;
+    if (!hasAntenna) return false;
+
+    // Si toutes les étapes du guide ont déjà été réclamées, marquer achevé
+    const claimedList = game.starterGuide?.stepsClaimed || [];
+    const baseStepIds = ['step_pub', 'step_rearm', 'step_params', 'step_vehicule', 'step_mission', 'step_formation'];
+    if (claimedList.length >= baseStepIds.length && baseStepIds.every(id => claimedList.includes(id))) {
+      game.starterGuide.completed = true;
+      return false;
+    }
 
     // Joueurs confirmés historiques : si le joueur a déjà beaucoup progressé (> 8 missions terminées et >= 3 véhicules), marquer achevé
     const completedMissions = (game.missions || []).filter(m => m.status === 'completed' || m.status === 'termine').length + (game.stats?.completedMissionsCount || 0);
     const vehCount = (game.vehicles || []).length;
     if (completedMissions >= 8 && vehCount >= 3 && !game.starterGuide) {
-      game.starterGuide = { completed: true, skipped: false, stepsClaimed: ['step_pub', 'step_rearm', 'step_params', 'step_vehicule', 'step_mission', 'step_formation'] };
+      game.starterGuide = { completed: true, skipped: false, stepsClaimed: baseStepIds };
       return false;
     }
 
@@ -2333,7 +2340,11 @@ window.ProtecAdvanced = {
     if (!game) return;
     if (!game.starterGuide) game.starterGuide = { completed: false, skipped: true, stepsClaimed: [] };
     game.starterGuide.skipped = true;
+    game.starterGuide.completed = true;
     game.saveGame(true);
+    if (typeof game.updateStatsUI === 'function') {
+      game.updateStatsUI();
+    }
     game.showToast('Tutoriel Passé', 'Accès direct débloqué aux Objectifs Quotidiens et Défis de la Semaine.', 'blue');
 
     if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {

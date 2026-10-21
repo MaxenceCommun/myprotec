@@ -31172,8 +31172,8 @@ class ProtecGame {
       }
     }
 
-    // Gestion de l'affichage adaptatif : TUTORIEL actif vs DÉFIS & CADEAUX habituels
-    const isTuto = Boolean(window.ProtecTutorial && typeof window.ProtecTutorial.isTutorialActive === 'function' && window.ProtecTutorial.isTutorialActive(this));
+    // Gestion de l'affichage adaptatif : TUTORIEL actif (Starter Guide au format défis) vs DÉFIS & CADEAUX habituels
+    const isStarterGuide = Boolean(window.ProtecAdvanced && typeof window.ProtecAdvanced.isStarterGuideActive === 'function' && window.ProtecAdvanced.isStarterGuideActive(this));
     const headerBtn = document.getElementById('header-rewards-btn');
     const iconBox = document.getElementById('header-rewards-icon-box');
     const iconSlot = document.getElementById('header-rewards-icon-slot');
@@ -31181,10 +31181,14 @@ class ProtecGame {
     const rewardDot = document.getElementById('badge-rewards-dot');
     const rewardReadyText = document.getElementById('stat-rewards-ready');
 
-    if (isTuto) {
-      const step = (this.tutorialState && this.tutorialState.step) || (window.ProtecTutorial?.getCurrentStep?.(this)) || 1;
+    if (isStarterGuide) {
+      const steps = window.ProtecAdvanced.getStarterGuideSteps(this);
+      const completedCount = steps.filter(s => s.isClaimed || s.isCompleted).length;
+      const totalCount = steps.length || 6;
+      const hasUnclaimed = steps.some(s => s.isCompleted && !s.isClaimed);
+
       if (headerBtn) {
-        headerBtn.title = `Tutoriel en cours (Étape ${step}/3) — Cliquez pour ouvrir vos récompenses et défis`;
+        headerBtn.title = `Tutoriel de démarrage (${completedCount}/${totalCount} validés) — Cliquez pour ouvrir vos objectifs de départ`;
         headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 transition-all duration-200';
       }
       if (iconBox) {
@@ -31198,11 +31202,15 @@ class ProtecGame {
         subtitleEl.className = 'text-[9px] uppercase font-bold tracking-wider text-pc-blue dark:text-sky-400';
       }
       if (rewardReadyText) {
-        rewardReadyText.textContent = `Étape ${step}/3`;
-        rewardReadyText.className = 'text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1';
+        rewardReadyText.textContent = hasUnclaimed ? 'Prime prête !' : `${completedCount}/${totalCount} validés`;
+        rewardReadyText.className = hasUnclaimed
+          ? 'text-xs font-black text-rose-600 dark:text-rose-400 flex items-center gap-1'
+          : 'text-xs font-black text-slate-800 dark:text-slate-100 flex items-center gap-1';
       }
       if (rewardDot) {
-        rewardDot.className = 'w-2 h-2 rounded-full bg-pc-orange absolute -top-0.5 -right-0.5 animate-ping';
+        rewardDot.className = hasUnclaimed
+          ? 'w-2 h-2 rounded-full bg-rose-500 absolute -top-0.5 -right-0.5 animate-ping'
+          : 'w-2 h-2 rounded-full bg-pc-orange absolute -top-0.5 -right-0.5 animate-ping';
         rewardDot.classList.remove('hidden');
       }
       if (window.lucide && typeof window.lucide.createIcons === 'function') {
