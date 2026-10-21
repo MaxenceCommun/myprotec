@@ -265,6 +265,13 @@ window.ProtecNotifications = {
       rh: 'sound_notif',
       weather: 'sound_notif'
     },
+    alertVolumes: {
+      samu: 85,
+      sdis: 80,
+      dps: 70,
+      rh: 70,
+      weather: 80
+    },
     alertSounds: {
       samu: 'alerte_crise.mp3',
       sdis: 'attention.mp3',
@@ -367,9 +374,26 @@ window.ProtecNotifications = {
     this.saveConfig();
   },
 
-  previewAlertSound(soundKey) {
+  getAlertVolume(category) {
+    const cat = (category === 'meteo') ? 'weather' : category;
+    if (this.config.alertVolumes && this.config.alertVolumes[cat] !== undefined) {
+      return Number(this.config.alertVolumes[cat]);
+    }
+    return 80;
+  },
+
+  setAlertVolume(category, vol) {
+    const cat = (category === 'meteo') ? 'weather' : category;
+    if (!this.config.alertVolumes) this.config.alertVolumes = {};
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(vol) || 0)));
+    this.config.alertVolumes[cat] = clamped;
+    this.saveConfig();
+  },
+
+  previewAlertSound(soundKey, category) {
     if (window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
-      window.ProtecAudio.playFile(soundKey);
+      const vol = category ? (this.getAlertVolume(category) / 100) : 0.8;
+      window.ProtecAudio.playFile(soundKey, vol);
     }
   },
 
@@ -397,7 +421,14 @@ window.ProtecNotifications = {
       title: 'Recrutement : Nouvelle Candidature Reçue',
       body: 'Un bénévole qualifié vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
       tag: 'reengage-rh-new',
-      condition: (game) => Boolean(game && (!game.candidatures || game.candidatures.filter(c => c.type !== 'salarie').length < 4)),
+      condition: (game) => {
+        if (!game) return false;
+        const socialVis = game.socialMedia?.visibilityScore || 0;
+        const hasCampaign = !!(game.resources?.campaigns?.social || game.resources?.campaigns?.posters || game.commData?.activeCampaign?.subjectId === 'recrutement');
+        const hasVisibility = hasCampaign || socialVis >= 30 || ((game.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length >= 2);
+        const candCount = (game.candidatures || []).filter(c => c.type !== 'salarie').length;
+        return hasVisibility && candCount < 4;
+      },
       action: (game) => {
         if (game && typeof game.generateRandomCandidature === 'function') {
           game.generateRandomCandidature();
@@ -423,6 +454,8 @@ window.ProtecNotifications = {
       const seenBilanDays = new Set();
       this.history = this.history.filter(item => {
         if (!item || !item.title) return false;
+        const bodyContent = (item.message || item.body || '').trim();
+        if (!bodyContent) return false;
         const t = (item.title || '').toLowerCase();
         const m = (item.message || '').toLowerCase();
         // Purger les notifications système de filtres, thèmes, apparence, préférences
@@ -476,14 +509,29 @@ window.ProtecNotifications = {
         this.swRegistration = reg;
 
         navigator.serviceWorker.addEventListener('message', (event) => {
-          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED' || event.data?.type === 'NOTIFICATION_ACTION_CLICKED') {
+          if (event.data?.type === 'PUSH_NOTIFICATION_RECEIVED') {
             const d = event.data.data || {};
             this.syncCloudMissions();
-            if (window.game && typeof window.game.showToast === 'function') {
-              window.game.showToast(d.title || '🚨 Alerte Reçue', d.body || d.message || '', d.type || 'orange');
+            const bodyMsg = d.body || d.message || '';
+            if (bodyMsg.trim()) {
+              if (window.game && typeof window.game.showToast === 'function') {
+                window.game.showToast(d.title || '🚨 Alerte Protection Civile', bodyMsg, d.type || 'orange');
+              }
+              this.playAlertSound(d.title, bodyMsg);
+              this.triggerVibration();
             }
-            this.playAlertSound(d.title, d.body);
-            this.triggerVibration();
+          } else if (event.data?.type === 'NOTIFICATION_ACTION_CLICKED') {
+            const d = event.data.data || {};
+            this.syncCloudMissions();
+            // Clic sur notification : naviguer directement sans générer de faux toast vide
+            if (d.targetId && window.game) {
+              const mission = (window.game.missions || []).find(m => m.id === d.targetId);
+              if (mission && typeof window.game.showMissionDetailsModal === 'function') {
+                window.game.showMissionDetailsModal(mission);
+              }
+            } else if (d.module && window.game && typeof window.game.openModule === 'function') {
+              window.game.openModule(d.module);
+            }
           }
         });
 
@@ -517,7 +565,29 @@ window.ProtecNotifications = {
       this.onPageHidden();
     });
 
-    // 5. Écouteurs de présence active pour ne pas notifier un joueur en pleine partie
+        // 4b. Web Worker Ticker d'arrière-plan : empêche les navigateurs de geler le jeu en arrière-plan
+    this.initBackgroundTicker(game);
+
+    // 4c. Demande proactive de permission au premier geste utilisateur
+    const requestPermissionOnFirstAction = () => {
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        if (Notification.permission === 'default') {
+          Notification.requestPermission().then(perm => {
+            this.permission = perm;
+            if (perm === 'granted') {
+              this.subscribeUserToPush();
+              this.updateHeaderUI();
+              this.hideSubscriptionBanner();
+            }
+          }).catch(() => {});
+        }
+      }
+    };
+    ['click', 'touchstart', 'keydown'].forEach(evt => {
+      window.addEventListener(evt, requestPermissionOnFirstAction, { once: true, passive: true });
+    });
+
+    // 5. Écouteurs de présence active pour ne pas notifier un joueur en pleine partie pour ne pas notifier un joueur en pleine partie
     const onUserActive = () => {
       this.lastUserInteraction = Date.now();
       if (!this.isDeviceMobile()) {
@@ -861,7 +931,7 @@ window.ProtecNotifications = {
     }
 
     // D. SAMU 15 / Départs réflexes
-    if (title.includes('samu') || title.includes('15') || item.category === 'samu') {
+    if (title.includes('samu') || /\bsamu\b|\b15\b/.test(title) || item.category === 'samu') {
       const samuMission = (game.missions || []).find(m => m.type === 'samu' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (samuMission) {
         return { type: 'mission', id: samuMission.id, label: 'Voir la sortie 15' };
@@ -870,7 +940,7 @@ window.ProtecNotifications = {
     }
 
     // E. SDIS 18 / Pompiers
-    if (title.includes('sdis') || title.includes('pompier') || title.includes('18') || item.category === 'sdis') {
+    if (title.includes('sdis') || title.includes('pompier') || /\bsdis\b|\b18\b/.test(title) || item.category === 'sdis') {
       const sdisMission = (game.missions || []).find(m => m.type === 'pompiers' && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (sdisMission) {
         return { type: 'mission', id: sdisMission.id, label: 'Voir la garde 18' };
@@ -878,13 +948,18 @@ window.ProtecNotifications = {
       return { type: 'module', id: 'pompiers', label: 'Ouvrir le SDIS' };
     }
 
-    // F. Crise, NOVI, CUMP, Plan d'urgence
-    if (title.includes('crise') || title.includes('novi') || title.includes('cai') || title.includes('cump') || title.includes('catastrophe')) {
+    // F. Crise, NOVI, CUMP, Plan d'urgence (Attention : regex \bcai\b pour ne pas matcher "encaissée" !)
+    if (title.includes('crise') || title.includes('novi') || /\bcai\b/.test(title) || title.includes("centre d'accueil") || title.includes('cump') || title.includes('catastrophe')) {
       const crisisMission = (game.missions || []).find(m => (m.isCrisis || m.type === 'crise') && ['declenche', 'prealerte', 'ongoing'].includes(m.status));
       if (crisisMission) {
         return { type: 'mission', id: crisisMission.id, label: 'Voir l\'urgence' };
       }
       return { type: 'module', id: 'crise', label: 'Cellule de crise' };
+    }
+
+    // Dotations Quotidiennes, Récompenses & Défis
+    if (title.includes('dotation') || title.includes('récompense') || title.includes('recompense') || title.includes('connexion') || item.category === 'recompenses') {
+      return { type: 'module', id: 'recompenses', label: 'Récompenses' };
     }
 
     // G. SNCF / Réseau Ferré & Naufragés du rail
@@ -962,6 +1037,10 @@ window.ProtecNotifications = {
 
   recordNotification(data) {
     if (!data) return;
+    const rawContent = (data.message || data.body || '').trim();
+    // Bloquer impérativement toute notification dont le message est vide
+    if (!rawContent) return;
+
     const t = (data.title || '').toLowerCase();
     const m = (data.message || data.body || '').toLowerCase();
 
@@ -1077,6 +1156,63 @@ window.ProtecNotifications = {
   },
 
   // Envoi d'une vraie notification Push système (Arrière-plan & Écran verrouillé)
+  // Web Worker d'arrière-plan : garantit que la simulation continue de tourner même si l'onglet est masqué ou le smartphone verrouillé
+  initBackgroundTicker(game) {
+    if (this._bgWorkerStarted) return;
+    this._bgWorkerStarted = true;
+    try {
+      const workerBlob = new Blob([`
+        let timer = null;
+        self.onmessage = function(e) {
+          if (e.data === 'start') {
+            if (!timer) {
+              timer = setInterval(function() {
+                self.postMessage('tick');
+              }, 1000);
+            }
+          }
+        };
+        self.postMessage('ready');
+      `], { type: 'application/javascript' });
+      const workerUrl = URL.createObjectURL(workerBlob);
+      this.bgWorker = new Worker(workerUrl);
+      this.bgWorker.onmessage = (e) => {
+        if (e.data === 'tick' && window.game) {
+          // Si la page est en arrière-plan, continuer à faire avancer la simulation en temps réel !
+          if (document.hidden && typeof window.game.tickSimulation === 'function') {
+            window.game.tickSimulation();
+          }
+        }
+      };
+      this.bgWorker.postMessage('start');
+      console.log('[Notifications] Background Web Worker ticker actif (maintien du temps réel).');
+    } catch (e) {
+      console.warn('[Notifications] Background Worker non supporté:', e);
+    }
+  },
+
+  // Planification d'une alerte à une heure précise (transmise au Service Worker et au timer local)
+  scheduleFutureAlert(alertData) {
+    if (!alertData || !alertData.targetTime) return;
+    // 1. Transmission au Service Worker (niveau OS / écran verrouillé)
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_FUTURE_ALERT',
+        alert: alertData
+      });
+    }
+    // 2. Programmation locale si l'onglet reste ouvert
+    const delay = Math.max(100, alertData.targetTime - Date.now());
+    setTimeout(() => {
+      if (document.hidden) {
+        this.sendPushNotification(alertData.title, alertData.body, {
+          tag: alertData.id || `future-${Date.now()}`,
+          data: alertData.data
+        });
+      }
+    }, delay);
+  },
+
   sendPushNotification(title, body, options = {}) {
     body = this.sanitizeMessage(body);
     // 1. Enregistre TOUJOURS dans le journal in-app
@@ -1087,10 +1223,25 @@ window.ProtecNotifications = {
       return;
     }
 
+    // 2b. ANTI-FLOOD & DÉ-DOUBLONNAGE PUSH SYSTÈME (Web & Mobile)
+    if (!this._recentPushMap) this._recentPushMap = new Map();
+    const pushNow = Date.now();
+    for (const [k, t] of this._recentPushMap.entries()) {
+      if (pushNow - t > 60000) this._recentPushMap.delete(k);
+    }
+    const pushFingerprint = `${title}__${body}`;
+    const lastTime = this._recentPushMap.get(pushFingerprint);
+    if (lastTime && (pushNow - lastTime) < 20000) {
+      // Déjà envoyé il y a moins de 20 secondes -> rejet anti-spam
+      console.log('[Notifications] Anti-flood Push : notification identique ignorée (déjà émise).');
+      return;
+    }
+    this._recentPushMap.set(pushFingerprint, pushNow);
+
     // 3. Son d'alerte et vibration
     if (options.customSound && window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
       if (this.config.sound) {
-        window.ProtecAudio.playFile(options.customSound);
+        window.ProtecAudio.playFile(options.customSound, options.customVolume);
       }
     } else {
       this.playAlertSound(title, body, options);
@@ -1101,7 +1252,7 @@ window.ProtecNotifications = {
       body: body,
       icon: options.icon || 'badge-monochrome.png',
       badge: options.badge || 'badge-monochrome.png',
-      tag: options.tag || `protec-${Date.now()}`,
+      tag: options.tag || (options.category ? `protec-cat-${options.category}` : 'protec-general-alert'),
       vibrate: [300, 150, 300, 150, 450],
       renotify: true,
       requireInteraction: true,
@@ -1111,6 +1262,9 @@ window.ProtecNotifications = {
         ...options.data
       }
     }, options);
+
+    // Envoi direct si document.hidden (onglet en arrière-plan, téléphone verrouillé)
+    const isHidden = (typeof document !== 'undefined' && document.hidden);
 
     // Affichage via le Service Worker si actif
     if (this.swRegistration && 'showNotification' in this.swRegistration) {
@@ -1130,6 +1284,7 @@ window.ProtecNotifications = {
           window.focus();
           notif.close();
         };
+        return;
       } catch (e) {
         console.warn('Erreur notification standard:', e);
       }
@@ -1154,10 +1309,12 @@ window.ProtecNotifications = {
 
     const soundKey = this.getAlertSound(cat);
 
+    const volume = this.getAlertVolume(cat) / 100;
+
     if (mode === 'sound_only') {
       // 2. Statut Son uniquement : joue la tonalité choisie et vibre, enregistre dans l'historique sans push OS
       if (this.config.sound && window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
-        window.ProtecAudio.playFile(soundKey);
+        window.ProtecAudio.playFile(soundKey, volume);
       }
       this.triggerVibration();
       this.recordNotification({ title, message: this.sanitizeMessage(body), color: 'orange', category: cat });
@@ -1168,7 +1325,8 @@ window.ProtecNotifications = {
     this.sendPushNotification(title, body, {
       tag: `${cat}-${tag}`,
       category: cat,
-      customSound: soundKey
+      customSound: soundKey,
+      customVolume: volume
     });
   },
 
@@ -1228,7 +1386,7 @@ window.ProtecNotifications = {
     }
 
     this.scheduleDelayedPush({
-      eventId: `inactivity_reminder_${Date.now()}`,
+      eventId: 'inactivity_reminder_global',
       delaySeconds: this.inactivityIntervalSec,
       title: emergencyTitle,
       body: emergencyBody,
@@ -1440,12 +1598,25 @@ window.ProtecNotifications = {
         const unread = pending.filter(n => new Date(n.created_at).getTime() > lastSeen);
 
         if (unread.length > 0) {
-          unread.forEach(n => {
+          if (unread.length === 1) {
+            const n = unread[0];
             this.sendPushNotification(n.title || '🔔 Alerte MyProtec', n.message || n.body || '', {
               category: n.category || 'admin-test',
-              color: n.type || 'orange'
+              color: n.type || 'orange',
+              tag: `pending-${n.id || 'single'}`
             });
-          });
+          } else {
+            // Plusieurs notifications en attente : un seul résumé groupé pour ne pas mitrailler le joueur
+            this.sendPushNotification(
+              `🔔 ${unread.length} Notifications Opérationnelles`,
+              `Vous avez ${unread.length} nouveaux messages et événements opérationnels à l'antenne.`,
+              {
+                category: 'general',
+                color: 'blue',
+                tag: 'pending-summary'
+              }
+            );
+          }
           localStorage.setItem('protec_last_seen_notif', Date.now().toString());
         }
       }
@@ -1939,19 +2110,20 @@ window.ProtecNotifications = {
             </div>
 
 
-            <!-- Catégories Opérationnelles : 3 Statuts & Personnalisation Audio -->
-            <div class="space-y-3 pt-2">
+            <!-- Catégories Opérationnelles : 3 Statuts, Tonalités & Volumes compacts -->
+            <div class="space-y-2 pt-1">
               <div class="flex items-center justify-between">
                 <div>
-                  <h4 class="font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider text-[10.5px]">Types d'Alertes & Personnalisation</h4>
-                  <p class="text-[10px] text-slate-500 dark:text-slate-400">Choisissez le statut (Désactivé, Son seul, Son + Notif) et la tonalité audio de chaque alerte</p>
+                  <h4 class="font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider text-[10px]">Types d'Alertes & Personnalisation</h4>
+                  <p class="text-[9.5px] text-slate-500 dark:text-slate-400">Statuts (Désactivé, Son, Son+Notif), tonalités et volume individuel</p>
                 </div>
               </div>
 
-              <div class="space-y-2.5">
+              <div class="space-y-1.5">
                 ${this.alertCategoriesList.map(cat => {
                   const mode = this.getAlertMode(cat.id);
                   const sound = this.getAlertSound(cat.id);
+                  const volume = this.getAlertVolume(cat.id);
 
                   let badgeText = 'Son + Notif';
                   let badgeClass = 'bg-pc-blue/15 text-pc-blue dark:bg-sky-950/60 dark:text-sky-300 border border-blue-200 dark:border-blue-800';
@@ -1959,68 +2131,82 @@ window.ProtecNotifications = {
                     badgeText = 'Désactivé';
                     badgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
                   } else if (mode === 'sound_only') {
-                    badgeText = 'Son uniquement';
+                    badgeText = 'Son seul';
                     badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
                   }
 
                   return `
-                    <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2.5 transition">
-                      <!-- En-tête : Titre & Badge d'état -->
+                    <div class="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1.5 transition">
+                      <!-- Ligne 1 : Titre + Segmented Control compact -->
                       <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                          <span class="text-base">${cat.icon}</span>
-                          <div>
-                            <h5 class="text-xs font-black text-slate-900 dark:text-slate-100">${cat.label}</h5>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">${cat.desc}</p>
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="text-sm shrink-0">${cat.icon}</span>
+                          <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                              <h5 class="text-[11.5px] font-black text-slate-900 dark:text-slate-100 truncate">${cat.label}</h5>
+                              <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black uppercase tracking-wide shrink-0 ${badgeClass}">
+                                ${badgeText}
+                              </span>
+                            </div>
+                            <p class="text-[9.5px] text-slate-500 dark:text-slate-400 truncate leading-none hidden sm:block">${cat.desc}</p>
                           </div>
                         </div>
-                        <span class="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wide shrink-0 ${badgeClass}">
-                          ${badgeText}
-                        </span>
-                      </div>
 
-                      <!-- 3 Statuts par Alerte -->
-                      <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'off'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'off' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔕</span>
-                          <span>Désactivé</span>
-                        </button>
+                        <!-- Mini segmented control à 3 états -->
+                        <div class="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700/60 shrink-0">
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'off'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'off' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Désactiver complètement l'alerte">
+                            <span>🔕</span>
+                            <span>Off</span>
+                          </button>
 
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_only'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'sound_only' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔊</span>
-                          <span>Son seul</span>
-                        </button>
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_only'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'sound_only' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Son uniquement (sans notification push)">
+                            <span>🔊</span>
+                            <span>Son</span>
+                          </button>
 
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_notif'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'sound_notif' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔔</span>
-                          <span>Son + Notif</span>
-                        </button>
-                      </div>
-
-                      <!-- Personnalisation du son -->
-                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
-                        <div class="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-600 dark:text-slate-300">
-                          <span>🎵</span>
-                          <span>Tonalité d'alerte :</span>
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_notif'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'sound_notif' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Son et notification push système">
+                            <span>🔔</span>
+                            <span>Son+Notif</span>
+                          </button>
                         </div>
-                        <div class="flex items-center gap-1.5 flex-1 max-w-[260px]">
+                      </div>
+
+                      <!-- Ligne 2 : Tonalité (Select + Play) ET Volume (Slider + %) -->
+                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[10px]">
+                        <!-- Tonalité -->
+                        <div class="flex items-center gap-1 flex-1 min-w-0">
+                          <span class="text-slate-400 text-xs shrink-0" title="Tonalité d'alerte">🎵</span>
                           <select id="notif-sound-${cat.id}"
-                            onchange="window.ProtecNotifications.setAlertSound('${cat.id}', this.value); window.ProtecNotifications.previewAlertSound(this.value);"
-                            class="w-full text-[10.5px] font-semibold py-1 px-2 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-pc-blue focus:outline-none cursor-pointer">
+                            onchange="window.ProtecNotifications.setAlertSound('${cat.id}', this.value); window.ProtecNotifications.previewAlertSound(this.value, '${cat.id}');"
+                            class="w-full text-[10px] font-semibold py-0.5 px-1.5 rounded-md bg-slate-50 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-pc-blue focus:outline-none cursor-pointer truncate">
                             ${this.availableAlertSounds.map(s => {
                               const isSelected = (sound === s.value || sound === s.key || sound === s.value.replace('.mp3', ''));
                               return `<option value="${s.value}" ${isSelected ? 'selected' : ''}>${s.label} (${s.desc})</option>`;
                             }).join('')}
                           </select>
                           <button type="button"
-                            onclick="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value)"
-                            class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-pc-blue hover:text-white text-slate-700 dark:text-slate-200 text-[10.5px] font-extrabold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                            onclick="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value, '${cat.id}')"
+                            class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-pc-blue hover:text-white text-slate-700 dark:text-slate-200 text-[10px] font-extrabold transition flex items-center gap-0.5 cursor-pointer shrink-0 shadow-2xs"
                             title="Tester / Écouter ce son">
                             <span>▶️</span>
                           </button>
+                        </div>
+
+                        <!-- Réglage du Volume pour cette notif -->
+                        <div class="flex items-center gap-1.5 shrink-0 pl-2 border-l border-slate-200 dark:border-slate-700/60" title="Volume sonore de cette alerte">
+                          <span class="text-slate-400 text-xs">🎚️</span>
+                          <input type="range" min="0" max="100" step="5" value="${volume}"
+                            id="notif-vol-slider-${cat.id}"
+                            oninput="document.getElementById('notif-vol-val-${cat.id}').textContent = this.value + '%'; window.ProtecNotifications.setAlertVolume('${cat.id}', this.value);"
+                            onchange="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value, '${cat.id}');"
+                            class="w-16 sm:w-20 h-1 accent-pc-blue bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+                          <span id="notif-vol-val-${cat.id}" class="text-[9.5px] font-mono font-bold text-slate-600 dark:text-slate-300 w-7 text-right">${volume}%</span>
                         </div>
                       </div>
                     </div>

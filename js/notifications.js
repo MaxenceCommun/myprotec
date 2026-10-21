@@ -265,6 +265,13 @@ window.ProtecNotifications = {
       rh: 'sound_notif',
       weather: 'sound_notif'
     },
+    alertVolumes: {
+      samu: 85,
+      sdis: 80,
+      dps: 70,
+      rh: 70,
+      weather: 80
+    },
     alertSounds: {
       samu: 'alerte_crise.mp3',
       sdis: 'attention.mp3',
@@ -367,9 +374,26 @@ window.ProtecNotifications = {
     this.saveConfig();
   },
 
-  previewAlertSound(soundKey) {
+  getAlertVolume(category) {
+    const cat = (category === 'meteo') ? 'weather' : category;
+    if (this.config.alertVolumes && this.config.alertVolumes[cat] !== undefined) {
+      return Number(this.config.alertVolumes[cat]);
+    }
+    return 80;
+  },
+
+  setAlertVolume(category, vol) {
+    const cat = (category === 'meteo') ? 'weather' : category;
+    if (!this.config.alertVolumes) this.config.alertVolumes = {};
+    const clamped = Math.max(0, Math.min(100, Math.round(Number(vol) || 0)));
+    this.config.alertVolumes[cat] = clamped;
+    this.saveConfig();
+  },
+
+  previewAlertSound(soundKey, category) {
     if (window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
-      window.ProtecAudio.playFile(soundKey);
+      const vol = category ? (this.getAlertVolume(category) / 100) : 0.8;
+      window.ProtecAudio.playFile(soundKey, vol);
     }
   },
 
@@ -1217,7 +1241,7 @@ window.ProtecNotifications = {
     // 3. Son d'alerte et vibration
     if (options.customSound && window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
       if (this.config.sound) {
-        window.ProtecAudio.playFile(options.customSound);
+        window.ProtecAudio.playFile(options.customSound, options.customVolume);
       }
     } else {
       this.playAlertSound(title, body, options);
@@ -1285,10 +1309,12 @@ window.ProtecNotifications = {
 
     const soundKey = this.getAlertSound(cat);
 
+    const volume = this.getAlertVolume(cat) / 100;
+
     if (mode === 'sound_only') {
       // 2. Statut Son uniquement : joue la tonalité choisie et vibre, enregistre dans l'historique sans push OS
       if (this.config.sound && window.ProtecAudio && typeof window.ProtecAudio.playFile === 'function') {
-        window.ProtecAudio.playFile(soundKey);
+        window.ProtecAudio.playFile(soundKey, volume);
       }
       this.triggerVibration();
       this.recordNotification({ title, message: this.sanitizeMessage(body), color: 'orange', category: cat });
@@ -1299,7 +1325,8 @@ window.ProtecNotifications = {
     this.sendPushNotification(title, body, {
       tag: `${cat}-${tag}`,
       category: cat,
-      customSound: soundKey
+      customSound: soundKey,
+      customVolume: volume
     });
   },
 
@@ -2083,19 +2110,20 @@ window.ProtecNotifications = {
             </div>
 
 
-            <!-- Catégories Opérationnelles : 3 Statuts & Personnalisation Audio -->
-            <div class="space-y-3 pt-2">
+            <!-- Catégories Opérationnelles : 3 Statuts, Tonalités & Volumes compacts -->
+            <div class="space-y-2 pt-1">
               <div class="flex items-center justify-between">
                 <div>
-                  <h4 class="font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider text-[10.5px]">Types d'Alertes & Personnalisation</h4>
-                  <p class="text-[10px] text-slate-500 dark:text-slate-400">Choisissez le statut (Désactivé, Son seul, Son + Notif) et la tonalité audio de chaque alerte</p>
+                  <h4 class="font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider text-[10px]">Types d'Alertes & Personnalisation</h4>
+                  <p class="text-[9.5px] text-slate-500 dark:text-slate-400">Statuts (Désactivé, Son, Son+Notif), tonalités et volume individuel</p>
                 </div>
               </div>
 
-              <div class="space-y-2.5">
+              <div class="space-y-1.5">
                 ${this.alertCategoriesList.map(cat => {
                   const mode = this.getAlertMode(cat.id);
                   const sound = this.getAlertSound(cat.id);
+                  const volume = this.getAlertVolume(cat.id);
 
                   let badgeText = 'Son + Notif';
                   let badgeClass = 'bg-pc-blue/15 text-pc-blue dark:bg-sky-950/60 dark:text-sky-300 border border-blue-200 dark:border-blue-800';
@@ -2103,68 +2131,82 @@ window.ProtecNotifications = {
                     badgeText = 'Désactivé';
                     badgeClass = 'bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
                   } else if (mode === 'sound_only') {
-                    badgeText = 'Son uniquement';
+                    badgeText = 'Son seul';
                     badgeClass = 'bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
                   }
 
                   return `
-                    <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-2.5 transition">
-                      <!-- En-tête : Titre & Badge d'état -->
+                    <div class="p-2 sm:p-2.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200/90 dark:border-slate-700/80 shadow-2xs space-y-1.5 transition">
+                      <!-- Ligne 1 : Titre + Segmented Control compact -->
                       <div class="flex items-center justify-between gap-2">
-                        <div class="flex items-center gap-2">
-                          <span class="text-base">${cat.icon}</span>
-                          <div>
-                            <h5 class="text-xs font-black text-slate-900 dark:text-slate-100">${cat.label}</h5>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">${cat.desc}</p>
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="text-sm shrink-0">${cat.icon}</span>
+                          <div class="min-w-0">
+                            <div class="flex items-center gap-1.5">
+                              <h5 class="text-[11.5px] font-black text-slate-900 dark:text-slate-100 truncate">${cat.label}</h5>
+                              <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black uppercase tracking-wide shrink-0 ${badgeClass}">
+                                ${badgeText}
+                              </span>
+                            </div>
+                            <p class="text-[9.5px] text-slate-500 dark:text-slate-400 truncate leading-none hidden sm:block">${cat.desc}</p>
                           </div>
                         </div>
-                        <span class="px-2 py-0.5 rounded-full text-[9.5px] font-black uppercase tracking-wide shrink-0 ${badgeClass}">
-                          ${badgeText}
-                        </span>
-                      </div>
 
-                      <!-- 3 Statuts par Alerte -->
-                      <div class="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800">
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'off'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'off' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔕</span>
-                          <span>Désactivé</span>
-                        </button>
+                        <!-- Mini segmented control à 3 états -->
+                        <div class="inline-flex p-0.5 rounded-lg bg-slate-100 dark:bg-slate-900/80 border border-slate-200/80 dark:border-slate-700/60 shrink-0">
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'off'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'off' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Désactiver complètement l'alerte">
+                            <span>🔕</span>
+                            <span>Off</span>
+                          </button>
 
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_only'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'sound_only' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔊</span>
-                          <span>Son seul</span>
-                        </button>
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_only'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'sound_only' ? 'bg-amber-500 text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Son uniquement (sans notification push)">
+                            <span>🔊</span>
+                            <span>Son</span>
+                          </button>
 
-                        <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_notif'); window.ProtecNotifications.renderSettingsModalBody();"
-                          class="py-1 px-1.5 rounded-lg text-[10.5px] font-extrabold flex items-center justify-center gap-1 transition cursor-pointer ${mode === 'sound_notif' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}">
-                          <span>🔔</span>
-                          <span>Son + Notif</span>
-                        </button>
-                      </div>
-
-                      <!-- Personnalisation du son -->
-                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60">
-                        <div class="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-600 dark:text-slate-300">
-                          <span>🎵</span>
-                          <span>Tonalité d'alerte :</span>
+                          <button type="button" onclick="window.ProtecNotifications.setAlertMode('${cat.id}', 'sound_notif'); window.ProtecNotifications.renderSettingsModalBody();"
+                            class="py-0.5 px-2 rounded-md text-[9.5px] font-extrabold flex items-center gap-1 transition cursor-pointer ${mode === 'sound_notif' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}"
+                            title="Son et notification push système">
+                            <span>🔔</span>
+                            <span>Son+Notif</span>
+                          </button>
                         </div>
-                        <div class="flex items-center gap-1.5 flex-1 max-w-[260px]">
+                      </div>
+
+                      <!-- Ligne 2 : Tonalité (Select + Play) ET Volume (Slider + %) -->
+                      <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[10px]">
+                        <!-- Tonalité -->
+                        <div class="flex items-center gap-1 flex-1 min-w-0">
+                          <span class="text-slate-400 text-xs shrink-0" title="Tonalité d'alerte">🎵</span>
                           <select id="notif-sound-${cat.id}"
-                            onchange="window.ProtecNotifications.setAlertSound('${cat.id}', this.value); window.ProtecNotifications.previewAlertSound(this.value);"
-                            class="w-full text-[10.5px] font-semibold py-1 px-2 rounded-lg bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-pc-blue focus:outline-none cursor-pointer">
+                            onchange="window.ProtecNotifications.setAlertSound('${cat.id}', this.value); window.ProtecNotifications.previewAlertSound(this.value, '${cat.id}');"
+                            class="w-full text-[10px] font-semibold py-0.5 px-1.5 rounded-md bg-slate-50 dark:bg-slate-700/80 border border-slate-200 dark:border-slate-600 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-pc-blue focus:outline-none cursor-pointer truncate">
                             ${this.availableAlertSounds.map(s => {
                               const isSelected = (sound === s.value || sound === s.key || sound === s.value.replace('.mp3', ''));
                               return `<option value="${s.value}" ${isSelected ? 'selected' : ''}>${s.label} (${s.desc})</option>`;
                             }).join('')}
                           </select>
                           <button type="button"
-                            onclick="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value)"
-                            class="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-pc-blue hover:text-white text-slate-700 dark:text-slate-200 text-[10.5px] font-extrabold transition flex items-center gap-1 cursor-pointer shrink-0 shadow-2xs"
+                            onclick="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value, '${cat.id}')"
+                            class="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-pc-blue hover:text-white text-slate-700 dark:text-slate-200 text-[10px] font-extrabold transition flex items-center gap-0.5 cursor-pointer shrink-0 shadow-2xs"
                             title="Tester / Écouter ce son">
                             <span>▶️</span>
                           </button>
+                        </div>
+
+                        <!-- Réglage du Volume pour cette notif -->
+                        <div class="flex items-center gap-1.5 shrink-0 pl-2 border-l border-slate-200 dark:border-slate-700/60" title="Volume sonore de cette alerte">
+                          <span class="text-slate-400 text-xs">🎚️</span>
+                          <input type="range" min="0" max="100" step="5" value="${volume}"
+                            id="notif-vol-slider-${cat.id}"
+                            oninput="document.getElementById('notif-vol-val-${cat.id}').textContent = this.value + '%'; window.ProtecNotifications.setAlertVolume('${cat.id}', this.value);"
+                            onchange="window.ProtecNotifications.previewAlertSound(document.getElementById('notif-sound-${cat.id}').value, '${cat.id}');"
+                            class="w-16 sm:w-20 h-1 accent-pc-blue bg-slate-200 dark:bg-slate-700 rounded-lg cursor-pointer" />
+                          <span id="notif-vol-val-${cat.id}" class="text-[9.5px] font-mono font-bold text-slate-600 dark:text-slate-300 w-7 text-right">${volume}%</span>
                         </div>
                       </div>
                     </div>

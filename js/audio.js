@@ -104,7 +104,7 @@ window.ProtecAudio = {
   /**
    * Joue un fichier audio mp3 avec gestion du mute, clonage pour lectures multiples et fallback
    */
-  playFile(key) {
+  playFile(key, customVolume) {
     if (this.muted || !key) return;
     const cleanKey = String(key).replace(/^sons\//, '').replace(/\.mp3$/, '');
     const url = this.files[key] || this.files[cleanKey] || `sons/${cleanKey}.mp3`;
@@ -113,7 +113,10 @@ window.ProtecAudio = {
     try {
       // Utilisation d'un élément audio autonome pour permettre plusieurs lectures simultanées
       const audio = new Audio(url);
-      audio.volume = 0.85;
+      const vol = (typeof customVolume === 'number') 
+        ? Math.max(0, Math.min(1, customVolume)) 
+        : (typeof this.masterVolume === 'number' ? this.masterVolume : 0.85);
+      audio.volume = vol;
       const promise = audio.play();
       if (promise !== undefined) {
         promise.catch(() => {
@@ -346,8 +349,11 @@ window.ProtecAudio = {
           return; // Alerte désactivée par le joueur : silence total
         }
         const customSound = window.ProtecNotifications.getAlertSound(matchedCategory);
+        const customVolume = (typeof window.ProtecNotifications.getAlertVolume === 'function')
+          ? window.ProtecNotifications.getAlertVolume(matchedCategory) / 100
+          : undefined;
         if (customSound) {
-          this.playFile(customSound);
+          this.playFile(customSound, customVolume);
           return;
         }
       }
