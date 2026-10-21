@@ -2861,6 +2861,10 @@ class ProtecGame {
       } else if (this.isPickingLocation && this.onLocationPickedCallback) {
         this.onLocationPickedCallback(e.latlng);
       } else {
+        // Masquer les tracés de véhicules actifs au clic sur la carte vierge
+        if (window.ProtecSystems && typeof window.ProtecSystems.hideAllTransitPolylines === 'function') {
+          window.ProtecSystems.hideAllTransitPolylines(this);
+        }
         // Ne fermer le tiroir que si le clic s'est réellement produit sur le fond de carte vierge
         if (e.originalEvent && (
           e.originalEvent.target.closest('#context-drawer') || 

@@ -35,7 +35,59 @@ window.ProtecSystems = {
   },
 
   // Rendu dynamique des gyrophares personnalisés configurés par l'admin avec décalage de synchronisation
-  getVehicleBeaconsHTML(vehicle, isEmergency = true) {
+  // Basculer l'affichage du tracé de route d'un véhicule (visible UNIQUEMENT au clic)
+  toggleTransitPolyline(game, transit) {
+    if (!game || !game.map || !transit || !transit.polyline) return;
+
+    const isVisible = game.map.hasLayer(transit.polyline);
+
+    // Masquer les autres tracés pour ne pas encombrer la carte
+    (game.transits || []).forEach(t => {
+      if (t !== transit && t.polyline && game.map.hasLayer(t.polyline)) {
+        game.map.removeLayer(t.polyline);
+        t.polylineVisible = false;
+      }
+    });
+
+    if (isVisible) {
+      game.map.removeLayer(transit.polyline);
+      transit.polylineVisible = false;
+    } else {
+      transit.polyline.addTo(game.map);
+      transit.polylineVisible = true;
+      try {
+        const bounds = transit.polyline.getBounds();
+        if (bounds && bounds.isValid()) {
+          game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+        }
+      } catch (err) {}
+
+      // Impulsion visuelle élégante pour mettre en valeur le tracé cliqué
+      transit.polyline.setStyle({ weight: 7, opacity: 1 });
+      setTimeout(() => {
+        if (transit.polyline && game.map.hasLayer(transit.polyline)) {
+          const isEmergency = transit.canUseEmergencySpeed || transit.isEmergency;
+          transit.polyline.setStyle({
+            weight: isEmergency ? 5 : 3.5,
+            opacity: isEmergency ? 0.85 : 0.65
+          });
+        }
+      }, 1200);
+    }
+  },
+
+  // Masquer tous les tracés de véhicules actifs
+  hideAllTransitPolylines(game) {
+    if (!game || !game.map || !Array.isArray(game.transits)) return;
+    game.transits.forEach(t => {
+      if (t.polyline && game.map.hasLayer(t.polyline)) {
+        game.map.removeLayer(t.polyline);
+        t.polylineVisible = false;
+      }
+    });
+  },
+
+    getVehicleBeaconsHTML(vehicle, isEmergency = true) {
     if (!isEmergency) return '';
     if (!vehicle) return '';
 
@@ -330,13 +382,14 @@ window.ProtecSystems = {
 
     // Polyline Leaflet sur la route
     const isReturn = statusTarget === 6;
+    // RÈGLE MÉTIER : Le tracé du véhicule n'est pas affiché par défaut sur la carte, il n'apparaît que si le joueur clique sur le véhicule
     const polyline = L.polyline(routeCoords, {
       color: isReturn ? '#0284c7' : (canUseEmergencySpeed ? (statusTarget === 4 ? '#ef4444' : '#f97316') : (isEmergency ? '#eab308' : '#0284c7')),
       weight: isReturn ? 3.5 : (canUseEmergencySpeed ? 5 : 3.5),
       opacity: isReturn ? 0.75 : (canUseEmergencySpeed ? 0.85 : 0.65),
       dashArray: isReturn ? '6, 6' : (canUseEmergencySpeed ? null : '6, 6'),
       className: canUseEmergencySpeed ? 'route-line-animated' : 'route-line-normal'
-    }).addTo(game.map);
+    });
 
     // Détermination de l'antenne d'attache du véhicule
     const myStation = game.stations?.find(s => (s.vehicles || []).some(v => (typeof v === 'string' ? v === vehicle.id : v.id === vehicle.id))) || game.stations?.[0];
@@ -360,19 +413,33 @@ window.ProtecSystems = {
 
     const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: canUseEmergencySpeed ? 1200 : 800 }).addTo(game.map);
 
-    // Clic sur mon véhicule : zoomer/centrer sur le trajet et ouvrir la mission
-    marker.on('click', () => {
+    // Clic sur mon véhicule : afficher/masquer le tracé et ouvrir les détails de la mission
+    marker.on('click', (e) => {
+      game._lastMarkerClickTime = Date.now();
       if (game.map && polyline) {
-        try {
-          const bounds = polyline.getBounds();
-          if (bounds && bounds.isValid()) {
-            game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
-          }
-        } catch (err) {}
-        polyline.setStyle({ weight: 7, opacity: 1 });
-        setTimeout(() => {
-          polyline.setStyle({ weight: canUseEmergencySpeed ? 5 : 3.5, opacity: canUseEmergencySpeed ? 0.85 : 0.65 });
-        }, 1800);
+        if (game.map.hasLayer(polyline)) {
+          game.map.removeLayer(polyline);
+        } else {
+          // Masquer les autres tracés pour ne garder que celui sélectionné
+          (game.transits || []).forEach(t => {
+            if (t.polyline && t.polyline !== polyline && game.map.hasLayer(t.polyline)) {
+              game.map.removeLayer(t.polyline);
+            }
+          });
+          polyline.addTo(game.map);
+          try {
+            const bounds = polyline.getBounds();
+            if (bounds && bounds.isValid()) {
+              game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+            }
+          } catch (err) {}
+          polyline.setStyle({ weight: 7, opacity: 1 });
+          setTimeout(() => {
+            if (game.map.hasLayer(polyline)) {
+              polyline.setStyle({ weight: canUseEmergencySpeed ? 5 : 3.5, opacity: canUseEmergencySpeed ? 0.85 : 0.65 });
+            }
+          }, 1200);
+        }
       }
 
       if (mission && mission.id) {
@@ -738,7 +805,7 @@ window.ProtecSystems = {
           t.vehicle.lat = lastPoint[0];
           t.vehicle.lng = lastPoint[1];
         }
-        if (t.polyline && game.map) game.map.removeLayer(t.polyline);
+        if (t.polyline && game.map && game.map.hasLayer(t.polyline)) game.map.removeLayer(t.polyline);
         if (t.marker && game.map) game.map.removeLayer(t.marker);
         game.transits.splice(i, 1);
 
@@ -800,13 +867,14 @@ window.ProtecSystems = {
     const segments = routeData.segments;
 
     const isEmergency = !!data.isEmergency;
+    // RÈGLE MÉTIER : Le tracé du véhicule distant n'est pas affiché par défaut sur la carte, il n'apparaît que si le joueur clique sur le véhicule
     const polyline = L.polyline(routeCoords, {
       color: isEmergency ? '#4f46e5' : '#0284c7',
       weight: isEmergency ? 4 : 3,
       opacity: isEmergency ? 0.8 : 0.65,
       dashArray: isEmergency ? null : '5, 5',
       className: isEmergency ? 'route-line-animated' : 'route-line-remote'
-    }).addTo(game.map);
+    });
 
     const vehName = data.vehicleName || 'VPSP Partenaire';
     const playerName = data.playerName || 'Directeur d’Antenne';
@@ -833,17 +901,32 @@ window.ProtecSystems = {
 
     const marker = L.marker(routeCoords[0], { icon: icon, zIndexOffset: isEmergency ? 1100 : 750 }).addTo(game.map);
 
-    // Clic sur le véhicule distant / allié : tracer le trajet et si c'est le mien, ouvrir la mission
-    marker.on('click', () => {
+    // Clic sur le véhicule distant / allié : afficher/masquer le tracé
+    marker.on('click', (e) => {
+      game._lastMarkerClickTime = Date.now();
       if (game.map && polyline) {
-        try {
-          const bounds = polyline.getBounds();
-          if (bounds && bounds.isValid()) {
-            game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
-          }
-        } catch (e) {}
-        polyline.setStyle({ weight: 7, opacity: 1 });
-        setTimeout(() => polyline.setStyle({ weight: 4, opacity: 0.8 }), 1800);
+        if (game.map.hasLayer(polyline)) {
+          game.map.removeLayer(polyline);
+        } else {
+          (game.transits || []).forEach(t => {
+            if (t.polyline && t.polyline !== polyline && game.map.hasLayer(t.polyline)) {
+              game.map.removeLayer(t.polyline);
+            }
+          });
+          polyline.addTo(game.map);
+          try {
+            const bounds = polyline.getBounds();
+            if (bounds && bounds.isValid()) {
+              game.map.fitBounds(bounds, { padding: [80, 80], maxZoom: 16 });
+            }
+          } catch (e) {}
+          polyline.setStyle({ weight: 7, opacity: 1 });
+          setTimeout(() => {
+            if (game.map.hasLayer(polyline)) {
+              polyline.setStyle({ weight: 4, opacity: 0.8 });
+            }
+          }, 1200);
+        }
       }
 
       if (isMine && data.missionId) {
