@@ -11311,21 +11311,22 @@ class ProtecGame {
     const mission = (this.missions || []).find(m => m.id === targetId);
     if (!mission) return;
 
-    // Prise de commandement par un joueur
-    if (payload.status === 'command_claimed') {
+    // Prise ou passation de commandement par un joueur
+    if (payload.status === 'command_claimed' || (payload.managerPlayerId && payload.managerPlayerId !== mission.managerPlayerId)) {
+      const prevManager = mission.managerPlayerId;
       mission.managerPlayerId = payload.managerPlayerId;
-      mission.managerPlayerName = payload.managerPlayerName;
+      mission.managerPlayerName = payload.managerPlayerName || 'Directeur Allié';
       mission.alertStage = 'managed';
       mission.acknowledged = true;
 
-      if (payload.managerPlayerId !== this.player?.id) {
+      if (payload.managerPlayerId !== this.player?.id && prevManager !== payload.managerPlayerId) {
         this.showToast(
           'Commandement Établi',
           `Le Responsable ${payload.managerPlayerName || 'Allié'} a pris la main sur la gestion de crise.`,
           'blue'
         );
       }
-    } else if (payload.status === 'command_vacant') {
+    } else if (payload.status === 'command_vacant' || (payload.managerPlayerId === null && mission.managerPlayerId)) {
       // Passation / libération du commandement
       mission.managerPlayerId = null;
       mission.managerPlayerName = null;
@@ -18920,12 +18921,19 @@ class ProtecGame {
             </button>
           </div>
           <div class="flex items-center gap-1.5 flex-wrap ml-auto">
-            ${isCrisisMission ? `
-              <button onclick="window.game.deployAllReadyCrisisTeams('${mission.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
-                <i data-lucide="siren" class="w-4 h-4"></i>
-                <span>Déployer les Équipes</span>
-              </button>
-            ` : (isComplete ? `
+            ${isCrisisMission ? (
+              hasOtherManager ? `
+                <div class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-700 text-amber-300 flex items-center gap-1.5 shadow-sm">
+                  <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400"></i>
+                  <span>Géré par ${mission.managerPlayerName || 'Directeur Allié'} (Mode Suivi / Renforts)</span>
+                </div>
+              ` : `
+                <button onclick="window.game.deployAllReadyCrisisTeams('${mission.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
+                  <i data-lucide="siren" class="w-4 h-4"></i>
+                  <span>Déployer les Équipes</span>
+                </button>
+              `
+            ) : (isComplete ? `
               <button onclick="window.game.launchScheduledMission('${mission.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
                 <i data-lucide="siren" class="w-4 h-4"></i>
                 <span>Engager & Partir</span>
@@ -18965,7 +18973,12 @@ class ProtecGame {
           <i data-lucide="users" class="w-3.5 h-3.5 flex-shrink-0"></i> <span>+ Renfort</span>
         </button>
         ${isCrisisMission ? (
-          (mission.deployedTeams && mission.deployedTeams.length > 0) ? `
+          hasOtherManager ? `
+            <div class="px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-700 text-amber-300 flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0">
+              <i data-lucide="lock" class="w-3.5 h-3.5 text-amber-400"></i>
+              <span>Géré par ${mission.managerPlayerName || 'Directeur Allié'} (Mode Suivi / Renforts)</span>
+            </div>
+          ` : (mission.deployedTeams && mission.deployedTeams.length > 0) ? `
             <button onclick="window.game.deployAllReadyCrisisTeams('${mission.id}')" class="flex-1 min-w-[140px] px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow hover:brightness-110 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0">
               <i data-lucide="send" class="w-3.5 h-3.5 flex-shrink-0"></i>
               <span>Déployer Équipes Suivantes (${mission.deployedTeams.length} en zone)</span>
@@ -28363,6 +28376,11 @@ class ProtecGame {
       const currentTime = now.getTime();
 
       // 1. Progression des missions en cours (Vraie durée & Main Courante de Crise)
+      // Synchronisation départementale périodique des crises actives
+      if (this.clock.second % 20 === 0) {
+        this.syncDepartmentCrises();
+      }
+
       // Vérification du réarmement logistique automatique (si Responsable Logistique en poste)
       if (this.clock.second % 15 === 0) {
         this.checkAutoLogisticsRearmament();

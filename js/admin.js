@@ -5402,11 +5402,14 @@ window.ProtecAdmin = {
       };
     } else if (type === 'crise_novi') {
       const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const dept = base?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
       m = {
         id: `test-novi-${now}`,
         title: 'CRISE NOVI : Déraillement Train Express & 35 Impliqués',
         desc: 'Plan NOVI activé par la Préfecture. Montage d’un Poste Médical Avancé (PMA), CAI et noria de VPSP.',
         type: 'crise',
+        isCrisis: true,
+        departmentCode: dept,
         scale: 'PLAN NOVI (8 secouristes + PMA + VPSP)',
         urgency: 'critique',
         lat: loc.lat,
@@ -5554,10 +5557,42 @@ window.ProtecAdmin = {
         m.isSector = false;
       }
       if (game.enrichMissionLocationWithCity) game.enrichMissionLocationWithCity(m);
+      if (!m.departmentCode) {
+        m.departmentCode = base?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
+      }
       game.missions.push(m);
       game.renderMissions();
       game.updateStatsUI();
       game.saveGame();
+
+      // Synchronisation départementale Supabase et Realtime pour les crises générées
+      if (m.isCrisis || m.type === 'crise') {
+        if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.initMissionOperationalLog === 'function') {
+          window.ProtecCriseLogistique.initMissionOperationalLog(m);
+        }
+        if (window.ProtecSupabase) {
+          if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+            window.ProtecSupabase.saveDepartmentCrisis(m, m.departmentCode);
+          }
+          if (typeof window.ProtecSupabase.broadcastDepartmentCrisis === 'function') {
+            window.ProtecSupabase.broadcastDepartmentCrisis({
+              departmentCode: m.departmentCode,
+              crisisData: m,
+              senderId: game.player?.id || 'ADMIN'
+            });
+          }
+        }
+        fetch('/api/crises/department/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            departmentCode: m.departmentCode,
+            crisisData: m,
+            senderId: game.player?.id || 'ADMIN'
+          })
+        }).catch(() => {});
+      }
+
       game.showToast('Mission Test Générée', `« ${m.title} » ajoutée sur la carte !`, 'green');
       if (window.ProtecNotifications) {
         window.ProtecNotifications.recordNotification({ title: m.title, message: m.desc, color: 'blue' });

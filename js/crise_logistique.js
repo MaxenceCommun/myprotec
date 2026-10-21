@@ -2708,10 +2708,39 @@ window.ProtecCriseLogistique = {
     }
 
     if (m) {
+      if (!m.departmentCode) {
+        m.departmentCode = game.currentDepartmentCode || game.stations?.[0]?.departmentCode || game.player?.departmentCode || '54';
+      }
       this.initMissionOperationalLog(m);
       game.missions.unshift(m);
       game.renderMissions();
       game.saveGame();
+
+      // Synchronisation départementale immédiate
+      if (m.isCrisis || m.type === 'crise') {
+        if (window.ProtecSupabase) {
+          if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+            window.ProtecSupabase.saveDepartmentCrisis(m, m.departmentCode);
+          }
+          if (typeof window.ProtecSupabase.broadcastDepartmentCrisis === 'function') {
+            window.ProtecSupabase.broadcastDepartmentCrisis({
+              departmentCode: m.departmentCode,
+              crisisData: m,
+              senderId: game.player?.id || 'DIRECTEUR'
+            });
+          }
+        }
+        fetch('/api/crises/department/broadcast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            departmentCode: m.departmentCode,
+            crisisData: m,
+            senderId: game.player?.id || 'DIRECTEUR'
+          })
+        }).catch(() => {});
+      }
+
       if (window.ProtecAudio) {
         if (m.isCrisis) window.ProtecAudio.playCrisisAlertSound();
         else window.ProtecAudio.playInfoSound();
@@ -3291,6 +3320,7 @@ window.ProtecCriseLogistique = {
       if (typeof window.ProtecSupabase.broadcastDepartmentCrisisUpdate === 'function') {
         window.ProtecSupabase.broadcastDepartmentCrisisUpdate({
           id: crisis.id,
+          status: crisis.managerPlayerId ? 'command_claimed' : 'command_vacant',
           departmentCode: deptCode,
           crisisData: crisis,
           managerPlayerId: crisis.managerPlayerId,
