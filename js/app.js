@@ -19553,6 +19553,9 @@ class ProtecGame {
     const myProposals = (mission.proposedRenforts || []).filter(p => p.sourcePlayerId === myId);
     const openDirectorRequests = (this.renforts || []).filter(r => (r.missionId === mission.id || r.crisisId === mission.id) && r.status === 'open');
 
+    const smsState = this.crisisRenfortSmsDispos?.[mission.id];
+    const availCount = smsState?.sent ? (this.volunteers || []).filter(v => smsState.responses?.[v.id]?.status === 'available').length : 0;
+
     return `
       <div class="space-y-4 animate-in fade-in duration-150">
         <!-- BANNIÈRE DE SITUATION & GOUVERNANCE INTER-ANTENNES -->
@@ -19584,13 +19587,26 @@ class ProtecGame {
               <i data-lucide="handshake" class="w-4 h-4 text-pc-blue"></i>
               <span>Détachement Volontaire d'Antenne</span>
             </h4>
-            <p class="text-[11px] text-slate-600 dark:text-slate-400">Proposer spontanément un véhicule avec équipage et lot matériel au Directeur.</p>
+            <p class="text-[11px] text-slate-600 dark:text-slate-400">Sondez vos bénévoles par SMS, constituez votre équipage parmi les volontaires DISPO et proposez-le au Directeur.</p>
           </div>
           <button onclick="window.game.openProposeCrisisRenfortModal('${mission.id}')" class="w-full sm:w-auto px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue via-indigo-600 to-indigo-700 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center justify-center gap-2 cursor-pointer shrink-0">
             <i data-lucide="plus-circle" class="w-4 h-4"></i>
-            <span>Proposer un Renfort de Mon Antenne</span>
+            <span>Constituer & Proposer une Équipe</span>
           </button>
         </div>
+
+        ${smsState?.sent ? `
+          <div class="px-4 py-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border-2 border-emerald-400 dark:border-emerald-600/50 flex items-center justify-between text-xs shadow-2xs">
+            <span class="text-emerald-950 dark:text-emerald-200 font-bold flex items-center gap-2">
+              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
+              <span>Appel SMS actif : <strong>${availCount}</strong> secouriste(s) volontaire(s) DISPO pour composer l'équipe.</span>
+            </span>
+            <button onclick="window.game.openProposeCrisisRenfortModal('${mission.id}')" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs shadow-xs transition flex items-center gap-1 cursor-pointer">
+              <span>Composer l'équipe</span>
+              <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        ` : ''}
 
         <!-- SECTION 1 : DEMANDES OFFICIELLES DU DIRECTEUR DE CRISE -->
         <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-3">
@@ -19814,13 +19830,213 @@ class ProtecGame {
     `;
   }
 
+  // --- 1. SONDAGE & MOBILISATION SMS DE L'ANTENNE POUR RENFORT CRISE ---
+  sendCrisisRenfortSmsMobilization(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
+    if (!mission) return;
+
+    if (!this.crisisRenfortSmsDispos) this.crisisRenfortSmsDispos = {};
+    this.crisisRenfortSmsDispos[missionId] = {
+      sent: true,
+      sentAt: Date.now(),
+      responses: {}
+    };
+
+    const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo' && !v.isBurnout);
+    if (dispoVolunteers.length === 0) {
+      this.showToast('Aucun bénévole disponible', 'Tous vos personnels sont actuellement engagés ou indisponibles.', 'orange');
+      return;
+    }
+
+    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+      window.ProtecAudio.playRadioBeep();
+    }
+    this.showToast(
+      '📱 Appel SMS Transmis !',
+      `Sondage de disponibilité envoyé à ${dispoVolunteers.length} secouriste(s) de votre antenne. Les réponses arrivent...`,
+      'blue'
+    );
+
+    // Mettre à jour la modale
+    this.openProposeCrisisRenfortModal(missionId);
+
+    // Simulation des réponses asynchrones réalistes des bénévoles
+    const sortedVols = [...dispoVolunteers].sort((a, b) => {
+      const scoreA = (a.motivation || 70) + (a.energy || 70) * 0.4 + (a.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      const scoreB = (b.motivation || 70) + (b.energy || 70) * 0.4 + (b.trait === 'devoue' ? 25 : 0) + (Math.random() * 15);
+      return scoreB - scoreA;
+    });
+
+    let cumulativeDelayMs = 0;
+    sortedVols.forEach((vol, idx) => {
+      const evalResult = this.evaluateVolunteerAvailability(vol, mission.eventDate || { dayName: 'Samedi' });
+      const motiv = vol.motivation || 70;
+      const speedMod = Math.max(0.5, 1.3 - (motiv / 100));
+      const stepMs = Math.round((1400 + Math.random() * 2200) * speedMod);
+
+      if (idx === 0) {
+        cumulativeDelayMs = Math.round(1000 + Math.random() * 1200);
+      } else {
+        cumulativeDelayMs += stepMs;
+      }
+
+      setTimeout(() => {
+        if (!this.crisisRenfortSmsDispos?.[missionId]) return;
+        const liveDispos = this.crisisRenfortSmsDispos[missionId];
+        const isAvail = evalResult.isAvailable;
+
+        liveDispos.responses[vol.id] = {
+          status: isAvail ? 'available' : 'unavailable',
+          reason: evalResult.rejectReason || 'Contrainte personnelle'
+        };
+
+        if (isAvail) {
+          this.showToast('📱 SMS Reçu : DISPO !', `${vol.name} (${vol.rank || 'Secouriste'}) : « Présent ! Je me porte volontaire pour le renfort. »`, 'green');
+        } else {
+          this.showToast('📱 SMS Reçu : Non dispo', `${vol.name} : « Empêché (${evalResult.rejectReason || 'Indisponible'}) »`, 'slate');
+        }
+
+        // Mise à jour de la modale en direct sans la fermer
+        const modal = document.getElementById('propose-crisis-renfort-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+          this.refreshProposeCrisisRenfortModalList(missionId);
+        }
+      }, cumulativeDelayMs);
+    });
+  }
+
+  refreshProposeCrisisRenfortModalList(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
+    if (!mission) return;
+
+    const smsState = this.crisisRenfortSmsDispos?.[missionId] || { sent: false, responses: {} };
+    const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo' && !v.isBurnout);
+    const availableVolunteers = dispoVolunteers.filter(v => smsState.responses?.[v.id]?.status === 'available');
+
+    // Mettre à jour le badge de compteur de réponses DISPO
+    const badgeCount = document.getElementById('prop-renfort-sms-count-badge');
+    if (badgeCount) {
+      badgeCount.innerHTML = `<strong>${availableVolunteers.length}</strong> volontaire(s) DISPO confirmé(s)`;
+    }
+
+    const container = document.getElementById('prop-renfort-volunteers-list');
+    if (!container) return;
+
+    // Conserver les cases déjà cochées par le joueur
+    const previouslyChecked = new Set(Array.from(container.querySelectorAll('input[name="prop-vol-checkbox"]:checked')).map(cb => cb.value));
+
+    // Si aucune case n'était cochée et qu'il y a des disponibles, on coche les premiers disponibles
+    if (previouslyChecked.size === 0 && availableVolunteers.length > 0) {
+      availableVolunteers.slice(0, 4).forEach(v => previouslyChecked.add(v.id));
+    }
+
+    container.innerHTML = dispoVolunteers.map(v => {
+      const resp = smsState.responses?.[v.id];
+      const isAvail = resp && resp.status === 'available';
+      const isUnavail = resp && resp.status === 'unavailable';
+      const isPending = smsState.sent && !resp;
+
+      const isChecked = isAvail && previouslyChecked.has(v.id);
+
+      return `
+        <label class="p-2.5 rounded-xl border flex items-center justify-between text-xs transition ${isAvail ? 'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-600/60 hover:shadow-xs cursor-pointer' : (isUnavail ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 opacity-80 cursor-not-allowed')}">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <input 
+              type="checkbox" 
+              name="prop-vol-checkbox" 
+              value="${v.id}" 
+              ${isChecked ? 'checked' : ''} 
+              ${!isAvail ? 'disabled' : ''} 
+              onchange="window.game.updateCrisisRenfortSubmitButtonState()" 
+              class="rounded text-emerald-600 focus:ring-0 ${!isAvail ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}"
+            >
+            <div class="min-w-0">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${v.name}</span>
+                <span class="text-[10px] text-slate-500 font-semibold">${v.rank || 'Secouriste'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="shrink-0">
+            ${isAvail ? `
+              <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300">
+                ✓ DISPO Confirmé
+              </span>
+            ` : isUnavail ? `
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400" title="${resp.reason || 'Indisponible'}">
+                ✕ Empêché
+              </span>
+            ` : isPending ? `
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 flex items-center gap-1 animate-pulse">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                <span>En attente SMS...</span>
+              </span>
+            ` : `
+              <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                SMS non envoyé
+              </span>
+            `}
+          </div>
+        </label>
+      `;
+    }).join('');
+
+    this.updateCrisisRenfortSubmitButtonState();
+  }
+
+  autoSelectCrisisRenfortAvailableVolunteers(maxCount = 4) {
+    const checkboxes = Array.from(document.querySelectorAll('input[name="prop-vol-checkbox"]'));
+    let count = 0;
+    checkboxes.forEach(cb => {
+      if (!cb.disabled && count < maxCount) {
+        cb.checked = true;
+        count++;
+      } else if (!cb.disabled) {
+        cb.checked = false;
+      }
+    });
+    this.updateCrisisRenfortSubmitButtonState();
+  }
+
+  updateCrisisRenfortSubmitButtonState() {
+    const checked = Array.from(document.querySelectorAll('input[name="prop-vol-checkbox"]:checked'));
+    const btn = document.getElementById('prop-renfort-submit-btn');
+    const notice = document.getElementById('prop-renfort-submit-notice');
+    const vehSelect = document.getElementById('prop-renfort-veh-select');
+    const hasVeh = Boolean(vehSelect && vehSelect.value);
+
+    if (!btn) return;
+
+    if (checked.length >= 1 && hasVeh) {
+      btn.disabled = false;
+      btn.classList.remove('opacity-50', 'pointer-events-none');
+      btn.innerHTML = `<i data-lucide="send" class="w-3.5 h-3.5"></i> <span>3. Proposer l'Équipe Constituée (${checked.length} secouriste(s)) au Directeur</span>`;
+      if (notice) notice.classList.add('hidden');
+    } else {
+      btn.disabled = true;
+      btn.classList.add('opacity-50', 'pointer-events-none');
+      btn.innerHTML = `<i data-lucide="lock" class="w-3.5 h-3.5"></i> <span>Équipe non constituée</span>`;
+      if (notice) {
+        notice.classList.remove('hidden');
+        notice.textContent = !hasVeh ? '⚠️ Sélectionnez un véhicule disponible.' : '⚠️ Cochez au moins 1 secouriste ayant confirmé sa disponibilité par SMS.';
+      }
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
   openProposeCrisisRenfortModal(missionId) {
     const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     const dispoVehicles = (this.vehicles || []).filter(v => v.status === 'dispo');
-    const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo');
+    const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo' && !v.isBurnout);
     const route = this.calculateRouteInfo(mission.lat, mission.lng);
+
+    const smsState = this.crisisRenfortSmsDispos?.[missionId] || { sent: false, responses: {} };
+    const hasSentSms = Boolean(smsState.sent);
+    const availableVolunteers = dispoVolunteers.filter(v => smsState.responses?.[v.id]?.status === 'available');
+    const availableVolsCount = availableVolunteers.length;
 
     let modal = document.getElementById('propose-crisis-renfort-modal');
     if (!modal) {
@@ -19839,146 +20055,226 @@ class ProtecGame {
               <i data-lucide="handshake" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight">Proposer un Renfort Spontané</h3>
+              <h3 class="text-base font-black text-slate-900 dark:text-white leading-tight">Constitution & Envoi d'un Renfort de Crise</h3>
               <p class="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-relaxed">
-                Crise : ${mission.title} • Direction : ${mission.managerPlayerName || 'Directeur Allié'}
+                Crise : ${mission.title} • Coordonnée par ${mission.managerPlayerName || 'Directeur Allié'}
               </p>
             </div>
           </div>
           <button onclick="document.getElementById('propose-crisis-renfort-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
-        <!-- Alerte Doctrine -->
-        <div class="p-3 rounded-2xl bg-sky-50 dark:bg-sky-950/40 border border-sky-300 dark:border-sky-700/60 text-xs text-sky-950 dark:text-sky-200 font-semibold flex items-center gap-2.5">
-          <span class="text-lg">🤝</span>
-          <div>
-            <span class="font-black block">Entraide Inter-Antennes • Règle d'engagement</span>
-            <span>Le renfort est proposé au Directeur de crise. Dès son acceptation, votre équipage se met en transit et la quote-part des récompenses et réputation sera partagée à la clôture.</span>
-          </div>
-        </div>
-
-        <!-- 1. SÉLECTION DU VÉHICULE -->
-        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
-          <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-            1. Véhicule à détacher :
-          </label>
-          ${dispoVehicles.length === 0 ? `
-            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-xs font-bold">
-              ⚠️ Aucun véhicule disponible au garage de votre antenne actuellement.
+        <!-- 1. ÉTAPE 1 : ENVOI DU SMS DE SONDAGE OBLIGATOIRE -->
+        <div class="p-4 rounded-2xl ${hasSentSms ? 'bg-emerald-50/80 dark:bg-emerald-950/40 border-2 border-emerald-500/50' : 'bg-amber-50/80 dark:bg-amber-950/40 border-2 border-amber-500/50'} space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2.5">
+              <span class="w-8 h-8 rounded-xl ${hasSentSms ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white animate-pulse'} flex items-center justify-center font-black">
+                <i data-lucide="phone-call" class="w-4 h-4"></i>
+              </span>
+              <div>
+                <h4 class="text-xs font-black uppercase tracking-wider ${hasSentSms ? 'text-emerald-900 dark:text-emerald-200' : 'text-amber-900 dark:text-amber-200'}">
+                  Étape 1 : Appel & Sondage des Disponibilités par SMS
+                </h4>
+                <p class="text-[11px] ${hasSentSms ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}">
+                  ${hasSentSms ? `Appel SMS transmis • <span id="prop-renfort-sms-count-badge"><strong>${availableVolsCount}</strong> volontaire(s) DISPO confirmé(s)</span>.` : 'Règle bénévole : Les secouristes ne peuvent pas être forcés. Vous devez d\'abord envoyer un SMS pour recueillir les disponibilités.'}
+                </p>
+              </div>
             </div>
-          ` : `
-            <select id="prop-renfort-veh-select" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
-              ${dispoVehicles.map(v => `
-                <option value="${v.id}">${v.name} (${v.type})</option>
-              `).join('')}
-            </select>
-          `}
-        </div>
 
-        <!-- 2. LOT DE MATÉRIEL SPÉCIALISÉ ASSOCIÉ -->
-        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
-          <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-            2. Lot de Matériel Spécialisé Embarqué (Optionnel) :
-          </label>
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="" checked class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚑 VPSP Standard</span>
-            </label>
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="pma" class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">⛺ Lot PMA</span>
-            </label>
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="cai" class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🏥 Lot CAI</span>
-            </label>
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="drone" class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚁 Drone / Télépilote</span>
-            </label>
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="cyno" class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🐕 Équipe Cyno</span>
-            </label>
-            <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-              <input type="radio" name="prop-special-lot" value="eclairage" class="text-indigo-600 focus:ring-0">
-              <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">💡 Lot Éclairage</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- 3. SÉLECTION DES SECOURISTES -->
-        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              3. Équipage de Secouristes :
-            </label>
-            <button type="button" onclick="
-              const boxes = document.querySelectorAll('input[name=prop-vol-checkbox]');
-              boxes.forEach((b, idx) => b.checked = (idx < 4));
-            " class="text-[10px] font-black text-indigo-600 hover:underline cursor-pointer">
-              ⚡ Sélectionner 4 premiers
+            <button type="button" onclick="window.game.sendCrisisRenfortSmsMobilization('${mission.id}')" class="px-4 py-2 rounded-xl text-xs font-black ${hasSentSms ? 'bg-white dark:bg-slate-800 hover:bg-slate-100 text-slate-800 dark:text-slate-200 border border-slate-300 dark:border-slate-700' : 'bg-gradient-to-r from-amber-600 to-pc-orange hover:brightness-110 text-white shadow-md animate-pulse'} transition flex items-center gap-1.5 cursor-pointer">
+              <i data-lucide="send" class="w-3.5 h-3.5"></i>
+              <span>${hasSentSms ? 'Relancer l\'appel SMS' : 'Envoyer l\'Appel SMS aux Secouristes'}</span>
             </button>
           </div>
-          ${dispoVolunteers.length === 0 ? `
-            <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-xs font-bold">
-              ⚠️ Aucun secouriste disponible actuellement.
-            </div>
-          ` : `
-            <div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-              ${dispoVolunteers.map((v, idx) => `
-                <label class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800">
-                  <div class="flex items-center gap-2">
-                    <input type="checkbox" name="prop-vol-checkbox" value="${v.id}" ${idx < 4 ? 'checked' : ''} class="rounded text-indigo-600 focus:ring-0">
-                    <span class="font-bold text-slate-800 dark:text-slate-100">${v.name}</span>
-                    <span class="text-[10px] text-slate-500 font-semibold">${v.rank || 'Secouriste'}</span>
-                  </div>
-                  <span class="text-[10px] font-bold text-emerald-600">Dispo</span>
-                </label>
-              `).join('')}
-            </div>
-          `}
         </div>
 
-        <!-- 4. CONSIGNE D'ACHEMINEMENT -->
-        <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
-          <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-            4. Consigne d'Acheminement :
-          </label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-indigo-500 ring-1 ring-indigo-500">
-              <input type="radio" name="prop-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-0">
-              <div>
-                <span class="font-black text-slate-900 dark:text-white block">📍 Directement sur place</span>
-                <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Ralliement immédiat sur le secteur de crise (~${route.durationText || '12 min'}).</p>
-              </div>
+        <!-- 2. ÉTAPE 2 : CONSTITUTION DE L'ÉQUIPE (SECOURISTES DISPO + VÉHICULE + MATÉRIEL) -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+              <i data-lucide="users" class="w-4 h-4 text-indigo-600"></i>
+              <span>Étape 2 : Constitution de l'Équipe de Renfort</span>
+            </h4>
+            <span class="text-[10px] text-slate-500 font-semibold">Volontaires confirmés DISPO uniquement</span>
+          </div>
+
+          <!-- Sélection du Véhicule -->
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+            <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              Véhicule affecté à l'équipe :
             </label>
-            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-              <input type="radio" name="prop-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-0">
-              <div>
-                <span class="font-black text-slate-900 dark:text-white block">🏢 Passer par la base</span>
-                <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Halte à l'antenne directrice pour prise de consignes.</p>
+            ${dispoVehicles.length === 0 ? `
+              <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-xs font-bold">
+                ⚠️ Aucun véhicule disponible au garage de votre antenne actuellement.
               </div>
+            ` : `
+              <select id="prop-renfort-veh-select" onchange="window.game.updateCrisisRenfortSubmitButtonState()" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
+                ${dispoVehicles.map(v => `
+                  <option value="${v.id}">${v.name} (${v.type})</option>
+                `).join('')}
+              </select>
+            `}
+          </div>
+
+          <!-- Lot de Matériel Spécialisé Embarqué -->
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+            <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              Lot de Matériel Spécialisé Embarqué (Optionnel) :
             </label>
+            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="" checked class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚑 VPSP Standard</span>
+              </label>
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="pma" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">⛺ Lot PMA</span>
+              </label>
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="cai" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🏥 Lot CAI</span>
+              </label>
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="drone" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚁 Drone / Télépilote</span>
+              </label>
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="cyno" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🐕 Équipe Cyno</span>
+              </label>
+              <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
+                <input type="radio" name="prop-special-lot" value="eclairage" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">💡 Lot Éclairage</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Sélection des Secouristes Répondants DISPO -->
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Secouristes de l'Équipage (Volontaires confirmés DISPO) :
+              </label>
+              ${availableVolsCount > 0 ? `
+                <button type="button" onclick="window.game.autoSelectCrisisRenfortAvailableVolunteers(4)" class="text-[10px] font-black text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer">
+                  ⚡ Sélectionner les volontaires DISPO
+                </button>
+              ` : ''}
+            </div>
+
+            <div id="prop-renfort-volunteers-list" class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              ${dispoVolunteers.length === 0 ? `
+                <div class="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-700 text-rose-800 dark:text-rose-200 text-xs font-bold">
+                  ⚠️ Aucun secouriste disponible actuellement.
+                </div>
+              ` : dispoVolunteers.map(v => {
+                const resp = smsState.responses?.[v.id];
+                const isAvail = resp && resp.status === 'available';
+                const isUnavail = resp && resp.status === 'unavailable';
+                const isPending = smsState.sent && !resp;
+
+                return `
+                  <label class="p-2.5 rounded-xl border flex items-center justify-between text-xs transition ${isAvail ? 'bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-600/60 hover:shadow-xs cursor-pointer' : (isUnavail ? 'bg-slate-100/70 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60 cursor-not-allowed' : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 opacity-80 cursor-not-allowed')}">
+                    <div class="flex items-center gap-2.5 min-w-0">
+                      <input 
+                        type="checkbox" 
+                        name="prop-vol-checkbox" 
+                        value="${v.id}" 
+                        ${!isAvail ? 'disabled' : ''} 
+                        onchange="window.game.updateCrisisRenfortSubmitButtonState()" 
+                        class="rounded text-emerald-600 focus:ring-0 ${!isAvail ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}"
+                      >
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                          <span class="font-bold text-slate-800 dark:text-slate-100 truncate">${v.name}</span>
+                          <span class="text-[10px] text-slate-500 font-semibold">${v.rank || 'Secouriste'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="shrink-0">
+                      ${isAvail ? `
+                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300">
+                          ✓ DISPO Confirmé
+                        </span>
+                      ` : isUnavail ? `
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400" title="${resp.reason || 'Indisponible'}">
+                          ✕ Empêché
+                        </span>
+                      ` : isPending ? `
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 flex items-center gap-1 animate-pulse">
+                          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span>En attente SMS...</span>
+                        </span>
+                      ` : `
+                        <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                          SMS non envoyé
+                        </span>
+                      `}
+                    </div>
+                  </label>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- Consigne d'Acheminement -->
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
+            <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+              Consigne d'Acheminement :
+            </label>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-indigo-500 ring-1 ring-indigo-500">
+                <input type="radio" name="prop-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-0">
+                <div>
+                  <span class="font-black text-slate-900 dark:text-white block">📍 Directement sur place</span>
+                  <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Ralliement immédiat sur le secteur de crise (~${route.durationText || '12 min'}).</p>
+                </div>
+              </label>
+              <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
+                <input type="radio" name="prop-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-0">
+                <div>
+                  <span class="font-black text-slate-900 dark:text-white block">🏢 Passer par la base</span>
+                  <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Halte à l'antenne directrice pour prise de consignes.</p>
+                </div>
+              </label>
+            </div>
           </div>
         </div>
 
-        <!-- Actions -->
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-          <button onclick="document.getElementById('propose-crisis-renfort-modal').classList.add('hidden')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer">
-            Annuler
-          </button>
-          <button onclick="window.game.submitProposeCrisisRenfort('${mission.id}')" ${dispoVehicles.length === 0 || dispoVolunteers.length === 0 ? 'disabled' : ''} class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue via-indigo-600 to-indigo-700 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:pointer-events-none">
-            <i data-lucide="send" class="w-3.5 h-3.5"></i>
-            <span>Transmettre la Proposition au Directeur</span>
-          </button>
+        <!-- 3. ÉTAPE 3 : TRANSMISSION DE L'ÉQUIPE CONSTITUÉE AU DIRECTEUR -->
+        <div class="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+          <div id="prop-renfort-submit-notice" class="text-xs font-bold text-amber-700 dark:text-amber-400 text-center">
+            ${!hasSentSms ? '⚠️ Veuillez d\'abord lancer l\'appel SMS à l\'Étape 1.' : (availableVolsCount === 0 ? '⏳ En attente de réponses favorables par SMS...' : '⚠️ Cochez les secouristes DISPO pour former l\'équipe.')}
+          </div>
+
+          <div class="flex items-center justify-end gap-2">
+            <button onclick="document.getElementById('propose-crisis-renfort-modal').classList.add('hidden')" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer">
+              Annuler
+            </button>
+            <button 
+              id="prop-renfort-submit-btn" 
+              onclick="window.game.submitProposeCrisisRenfort('${mission.id}')" 
+              disabled 
+              class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 active:scale-95 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer opacity-50 pointer-events-none"
+            >
+              <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+              <span>Équipe non constituée</span>
+            </button>
+          </div>
         </div>
       </div>
     `;
 
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
+
+    // Auto-sélectionner si des personnes ont déjà répondu DISPO
+    if (availableVolsCount > 0) {
+      this.autoSelectCrisisRenfortAvailableVolunteers(4);
+    } else {
+      this.updateCrisisRenfortSubmitButtonState();
+    }
   }
 
   submitProposeCrisisRenfort(missionId) {
@@ -19996,11 +20292,23 @@ class ProtecGame {
     const checkedBoxes = Array.from(document.querySelectorAll('input[name="prop-vol-checkbox"]:checked'));
     const selectedVolIds = checkedBoxes.map(cb => cb.value);
     if (selectedVolIds.length === 0) {
-      this.showToast('Équipage Requis', 'Veuillez sélectionner au moins un secouriste.', 'orange');
+      this.showToast('Équipage Requis', 'Veuillez sélectionner au moins un secouriste volontaire DISPO.', 'orange');
       return;
     }
 
     const selectedVols = (this.volunteers || []).filter(v => selectedVolIds.includes(v.id));
+
+    // VÉRIFICATION STRICTE DE DISPONIBILITÉ : aucun personnel ne peut être forcé
+    const smsData = this.crisisRenfortSmsDispos?.[mission.id] || { responses: {} };
+    const unconfirmedVols = selectedVols.filter(v => smsData.responses?.[v.id]?.status !== 'available');
+    if (unconfirmedVols.length > 0) {
+      this.showToast(
+        'Volontaires Non Confirmés',
+        `Certains secouristes sélectionnés (${unconfirmedVols.map(v => v.name).join(', ')}) n'ont pas confirmé leur disponibilité par retour SMS. Seuls les volontaires confirmés peuvent être engagés.`,
+        'orange'
+      );
+      return;
+    }
 
     const lotRadio = document.querySelector('input[name="prop-special-lot"]:checked');
     const specialLot = lotRadio ? lotRadio.value : '';
@@ -20063,8 +20371,8 @@ class ProtecGame {
       window.ProtecAudio.playRadioBeep();
     }
     this.showToast(
-      'Proposition Transmise',
-      `Votre proposition (${veh.name} + ${selectedVolIds.length} secouristes) a été transmise à ${mission.managerPlayerName || 'Directeur Allié'}.`,
+      'Équipe Proposée au Directeur !',
+      `L'équipe de renfort constituée (${veh.name} + ${selectedVolIds.length} secouristes volontaires DISPO) a été transmise à ${mission.managerPlayerName || 'Directeur Allié'}.`,
       'green'
     );
 
