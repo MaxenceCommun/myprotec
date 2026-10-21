@@ -11357,6 +11357,7 @@ class ProtecGame {
     mission.status = 'declenche';
     mission.title = mission.title.replace('[Préalerte] ', '[ALERTE ACTIVE] ');
     mission.spawnedAt = Date.now();
+    mission.isCrisis = true;
     mission.isEvolutive = true;
     mission.maxResponseMinutes = 20; // 20 min max pour partir en intervention
     const originName = mission.authorityLabel || (mission.alertOrigin === 'sncf' ? 'la SNCF' : 'la Préfecture');
@@ -16118,120 +16119,160 @@ class ProtecGame {
           `}
         ` : ''}
 
-        ${mission.status === 'prealerte' ? `
-          <div class="rounded-2xl border-2 border-amber-400 dark:border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-white dark:to-slate-900 p-4 text-slate-900 dark:text-slate-100 shadow-md space-y-4">
+        ${(
+          mission.status === 'prealerte' ||
+          mission.status === 'declenche' ||
+          (mission.status === 'ongoing' && (mission.type === 'crise' || mission.isCrisis || (mission.assignedMissions && mission.assignedMissions.length > 0))) ||
+          mission.type === 'crise' ||
+          mission.isCrisis ||
+          (Array.isArray(mission.assignedMissions) && mission.assignedMissions.length > 0) ||
+          (mission.requiredAssets && (mission.requiredAssets.vpsp > 0 || mission.requiredAssets.chu_places > 0 || mission.requiredAssets.pma || mission.requiredAssets.cyno > 0 || mission.requiredAssets.drone))
+        ) ? `
+          ${(() => {
+            const isPrealert = mission.status === 'prealerte';
+            const cleanTitle = (mission.title || '').replace(/\[(Préalerte|ALERTE ACTIVE)\]\s*/g, '');
+            const cardBorder = isPrealert 
+              ? 'border-amber-400 dark:border-amber-500/50 bg-gradient-to-b from-amber-500/10 via-amber-500/5 to-white dark:to-slate-900'
+              : 'border-red-500/70 dark:border-red-500/50 bg-gradient-to-b from-red-500/10 via-red-500/5 to-white dark:to-slate-900';
+            const badgeBg = isPrealert ? 'bg-amber-500 text-white' : 'bg-red-600 text-white';
+            const badgeIcon = isPrealert ? '<i data-lucide="bell" class="w-3 h-3 animate-bounce"></i>' : '<i data-lucide="siren" class="w-3.5 h-3.5 animate-pulse"></i>';
+            const badgeLabel = isPrealert ? 'Veille Opérationnelle / Préalerte AASC' : (mission.status === 'ongoing' ? 'Intervention Opérationnelle Active' : '🚨 Réquisition Opérationnelle Confirmée');
             
-            <!-- EN-TÊTE OFFICIEL DE LA FICHE -->
-            <div class="flex items-start justify-between gap-3 border-b border-amber-200 dark:border-amber-500/30 pb-3">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500 text-white shadow-xs">
-                    <i data-lucide="bell" class="w-3 h-3 animate-bounce"></i>
-                    <span>Veille Opérationnelle / Préalerte AASC</span>
-                  </span>
-                  <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${mission.authorityBadgeBg || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'}">
-                    <i data-lucide="shield" class="w-3 h-3"></i>
-                    <span>Émetteur : ${mission.authorityLabel || 'Préfecture (COZ / SIDPC)'}</span>
-                  </span>
-                </div>
-                <h3 class="text-sm font-black text-amber-950 dark:text-amber-200">${mission.title.replace('[Préalerte] ', '')}</h3>
-              </div>
-              <div class="text-right shrink-0">
-                <span id="mission-prealert-timer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-100 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 shadow-2xs">
-                  <i data-lucide="radio" class="w-3.5 h-3.5 text-amber-800 dark:text-amber-400 animate-pulse"></i>
-                  <span>Veille Active</span>
-                </span>
-                <span class="block text-[10px] font-extrabold text-amber-800 dark:text-amber-300 mt-1">Situation Évolutive</span>
-              </div>
-            </div>
+            const stateBox = isPrealert ? `
+              <span id="mission-prealert-timer" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-100 dark:bg-amber-950/60 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-amber-500/40 shadow-2xs">
+                <i data-lucide="radio" class="w-3.5 h-3.5 text-amber-800 dark:text-amber-400 animate-pulse"></i>
+                <span>Veille Active</span>
+              </span>
+              <span class="block text-[10px] font-extrabold text-amber-800 dark:text-amber-300 mt-1">Situation Évolutive</span>
+            ` : `
+              <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-red-100 dark:bg-red-950/60 text-red-950 dark:text-red-200 border border-red-300 dark:border-red-500/40 shadow-2xs">
+                <i data-lucide="${mission.status === 'ongoing' ? 'activity' : 'flame'}" class="w-3.5 h-3.5 text-red-600 dark:text-red-400 ${mission.status === 'ongoing' ? 'animate-pulse' : ''}"></i>
+                <span>${mission.status === 'ongoing' ? 'Sur Site' : 'Déploiement Requis'}</span>
+              </span>
+              <span class="block text-[10px] font-extrabold text-red-800 dark:text-red-300 mt-1">Ordre de Mission</span>
+            `;
 
-            <!-- BLOC 1 : SITUATION & ÉTAT DES LIEUX -->
-            <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-amber-200 dark:border-amber-500/30 shadow-2xs space-y-1.5">
-              <div class="flex items-center gap-1.5 text-xs font-black uppercase text-amber-900 dark:text-amber-300">
-                <i data-lucide="radio" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
-                <span>1. Situation Initiale & Intervention Publique en cours</span>
-              </div>
-              <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed bg-amber-50/40 dark:bg-amber-950/40 p-2.5 rounded-lg border border-amber-100 dark:border-amber-500/30 font-medium">
-                ${mission.scenarioText || mission.desc}
-              </p>
-            </div>
+            const section1Title = isPrealert ? '1. Situation Initiale & Intervention Publique en cours' : '1. Situation Opérationnelle & Contexte d\'intervention';
+            const section1IconColor = isPrealert ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400';
+            const section1HeaderColor = isPrealert ? 'text-amber-900 dark:text-amber-300' : 'text-red-950 dark:text-red-300';
+            const section1Bg = isPrealert ? 'bg-amber-50/40 dark:bg-amber-950/40 border-amber-100 dark:border-amber-500/30' : 'bg-red-50/30 dark:bg-red-950/30 border-red-100 dark:border-red-500/30';
 
-            <!-- BLOC 2 : MISSIONS CONFIÉES AUX AASC -->
-            <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-amber-200 dark:border-amber-500/30 shadow-2xs space-y-2">
-              <div class="flex items-center gap-1.5 text-xs font-black uppercase text-amber-900 dark:text-amber-300">
-                <i data-lucide="clipboard-list" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
-                <span>2. Missions Pressenties pour la Protection Civile</span>
-              </div>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                ${(mission.assignedMissions || ['Accueil et soutien des impliqués', 'Soutien sanitaire d\'urgence']).map(mis => `
-                  <div class="flex items-start gap-2.5 p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-500/30 text-indigo-950 dark:text-indigo-200 font-bold leading-snug">
-                    <i data-lucide="check-circle-2" class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5"></i>
-                    <span class="break-words whitespace-normal flex-1">${mis}</span>
+            const section2Title = isPrealert ? '2. Missions Pressenties pour la Protection Civile' : '2. Missions Confiées à la Protection Civile';
+            const section2IconColor = isPrealert ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400';
+            const section2HeaderColor = isPrealert ? 'text-amber-900 dark:text-amber-300' : 'text-slate-900 dark:text-blue-300';
+
+            const section3Title = isPrealert ? '3. Estimation des Moyens Sollicités' : '3. Moyens & Vecteurs Opérationnels Sollicités';
+            const section3IconColor = isPrealert ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400';
+            const section3HeaderColor = isPrealert ? 'text-amber-900 dark:text-amber-300' : 'text-slate-900 dark:text-blue-300';
+
+            const assets = mission.requiredAssets || {};
+            const requestedItems = [];
+            if (assets.vpsp && assets.vpsp > 0) {
+              requestedItems.push({
+                icon: '🚑',
+                label: 'VPSP',
+                val: `${assets.vpsp} demandé(s)`,
+                color: 'text-red-700 dark:text-red-300 bg-red-50/70 dark:bg-red-950/40 border-red-200 dark:border-red-500/30'
+              });
+            }
+            if (assets.chu_places && assets.chu_places > 0) {
+              requestedItems.push({
+                icon: '🛏️',
+                label: 'CHU / Lits',
+                val: `${assets.chu_places} places`,
+                color: 'text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/30'
+              });
+            }
+            if (assets.pma) {
+              requestedItems.push({
+                icon: '🏥',
+                label: 'Lot PMA',
+                val: 'Poste Médical Avancé',
+                color: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30'
+              });
+            }
+            if (assets.cyno && assets.cyno > 0) {
+              requestedItems.push({
+                icon: '🐕',
+                label: 'Cynotechnie',
+                val: `${assets.cyno} équipe(s)`,
+                color: 'text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-500/30'
+              });
+            }
+            if (assets.drone) {
+              requestedItems.push({
+                icon: '🚁',
+                label: 'Drone',
+                val: 'Télépilote Requis',
+                color: 'text-sky-700 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/40 border-sky-200 dark:border-sky-500/30'
+              });
+            }
+            // Aucun moyen LOG exigé sur le dispositif (matériel acheminé en amont / logistique interne)
+            if (requestedItems.length === 0) {
+              requestedItems.push({
+                icon: '👥',
+                label: 'Secouristes',
+                val: `${mission.requiredVolunteers || 4} équipiers requis`,
+                color: 'text-blue-700 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/40 border-blue-200 dark:border-blue-500/30'
+              });
+            }
+
+            return `
+              <div class="rounded-2xl border-2 ${cardBorder} p-4 text-slate-900 dark:text-slate-100 shadow-md space-y-4">
+                
+                <!-- EN-TÊTE OFFICIEL DE LA FICHE -->
+                <div class="flex items-start justify-between gap-3 border-b ${isPrealert ? 'border-amber-200 dark:border-amber-500/30' : 'border-red-200 dark:border-red-500/30'} pb-3">
+                  <div class="space-y-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${badgeBg} shadow-xs">
+                        ${badgeIcon}
+                        <span>${badgeLabel}</span>
+                      </span>
+                      <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black border ${mission.authorityBadgeBg || 'bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'}">
+                        <i data-lucide="shield" class="w-3 h-3"></i>
+                        <span>${isPrealert ? 'Émetteur' : 'Autorité Requérante'} : ${mission.authorityLabel || 'Préfecture (COZ / SIDPC)'}</span>
+                      </span>
+                    </div>
+                    <h3 class="text-sm font-black ${isPrealert ? 'text-amber-950 dark:text-amber-200' : 'text-slate-900 dark:text-white'}">${cleanTitle}</h3>
                   </div>
-                `).join('')}
-              </div>
-            </div>
+                  <div class="text-right shrink-0">
+                    ${stateBox}
+                  </div>
+                </div>
 
-            <!-- BLOC 3 : MOYENS & VECTEURS SOLLICITÉS (Uniquement les moyens requis) -->
-            ${(() => {
-              const assets = mission.requiredAssets || {};
-              const requestedItems = [];
-              if (assets.vpsp && assets.vpsp > 0) {
-                requestedItems.push({
-                  icon: '🚑',
-                  label: 'VPSP',
-                  val: `${assets.vpsp} demandé(s)`,
-                  color: 'text-red-700 dark:text-red-300 bg-red-50/70 dark:bg-red-950/40 border-red-200 dark:border-red-500/30'
-                });
-              }
-              if (assets.chu_places && assets.chu_places > 0) {
-                requestedItems.push({
-                  icon: '🛏️',
-                  label: 'CHU / Lits',
-                  val: `${assets.chu_places} places`,
-                  color: 'text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-500/30'
-                });
-              }
-              if (assets.pma) {
-                requestedItems.push({
-                  icon: '🏥',
-                  label: 'Lot PMA',
-                  val: 'Poste Médical Avancé',
-                  color: 'text-emerald-700 dark:text-emerald-300 bg-emerald-50/70 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-500/30'
-                });
-              }
-              if (assets.cyno && assets.cyno > 0) {
-                requestedItems.push({
-                  icon: '🐕',
-                  label: 'Cynotechnie',
-                  val: `${assets.cyno} équipe(s)`,
-                  color: 'text-amber-700 dark:text-amber-300 bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-500/30'
-                });
-              }
-              if (assets.drone) {
-                requestedItems.push({
-                  icon: '🚁',
-                  label: 'Drone',
-                  val: 'Télépilote Requis',
-                  color: 'text-sky-700 dark:text-sky-300 bg-sky-50/70 dark:bg-sky-950/40 border-sky-200 dark:border-sky-500/30'
-                });
-              }
-              // Le moyen LOG n'est pas requis sur le dispositif (utilisé uniquement en interne pour transport matériel)
-              if (requestedItems.length === 0) {
-                requestedItems.push({
-                  icon: '👥',
-                  label: 'Secouristes',
-                  val: `${mission.requiredVolunteers || 4} équipiers requis`,
-                  color: 'text-blue-700 dark:text-blue-300 bg-blue-50/70 dark:bg-blue-950/40 border-blue-200 dark:border-blue-500/30'
-                });
-              }
+                <!-- BLOC 1 : SITUATION & ÉTAT DES LIEUX -->
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border ${isPrealert ? 'border-amber-200 dark:border-amber-500/30' : 'border-slate-200 dark:border-slate-700'} shadow-2xs space-y-1.5">
+                  <div class="flex items-center gap-1.5 text-xs font-black uppercase ${section1HeaderColor}">
+                    <i data-lucide="radio" class="w-4 h-4 ${section1IconColor}"></i>
+                    <span>${section1Title}</span>
+                  </div>
+                  <p class="text-xs text-slate-700 dark:text-slate-200 leading-relaxed ${section1Bg} p-2.5 rounded-lg border font-medium">
+                    ${mission.scenarioText || mission.desc || 'Intervention d\'urgence déclenchée à la demande des autorités publiques.'}
+                  </p>
+                </div>
 
-              return `
-                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-amber-200 dark:border-amber-500/30 shadow-2xs space-y-2">
+                <!-- BLOC 2 : MISSIONS CONFIÉES AUX AASC -->
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border ${isPrealert ? 'border-amber-200 dark:border-amber-500/30' : 'border-slate-200 dark:border-slate-700'} shadow-2xs space-y-2">
+                  <div class="flex items-center gap-1.5 text-xs font-black uppercase ${section2HeaderColor}">
+                    <i data-lucide="clipboard-list" class="w-4 h-4 ${section2IconColor}"></i>
+                    <span>${section2Title}</span>
+                  </div>
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    ${(mission.assignedMissions || ['Accueil et soutien des impliqués', 'Soutien sanitaire d\'urgence']).map(mis => `
+                      <div class="flex items-start gap-2.5 p-2.5 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/50 border border-indigo-100 dark:border-indigo-500/30 text-indigo-950 dark:text-indigo-200 font-bold leading-snug">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5"></i>
+                        <span class="break-words whitespace-normal flex-1">${mis}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+
+                <!-- BLOC 3 : MOYENS & VECTEURS SOLLICITÉS -->
+                <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border ${isPrealert ? 'border-amber-200 dark:border-amber-500/30' : 'border-slate-200 dark:border-slate-700'} shadow-2xs space-y-2">
                   <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-1.5 text-xs font-black uppercase text-amber-900 dark:text-amber-300">
-                      <i data-lucide="truck" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
-                      <span>3. Estimation des Moyens Sollicités</span>
+                    <div class="flex items-center gap-1.5 text-xs font-black uppercase ${section3HeaderColor}">
+                      <i data-lucide="truck" class="w-4 h-4 ${section3IconColor}"></i>
+                      <span>${section3Title}</span>
                     </div>
                     <span class="text-[10px] font-black text-slate-500 dark:text-slate-400">Besoin min : ${mission.requiredVolunteers} secouristes</span>
                   </div>
@@ -16247,54 +16288,65 @@ class ProtecGame {
                     `).join('')}
                   </div>
                 </div>
-              `;
-            })()}
 
-            <!-- BLOC 4 : ANTICIPATION & DÉCISION DU JOUEUR -->
-            <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-500/30 shadow-2xs space-y-3">
-              <div class="flex items-center justify-between flex-wrap gap-2">
-                <div class="flex items-center gap-2">
-                  <i data-lucide="compass" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
-                  <span class="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-300">4. Décision & Anticipation Opérationnelle</span>
-                </div>
-                <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${mission.preMobilisationActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}">
-                  ${mission.preMobilisationActive ? '⚡ Effectifs en préalerte' : '👁️ Veille simple (Au repos)'}
-                </span>
-              </div>
+                ${isPrealert ? `
+                  <!-- BLOC 4 : ANTICIPATION & DÉCISION DU JOUEUR (EN PRÉALERTE SEULEMENT) -->
+                  <div class="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-500/30 shadow-2xs space-y-3">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="compass" class="w-4 h-4 text-amber-600 dark:text-amber-400"></i>
+                        <span class="text-xs font-black uppercase tracking-wider text-amber-900 dark:text-amber-300">4. Décision & Anticipation Opérationnelle</span>
+                      </div>
+                      <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${mission.preMobilisationActive ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-500/20 dark:text-emerald-300 dark:border-emerald-500/30' : 'bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'}">
+                        ${mission.preMobilisationActive ? '⚡ Effectifs en préalerte' : '👁️ Veille simple (Au repos)'}
+                      </span>
+                    </div>
 
-              <!-- JAUGE DE PRÉ-ARMEMENT -->
-              <div class="space-y-1.5 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-slate-700 dark:text-slate-300 font-bold">Disponibilités confirmées (préalerte) :</span>
-                  <strong id="prealert-vols-count" class="font-black text-amber-800 dark:text-amber-300">${registeredVols.length} / ${mission.requiredVolunteers} secouristes prêts</strong>
-                </div>
-                <div class="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                  <div id="prealert-vols-bar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
-                </div>
-                <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                  ${mission.preMobilisationActive 
-                    ? `En préalerte, les secouristes consultent leurs messages et confirment progressivement leur disponibilité pour l'intervention.` 
-                    : 'En veille simple, aucun bénévole n\'est sondé d\'avance. Si l\'alerte se confirme, le rassemblement à la base prendra le délai standard.'}
-                </p>
-              </div>
+                    <!-- JAUGE DE PRÉ-ARMEMENT -->
+                    <div class="space-y-1.5 bg-slate-50 dark:bg-slate-800/80 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div class="flex items-center justify-between text-xs">
+                        <span class="text-slate-700 dark:text-slate-300 font-bold">Disponibilités confirmées (préalerte) :</span>
+                        <strong id="prealert-vols-count" class="font-black text-amber-800 dark:text-amber-300">${registeredVols.length} / ${mission.requiredVolunteers} secouristes prêts</strong>
+                      </div>
+                      <div class="h-2 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div id="prealert-vols-bar" class="h-full bg-gradient-to-r from-amber-500 to-emerald-500 transition-all duration-300" style="width: ${Math.min(100, Math.round((registeredVols.length / (mission.requiredVolunteers || 1)) * 100))}%"></div>
+                      </div>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                        ${mission.preMobilisationActive 
+                          ? `En préalerte, les secouristes consultent leurs messages et confirment progressivement leur disponibilité pour l'intervention.` 
+                          : 'En veille simple, aucun bénévole n\'est sondé d\'avance. Si l\'alerte se confirme, le rassemblement à la base prendra le délai standard.'}
+                      </p>
+                    </div>
 
-              <!-- BOUTONS DE DÉCISION DU JOUEUR -->
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                <button type="button" 
-                  onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'premobilisation')" 
-                  class="px-3 py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${mission.preMobilisationActive ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400 dark:ring-emerald-500' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-emerald-400 dark:border-emerald-500/30'}">
-                  <i data-lucide="bell" class="w-3.5 h-3.5"></i>
-                  <span>Mettre les effectifs en préalerte</span>
-                </button>
-                <button type="button" 
-                  onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'veille_simple')" 
-                  class="px-3 py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${!mission.preMobilisationActive ? 'bg-amber-600 text-white shadow-md ring-2 ring-amber-400 dark:ring-amber-500' : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 dark:border-amber-500/30'}">
-                  <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                  <span>Mise en veille simple (Attendre confirmation)</span>
-                </button>
+                    <!-- BOUTONS DE DÉCISION DU JOUEUR -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <button type="button" 
+                        onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'premobilisation')" 
+                        class="px-3 py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${mission.preMobilisationActive ? 'bg-emerald-600 text-white shadow-md ring-2 ring-emerald-400 dark:ring-emerald-500' : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-emerald-400 dark:border-emerald-500/30'}">
+                        <i data-lucide="bell" class="w-3.5 h-3.5"></i>
+                        <span>Mettre les effectifs en préalerte</span>
+                      </button>
+                      <button type="button" 
+                        onclick="window.game.setPrealertMobilisationMode('${mission.id}', 'veille_simple')" 
+                        class="px-3 py-2.5 rounded-xl font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${!mission.preMobilisationActive ? 'bg-amber-600 text-white shadow-md ring-2 ring-amber-400 dark:ring-amber-500' : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-amber-300 dark:border-amber-500/30'}">
+                        <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                        <span>Mise en veille simple (Attendre confirmation)</span>
+                      </button>
+                    </div>
+                  </div>
+                ` : `
+                  <!-- RAPPEL ORDRE DE MISSION CONFIRMÉ (EN ALERTE DÉCLENCHÉE) -->
+                  <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs text-slate-800 dark:text-slate-200 font-bold">
+                    <div class="flex items-center gap-2">
+                      <i data-lucide="info" class="w-4 h-4 text-red-600 dark:text-red-400 shrink-0"></i>
+                      <span>${mission.status === 'ongoing' ? 'Dispositif déployé sur le terrain selon l\'ordre de mission des autorités publiques.' : 'Alerte confirmée : affectez vos secouristes et vos véhicules dans les onglets ci-dessous, puis engagez le départ.'}</span>
+                    </div>
+                  </div>
+                `}
+
               </div>
-            </div>
-          </div>
+            `;
+          })()}
         ` : ''}
 
         ${(mission.isGarde || mission.type === 'garde_samu') && window.ProtecGardesSamu ? `
@@ -16451,10 +16503,15 @@ class ProtecGame {
               <div class="text-xs text-slate-700 dark:text-slate-300 space-y-1 pt-1">
                 <span class="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Missions Prévues sur Site :</span>
                 <ul class="text-[11px] text-slate-700 dark:text-slate-200 space-y-1 list-disc list-inside bg-slate-50 dark:bg-slate-800/70 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                  <li>Reconnaissance de périmètre et bilans circonstanciés</li>
-                  <li>Prise en charge des victimes et gestes de premiers secours</li>
-                  <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
-                  <li>Transmissions opérationnelles et liaisons vers les urgences (CHU)</li>
+                  ${(Array.isArray(mission.assignedMissions) && mission.assignedMissions.length > 0)
+                    ? mission.assignedMissions.map(m => `<li>${m}</li>`).join('')
+                    : `
+                      <li>Reconnaissance de périmètre et bilans circonstanciés</li>
+                      <li>Prise en charge des victimes et gestes de premiers secours</li>
+                      <li>Accueil, réconfort et distribution d'urgence aux impliqués</li>
+                      <li>Transmissions opérationnelles et liaisons vers les urgences (CHU)</li>
+                    `
+                  }
                 </ul>
               </div>
             </div>
