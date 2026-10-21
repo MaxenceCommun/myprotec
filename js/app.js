@@ -18884,8 +18884,8 @@ class ProtecGame {
             <span class="font-extrabold text-slate-800 flex items-center gap-1.5">
               <span>📦</span> Réserve & Stocks de l'Antenne
             </span>
-            <button onclick="window.ProtecLogistique.selectedStationId='${station.id}'; window.ProtecLogistique.activeTab='boutique'; window.game.openModule('logistique');" class="text-xs font-extrabold text-pc-blue hover:underline">
-              🛒 Boutique / Acheter
+            <button onclick="if(window.ProtecBoutiques){ window.ProtecBoutiques.selectedStationId='${station.id}'; } window.game.openModule('boutiques');" class="text-xs font-extrabold text-pc-blue hover:underline cursor-pointer">
+              🛒 Boutiques & Magasins
             </button>
           </div>
           <div class="flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-200">
@@ -23311,7 +23311,7 @@ class ProtecGame {
                           <span>✨ Doter tous (${Math.min(zeroUniformVols, stockTenues)})</span>
                         </button>
                       ` : ''}
-                      <button type="button" onclick="window.ProtecLogistique.selectedStationId='${primarySt?.id}'; window.ProtecLogistique.activeTab='boutique'; window.game.openModule('logistique');" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
+                      <button type="button" onclick="if(window.ProtecBoutiques){ window.ProtecBoutiques.activeShopId='centrale_federale'; window.ProtecBoutiques.activeRayonId='tenues'; if('${primarySt?.id}') window.ProtecBoutiques.selectedStationId='${primarySt?.id}'; } window.game.openModule('boutiques');" class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-xs transition flex items-center gap-1.5 cursor-pointer">
                         <span>🛒 Boutique Tenues & Rangers</span>
                       </button>
                     </div>
