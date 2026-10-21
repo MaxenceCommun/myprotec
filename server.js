@@ -4,6 +4,57 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const db = require('./db');
+const { exec, spawn } = require('child_process');
+
+// --- CONFIGURATION PIPER TTS (Modèle fr_FR-mls-medium / 125 locuteurs) ---
+const TTS_CACHE_DIR = path.join(__dirname, 'cache', 'tts');
+if (!fs.existsSync(TTS_CACHE_DIR)) {
+  fs.mkdirSync(TTS_CACHE_DIR, { recursive: true });
+}
+
+function getPiperConfig() {
+  const customBin = process.env.PIPER_BIN;
+  const customModel = process.env.PIPER_MODEL;
+
+  const candidateBins = [
+    customBin,
+    path.join(__dirname, 'bin', 'piper', 'piper.exe'),
+    path.join(__dirname, 'bin', 'piper', 'piper'),
+    'piper.exe',
+    'piper'
+  ].filter(Boolean);
+
+  const candidateModels = [
+    customModel,
+    path.join(__dirname, 'models', 'piper', 'fr_FR-mls-medium.onnx'),
+    path.join(__dirname, 'models', 'fr_FR-mls-medium.onnx'),
+    path.join(__dirname, 'fr_FR-mls-medium.onnx')
+  ].filter(Boolean);
+
+  let foundBin = null;
+  for (const b of candidateBins) {
+    if (b.includes(path.sep) && fs.existsSync(b)) {
+      foundBin = b;
+      break;
+    }
+  }
+
+  let foundModel = null;
+  for (const m of candidateModels) {
+    if (fs.existsSync(m)) {
+      foundModel = m;
+      break;
+    }
+  }
+
+  return {
+    bin: foundBin || 'piper',
+    isPiperInstalled: !!foundBin,
+    model: foundModel,
+    isModelPresent: !!foundModel,
+    cacheDir: TTS_CACHE_DIR
+  };
+}
 
 let PORT = parseInt(process.env.PORT || '8080', 10);
 const MIME_TYPES = {
@@ -15,7 +66,11 @@ const MIME_TYPES = {
   '.jpg': 'image/jpeg',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
-  '.txt': 'text/plain; charset=UTF-8'
+  '.txt': 'text/plain; charset=UTF-8',
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.webm': 'audio/webm'
 };
 
 // --- ÉTAT MULTIJOUEUR EN BDD ---
@@ -1619,6 +1674,171 @@ const server = http.createServer((req, res) => {
     const deptCode = String(url.split('/').pop() || '54');
     const crisis = (db.data.department_crises || {})[deptCode] || null;
     sendJson(res, 200, { success: true, crisis });
+    return;
+  }
+
+  // --- API PIPER TTS & RADIO VOCALE DE CRISE (fr_FR-mls-medium / 125 locuteurs) ---
+
+  // Statut du Moteur de Synthèse Vocale Piper TTS
+  if (url === '/api/crisis/tts/status' && req.method === 'GET') {
+    const config = getPiperConfig();
+    let cachedCount = 0;
+    try {
+      if (fs.existsSync(TTS_CACHE_DIR)) {
+        cachedCount = fs.readdirSync(TTS_CACHE_DIR).filter(f => f.endsWith('.wav') || f.endsWith('.mp3')).length;
+      }
+    } catch (e) {}
+    sendJson(res, 200, {
+      success: true,
+      piperInstalled: config.isPiperInstalled,
+      modelPresent: config.isModelPresent,
+      model: 'fr_FR-mls-medium',
+      speakersCount: 125,
+      cachedFilesCount: cachedCount,
+      cacheDir: TTS_CACHE_DIR
+    });
+    return;
+  }
+
+  // Génération ou Récupération en Cache Audio TTS (Piper TTS fr_FR-mls-medium)
+  if (url === '/api/crisis/tts' && (req.method === 'GET' || req.method === 'POST')) {
+    const handleTts = (params) => {
+      let { text, speaker, rate } = params;
+      if (!text) {
+        sendJson(res, 400, { success: false, error: 'Paramètre "text" requis.' });
+        return;
+      }
+      text = String(text).trim();
+      let speakerId = parseInt(speaker, 10);
+      if (isNaN(speakerId) || speakerId < 0) speakerId = 0;
+      if (speakerId > 124) speakerId = speakerId % 125;
+
+      // Hachage MD5 déterministe pour le fichier en cache
+      const cleanText = text.toLowerCase().replace(/\s+/g, ' ');
+      const hash = crypto.createHash('md5').update(`${speakerId}:${cleanText}`).digest('hex');
+      const cachedFile = path.join(TTS_CACHE_DIR, `${hash}.wav`);
+
+      // 1. Si le fichier audio est déjà présent dans le cache serveur
+      if (fs.existsSync(cachedFile)) {
+        try {
+          const stat = fs.statSync(cachedFile);
+          res.writeHead(200, {
+            'Content-Type': 'audio/wav',
+            'Content-Length': stat.size,
+            'Cache-Control': 'public, max-age=31536000',
+            'Access-Control-Allow-Origin': '*',
+            'X-TTS-Cached': '1',
+            'X-TTS-Speaker': String(speakerId)
+          });
+          fs.createReadStream(cachedFile).pipe(res);
+          return;
+        } catch (readErr) {
+          console.warn('Erreur lecture cache TTS:', readErr);
+        }
+      }
+
+      // 2. Si non en cache, tenter Piper TTS s'il est configuré
+      const piperCfg = getPiperConfig();
+      if (piperCfg.isPiperInstalled && piperCfg.isModelPresent) {
+        try {
+          const piperArgs = [
+            '--model', piperCfg.model,
+            '--speaker', String(speakerId),
+            '--output_file', cachedFile
+          ];
+          const proc = spawn(piperCfg.bin, piperArgs);
+          proc.stdin.write(text);
+          proc.stdin.end();
+
+          proc.on('close', (code) => {
+            if (code === 0 && fs.existsSync(cachedFile)) {
+              const stat = fs.statSync(cachedFile);
+              res.writeHead(200, {
+                'Content-Type': 'audio/wav',
+                'Content-Length': stat.size,
+                'Cache-Control': 'public, max-age=31536000',
+                'Access-Control-Allow-Origin': '*',
+                'X-TTS-Cached': '0',
+                'X-TTS-Speaker': String(speakerId)
+              });
+              fs.createReadStream(cachedFile).pipe(res);
+            } else {
+              sendJson(res, 200, {
+                success: true,
+                cached: false,
+                available: false,
+                fallback: true,
+                speaker: speakerId,
+                text: text,
+                hint: 'Piper TTS offline - utilisation du fallback synthèse vocale radio'
+              });
+            }
+          });
+
+          proc.on('error', () => {
+            sendJson(res, 200, {
+              success: true,
+              cached: false,
+              available: false,
+              fallback: true,
+              speaker: speakerId,
+              text: text
+            });
+          });
+          return;
+        } catch (e) {
+          // Erreur d'exécution -> fallback
+        }
+      }
+
+      // 3. Fallback immédiat vers la synthèse Web Audio / Web Speech Radio client
+      sendJson(res, 200, {
+        success: true,
+        cached: false,
+        available: false,
+        fallback: true,
+        speaker: speakerId,
+        text: text,
+        hint: 'Piper TTS modèle fr_FR-mls-medium - fallback client actif'
+      });
+    };
+
+    if (req.method === 'GET') {
+      const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost:8080'}`);
+      handleTts({
+        text: urlObj.searchParams.get('text'),
+        speaker: urlObj.searchParams.get('speaker') || '0',
+        rate: urlObj.searchParams.get('rate') || '1.0'
+      });
+      return;
+    } else {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const payload = JSON.parse(body || '{}');
+          handleTts(payload);
+        } catch (err) {
+          sendJson(res, 400, { success: false, error: 'JSON invalide.' });
+        }
+      });
+      return;
+    }
+  }
+
+  // Vider le cache TTS
+  if (url === '/api/crisis/tts/clear-cache' && req.method === 'POST') {
+    try {
+      if (fs.existsSync(TTS_CACHE_DIR)) {
+        const files = fs.readdirSync(TTS_CACHE_DIR);
+        files.forEach(f => {
+          try { fs.unlinkSync(path.join(TTS_CACHE_DIR, f)); } catch (e) {}
+        });
+      }
+      sendJson(res, 200, { success: true, message: 'Cache TTS vidé.' });
+    } catch (e) {
+      sendJson(res, 500, { success: false, error: e.message });
+    }
     return;
   }
 

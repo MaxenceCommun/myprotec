@@ -3850,6 +3850,11 @@ window.ProtecCriseLogistique = {
       text: text
     };
     crisis.journal_crise.unshift(entry);
+
+    // Diffusion radio vocale synchronisée
+    if (window.ProtecCrisisRadio && window.ProtecCrisisRadio.enabled) {
+      window.ProtecCrisisRadio.transmitCrisisLog(entry, crisis);
+    }
   },
 
   /**
@@ -3892,6 +3897,11 @@ window.ProtecCriseLogistique = {
       }
     });
 
+    // Simulation des réponses radio individuelles d'astreinte
+    if (window.ProtecCrisisRadio && window.ProtecCrisisRadio.enabled) {
+      window.ProtecCrisisRadio.simulateMobilisationCalls(game, crisis, mode, deltaMax, availableVolunteers, countAdded);
+    }
+
     this.logCrisisRadio(
       crisis,
       'Secrétariat Opérationnel',
@@ -3927,6 +3937,9 @@ window.ProtecCriseLogistique = {
       if (!crisis.reserve.onBase.includes(volId)) crisis.reserve.onBase.push(volId);
       this.logCrisisRadio(crisis, 'Transit Bénévoles', `${vol.name} a rejoint le local d'antenne (Réserve en base opérationnelle).`, 'info');
       game.showToast('Bénévole sur Base', `${vol.name} est maintenant présent au local.`, 'blue');
+      if (window.ProtecCrisisRadio && window.ProtecCrisisRadio.enabled) {
+        window.ProtecCrisisRadio.speakVolunteerTransit(vol, vol.temps_trajet_base_minutes || 15);
+      }
     } else if (crisis.reserve.onBase.includes(volId)) {
       // Passage de la base à l'astreinte à domicile
       crisis.reserve.onBase = crisis.reserve.onBase.filter(id => id !== volId);
@@ -4028,6 +4041,11 @@ window.ProtecCriseLogistique = {
       `ENGAGEMENT : « ${sub.titre} » paré au départ avec ${volIds.length} secouristes [${vehNames}].`,
       'ordre'
     );
+
+    // Briefing vocal de l'ordre d'opération
+    if (window.ProtecCrisisRadio && window.ProtecCrisisRadio.enabled) {
+      window.ProtecCrisisRadio.speakOperationalOrder(sub, vehNames, volIds.length);
+    }
 
     if (window.ProtecAudio) window.ProtecAudio.playRadioBeep();
     game.showToast('Vecteur Engagé !', `Équipe envoyée sur « ${sub.titre} ».`, 'blue');
@@ -4153,6 +4171,13 @@ window.ProtecCriseLogistique = {
 
           <!-- Actions En-tête -->
           <div class="flex items-center gap-2">
+            <!-- Bouton Toggle Radio Vocale Instantané avec persistance -->
+            <button onclick="window.ProtecCrisisRadio.toggle()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition shadow-xs ${window.ProtecCrisisRadio?.enabled ? 'bg-cyan-950/80 border-cyan-500/80 text-cyan-300 hover:bg-cyan-900/90 shadow-cyan-950/50' : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:bg-slate-700'}" title="Activer ou couper les transmissions radio vocales tactiques">
+              <i data-lucide="${window.ProtecCrisisRadio?.enabled ? 'volume-2' : 'volume-x'}" class="w-4 h-4 ${window.ProtecCrisisRadio?.enabled ? 'text-cyan-400 animate-pulse' : 'text-slate-500'}"></i>
+              <span class="hidden sm:inline">Radio Vocale :</span>
+              <span class="${window.ProtecCrisisRadio?.enabled ? 'text-cyan-300 font-black' : 'text-slate-400'}">${window.ProtecCrisisRadio?.enabled ? 'ACTIVE 🎙️' : 'OFF 🔇'}</span>
+            </button>
+
             <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-xs">
               <span class="text-slate-400 font-medium">Phase : <strong class="text-white">${crisis.currentPhaseIndex + 1}/${phasesCount}</strong></span>
               <span class="text-slate-400 font-medium">Engagés : <strong class="text-emerald-400">${engagedCount}</strong></span>

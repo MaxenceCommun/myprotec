@@ -23,12 +23,14 @@ window.ProtecAudio = {
     erreur: 'sons/erreur.mp3',
     attention: 'sons/attention.mp3',
     alerte_crise: 'sons/alerte_crise.mp3',
+    start_radio: 'sons/start_radio.mp3',
     'notif.mp3': 'sons/notif.mp3',
     'info.mp3': 'sons/info.mp3',
     'expire.mp3': 'sons/expire.mp3',
     'erreur.mp3': 'sons/erreur.mp3',
     'attention.mp3': 'sons/attention.mp3',
-    'alerte_crise.mp3': 'sons/alerte_crise.mp3'
+    'alerte_crise.mp3': 'sons/alerte_crise.mp3',
+    'start_radio.mp3': 'sons/start_radio.mp3'
   },
 
   userInteracted: false,
@@ -54,9 +56,9 @@ window.ProtecAudio = {
     window.addEventListener('keydown', unlockHandler, { once: true, passive: true });
     window.addEventListener('click', unlockHandler, { once: true, passive: true });
 
-    // Préchargement léger des 6 fichiers audio mp3
+    // Préchargement léger des fichiers audio mp3
     try {
-      const baseKeys = ['notif', 'info', 'expire', 'erreur', 'attention', 'alerte_crise'];
+      const baseKeys = ['notif', 'info', 'expire', 'erreur', 'attention', 'alerte_crise', 'start_radio'];
       baseKeys.forEach(key => {
         const url = this.files[key];
         const a = new Audio();
