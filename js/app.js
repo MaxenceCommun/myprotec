@@ -26141,6 +26141,165 @@ class ProtecGame {
   
   // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
   
+  // --- GÉOLOCALISATION ET VISUALISATION DU BÉNÉVOLE EN TRANSIT SUR LA CARTE (TRACÉ ROUTIER ET POINT GPS) ---
+  async centerMapOnVolunteerTransit(missionId, volId) {
+    if (!volId) return;
+
+    const mission = (this.missions || []).find(m => m.id === missionId) || (this.missions || []).find(m => m.volunteerTransit && m.volunteerTransit[volId]) || this.missions?.[0];
+    const vol = (this.volunteers || []).find(v => v.id === volId);
+    if (!vol) return;
+
+    const transit = mission?.volunteerTransit?.[vol.id] || (mission?.volunteerTransit && Object.values(mission.volunteerTransit).find(t => t.volId === vol.id));
+    const nowTs = Date.now() + (this.serverTimeOffset || 0);
+
+    // Déterminer la station d'antenne de destination
+    const station = (this.stations || []).find(s => s.id === vol.stationId) 
+      || (this.stations || []).find(s => s.id === mission?.stationId) 
+      || this.stations?.[0]
+      || { lat: 48.6921, lng: 6.1844, name: 'Base Antenne' };
+
+    const baseLat = Number(station.lat || 48.6921);
+    const baseLng = Number(station.lng || 6.1844);
+
+    // S'assurer de la présence du domicile du bénévole
+    if (!vol.coords_domicile && window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      window.ProtecPersonnel.ensureVolunteerResidence(vol, this);
+    }
+
+    const homeLat = Number(vol.coords_domicile?.lat || vol.lat || (baseLat + 0.025));
+    const homeLng = Number(vol.coords_domicile?.lng || vol.lng || (baseLng + 0.025));
+
+    // Calcul de la progression en direct (entre 4% et 96% si en cours de trajet)
+    let progress = 0.5;
+    let minsLeft = vol.temps_ralliement_minutes || 8;
+
+    if (transit && transit.departedDomicileAt && transit.arrivalBaseAt) {
+      const total = Math.max(1000, transit.arrivalBaseAt - transit.departedDomicileAt);
+      const elapsed = nowTs - transit.departedDomicileAt;
+      progress = Math.max(0.04, Math.min(0.96, elapsed / total));
+      minsLeft = Math.max(1, Math.ceil((transit.arrivalBaseAt - nowTs) / 60000));
+    }
+
+    // Fermer les fenêtres ouvertes pour dévoiler la carte
+    if (typeof this.closeModal === 'function') this.closeModal();
+    if (typeof this.closeDrawer === 'function') this.closeDrawer();
+    const mainModal = document.getElementById('main-modal');
+    if (mainModal) mainModal.classList.add('hidden');
+
+    // Récupération du tracé routier précis (OSRM)
+    let routeCoords = [];
+    if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function') {
+      try {
+        const details = await window.ProtecSystems.fetchRouteDetails(
+          { lat: homeLat, lng: homeLng },
+          { lat: baseLat, lng: baseLng }
+        );
+        if (details && Array.isArray(details.coords) && details.coords.length > 1) {
+          routeCoords = details.coords;
+        }
+      } catch (e) {
+        console.warn('[VolunteerTransit] Erreur OSRM, fallback direct:', e);
+      }
+    }
+
+    if (!routeCoords || routeCoords.length === 0) {
+      // Fallback interpolation droite
+      routeCoords = [
+        [homeLat, homeLng],
+        [homeLat + (baseLat - homeLat) * 0.5, homeLng + (baseLng - homeLng) * 0.5],
+        [baseLat, baseLng]
+      ];
+    }
+
+    // Calcul de la position exacte sur la route selon la progression
+    let targetIndex = Math.floor(progress * (routeCoords.length - 1));
+    targetIndex = Math.max(0, Math.min(routeCoords.length - 1, targetIndex));
+    const currentPoint = routeCoords[targetIndex] || [homeLat + (baseLat - homeLat) * progress, homeLng + (baseLng - homeLng) * progress];
+    const approxLat = currentPoint[0];
+    const approxLng = currentPoint[1];
+
+    if (!this.map) return;
+
+    // Nettoyer l'ancien tracé et l'ancien marqueur
+    if (this._tempVolunteerPolyline) {
+      try { this._tempVolunteerPolyline.remove(); } catch(e) {}
+      this._tempVolunteerPolyline = null;
+    }
+    if (this._tempVolunteerTransitMarker) {
+      try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
+      this._tempVolunteerTransitMarker = null;
+    }
+
+    // 1. Tracé sur la route comme les véhicules Protection Civile
+    this._tempVolunteerPolyline = L.polyline(routeCoords, {
+      color: '#f59e0b',
+      weight: 4.5,
+      opacity: 0.9,
+      dashArray: '8, 8',
+      lineCap: 'round',
+      lineJoin: 'round'
+    }).addTo(this.map);
+
+    // 2. Point GPS sur la route où se trouve le bénévole avec balise
+    const modeIcon = vol.mode_transport === 'moto' ? '🏍️' : (vol.mode_transport === 'velo' ? '🚲' : '🚗');
+    const icon = L.divIcon({
+      className: 'temp-volunteer-ping',
+      html: `<div class="relative flex items-center justify-center -translate-x-1/2 -translate-y-1/2 cursor-pointer">
+        <!-- Point d'onde pulsant -->
+        <span class="animate-ping absolute inline-flex h-9 w-9 rounded-full bg-amber-400 opacity-75"></span>
+        <span class="relative inline-flex rounded-full h-4 w-4 bg-amber-500 border-2 border-white shadow-md"></span>
+        <!-- Étiquette informative -->
+        <div class="absolute left-5 px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[11px] font-black shadow-xl border-2 border-white flex items-center gap-1.5 whitespace-nowrap">
+          <span>${modeIcon}</span>
+          <span>${vol.name.split(' ')[0]} (~<span class="mono-num">${minsLeft}</span> min)</span>
+        </div>
+      </div>`,
+      iconSize: [1, 1],
+      iconAnchor: [0, 0]
+    });
+
+    this._tempVolunteerTransitMarker = L.marker([approxLat, approxLng], { icon }).addTo(this.map);
+
+    // 3. Cadrage caméra modéré : ne pas trop zoomer pour voir le trajet restant jusqu'à la base
+    const remainingBounds = L.latLngBounds([
+      [approxLat, approxLng],
+      [baseLat, baseLng]
+    ]);
+
+    this.map.fitBounds(remainingBounds, {
+      padding: [90, 90],
+      maxZoom: 13,
+      animate: true,
+      duration: 1.2
+    });
+
+    // Nettoyage au bout de 14 secondes ou au premier clic carte
+    const cleanup = () => {
+      if (this._tempVolunteerPolyline) {
+        try { this._tempVolunteerPolyline.remove(); } catch(e) {}
+        this._tempVolunteerPolyline = null;
+      }
+      if (this._tempVolunteerTransitMarker) {
+        try { this._tempVolunteerTransitMarker.remove(); } catch(e) {}
+        this._tempVolunteerTransitMarker = null;
+      }
+    };
+
+    const cleanupTimer = setTimeout(cleanup, 14000);
+    this.map.once('click', () => {
+      clearTimeout(cleanupTimer);
+      cleanup();
+    });
+
+    this.showToast(
+      `🚗 ${vol.name} en route`,
+      `Itinéraire vers ${station.name || 'la base'} affiché (~reste ${minsLeft} min, parcours à ${(progress * 100).toFixed(0)}%).`,
+      'orange'
+    );
+  }
+
+  // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
+  
   // --- GÉOLOCALISATION ET VISUALISATION DU BÉNÉVOLE EN TRANSIT SUR LA CARTE ---
   centerMapOnVolunteerTransit(missionId, volId) {
     if (!volId) return;
