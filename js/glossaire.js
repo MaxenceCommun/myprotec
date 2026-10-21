@@ -468,8 +468,12 @@
 
     getEntry(rawText) {
       if (!rawText) return null;
-      const clean = String(rawText).trim().toUpperCase();
-      return GLOSSARY[clean] || null;
+      const clean = String(rawText).trim();
+      // RÈGLE MÉTIER STRICTE : Une abréviation DOIT être en MAJUSCULES (ex: 'CE' !== 'ce')
+      if (GLOSSARY[clean] && (clean === clean.toUpperCase() || clean === 'FdF')) {
+        return GLOSSARY[clean];
+      }
+      return null;
     },
 
     // Crée l'élément du tooltip flottant unique
@@ -590,12 +594,22 @@
         end++;
       }
 
-      const word = text.slice(start, end).trim().toUpperCase();
-      if (GLOSSARY[word]) return word;
+      const rawWord = text.slice(start, end).trim();
+      if (!rawWord) return null;
 
-      // Vérifier les variantes (ex: sans tiret final ou parenthèses)
-      const cleanWord = word.replace(/^[^\w]+|[^\w]+$/g, '');
+      // Nettoyer les ponctuations aux extrémités (ex: '(CE)', 'DPS,', '[VPSP]')
+      const cleanWord = rawWord.replace(/^[^\wÀ-ÿ0-9]+|[^\wÀ-ÿ0-9]+$/g, '');
+      if (!cleanWord) return null;
+
+      // RÈGLE MÉTIER STRICTE : Une abréviation DOIT être en MAJUSCULES dans le texte source !
+      // Le mot français "ce" (minuscule) est un mot courant et non l'abréviation "CE" (Chef d'Équipe).
+      const isStrictUpper = (cleanWord === cleanWord.toUpperCase() || cleanWord === 'FdF');
+      if (!isStrictUpper) {
+        return null;
+      }
+
       if (GLOSSARY[cleanWord]) return cleanWord;
+      if (GLOSSARY[rawWord] && (rawWord === rawWord.toUpperCase() || rawWord === 'FdF')) return rawWord;
 
       return null;
     },
@@ -613,33 +627,33 @@
         // 1. Cible directe <abbr> ou élément avec data-abbr
         const abbrEl = target.closest('[data-abbr], abbr');
         if (abbrEl) {
-          const key = abbrEl.getAttribute('data-abbr') || abbrEl.textContent.trim().toUpperCase();
-          if (GLOSSARY[key]) {
-            this.showTooltip(key, abbrEl.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
+          const rawKey = abbrEl.getAttribute('data-abbr') || abbrEl.textContent.trim();
+          if (GLOSSARY[rawKey] && (rawKey === 'FdF' || rawKey === rawKey.toUpperCase())) {
+            this.showTooltip(rawKey, abbrEl.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
             return;
           }
         }
 
         // 2. Si l'élément cible est un badge, bouton, puce ou cellule courte dont le texte est directement une abréviation
-        const directText = target.children.length === 0 ? target.textContent.trim().toUpperCase() : null;
-        if (directText && GLOSSARY[directText]) {
+        const directText = target.children.length === 0 ? target.textContent.trim() : null;
+        if (directText && GLOSSARY[directText] && (directText === 'FdF' || directText === directText.toUpperCase())) {
           if (!target.title) target.title = GLOSSARY[directText].fullName;
           this.showTooltip(directText, target.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
           return;
         }
 
         // 2b. Conteneur compact ou badge stylé
-        const badgeEl = target.closest('[class*="badge"], [class*="pill"], .tag, button, span');
+        const badgeEl = target.closest('[class*="badge"], [class*="pill"], .tag');
         if (badgeEl) {
-          const badgeText = badgeEl.textContent.trim().toUpperCase();
-          if (GLOSSARY[badgeText]) {
+          const badgeText = badgeEl.textContent.trim();
+          if (GLOSSARY[badgeText] && (badgeText === 'FdF' || badgeText === badgeText.toUpperCase())) {
             if (!badgeEl.title) badgeEl.title = GLOSSARY[badgeText].fullName;
             this.showTooltip(badgeText, badgeEl.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
             return;
           }
         }
 
-        // 3. Détection du mot sous le curseur dans le texte
+        // 3. Détection du mot sous le curseur dans le texte (respect strict de la casse majuscule)
         const word = this.getWordUnderCursor(e);
         if (word && GLOSSARY[word]) {
           this.showTooltip(word, target.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
@@ -663,14 +677,14 @@
 
         const abbrEl = target.closest('[data-abbr], abbr');
         if (abbrEl) {
-          const key = abbrEl.getAttribute('data-abbr') || abbrEl.textContent.trim().toUpperCase();
-          if (GLOSSARY[key]) {
-            this.showTooltip(key, abbrEl.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
+          const rawKey = abbrEl.getAttribute('data-abbr') || abbrEl.textContent.trim();
+          if (GLOSSARY[rawKey] && (rawKey === 'FdF' || rawKey === rawKey.toUpperCase())) {
+            this.showTooltip(rawKey, abbrEl.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
             return;
           }
         }
-        const directText = target.children.length === 0 ? target.textContent.trim().toUpperCase() : null;
-        if (directText && GLOSSARY[directText]) {
+        const directText = target.children.length === 0 ? target.textContent.trim() : null;
+        if (directText && GLOSSARY[directText] && (directText === 'FdF' || directText === directText.toUpperCase())) {
           this.showTooltip(directText, target.getBoundingClientRect(), { x: e.clientX, y: e.clientY });
           return;
         }
