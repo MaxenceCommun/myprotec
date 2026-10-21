@@ -14996,6 +14996,7 @@ class ProtecGame {
   }
 
   setMissionDetailTab(tab) {
+    this.missionDetailActiveTabExplicit = true;
     if (tab === 'effectifs') {
       this.missionDetailActiveTab = 'personnel';
     } else if (tab === 'vehicules') {
@@ -15365,11 +15366,27 @@ class ProtecGame {
       ))
     );
 
-    let activeTab = this.missionDetailActiveTab || 'info';
-    if (!isDPS && activeTab === 'dps') {
-      activeTab = 'info';
-      this.missionDetailActiveTab = 'info';
+    const isAnyCrisis = Boolean(
+      isCrisisMission || 
+      isPlanNovi || 
+      mission.isCrisis || 
+      mission.isSinistre || 
+      mission.isIncident || 
+      ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type) ||
+      (mission.title && (mission.title.includes('NOVI') || mission.title.includes('CRISE') || mission.title.includes('Crise') || mission.title.includes('Urgence'))) ||
+      Boolean(mission.operationalLog && mission.operationalLog.length > 0)
+    );
+
+    let activeTab = this.missionDetailActiveTab;
+    if (!activeTab || (this._lastOpenedMissionId !== mission.id && !this.missionDetailActiveTabExplicit)) {
+      activeTab = isAnyCrisis ? 'main_courante' : 'info';
+      this.missionDetailActiveTab = activeTab;
     }
+    if (!isDPS && activeTab === 'dps') {
+      activeTab = isAnyCrisis ? 'main_courante' : 'info';
+      this.missionDetailActiveTab = activeTab;
+    }
+    this._lastOpenedMissionId = mission.id;
 
     // Indicateur s'il manque des moyens ou véhicules
     const hasMissingVehicles = this.hasMissingVehicles(mission);
@@ -15628,9 +15645,52 @@ class ProtecGame {
         <!-- BANDEAU INTERVENTION ACTIVE EN DIRECT (SI ONGOING) -->
         ${mission.status === 'ongoing' ? `
 
-          <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle -->
-          ${(mission.isCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? `
-            ${window.ProtecCriseLogistique.renderCrisisDetailsHTML(this, mission)}
+          <!-- Si c'est un sinistre ou une crise : Main Courante Opérationnelle gérée dans l'onglet Main Courante -->
+          ${(mission.isCrisis || isCrisisMission || isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) && window.ProtecCriseLogistique ? `
+            ${activeTab !== 'main_courante' ? `
+              <!-- Rappel de gouvernance compact UNIQUEMENT si le joueur navigue sur un autre onglet (Personnel / Logistique / Information) -->
+              <div class="mb-3">
+                ${!mission.managerPlayerId ? `
+                  <div class="p-3 rounded-2xl bg-gradient-to-r from-red-950 via-amber-950 to-slate-900 border-2 border-red-500 shadow-md flex items-center justify-between gap-3 flex-wrap animate-pulse">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-black">
+                        <i data-lucide="alert-triangle" class="w-4 h-4"></i>
+                      </div>
+                      <div>
+                        <div class="text-xs font-black text-red-200">Commandement de Crise Vacant</div>
+                        <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention pour coordonner les effectifs et la main courante.</p>
+                      </div>
+                    </div>
+                    <button onclick="window.ProtecCriseLogistique.claimCrisisCommand(window.game, '${mission.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-500 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                      <i data-lucide="shield" class="w-4 h-4"></i>
+                      <span>Prendre la main sur la gestion</span>
+                    </button>
+                  </div>
+                ` : (mission.managerPlayerId === myId) ? `
+                  <div class="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/60 shadow-xs flex items-center justify-between gap-2 text-xs">
+                    <span class="font-bold text-emerald-200 flex items-center gap-1.5">
+                      <i data-lucide="shield-check" class="w-4 h-4 text-emerald-400"></i>
+                      <span>Vous dirigez cette crise (Commandement Établi)</span>
+                    </span>
+                    <button onclick="window.game.setMissionDetailTab('main_courante')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1 cursor-pointer">
+                      <i data-lucide="radio" class="w-3 h-3"></i>
+                      <span>Voir la Main Courante</span>
+                    </button>
+                  </div>
+                ` : `
+                  <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-700 shadow-xs flex items-center justify-between gap-2 text-xs">
+                    <span class="font-bold text-slate-300 flex items-center gap-1.5">
+                      <i data-lucide="lock" class="w-4 h-4 text-amber-400"></i>
+                      <span>Dirigé par : ${mission.managerPlayerName || 'Directeur Allié'}</span>
+                    </span>
+                    <button onclick="window.game.setMissionDetailTab('main_courante')" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 transition flex items-center gap-1 cursor-pointer">
+                      <i data-lucide="radio" class="w-3 h-3"></i>
+                      <span>Voir la Main Courante</span>
+                    </button>
+                  </div>
+                `}
+              </div>
+            ` : ''}
           ` : `
             ${(mission.vehicleMismatch || mission.isSlowedDown) ? `
               <div class="p-3 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 text-xs shadow-sm space-y-1 mb-2.5">
@@ -15900,7 +15960,7 @@ class ProtecGame {
             <span>Logistique</span>
             ${hasMissingVehicles ? '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>' : ''}
           </button>
-          ${(isCrisisMission || isPlanNovi || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) ? `
+          ${(isCrisisMission || isPlanNovi || isAnyCrisis || ['crise', 'pompiers', 'samu', 'meteo'].includes(mission.type)) ? `
             <button type="button" onclick="window.game.setMissionDetailTab('main_courante')" class="pb-2.5 px-3 flex items-center gap-1.5 cursor-pointer border-b-2 font-black transition ${activeTab === 'main_courante' ? 'border-pc-blue text-pc-blue dark:border-sky-400 dark:text-sky-300' : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
               <i data-lucide="radio" class="w-3.5 h-3.5 text-pc-blue animate-pulse"></i>
               <span>Main Courante (${(mission.operationalLog || []).length})</span>
@@ -18932,6 +18992,9 @@ class ProtecGame {
   }
 
   closeDrawer() {
+    this.missionDetailActiveTab = null;
+    this.missionDetailActiveTabExplicit = false;
+    this._lastOpenedMissionId = null;
     const closedMissionId = this.selectedMissionId;
     const drawer = document.getElementById('context-drawer');
     if (drawer) {

@@ -3130,6 +3130,10 @@ window.ProtecCriseLogistique = {
     crisis.alertStage = 'managed';
     crisis.acknowledged = true;
     crisis.ackDeadline = null;
+    if (game) {
+      game.missionDetailActiveTab = 'main_courante';
+      game.missionDetailActiveTabExplicit = true;
+    }
 
     this.logCrisisRadio(crisis, 'Commandement Opérationnel', `PRISE DE COMMANDEMENT : Le Directeur ${myName} prend officiellement la direction des opérations du PC Crise.`, 'success');
 
@@ -3172,6 +3176,10 @@ window.ProtecCriseLogistique = {
     crisis.managerPlayerName = null;
     crisis.alertStage = 'broadcast_all'; // La crise redevient disponible pour tout le département
     crisis.ackDeadline = null;
+    if (game) {
+      game.missionDetailActiveTab = 'main_courante';
+      game.missionDetailActiveTabExplicit = true;
+    }
 
     this.logCrisisRadio(crisis, 'Commandement Opérationnel', `PASSATION DE COMMANDEMENT : Le Directeur ${prevName} laisse la main. Le poste de commandement est vacant et disponible pour tout directeur du département.`, 'ordre');
 
