@@ -185,7 +185,7 @@ class ProtecGame {
     this.badgesCollection = [];
     this.activeAllianceTab = 'membres';
     this.activePlanningTab = 'calendar';
-    this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+    this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true, crise: true };
     this.modalHistory = [];
     this.currentModalKey = null;
     this.sncfConvention = { signed: false, signedAt: null, totalInterventions: 0 };
@@ -5430,7 +5430,7 @@ class ProtecGame {
 
   togglePlanningPoleFilter(poleKey) {
     if (!this.planningPolesFilters) {
-      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true, crise: true };
     }
     this.planningPolesFilters[poleKey] = !this.planningPolesFilters[poleKey];
     this.openModule('planning', true);
@@ -5438,21 +5438,22 @@ class ProtecGame {
 
   toggleAllPlanningPoleFilters(allActive) {
     if (!this.planningPolesFilters) {
-      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true, crise: true };
     }
     this.planningPolesFilters = {
       dps: !!allActive,
       previ: !!allActive,
       devis: !!allActive,
       formations: !!allActive,
-      social: !!allActive
+      social: !!allActive,
+      crise: !!allActive
     };
     this.openModule('planning', true);
   }
 
   openPlanningFiltered(focusPole) {
     if (!this.planningPolesFilters) {
-      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+      this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true, crise: true };
     }
     if (focusPole) {
       this.planningPolesFilters[focusPole] = true;
@@ -5466,10 +5467,21 @@ class ProtecGame {
     const targetMonth = viewingMonth !== null ? viewingMonth : this.clock.month;
     const targetYear = viewingYear !== null ? viewingYear : (this.clock.year || 2026);
 
-    // 1. PÔLE SECOURS & DPS (DPS validés, gardes SAMU/SDIS, missions planifiées hors maraude)
+    // Helper d'identification d'une crise / plan d'urgence / plan NOVI
+    const isMissionCrisis = (m) => Boolean(
+      m.type === 'crise' || 
+      m.isCrisis || 
+      m.isEmergencyPlan || 
+      (m.crisisType && m.crisisType.length > 0) ||
+      ['prealerte', 'declenche'].includes(m.status) ||
+      (m.title && (m.title.includes('Plan NOVI') || m.title.includes('Plan Rouge') || m.title.includes('[ALERTE ACTIVE]')))
+    );
+
+    // 1. PÔLE SECOURS & DPS (DPS validés, gardes SAMU/SDIS, hors maraude et hors crise)
     const dpsMissions = (this.missions || []).filter(m => 
       !this.isMissionTerminated(m) &&
       m.type !== 'social' && 
+      !isMissionCrisis(m) &&
       (m.status === 'planifie' || m.status === 'ongoing' || m.isPlanned || (m.type === 'dps' && m.status !== 'completed'))
     );
     dpsMissions.forEach(m => {
@@ -5478,14 +5490,19 @@ class ProtecGame {
         eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: m.startHour || 14, minute: 0 };
         m.eventDate = eDate;
       }
+      const isSamu = Boolean(m.type === 'garde_samu' || m.type === 'samu' || m.isGarde);
+      const isSdis = Boolean(m.type === 'pompiers' || m.type === 'garde_sdis');
+      const missionType = isSamu ? 'Garde SAMU' : (isSdis ? 'Garde Pompiers' : (m.type === 'dps' ? 'DPS' : 'Dispositif'));
+      const badgeColor = isSamu ? 'bg-sky-600 text-white' : (isSdis ? 'bg-orange-600 text-white' : 'bg-pc-blue text-white');
+
       events.push({
         id: m.id,
         pole: 'dps',
         poleLabel: 'Secours & DPS',
         poleColor: 'bg-pc-blue',
-        type: (m.type === 'garde_samu' || m.type === 'samu') ? 'Garde SAMU' : (m.type === 'pompiers' || m.type === 'garde_sdis' ? 'Garde Pompiers' : (m.type === 'dps' ? 'DPS' : 'Garde')),
-        badgeBg: (m.type === 'garde_samu' || m.type === 'samu') ? 'bg-sky-600 text-white' : (m.type === 'pompiers' || m.type === 'garde_sdis' ? 'bg-orange-600 text-white' : 'bg-pc-blue text-white'),
-        isGarde: !!(m.isGarde || m.type === 'garde_samu' || m.type === 'samu'),
+        type: missionType,
+        badgeBg: badgeColor,
+        isGarde: isSamu,
         posture: m.posture || 'base',
         title: m.title,
         eventDate: eDate,
@@ -5663,6 +5680,63 @@ class ProtecGame {
         requiredCount: m.requiredVolunteers || 3,
         scale: 'Action Sociale',
         address: m.sector || m.address || 'Secteur Maraude',
+        raw: m
+      });
+    });
+
+    // 5. PÔLE GESTION DE CRISE & PLANS NOVI (Plans NOVI, réquisitions préfectorales, SAMU, SDIS, SNCF)
+    const crisisMissions = (this.missions || []).filter(m => 
+      !this.isMissionTerminated(m) &&
+      isMissionCrisis(m)
+    );
+    crisisMissions.forEach(m => {
+      let eDate = m.eventDate;
+      if (!eDate) {
+        eDate = { day: this.clock?.day || 1, month: this.clock?.month || 0, year: this.clock?.year || 2026, hour: m.startHour || 14, minute: 0 };
+        m.eventDate = eDate;
+      }
+
+      const isNovi = Boolean((m.crisisType && m.crisisType.includes('novi')) || (m.title && m.title.toLowerCase().includes('novi')));
+      const isPref = Boolean(m.alertOrigin === 'prefecture' || m.authority === 'prefecture' || (m.authorityLabel && m.authorityLabel.toLowerCase().includes('préfecture')));
+      const isSamuReq = Boolean(m.alertOrigin === 'samu' || (m.authorityLabel && m.authorityLabel.toLowerCase().includes('samu')));
+      const isSdisReq = Boolean(m.alertOrigin === 'pompiers' || (m.authorityLabel && m.authorityLabel.toLowerCase().includes('pompiers')));
+      const isSncf = Boolean(m.alertOrigin === 'sncf' || (m.title && m.title.toLowerCase().includes('sncf')));
+
+      let crisisTypeLabel = 'Plan NOVI';
+      if (isNovi) {
+        crisisTypeLabel = 'Plan NOVI';
+      } else if (isPref) {
+        crisisTypeLabel = 'Réquisition Préfecture';
+      } else if (isSamuReq) {
+        crisisTypeLabel = 'Urgence Réflexe SAMU';
+      } else if (isSdisReq) {
+        crisisTypeLabel = 'Renfort SDIS';
+      } else if (isSncf) {
+        crisisTypeLabel = 'Urgence SNCF';
+      } else {
+        crisisTypeLabel = 'Crise & Urgence';
+      }
+
+      events.push({
+        id: m.id,
+        pole: 'crise',
+        poleLabel: 'Crise & Urgence',
+        poleColor: 'bg-rose-600',
+        type: crisisTypeLabel,
+        badgeBg: 'bg-rose-600 text-white shadow-xs',
+        isCrisis: true,
+        isGarde: false,
+        posture: m.posture || 'crise',
+        title: m.title,
+        eventDate: eDate,
+        startHour: m.startHour || eDate.hour || 14,
+        durationHours: m.durationHours || 1,
+        durationSeconds: m.durationSeconds,
+        rewardMoney: m.rewardMoney || 0,
+        registeredCount: m.registeredVolunteers?.length || 0,
+        requiredCount: m.requiredVolunteers || 6,
+        scale: m.scale || (isNovi ? 'Plan NOVI (Nombreuses Victimes)' : 'Dispositif de Crise'),
+        address: m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Secteur d’intervention'),
         raw: m
       });
     });
@@ -22685,19 +22759,23 @@ class ProtecGame {
       // Agrégation transversale des événements de tous les pôles
       const allEvents = this.getAllPlanningEvents(curViewingMonth, curYear);
       if (!this.planningPolesFilters) {
-        this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true };
+        this.planningPolesFilters = { dps: true, previ: true, devis: true, formations: true, social: true, crise: true };
       }
       if (this.planningPolesFilters.previ === undefined) {
         this.planningPolesFilters.previ = true;
       }
       const filters = this.planningPolesFilters;
 
+      if (this.planningPolesFilters.crise === undefined) {
+        this.planningPolesFilters.crise = true;
+      }
       const poleCounts = {
         dps: allEvents.filter(e => e.pole === 'dps').length,
         previ: allEvents.filter(e => e.pole === 'previ').length,
         devis: allEvents.filter(e => e.pole === 'devis').length,
         formations: allEvents.filter(e => e.pole === 'formations').length,
-        social: allEvents.filter(e => e.pole === 'social').length
+        social: allEvents.filter(e => e.pole === 'social').length,
+        crise: allEvents.filter(e => e.pole === 'crise').length
       };
 
       const activeEvents = allEvents.filter(e => filters[e.pole]);
@@ -22711,6 +22789,7 @@ class ProtecGame {
 
       // Événements pour le jour sélectionné
       const selectedDayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === selectedDay && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
+      const selectedDayCrises = selectedDayEvents.filter(e => e.pole === 'crise');
       const selectedDayMissions = selectedDayEvents.filter(e => e.pole === 'dps');
       const selectedDayPrevi = selectedDayEvents.filter(e => e.pole === 'previ');
       const selectedDayDevis = selectedDayEvents.filter(e => e.pole === 'devis');
@@ -22749,6 +22828,12 @@ class ProtecGame {
                 <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
                 Social (${poleCounts.social})
               </button>
+              ${poleCounts.crise > 0 ? `
+                <button onclick="window.game.openPlanningFiltered('crise')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-rose-600 text-white hover:bg-rose-700 cursor-pointer animate-pulse shadow-sm" title="Crises et Réquisitions NOVI en cours">
+                  <i data-lucide="siren" class="w-4 h-4"></i>
+                  <span>Crises (${poleCounts.crise})</span>
+                </button>
+              ` : ''}
             </div>
             <div class="flex items-center gap-2">
               <div class="flex items-center gap-2 text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
@@ -22814,6 +22899,16 @@ class ProtecGame {
               >
                 <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
                 <span>🥫 Maraude (${poleCounts.social})</span>
+              </button>
+
+              <!-- Filtre Pôle Gestion de Crise & NOVI (Rouge / Rose d'urgence) -->
+              <button 
+                onclick="window.game.togglePlanningPoleFilter('crise')" 
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.crise ? 'bg-rose-600 text-white border-rose-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-slate-600 hover:bg-rose-50/50'}"
+                title="${filters.crise ? 'Cliquer pour masquer Crise & NOVI' : 'Cliquer pour afficher Crise & NOVI'}"
+              >
+                <span class="w-2.5 h-2.5 rounded-full ${filters.crise ? 'bg-white' : 'bg-rose-600 animate-pulse'}"></span>
+                <span>🚨 Crise (${poleCounts.crise})</span>
               </button>
             </div>
 
@@ -22915,6 +23010,7 @@ class ProtecGame {
 
                         const dayEvents = activeEvents.filter(e => e.eventDate && e.eventDate.day === day && e.eventDate.month === curViewingMonth && (e.eventDate.year == null || e.eventDate.year === curYear));
                         
+                        const crisisCount = dayEvents.filter(e => e.pole === 'crise').length;
                         const dpsCount = dayEvents.filter(e => e.pole === 'dps' && e.type === 'DPS').length;
                         const gardeCount = dayEvents.filter(e => e.pole === 'dps' && e.type !== 'DPS').length;
                         const prevCount = dayEvents.filter(e => e.pole === 'previ').length;
@@ -22946,6 +23042,11 @@ class ProtecGame {
                             </div>
 
                             <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
+                              ${crisisCount > 0 ? `
+                                <div class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white truncate text-center animate-pulse shadow-xs">
+                                  🚨 Crise (${crisisCount})
+                                </div>
+                              ` : ''}
                               ${dpsCount > 0 ? `
                                 <div class="px-1 py-0.2 rounded text-[8px] font-extrabold bg-pc-blue text-white truncate text-center">
                                   DPS (${dpsCount})
@@ -23007,6 +23108,72 @@ class ProtecGame {
                       </p>
                     ` : `
                       <div class="space-y-4">
+                        <!-- SECTION 0 : PÔLE GESTION DE CRISE & PLANS NOVI -->
+                        ${filters.crise && selectedDayCrises.length > 0 ? `
+                          <div class="space-y-2.5">
+                            <div class="text-[11px] font-black uppercase text-rose-800 dark:text-rose-300 tracking-wider flex items-center justify-between">
+                              <div class="flex items-center gap-1.5">
+                                <i data-lucide="siren" class="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 animate-pulse"></i>
+                                <span>Pôle Gestion de Crise & NOVI (${selectedDayCrises.length})</span>
+                              </div>
+                              <span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-700 uppercase">Alerte Prioritaire</span>
+                            </div>
+                            <div class="flex flex-col space-y-3">
+                              ${selectedDayCrises.map(e => {
+                                const m = e.raw;
+                                const regCount = m.registeredVolunteers?.length || 0;
+                                const reqCount = m.requiredVolunteers || 6;
+                                const isFull = regCount >= reqCount;
+
+                                return `
+                                  <div class="p-3.5 rounded-2xl bg-gradient-to-b from-rose-50/70 via-rose-50/30 to-white dark:from-rose-950/40 dark:to-slate-800 border-2 border-rose-400 dark:border-rose-600/70 flex flex-col justify-between space-y-2.5 shadow-sm">
+                                    <div>
+                                      <div class="flex items-center justify-between gap-2 flex-wrap">
+                                        <span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-600 text-white uppercase shadow-xs flex items-center gap-1">
+                                          <i data-lucide="siren" class="w-3 h-3"></i>
+                                          <span>${e.type}</span>
+                                        </span>
+                                        <div class="flex items-center gap-1.5">
+                                          ${m.rewardMoney ? `<span class="text-xs font-mono font-bold text-rose-700 dark:text-rose-300">+${m.rewardMoney} €</span>` : ''}
+                                          ${this.renderPinButtonHTML(m.id)}
+                                        </div>
+                                      </div>
+                                      <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${m.title}</h5>
+                                      <p class="text-[11px] text-slate-700 dark:text-slate-300 font-semibold flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="map-pin" class="w-3 h-3 text-rose-600 flex-shrink-0"></i>
+                                        <span>${m.address || 'Secteur d’intervention'}</span>
+                                      </p>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">${m.scale || 'Plan d’Urgence'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || 3600, true)}</strong> • Effectifs : <strong>${regCount}/${reqCount}</strong></p>
+                                    </div>
+
+                                    <div class="pt-2 border-t border-rose-200/60 dark:border-rose-800/40 space-y-1.5">
+                                      <div class="flex items-center justify-between text-xs font-bold">
+                                        <span class="${isFull ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'}">
+                                          ${isFull ? '✓ Détachement complet' : `⚠️ Incomplet (${regCount}/${reqCount})`}
+                                        </span>
+                                      </div>
+                                      <div class="w-full bg-slate-200/80 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                                        <div class="h-full bg-rose-600 rounded-full" style="width: ${Math.min(100, (regCount / reqCount) * 100)}%"></div>
+                                      </div>
+                                      <div class="flex items-center gap-2 pt-1">
+                                        <button onclick="window.game.closeModal(); window.game.openMissionDetails('${m.id}')" class="flex-1 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-black transition cursor-pointer flex items-center justify-center gap-1 shadow-xs">
+                                          <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                                          <span>Fiche & Mobilisation</span>
+                                        </button>
+                                        ${window.ProtecPCDispositif ? `
+                                          <button onclick="window.game.closeModal(); window.ProtecPCDispositif.openPCDrawer('${m.id}')" class="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-black transition cursor-pointer" title="Ouvrir le PC Crise">
+                                            PC Crise
+                                          </button>
+                                        ` : ''}
+                                      </div>
+                                    </div>
+                                  </div>
+                                `;
+                              }).join('')}
+                            </div>
+                          </div>
+                        ` : ''}
+
                         <!-- SECTION 1 : FORMATIONS & STAGES PÉDAGOGIQUES (INTERNES, EXTERNES, ENTREPRISES) -->
                         ${filters.formations && selectedDayFormations.length > 0 ? `
                           <div class="space-y-2.5">
@@ -23441,10 +23608,11 @@ class ProtecGame {
                   const timeSlot = e.raw ? this.formatMissionTimeSlot(e.raw) : (e.eventDate ? `${String(e.startHour || e.eventDate.hour || 14).padStart(2, '0')}h${String(e.eventDate.minute || 0).padStart(2, '0')}` : '14h00');
                   const dateStr = e.eventDate ? `${this.formatFullDate(e.eventDate)} à ${timeSlot.split(' à ')[0] || timeSlot}` : 'Date à confirmer';
                   const isToday = e.eventDate ? (e.eventDate.day === this.clock.day && e.eventDate.month === this.clock.month) : false;
+                  const isCrisis = e.pole === 'crise';
                   const searchText = `${e.title || ''} ${e.type || ''} ${e.scale || ''} ${e.address || ''} ${e.poleLabel || ''}`.toLowerCase();
 
                   return `
-                    <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
+                    <div class="planning-mission-card p-4 rounded-2xl glass-card flex flex-col justify-between space-y-3 border ${isCrisis ? 'border-rose-400 dark:border-rose-600 bg-rose-50/20 ring-1 ring-rose-300 shadow-sm' : isToday ? 'border-amber-300 ring-2 ring-amber-200' : 'border-slate-200/80'}" data-search-text="${searchText}">
                       <div class="space-y-1.5">
                         <div class="flex items-center justify-between gap-2 flex-wrap">
                           <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold ${e.badgeBg}">
@@ -23471,7 +23639,19 @@ class ProtecGame {
                           <div class="h-full rounded-full ${e.registeredCount >= e.requiredCount ? 'bg-emerald-500' : 'bg-amber-500'}" style="width: ${Math.min(100, (e.registeredCount / (e.requiredCount || 1)) * 100)}%"></div>
                         </div>
 
-                        ${e.pole === 'dps' || e.pole === 'social' ? `
+                        ${e.pole === 'crise' ? `
+                          <div class="flex gap-2">
+                            <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="flex-1 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs">
+                              <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
+                              <span>Fiche & Commandement Crise</span>
+                            </button>
+                            ${window.ProtecPCDispositif ? `
+                              <button onclick="window.game.closeModal(); window.ProtecPCDispositif.openPCDrawer('${e.id}')" class="px-3 py-2 rounded-xl text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white transition cursor-pointer" title="Ouvrir le PC Crise">
+                                PC Crise
+                              </button>
+                            ` : ''}
+                          </div>
+                        ` : e.pole === 'dps' || e.pole === 'social' ? `
                           <button onclick="window.game.closeModal(); window.game.openMissionDetails('${e.id}')" class="w-full py-2 rounded-xl text-xs font-bold glass-button text-slate-800 transition cursor-pointer">
                             ${e.pole === 'social' ? 'Fiche de la Maraude' : 'Détail du Dispositif'}
                           </button>
