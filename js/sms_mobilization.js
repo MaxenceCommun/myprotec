@@ -24,6 +24,24 @@ window.ProtecSmsMobilization = {
       smsText: 'Rendez-vous fixé à la base d\'antenne pour armement et briefing.',
       volunteerReply: 'Dispo confirmée ! Je serai à la base à l\'heure du RDV convenu.'
     },
+    sur_place_immediat: {
+      id: 'sur_place_immediat',
+      label: 'Ralliement DIRECT SUR PLACE (Sans passer par la base)',
+      shortLabel: 'Départ direct sur place',
+      badgeClass: 'bg-emerald-600 text-white animate-pulse',
+      icon: 'navigation',
+      smsText: 'CONVERGENCE DIRECTE SUR LE LIEU DE MISSION. Sans matériel à récupérer : ne passez pas par la base.',
+      volunteerReply: 'Bien reçu ! Je pars directement sur le lieu de l\'intervention sans passer par la base.'
+    },
+    sur_place_horaire: {
+      id: 'sur_place_horaire',
+      label: 'Rendez-vous DIRECT SUR PLACE à heure précise',
+      shortLabel: 'RDV sur site à heure fixe',
+      badgeClass: 'bg-teal-600 text-white',
+      icon: 'map-pin',
+      smsText: 'Rendez-vous directement sur le lieu de l\'intervention à heure convenue.',
+      volunteerReply: 'Dispo confirmée ! Je serai directement sur les lieux de l\'intervention à l\'heure fixée.'
+    },
     attente_domicile: {
       id: 'attente_domicile',
       label: 'Attendre à domicile en alerte (Dispo domicile)',
@@ -846,7 +864,7 @@ window.ProtecSmsMobilization = {
   onConsigneChanged(missionId, consigneId) {
     const rdvBox = document.getElementById('sms-rdv-box');
     if (rdvBox) {
-      if (consigneId === 'base_horaire') {
+      if (consigneId === 'base_horaire' || consigneId === 'sur_place_horaire') {
         rdvBox.classList.remove('hidden');
       } else {
         rdvBox.classList.add('hidden');

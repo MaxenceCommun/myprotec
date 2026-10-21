@@ -14374,19 +14374,35 @@ class ProtecGame {
       window.ProtecPersonnel.ensureVolunteerResidence(vol, this);
     }
 
-    const station = this.stations?.find(s => s.id === vol.stationId) || this.stations?.[0] || { lat: 48.8566, lng: 2.3522 };
-    let distKm = vol.distance_base_km;
-    if (!distKm && vol.coords_domicile && window.ProtecDepartements?.calculateDistance) {
-      // Majoration du détour routier réel (1.32x distance à vol d'oiseau)
-      distKm = parseFloat((window.ProtecDepartements.calculateDistance(vol.coords_domicile.lat, vol.coords_domicile.lng, station.lat, station.lng) * 1.32).toFixed(1));
-    }
-    if (!distKm) distKm = 4.5;
+    const station = this.stations?.find(s => s.id === vol.stationId) || this.stations?.[0] || { lat: 48.8566, lng: 2.3522, name: 'Base Antenne' };
 
-    let rallyMin = vol.temps_ralliement_minutes || vol.temps_trajet_base_minutes || vol.travelTimeToStationMin;
-    if (!rallyMin) {
-      rallyMin = Math.max(3, Math.round(3 + (distKm / 35) * 60));
-    }
+    // RÈGLE MÉTIER : Un bénévole passe par la base S'IL A DU MATÉRIEL OU VÉHICULE À RÉCUPÉRER.
+    // S'il n'a pas de matériel à récupérer (ou consigne 'sur place'), il converge DIRECTEMENT SUR LES LIEUX DE MISSION.
+    const hasVehicleToPickUp = Boolean(
+      mission.assignedCrew?.vehicles?.length > 0 &&
+      (mission.volunteerTeams?.[volId] || mission.volunteerRoles?.[volId]?.includes('chauffeur') || mission.volunteerRoles?.[volId]?.includes('conducteur'))
+    );
+    const hasMaterialToPickUp = Boolean(
+      mission.requiredAssets && (mission.requiredAssets.pma || mission.requiredAssets.cai || mission.requiredAssets.drone || mission.requiredAssets.eclairage || (mission.requiredAssets.vpsp && mission.requiredAssets.vpsp > 0))
+    );
+    const isExplicitBaseConsigne = Boolean(mission.smsConsigne?.consigne === 'base_immediat' || mission.smsConsigne?.consigne === 'base_horaire');
+    const isExplicitSurPlaceConsigne = Boolean(mission.smsConsigne?.consigne === 'sur_place_immediat' || mission.smsConsigne?.consigne === 'sur_place_horaire');
 
+    const mustPassByBase = !isExplicitSurPlaceConsigne && (isExplicitBaseConsigne || hasVehicleToPickUp || hasMaterialToPickUp);
+    const destinationType = mustPassByBase ? 'base' : 'sur_place';
+    const destTarget = mustPassByBase
+      ? { lat: station.lat, lng: station.lng, name: station.name || 'Base Antenne' }
+      : { lat: mission.lat || station.lat, lng: mission.lng || station.lng, name: mission.address || mission.title || 'Lieu de mission' };
+
+    let distKm = 0;
+    if (vol.coords_domicile && destTarget.lat && destTarget.lng && window.ProtecDepartements?.calculateDistance) {
+      distKm = parseFloat((window.ProtecDepartements.calculateDistance(vol.coords_domicile.lat, vol.coords_domicile.lng, destTarget.lat, destTarget.lng) * 1.32).toFixed(1));
+    } else {
+      distKm = vol.distance_base_km || 4.5;
+    }
+    if (!distKm || distKm <= 0) distKm = 4.5;
+
+    let rallyMin = Math.max(3, Math.round(3 + (distKm / 35) * 60));
     const now = Date.now() + (this.serverTimeOffset || 0);
     const homeAddress = vol.adresse ? `${vol.adresse}, ${vol.commune || ''}` : (vol.homeAddress || `${vol.commune || 'Domicile'} (${distKm} km)`);
 
@@ -14394,26 +14410,29 @@ class ProtecGame {
       volId: volId,
       volName: vol.name,
       homeAddress: homeAddress,
+      destinationType: destinationType,
+      destinationName: destTarget.name,
+      destLat: destTarget.lat,
+      destLng: destTarget.lng,
       distBaseKm: distKm,
       rallyMinutes: rallyMin,
       departedDomicileAt: now,
       arrivalBaseAt: now + (rallyMin * 60 * 1000),
       loggedDeparture: true,
       loggedArrival: false,
-      routeCoords: vol._routeToBaseCoords || null
+      routeCoords: null
     };
 
-    // Préchargement asynchrone de l'itinéraire OSRM réel
-    if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function' && vol.coords_domicile && station.lat && station.lng) {
-      window.ProtecSystems.fetchRouteDetails(vol.coords_domicile, { lat: station.lat, lng: station.lng }).then(details => {
+    // Préchargement asynchrone de l'itinéraire OSRM réel (vers base ou vers le lieu sur place)
+    if (window.ProtecSystems && typeof window.ProtecSystems.fetchRouteDetails === 'function' && vol.coords_domicile && destTarget.lat && destTarget.lng) {
+      window.ProtecSystems.fetchRouteDetails(vol.coords_domicile, { lat: destTarget.lat, lng: destTarget.lng }).then(details => {
         if (details && Array.isArray(details.coords) && details.coords.length > 1) {
-          vol._routeToBaseCoords = details.coords;
+          if (destinationType === 'base') vol._routeToBaseCoords = details.coords;
           if (mission.volunteerTransit && mission.volunteerTransit[volId]) {
             mission.volunteerTransit[volId].routeCoords = details.coords;
             if (details.totalDistanceMeters) {
               const roadDistKm = parseFloat((details.totalDistanceMeters / 1000).toFixed(1));
               mission.volunteerTransit[volId].distBaseKm = roadDistKm;
-              vol.distance_base_km = roadDistKm;
             }
           }
         }
@@ -14422,10 +14441,13 @@ class ProtecGame {
 
     if (mission.operationalLog) {
       const timeStr = new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const logMsg = mustPassByBase
+        ? `Départ domicile : ${vol.name} part vers la base d'antenne pour armer le matériel/véhicule (trajet : ${this.formatDurationMinutes(rallyMin)}).`
+        : `Départ domicile : ${vol.name} part directement vers les lieux de l'intervention sur place (sans matériel à récupérer à la base, trajet : ${this.formatDurationMinutes(rallyMin)}).`;
       mission.operationalLog.unshift({
         time: timeStr,
-        text: `Départ domicile : ${vol.name} quitte son domicile (${homeAddress}) pour rallier la base d'antenne (trajet estimé : ${this.formatDurationMinutes(rallyMin)}).`,
-        author: 'Ralliement Base'
+        text: logMsg,
+        author: mustPassByBase ? 'Ralliement Base' : 'Ralliement Sur Site'
       });
     }
 
@@ -19398,6 +19420,11 @@ class ProtecGame {
 
   // --- GESTION DES MOYENS SUPPLÉMENTAIRES DURANT L'ÉVÉNEMENT (RENFORTS SUR SITE) ---
   openMissionReinforcementsModal(missionId) {
+    // Le bouton '+ Renfort' ouvre directement la modale de renforts complète et détaillée
+    if (this.requestAllianceRenfortForMission) {
+      this.requestAllianceRenfortForMission(missionId);
+      return;
+    }
     const mission = (this.missions || []).find(m => m.id === missionId);
     if (!mission) return;
 
@@ -20473,6 +20500,12 @@ class ProtecGame {
             <span class="font-extrabold text-slate-700">🚙 Trajet estimé :</span>
             <span class="font-black text-slate-900">≈ ${route.distanceKm} km (~ ${route.durationText})</span>
           </div>
+          ${renfort.consigne ? `
+            <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">
+              <span class="font-extrabold text-indigo-900">🧭 Consigne Ralliement :</span>
+              <span class="font-black text-indigo-700">${renfort.consigne === 'base' ? '🏢 Halte à la base demandeur d\'abord' : '📍 Convergence directe sur place'}</span>
+            </div>
+          ` : ''}
           <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">
             <span class="font-extrabold text-emerald-800">💰 Indemnisation :</span>
             <span class="font-black text-emerald-700 mono-num">+${renfort.indemnite || 520} € & +${renfort.alliancePoints || 60} pts alliance</span>
@@ -26662,14 +26695,16 @@ class ProtecGame {
     const transit = mission?.volunteerTransit?.[vol.id] || (mission?.volunteerTransit && Object.values(mission.volunteerTransit).find(t => t.volId === vol.id));
     const nowTs = Date.now() + (this.serverTimeOffset || 0);
 
-    // Déterminer la station d'antenne de destination
+    // Déterminer la destination réelle du bénévole (sur place vs base)
     const station = (this.stations || []).find(s => s.id === vol.stationId) 
       || (this.stations || []).find(s => s.id === mission?.stationId) 
       || this.stations?.[0]
       || { lat: 48.6921, lng: 6.1844, name: 'Base Antenne' };
 
-    const baseLat = Number(station.lat || 48.6921);
-    const baseLng = Number(station.lng || 6.1844);
+    const isSurPlace = transit?.destinationType === 'sur_place';
+    const baseLat = Number((isSurPlace && mission?.lat) ? mission.lat : (station.lat || 48.6921));
+    const baseLng = Number((isSurPlace && mission?.lng) ? mission.lng : (station.lng || 6.1844));
+    const destName = isSurPlace ? (mission?.title || mission?.address || 'Lieu de mission') : (station.name || 'Base Antenne');
 
     // S'assurer de la présence du domicile du bénévole
     if (!vol.coords_domicile && window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
