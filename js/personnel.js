@@ -2240,7 +2240,7 @@ window.ProtecPersonnel = {
             </p>
             ${cand.adresse ? `
               <div class="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-700 flex flex-wrap items-center justify-between gap-1 mt-1">
-                <span>🏠 Domicile : <strong>${cand.adresse}</strong></span>
+                <button type="button" onclick="window.game.centerMapOnVolunteerAddress('${cand.id}', true)" class="hover:text-pc-blue hover:underline cursor-pointer flex items-center gap-1 text-left" title="Cliquer pour voir l'adresse sur la carte"><span>🏠 Domicile : <strong>${cand.adresse}</strong></span></button>
                 <span class="text-pc-blue font-bold">⏱️ Ralliement : ${cand.temps_ralliement_minutes || 10} min (${cand.distance_base_km || 3} km en ${cand.mode_transport === 'voiture' ? '🚗 Voiture' : (cand.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo/Transports')})</span>
               </div>
             ` : ''}

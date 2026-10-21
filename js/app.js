@@ -17403,9 +17403,10 @@ class ProtecGame {
                                   <span class="text-[8px] font-semibold text-slate-400">(${distKm} km)</span>
                                 </span>
                               </div>
-                              <div class="text-[9px] text-slate-500 truncate max-w-[240px] mt-0.5" title="Adresse de résidence : ${cleanAddr}">
-                                🏠 ${cleanAddr}
-                              </div>
+                              <button type="button" onclick="window.game.centerMapOnVolunteerAddress('${v.id}')" class="text-[9px] text-slate-500 truncate max-w-[240px] mt-0.5 cursor-pointer hover:underline hover:text-pc-blue flex items-center gap-1 text-left" title="Cliquer pour voir l'adresse de domicile sur la carte : ${cleanAddr}">
+                                <span>🏠</span>
+                                <span class="truncate">${cleanAddr}</span>
+                              </button>
                             `;
                           })()}
                           <div class="flex items-center gap-1 mt-0.5 flex-wrap">
@@ -23565,7 +23566,7 @@ class ProtecGame {
 
                           ${cand.commune ? `
                             <div class="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-300 mt-1">
-                              <span>🏠 Domicile : <strong class="text-slate-800 dark:text-slate-100">${cand.commune}</strong> (${cand.distance_base_km || 3} km)</span>
+                              <button type="button" onclick="window.game.centerMapOnVolunteerAddress('${cand.id}', true)" class="hover:text-pc-blue hover:underline cursor-pointer flex items-center gap-1" title="Cliquer pour voir l'adresse sur la carte"><span>🏠 Domicile : <strong class="text-slate-800 dark:text-slate-100">${cand.adresse || cand.commune}</strong> (${cand.distance_base_km || 3} km)</span></button>
                               <span>•</span>
                               <span class="font-bold text-pc-blue dark:text-sky-400">⏱️ Ralliement : ${cand.temps_ralliement_minutes || 10} min en ${cand.mode_transport === 'voiture' ? '🚗 Voiture' : (cand.mode_transport === 'moto' ? '🏍️ Moto' : '🚲 Vélo/Bus')}</span>
                               ${cand.permis_b ? '<span class="px-1.5 py-0.2 rounded text-[8px] font-black bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200">Permis B</span>' : ''}
@@ -23997,7 +23998,11 @@ class ProtecGame {
                       <!-- Domicile, Bassin Territorial & Ralliement Opérationnel -->
                       <div class="p-2 rounded-xl bg-slate-50/90 border border-slate-200/70 text-[10px] text-slate-700 space-y-1">
                         <div class="flex items-center justify-between">
-                          <span class="truncate max-w-[170px]" title="${v.adresse || 'Centre-ville'}">🏠 <strong>${v.commune || 'Centre-ville'}</strong> <span class="text-slate-400">(${v.distance_base_km || 3} km)</span></span>
+                          <button type="button" onclick="window.game.centerMapOnVolunteerAddress('${v.id}')" class="truncate max-w-[180px] text-left hover:text-pc-blue hover:underline cursor-pointer flex items-center gap-1 group" title="Cliquer pour voir l'adresse de domicile sur la carte (${v.adresse || v.commune || 'Centre-ville'})">
+                            <span>🏠</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-200 group-hover:text-pc-blue truncate">${v.adresse ? v.adresse : (v.commune || 'Centre-ville')}</span>
+                            <span class="text-slate-400 shrink-0">(${v.distance_base_km || 3} km)</span>
+                          </button>
                           <span class="font-extrabold ${v.temps_ralliement_minutes > 20 ? 'text-amber-700' : 'text-emerald-700'}">⏱️ ${v.temps_ralliement_minutes || 12} min</span>
                         </div>
                         <div class="flex items-center justify-between pt-0.5 border-t border-slate-200/50">
@@ -26156,6 +26161,61 @@ class ProtecGame {
   }
 
   // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR LA POSITION D'UN VÉHICULE ---
+  
+  // --- GÉOLOCALISATION ET CENTRAGE CAMÉRA SUR L'ADRESSE D'UN BÉNÉVOLE (SANS MARQUEUR NI ICÔNE) ---
+  centerMapOnVolunteerAddress(volunteerId, isCandidate = false) {
+    if (!volunteerId) return;
+
+    const vol = isCandidate 
+      ? (this.candidatures || []).find(c => c.id === volunteerId)
+      : ((this.volunteers || []).find(v => v.id === volunteerId) || (this.candidatures || []).find(c => c.id === volunteerId));
+
+    if (!vol) return;
+
+    // S'assurer de la présence des coordonnées de domicile
+    if (!vol.coords_domicile && window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') {
+      window.ProtecPersonnel.ensureVolunteerResidence(vol, this);
+    }
+
+    let lat = vol.coords_domicile?.lat || vol.lat;
+    let lng = vol.coords_domicile?.lng || vol.lng;
+
+    // Fallback sur la station ou commune de rattachement si manquant
+    if (!lat || !lng) {
+      const station = (this.stations || []).find(s => s.id === vol.stationId) || this.stations?.[0];
+      if (station && station.lat && station.lng) {
+        lat = station.lat;
+        lng = station.lng;
+      }
+    }
+
+    if (!lat || !lng) {
+      this.showToast('Adresse Introuvable', `Impossible de géolocaliser le domicile de ${vol.name}.`, 'orange');
+      return;
+    }
+
+    // Fermer les fenêtres modales ou tiroirs ouverts pour laisser voir la carte
+    if (typeof this.closeModal === 'function') this.closeModal();
+    if (typeof this.closeDrawer === 'function') this.closeDrawer();
+    const mainModal = document.getElementById('main-modal');
+    if (mainModal) mainModal.classList.add('hidden');
+
+    // Déplacement fluide de la caméra vers l'adresse exacte (zoom précis 16) SANS AUCUNE ICÔNE NI MARQUEUR
+    if (this.map && typeof this.map.flyTo === 'function') {
+      const targetZoom = Math.max(this.map.getZoom(), 16);
+      this.map.flyTo([lat, lng], targetZoom, {
+        duration: 1.2
+      });
+
+      const displayAddr = vol.adresse ? vol.adresse : (vol.commune ? `Résidence à ${vol.commune}` : 'Domicile du secouriste');
+      this.showToast(
+        `🏠 Domicile de ${vol.name}`,
+        `${displayAddr} (${vol.distance_base_km || 3} km de l'antenne)`,
+        'blue'
+      );
+    }
+  }
+
   centerMapOnVehicle(vehicleId) {
     const v = (this.vehicles || []).find(veh => veh.id === vehicleId);
     if (!v) return;
