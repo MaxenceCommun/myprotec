@@ -757,16 +757,112 @@ window.ProtecIncidents = {
     if (modal) modal.remove();
   },
 
+  // Vérification de la présence effective d'au moins un premier véhicule / équipe sur place
+  isFirstVehicleOnScene(game, mission) {
+    if (!mission) return false;
+    const g = game || window.game;
+    const now = Date.now() + (g?.serverTimeOffset || 0);
+
+    // 1. Indicateur explicite d'arrivée sur site
+    if (mission.firstVehicleArrived || mission.onSceneStartedAt) {
+      return true;
+    }
+
+    // 2. Détection via les déploiements d'équipes de crise
+    if (mission.crisisTeamDeployments && typeof mission.crisisTeamDeployments === 'object') {
+      const anyDepOnScene = Object.values(mission.crisisTeamDeployments).some(dep => {
+        if (!dep) return false;
+        return dep.status === 'sur_les_lieux' || (dep.crisisArrivalAt && now >= dep.crisisArrivalAt);
+      });
+      if (anyDepOnScene) {
+        mission.firstVehicleArrived = true;
+        if (!mission.firstVehicleArrivalAt) mission.firstVehicleArrivalAt = now;
+        return true;
+      }
+    }
+
+    // 3. Détection via ProtecCriseLogistique si actif
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.getOperationalAssetsStatus === 'function') {
+      try {
+        const assets = window.ProtecCriseLogistique.getOperationalAssetsStatus(mission, g);
+        if (assets && assets.hasAnyOnScene) {
+          mission.firstVehicleArrived = true;
+          if (!mission.firstVehicleArrivalAt) mission.firstVehicleArrivalAt = now;
+          return true;
+        }
+      } catch (e) {}
+    }
+
+    // 4. Détection via les véhicules engagés
+    const assignedVehIds = new Set();
+    (mission.assignedVehicles || []).forEach(id => assignedVehIds.add(typeof id === 'object' ? id.id : id));
+    (mission.assignedCrew?.vehicles || []).forEach(v => assignedVehIds.add(typeof v === 'object' ? v.id : v));
+    if (mission.vehicleId) assignedVehIds.add(mission.vehicleId);
+
+    if (assignedVehIds.size > 0 && g?.vehicles) {
+      // Identifier les transits en cours vers cette mission (statut 2 ou 3)
+      const activeTransitsToMission = (g.transits || []).filter(t => 
+        (t.missionId === mission.id || t.mission?.id === mission.id) &&
+        (t.statusTarget === 2 || t.statusTarget === 3)
+      );
+      const transitVehIds = new Set(activeTransitsToMission.map(t => t.vehicleId || t.vehicle?.id));
+
+      const hasVehicleOnScene = g.vehicles.some(v => {
+        if (!assignedVehIds.has(v.id)) return false;
+        // Si le véhicule est en cours de transit vers la mission, il n'est pas encore sur place
+        if (transitVehIds.has(v.id)) return false;
+        // Si son statut atteste de son arrivée sur les lieux
+        if (v.status === 'sur_les_lieux' || v.status === 'intervention' || v.status === 'sur_place') return true;
+        return false;
+      });
+
+      if (hasVehicleOnScene) {
+        mission.firstVehicleArrived = true;
+        if (!mission.firstVehicleArrivalAt) mission.firstVehicleArrivalAt = now;
+        return true;
+      }
+    }
+
+    // 5. Pour les DPS pédestres / postes fixes sans véhicule :
+    if (assignedVehIds.size === 0) {
+      const hasRallyInTransit = mission.volunteerTransit && Object.values(mission.volunteerTransit).some(t => {
+        return t && t.arrivalBaseAt && now < t.arrivalBaseAt;
+      });
+      if (hasRallyInTransit) return false;
+
+      const hasCrew = (mission.assignedCrew?.volunteers || mission.registeredVolunteers || []).length > 0;
+      if (hasCrew && mission.startedAt && (now - mission.startedAt) >= 90000) {
+        mission.firstVehicleArrived = true;
+        return true;
+      }
+    }
+
+    return false;
+  },
+
   // Détection du sous-dimensionnement en cours de mission
   checkUnderstaffedAlert(game, mission) {
     if (mission.understaffAlertTriggered || mission.understaffResolved) return;
-    if (mission.type !== 'dps' && !mission.scale) return;
+    if (mission.type !== 'dps' && !mission.scale && mission.type !== 'crise') return;
     if (!mission.startedAt || !mission.durationSeconds) return;
 
-    const elapsed = (Date.now() - mission.startedAt) / 1000;
+    // RÈGLE MÉTIER OBLIGATOIRE : Attendre impérativement l'arrivée sur site d'au moins le premier véhicule / équipage !
+    if (!this.isFirstVehicleOnScene(game, mission)) {
+      return;
+    }
+
+    // Attendre au moins 30 secondes sur place avant de constater un débordement
+    const now = Date.now();
+    const sceneStart = mission.firstVehicleArrivalAt || mission.onSceneStartedAt || mission.startedAt;
+    const timeOnSceneSec = (now - sceneStart) / 1000;
+    if (timeOnSceneSec < 30) {
+      return;
+    }
+
+    const elapsed = (now - mission.startedAt) / 1000;
     const progressRatio = elapsed / mission.durationSeconds;
     // Déclenchement quand la mission a dépassé 15% et avant 85% de sa durée
-    if (progressRatio < 0.15 || progressRatio > 0.85) return;
+    if (progressRatio < 0.10 || progressRatio > 0.85) return;
 
     const crewCount = (mission.assignedCrew?.volunteers || mission.registeredVolunteers || []).length;
     const minNeeded = mission.hiddenMinVolunteers || mission.requiredVolunteers || 4;

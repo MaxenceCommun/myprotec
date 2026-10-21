@@ -1126,6 +1126,11 @@ window.ProtecSystems = {
         this.playRadioChirp();
         if (t.statusTarget === 2) {
           if (t.vehicle) t.vehicle.status = 'sur_les_lieux';
+          if (t.mission) {
+            t.mission.firstVehicleArrived = true;
+            if (!t.mission.firstVehicleArrivalAt) t.mission.firstVehicleArrivalAt = Date.now();
+            if (!t.mission.onSceneStartedAt) t.mission.onSceneStartedAt = Date.now();
+          }
           const delayMin = t.mission?.departureDelayMinutes || 0;
           if (delayMin > 0) {
             this.addRadioLog(game, t.vehicle.name, 3, `STATUT 3 : Sur les lieux. Dispositif en place pour « ${t.mission?.title} » (Prise de poste avec ${delayMin} min de retard suite au ralliement).`);
