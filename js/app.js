@@ -31189,24 +31189,25 @@ class ProtecGame {
       const step = (this.tutorialState && this.tutorialState.step) || (window.ProtecTutorial?.getCurrentStep?.(this)) || 1;
       if (headerBtn) {
         headerBtn.title = `Tutoriel en cours (Étape ${step}/3) — Cliquez pour afficher vos objectifs de démarrage`;
-        headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 bg-gradient-to-r from-blue-50/95 via-sky-50 to-indigo-50/95 dark:from-slate-800 dark:to-sky-950/80 px-3 py-1.5 -my-1 rounded-2xl border-2 border-pc-blue dark:border-sky-500 shadow-md ring-2 ring-pc-blue/30 hover:scale-[1.03] transition-all duration-300';
+        headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 px-2.5 py-1 rounded-xl bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 border border-sky-300/70 dark:border-sky-600/50 shadow-2xs transition-all duration-200 hover:scale-[1.02]';
       }
       if (iconBox) {
-        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-gradient-to-br from-pc-blue to-pc-blue-light text-white flex items-center justify-center shadow-xs group-hover:brightness-110 transition shrink-0';
+        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-sky-500/15 dark:bg-sky-500/25 text-pc-blue dark:text-sky-300 flex items-center justify-center group-hover:bg-sky-500/25 transition shrink-0';
       }
       if (iconSlot) {
-        iconSlot.innerHTML = '<i data-lucide="graduation-cap" class="w-4 h-4 text-white animate-bounce"></i>';
+        iconSlot.innerHTML = '<i data-lucide="graduation-cap" class="w-4 h-4 text-pc-blue dark:text-sky-300 group-hover:scale-110 transition"></i>';
       }
       if (subtitleEl) {
-        subtitleEl.innerHTML = `<span class="text-[9px] uppercase font-black tracking-wider text-pc-blue dark:text-sky-300 flex items-center gap-1">⭐ Étape ${step}/3</span>`;
+        subtitleEl.innerHTML = `<span class="text-[9px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400">Tutoriel</span> <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700">Étape ${step}/3</span>`;
+        subtitleEl.className = 'flex items-center gap-1.5 leading-none';
       }
       if (rewardReadyText) {
-        rewardReadyText.innerHTML = '<span class="text-pc-blue dark:text-sky-200 font-black text-xs">Tutoriel</span> <span class="w-2 h-2 rounded-full bg-pc-orange animate-ping inline-block"></span>';
-        rewardReadyText.className = 'text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5';
+        rewardReadyText.innerHTML = `<span class="text-xs font-black text-pc-blue dark:text-sky-200">Guide de départ</span> <span class="relative flex h-2 w-2 ml-0.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-pc-orange opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-pc-orange"></span></span>`;
+        rewardReadyText.className = 'text-xs font-black text-slate-900 dark:text-white flex items-center gap-1 leading-tight';
       }
       if (rewardDot) {
-        rewardDot.className = 'w-2.5 h-2.5 rounded-full bg-pc-orange absolute -top-1 -right-1 animate-ping shadow-xs';
-        rewardDot.classList.remove('hidden');
+        rewardDot.className = 'hidden';
+        rewardDot.classList.add('hidden');
       }
       if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
