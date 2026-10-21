@@ -22258,13 +22258,9 @@ class ProtecGame {
       `;
   }
 
-  // Clic unifié sur l'encart d'en-tête : Tutoriel si actif, ou Récompenses & Défis
+  // Clic sur l'encart d'en-tête : Récompenses & Défis (page habituelle)
   handleRewardsOrTutorialClick() {
-    if (window.ProtecTutorial && typeof window.ProtecTutorial.isTutorialActive === 'function' && window.ProtecTutorial.isTutorialActive(this)) {
-      window.ProtecTutorial.openTutorialModal(this);
-    } else {
-      this.openModule('recompenses');
-    }
+    this.openModule('recompenses');
   }
 
   // --- POPUP MODULES DOCK ---
@@ -31188,26 +31184,26 @@ class ProtecGame {
     if (isTuto) {
       const step = (this.tutorialState && this.tutorialState.step) || (window.ProtecTutorial?.getCurrentStep?.(this)) || 1;
       if (headerBtn) {
-        headerBtn.title = `Tutoriel en cours (Étape ${step}/3) — Cliquez pour afficher vos objectifs de démarrage`;
-        headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 px-2.5 py-1 rounded-xl bg-sky-50/80 hover:bg-sky-100/90 dark:bg-sky-950/50 dark:hover:bg-sky-900/60 border border-sky-300/70 dark:border-sky-600/50 shadow-2xs transition-all duration-200 hover:scale-[1.02]';
+        headerBtn.title = `Tutoriel en cours (Étape ${step}/3) — Cliquez pour ouvrir vos récompenses et défis`;
+        headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 transition-all duration-200';
       }
       if (iconBox) {
-        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-sky-500/15 dark:bg-sky-500/25 text-pc-blue dark:text-sky-300 flex items-center justify-center group-hover:bg-sky-500/25 transition shrink-0';
+        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-pc-blue/10 dark:bg-pc-blue/20 text-pc-blue dark:text-sky-300 flex items-center justify-center group-hover:bg-pc-blue/20 transition shrink-0 relative';
       }
       if (iconSlot) {
-        iconSlot.innerHTML = '<i data-lucide="graduation-cap" class="w-4 h-4 text-pc-blue dark:text-sky-300 group-hover:scale-110 transition"></i>';
+        iconSlot.innerHTML = '<i data-lucide="graduation-cap" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>';
       }
       if (subtitleEl) {
-        subtitleEl.innerHTML = `<span class="text-[9px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-400">Tutoriel</span> <span class="px-1.5 py-0.2 rounded-full text-[8.5px] font-black bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700">Étape ${step}/3</span>`;
-        subtitleEl.className = 'flex items-center gap-1.5 leading-none';
+        subtitleEl.textContent = 'Tutoriel';
+        subtitleEl.className = 'text-[9px] uppercase font-bold tracking-wider text-pc-blue dark:text-sky-400';
       }
       if (rewardReadyText) {
-        rewardReadyText.innerHTML = `<span class="text-xs font-black text-pc-blue dark:text-sky-200">Guide de départ</span> <span class="relative flex h-2 w-2 ml-0.5"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-pc-orange opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-pc-orange"></span></span>`;
-        rewardReadyText.className = 'text-xs font-black text-slate-900 dark:text-white flex items-center gap-1 leading-tight';
+        rewardReadyText.textContent = `Étape ${step}/3`;
+        rewardReadyText.className = 'text-xs font-extrabold text-slate-800 dark:text-slate-100 flex items-center gap-1';
       }
       if (rewardDot) {
-        rewardDot.className = 'hidden';
-        rewardDot.classList.add('hidden');
+        rewardDot.className = 'w-2 h-2 rounded-full bg-pc-orange absolute -top-0.5 -right-0.5 animate-ping';
+        rewardDot.classList.remove('hidden');
       }
       if (window.lucide && typeof window.lucide.createIcons === 'function') {
         window.lucide.createIcons();
@@ -31240,7 +31236,7 @@ class ProtecGame {
         headerBtn.className = 'flex items-center gap-2 cursor-pointer group relative flex-shrink-0 transition-all duration-200';
       }
       if (iconBox) {
-        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:bg-rose-100 transition shrink-0';
+        iconBox.className = 'w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center group-hover:bg-rose-100 transition shrink-0 relative';
       }
       if (iconSlot) {
         iconSlot.innerHTML = '<i data-lucide="gift" class="w-3.5 h-3.5 sm:w-4 sm:h-4"></i>';
@@ -31262,7 +31258,7 @@ class ProtecGame {
           rewardDot.classList.add('hidden');
           if (rewardReadyText) {
             rewardReadyText.textContent = 'Quotidien';
-            rewardReadyText.className = 'text-xs font-bold text-slate-600 flex items-center gap-1';
+            rewardReadyText.className = 'text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-1';
           }
         }
       }
