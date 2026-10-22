@@ -752,13 +752,19 @@ window.ProtecVeille = {
         <!-- Bannière descriptive de l'échelon sélectionné -->
         <div class="p-4 rounded-2xl bg-gradient-to-r ${currentEch.bgGradient} text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div class="space-y-1">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="px-2 py-0.5 rounded-full font-black bg-white/20 uppercase tracking-wider text-[10px]">
                 Échelon ${currentEch.scopeName}
               </span>
               <span class="text-xs font-bold text-white/90">
                 📅 ${viewingDateLabel}
               </span>
+              <button 
+                type="button" 
+                onclick="window.ProtecVeille.toggleNextDay()"
+                class="px-2 py-0.5 rounded-lg text-[10px] font-black bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition cursor-pointer flex items-center gap-1">
+                <span>${this.activeDayOffset === 0 ? 'Switch J+1 (Demain) →' : '← Revenir à Aujourd’hui'}</span>
+              </button>
             </div>
             <h4 class="text-base font-black">${currentEch.getLabel(deptCtx)}</h4>
             <p class="text-xs text-white/80 leading-relaxed">${currentEch.description}</p>
@@ -791,10 +797,36 @@ window.ProtecVeille = {
         </div>
 
         <!-- GRILLE DES 6 CRÉNEAUX DE LA JOURNÉE -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
-            <span class="uppercase tracking-wider">Planning des 6 créneaux de 4h (${viewingDateLabel}) :</span>
-            <span class="text-[11px] text-slate-500 font-normal">Cliquez pour vous inscrire ou prendre la main</span>
+        <div class="space-y-2.5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-extrabold text-slate-700 bg-slate-50 p-2.5 rounded-2xl border border-slate-200">
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-1 rounded-xl text-[10.5px] font-black ${this.activeDayOffset === 0 ? 'bg-pc-blue text-white' : 'bg-indigo-600 text-white'}">
+                ${this.activeDayOffset === 0 ? 'JOUR ACTUEL (J)' : 'JOUR SUIVANT (J+1)'}
+              </span>
+              <span class="uppercase tracking-wider font-black text-slate-800">Créneaux de 4h • ${viewingDateLabel}</span>
+            </div>
+
+            <!-- BOUTON DE SWITCH SUR LE JOUR SUIVANT (J+1 UNIQUEMENT) -->
+            <div>
+              ${this.activeDayOffset === 0 ? `
+                <button 
+                  type="button" 
+                  onclick="window.ProtecVeille.toggleNextDay()"
+                  class="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-black bg-pc-blue hover:brightness-110 text-white shadow-md transition cursor-pointer flex items-center justify-center gap-1.5 animate-pulse">
+                  <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                  <span>Switch Jour Suivant (J+1 : Demain)</span>
+                  <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                </button>
+              ` : `
+                <button 
+                  type="button" 
+                  onclick="window.ProtecVeille.toggleNextDay()"
+                  class="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-black bg-slate-800 hover:bg-slate-700 text-white shadow-md transition cursor-pointer flex items-center justify-center gap-1.5">
+                  <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                  <span>← Revenir à Aujourd'hui (J)</span>
+                </button>
+              `}
+            </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -995,7 +1027,13 @@ window.ProtecVeille = {
   },
 
   setActiveDayOffset(offset) {
-    this.activeDayOffset = offset;
+    // Verrouillage strict : uniquement J (0) ou J+1 (1)
+    this.activeDayOffset = (offset === 1) ? 1 : 0;
+    this.renderModal(window.game);
+  },
+
+  toggleNextDay() {
+    this.activeDayOffset = (this.activeDayOffset === 0) ? 1 : 0;
     this.renderModal(window.game);
   },
 
