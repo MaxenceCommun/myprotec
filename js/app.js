@@ -20147,25 +20147,59 @@ class ProtecGame {
     const btn = document.getElementById('prop-renfort-submit-btn');
     const notice = document.getElementById('prop-renfort-submit-notice');
     const vehSelect = document.getElementById('prop-renfort-veh-select');
-    const hasVeh = Boolean(vehSelect && vehSelect.value);
+    const vehId = vehSelect ? vehSelect.value : null;
+    const veh = (this.vehicles || []).find(v => v.id === vehId);
+    const hasVeh = Boolean(veh);
+
+    // Calcul du volume LOG embarqué
+    let totalLogEmbarked = 0;
+    document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
+      totalLogEmbarked += parseInt(cb.dataset.size || 2);
+    });
+    const vehLogCapacity = veh ? (veh.capacity_log || 0) : 0;
+    const isLogOverloaded = totalLogEmbarked > vehLogCapacity;
+
+    const logBadge = document.getElementById('prop-renfort-log-status-badge');
+    if (logBadge) {
+      if (vehLogCapacity === 0 && totalLogEmbarked > 0) {
+        logBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300';
+        logBadge.textContent = '⚠️ Soute LOG indisponible (' + (veh ? veh.name : 'Véhicule') + ' n\'a pas de place LOG)';
+      } else if (isLogOverloaded) {
+        logBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300';
+        logBadge.textContent = '❌ Surcharge LOG : ' + totalLogEmbarked + ' / ' + vehLogCapacity + ' places max';
+      } else {
+        logBadge.className = 'px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200';
+        logBadge.textContent = 'Soute LOG : ' + totalLogEmbarked + ' / ' + vehLogCapacity + ' place(s) utilisée(s)';
+      }
+    }
 
     if (!btn) return;
 
-    if (checked.length >= 1 && hasVeh) {
+    if (checked.length >= 1 && hasVeh && !isLogOverloaded) {
       btn.disabled = false;
       btn.classList.remove('opacity-50', 'pointer-events-none');
-      btn.innerHTML = `<i data-lucide="send" class="w-3.5 h-3.5"></i> <span>3. Proposer l'Équipe Constituée (${checked.length} secouriste(s)) au Directeur</span>`;
+      btn.innerHTML = '<i data-lucide="send" class="w-3.5 h-3.5"></i> <span>3. Proposer l\'Équipe Constituée (' + checked.length + ' secouriste(s)) au Directeur</span>';
       if (notice) notice.classList.add('hidden');
     } else {
       btn.disabled = true;
       btn.classList.add('opacity-50', 'pointer-events-none');
-      btn.innerHTML = `<i data-lucide="lock" class="w-3.5 h-3.5"></i> <span>Équipe non constituée</span>`;
+      btn.innerHTML = '<i data-lucide="lock" class="w-3.5 h-3.5"></i> <span>Équipe non constituée</span>';
       if (notice) {
         notice.classList.remove('hidden');
-        notice.textContent = !hasVeh ? '⚠️ Sélectionnez un véhicule disponible.' : '⚠️ Cochez au moins 1 secouriste ayant confirmé sa disponibilité par SMS.';
+        if (!hasVeh) {
+          notice.textContent = '⚠️ Sélectionnez un véhicule disponible.';
+        } else if (isLogOverloaded) {
+          notice.textContent = '⚠️ Capacité LOG dépassée (' + totalLogEmbarked + ' places requises pour ' + vehLogCapacity + ' places du véhicule). Décochez des lots ou choisissez un VTU/VLHR.';
+        } else {
+          notice.textContent = '⚠️ Cochez au moins 1 secouriste ayant confirmé sa disponibilité par SMS.';
+        }
       }
     }
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  updateCrisisRenfortEmbarkedLotsCalculation() {
+    this.updateCrisisRenfortSubmitButtonState();
   }
 
   openProposeCrisisRenfortModal(missionId) {
@@ -20180,6 +20214,10 @@ class ProtecGame {
     const hasSentSms = Boolean(smsState.sent);
     const availableVolunteers = dispoVolunteers.filter(v => smsState.responses?.[v.id]?.status === 'available');
     const availableVolsCount = availableVolunteers.length;
+
+    // Lots possédés dans l'antenne locale
+    const allLots = window.ProtecEquipements?.LOTS_CATALOG || [];
+    const ownedLots = allLots.filter(l => (this.workplaceEquipment?.[l.id] || 0) > 0);
 
     let modal = document.getElementById('propose-crisis-renfort-modal');
     if (!modal) {
@@ -20219,7 +20257,7 @@ class ProtecGame {
                   Étape 1 : Appel & Sondage des Disponibilités par SMS
                 </h4>
                 <p class="text-[11px] ${hasSentSms ? 'text-emerald-800 dark:text-emerald-300' : 'text-amber-800 dark:text-amber-300'}">
-                  ${hasSentSms ? `Appel SMS transmis • <span id="prop-renfort-sms-count-badge"><strong>${availableVolsCount}</strong> volontaire(s) DISPO confirmé(s)</span>.` : 'Règle bénévole : Les secouristes ne peuvent pas être forcés. Vous devez d\'abord envoyer un SMS pour recueillir les disponibilités.'}
+                  ${hasSentSms ? 'Appel SMS transmis • <span id="prop-renfort-sms-count-badge"><strong>' + availableVolsCount + '</strong> volontaire(s) DISPO confirmé(s)</span>.' : 'Règle bénévole : Les secouristes ne peuvent pas être forcés. Vous devez d\'abord envoyer un SMS pour recueillir les disponibilités.'}
                 </p>
               </div>
             </div>
@@ -20231,7 +20269,7 @@ class ProtecGame {
           </div>
         </div>
 
-        <!-- 2. ÉTAPE 2 : CONSTITUTION DE L'ÉQUIPE (SECOURISTES DISPO + VÉHICULE + MATÉRIEL) -->
+        <!-- 2. ÉTAPE 2 : CONSTITUTION DE L'ÉQUIPE (VÉHICULE + LOTS + SECOURISTES DISPO) -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
             <h4 class="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
@@ -20253,41 +20291,75 @@ class ProtecGame {
             ` : `
               <select id="prop-renfort-veh-select" onchange="window.game.updateCrisisRenfortSubmitButtonState()" class="w-full px-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 font-bold text-xs bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500">
                 ${dispoVehicles.map(v => `
-                  <option value="${v.id}">${v.name} (${v.type})</option>
+                  <option value="${v.id}">${v.name} (${v.type}) • Capacité : ${v.capacity || 2} pers. • ${v.capacity_log || 0} places LOG</option>
                 `).join('')}
               </select>
             `}
           </div>
 
-          <!-- Lot de Matériel Spécialisé Embarqué -->
+          <!-- Lots de Matériel Embarqués (Stock Antenne) -->
+          <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2.5">
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                Lots de Matériel Embarqués (Stock Antenne) :
+              </label>
+              <span id="prop-renfort-log-status-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">
+                Soute LOG : 0 place(s)
+              </span>
+            </div>
+            ${ownedLots.length === 0 ? `
+              <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-500 text-xs">
+                Aucun lot de matériel lourd en stock à l'antenne. L'équipe partira avec l'armement standard du véhicule.
+              </div>
+            ` : `
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs max-h-40 overflow-y-auto pr-1">
+                ${ownedLots.map(l => `
+                  <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 cursor-pointer hover:border-indigo-400">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <input type="checkbox" name="prop-embarked-lot" value="${l.id}" data-name="${l.name}" data-size="${l.storageSize || 2}" onchange="window.game.updateCrisisRenfortEmbarkedLotsCalculation()" class="rounded text-indigo-600 focus:ring-0 cursor-pointer">
+                      <div class="min-w-0">
+                        <span class="font-bold text-slate-800 dark:text-slate-200 block truncate">${l.name}</span>
+                        <span class="text-[10px] text-slate-500">${this.workplaceEquipment[l.id]} en stock</span>
+                      </div>
+                    </div>
+                    <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold shrink-0">
+                      ${l.storageSize || 2} LOG
+                    </span>
+                  </label>
+                `).join('')}
+              </div>
+            `}
+          </div>
+
+          <!-- Spécialité Opérationnelle de l'Équipe -->
           <div class="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 space-y-2">
             <label class="block text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">
-              Lot de Matériel Spécialisé Embarqué (Optionnel) :
+              Spécialité Opérationnelle / Mission :
             </label>
             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
                 <input type="radio" name="prop-special-lot" value="" checked class="text-indigo-600 focus:ring-0">
-                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚑 VPSP Standard</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚑 VPSP Secours</span>
               </label>
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
                 <input type="radio" name="prop-special-lot" value="pma" class="text-indigo-600 focus:ring-0">
-                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">⛺ Lot PMA</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">⛺ Poste / PMA</span>
               </label>
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
                 <input type="radio" name="prop-special-lot" value="cai" class="text-indigo-600 focus:ring-0">
-                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🏥 Lot CAI</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🏥 Lot CAI / Psy</span>
               </label>
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
                 <input type="radio" name="prop-special-lot" value="drone" class="text-indigo-600 focus:ring-0">
-                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚁 Drone / Télépilote</span>
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🚁 Drone / Reco</span>
               </label>
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
                 <input type="radio" name="prop-special-lot" value="cyno" class="text-indigo-600 focus:ring-0">
                 <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">🐕 Équipe Cyno</span>
               </label>
               <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center gap-2 cursor-pointer hover:border-indigo-500">
-                <input type="radio" name="prop-special-lot" value="eclairage" class="text-indigo-600 focus:ring-0">
-                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">💡 Lot Éclairage</span>
+                <input type="radio" name="prop-special-lot" value="logistique" class="text-indigo-600 focus:ring-0">
+                <span class="font-bold text-slate-800 dark:text-slate-200 text-xs">📦 Logistique Lourd</span>
               </label>
             </div>
           </div>
@@ -20368,14 +20440,14 @@ class ProtecGame {
             </label>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-indigo-500 ring-1 ring-indigo-500">
-                <input type="radio" name="prop-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-0">
+                <input type="radio" name="prop-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-0 cursor-pointer">
                 <div>
                   <span class="font-black text-slate-900 dark:text-white block">📍 Directement sur place</span>
-                  <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Ralliement immédiat sur le secteur de crise (~${route.durationText || '12 min'}).</p>
+                  <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Ralliement immédiat sur le secteur de crise (~ ${route.durationText || '12 min'}).</p>
                 </div>
               </label>
               <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700">
-                <input type="radio" name="prop-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-0">
+                <input type="radio" name="prop-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-0 cursor-pointer">
                 <div>
                   <span class="font-black text-slate-900 dark:text-white block">🏢 Passer par la base</span>
                   <p class="text-[10.5px] text-slate-500 dark:text-slate-400">Halte à l'antenne directrice pour prise de consignes.</p>
@@ -20412,7 +20484,6 @@ class ProtecGame {
     modal.classList.remove('hidden');
     if (window.lucide) window.lucide.createIcons();
 
-    // Auto-sélectionner si des personnes ont déjà répondu DISPO
     if (availableVolsCount > 0) {
       this.autoSelectCrisisRenfortAvailableVolunteers(4);
     } else {
@@ -20447,22 +20518,36 @@ class ProtecGame {
     if (unconfirmedVols.length > 0) {
       this.showToast(
         'Volontaires Non Confirmés',
-        `Certains secouristes sélectionnés (${unconfirmedVols.map(v => v.name).join(', ')}) n'ont pas confirmé leur disponibilité par retour SMS. Seuls les volontaires confirmés peuvent être engagés.`,
+        'Certains secouristes sélectionnés (' + unconfirmedVols.map(v => v.name).join(', ') + ') n\'ont pas confirmé leur disponibilité par retour SMS. Seuls les volontaires confirmés peuvent être engagés.',
         'orange'
       );
       return;
     }
 
+    // Récupération des lots embarqués
+    const embarkedLots = [];
+    document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
+      embarkedLots.push({
+        id: cb.value,
+        name: cb.dataset.name,
+        storageSize: parseInt(cb.dataset.size || 2)
+      });
+    });
+
     const lotRadio = document.querySelector('input[name="prop-special-lot"]:checked');
     const specialLot = lotRadio ? lotRadio.value : '';
     const lotLabels = {
       pma: '⛺ Lot PMA',
-      cai: '🏥 Lot CAI',
-      drone: '🚁 Drone & Télépilote',
+      cai: '🏥 Lot CAI / Psy',
+      drone: '🚁 Drone / Reco',
       cyno: '🐕 Équipe Cyno',
-      eclairage: '💡 Lot Éclairage'
+      logistique: '📦 Logistique Lourd'
     };
-    const specialLotLabel = lotLabels[specialLot] || '';
+
+    let specialLotLabel = lotLabels[specialLot] || (embarkedLots.length > 0 ? embarkedLots.map(l => l.name).join(', ') : '🚑 VPSP Secours');
+    if (embarkedLots.length > 0 && specialLot) {
+      specialLotLabel += ' (' + embarkedLots.map(l => l.name).join(', ') + ')';
+    }
 
     const consigneRadio = document.querySelector('input[name="prop-consigne-route"]:checked');
     const routeConsigne = consigneRadio ? consigneRadio.value : 'sur_place';
@@ -20475,7 +20560,7 @@ class ProtecGame {
     const myStation = this.stations?.[0] || { name: 'Antenne Locale' };
 
     const proposal = {
-      id: `prop-renf-${Date.now()}`,
+      id: 'prop-renf-' + Date.now(),
       missionId: mission.id,
       sourcePlayerId: myId,
       sourcePlayerName: myName,
@@ -20488,6 +20573,7 @@ class ProtecGame {
       volunteersNames: selectedVols.map(v => v.name),
       specialLot: specialLot,
       specialLotLabel: specialLotLabel,
+      embarkedLots: embarkedLots,
       consigne: routeConsigne,
       consigneLabel: routeConsigne === 'base' ? 'Passer d\'abord par la base' : 'Ralliement direct sur place',
       arrivalEstimatedMinutes: transitMin,
@@ -20497,7 +20583,7 @@ class ProtecGame {
 
     // Marquer les ressources en renfort proposé
     veh.status = 'renfort';
-    veh.currentMissionTitle = `Renfort proposé : ${mission.title}`;
+    veh.currentMissionTitle = 'Renfort proposé : ' + mission.title;
     selectedVols.forEach(v => {
       v.status = 'renfort';
       v.missionId = mission.id;
@@ -20515,7 +20601,7 @@ class ProtecGame {
     }
     this.showToast(
       'Équipe Proposée au Directeur !',
-      `L'équipe de renfort constituée (${veh.name} + ${selectedVolIds.length} secouristes volontaires DISPO) a été transmise à ${mission.managerPlayerName || 'Directeur Allié'}.`,
+      'L\'équipe de renfort constituée (' + veh.name + ' + ' + selectedVolIds.length + ' secouristes volontaires DISPO' + (embarkedLots.length > 0 ? ' • ' + embarkedLots.map(l => l.name).join(', ') : '') + ') a été transmise à ' + (mission.managerPlayerName || 'Directeur Allié') + '.',
       'green'
     );
 
@@ -21756,6 +21842,24 @@ class ProtecGame {
             <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">
               <span class="font-extrabold text-indigo-900">🧭 Consigne Ralliement :</span>
               <span class="font-black text-indigo-700">${renfort.consigne === 'base' ? '🏢 Halte à la base demandeur d\'abord' : '📍 Convergence directe sur place'}</span>
+            </div>
+          ` : ''}
+          ${renfort.unitRequested ? `
+            <div class="flex items-start justify-between pt-1 border-t border-orange-200/60 text-xs">
+              <span class="font-extrabold text-orange-950 shrink-0 mr-2">📦 Moyens attendus :</span>
+              <span class="font-black text-slate-900 text-right">${renfort.unitRequested}</span>
+            </div>
+          ` : ''}
+          ${renfort.requestedLogSlots ? `
+            <div class="flex items-center justify-between pt-1 border-t border-orange-200/60 text-xs">
+              <span class="font-extrabold text-indigo-900">🚛 Capacité LOG requise :</span>
+              <span class="font-black text-indigo-700">${renfort.requestedLogSlots} place(s) LOG (véhicule porteur)</span>
+            </div>
+          ` : ''}
+          ${renfort.requestedLots && renfort.requestedLots.length > 0 ? `
+            <div class="flex items-start justify-between pt-1 border-t border-orange-200/60 text-xs">
+              <span class="font-extrabold text-amber-900 shrink-0 mr-2">⛺ Lots spécifiques :</span>
+              <span class="font-black text-amber-800 text-right">${renfort.requestedLots.map(l => (l.qty > 1 ? l.qty + 'x ' : '') + l.name).join(', ')}</span>
             </div>
           ` : ''}
           <div class="flex items-center justify-between pt-1 border-t border-orange-200/60">

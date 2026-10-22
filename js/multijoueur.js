@@ -206,23 +206,152 @@ window.ProtecMultiplayer = {
     };
   },
 
+    getDynamicVehiclesCatalog() {
+    const raw = window.ProtecAdvanced?.vehicleCatalog || window.ProtecSystems?.vehicleCatalog || [];
+    let custom = [];
+    try {
+      const stored = localStorage.getItem('protec_custom_vehicle_catalog');
+      if (stored) custom = JSON.parse(stored);
+    } catch (e) {}
+    const list = [...raw];
+    if (Array.isArray(custom)) {
+      custom.forEach(cv => {
+        if (!list.find(v => v.type === cv.type)) list.push(cv);
+      });
+    }
+    return list;
+  },
+
+  getDynamicLotsCatalog() {
+    let lots = window.ProtecEquipements?.LOTS_CATALOG || [];
+    try {
+      const stored = localStorage.getItem('protec_custom_equipment_catalog');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) lots = parsed;
+      }
+    } catch (e) {}
+    return lots;
+  },
+
+  updateCarriedLotsLogCalculation() {
+    let totalLogNeeded = 0;
+    const checked = document.querySelectorAll('input[name="renfort-carry-stock-lot"]:checked');
+    checked.forEach(cb => {
+      totalLogNeeded += parseInt(cb.dataset.size || 2);
+    });
+    const logInput = document.getElementById('renfort-log-slots-count');
+    if (logInput) {
+      logInput.value = totalLogNeeded;
+    }
+    const badge = document.getElementById('renfort-log-slots-summary-badge');
+    if (badge) {
+      badge.textContent = totalLogNeeded + ' place(s) LOG requise(s) pour charger votre stock';
+    }
+    if (totalLogNeeded > 0) {
+      const radioBase = document.querySelector('input[name="renfort-consigne-route"][value="base"]');
+      if (radioBase) radioBase.checked = true;
+      const notice = document.getElementById('renfort-consigne-auto-notice');
+      if (notice) notice.classList.remove('hidden');
+    }
+  },
+
+  setRequestedLogSlots(count) {
+    const logInput = document.getElementById('renfort-log-slots-count');
+    if (logInput) logInput.value = Math.max(0, count);
+    if (count > 0) {
+      const radioBase = document.querySelector('input[name="renfort-consigne-route"][value="base"]');
+      if (radioBase) radioBase.checked = true;
+      const notice = document.getElementById('renfort-consigne-auto-notice');
+      if (notice) notice.classList.remove('hidden');
+    }
+  },
+
+  changeRenfortVehQty(vehType, delta) {
+    const input = document.getElementById('renfort-veh-' + vehType + '-count');
+    if (input) {
+      const cur = parseInt(input.value || 0);
+      input.value = Math.max(0, Math.min(20, cur + delta));
+    }
+  },
+
+  changeRenfortLotQty(lotId, delta) {
+    const input = document.getElementById('renfort-lot-' + lotId + '-count');
+    if (input) {
+      const cur = parseInt(input.value || 0);
+      input.value = Math.max(0, Math.min(20, cur + delta));
+    }
+  },
+
   openRenfortZoneModal(game, missionId, preset = {}) {
-    const mission = game.missions.find(m => m.id === missionId);
+    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     this.injectState(game);
     const eligibility = this.checkMissionZoneEligibility(game, mission);
+    const reqVols = mission.requiredVolunteers || 4;
+    const regVols = mission.registeredVolunteers?.length || 0;
     const needed = (preset && typeof preset.volunteersCount === 'number')
       ? preset.volunteersCount
-      : Math.max(1, (mission.requiredVolunteers || 4) - (mission.registeredVolunteers?.length || 0));
+      : Math.max(1, reqVols - regVols);
 
-    const initVpsp = (preset && typeof preset.vpsp === 'number')
-      ? preset.vpsp
-      : ((mission.requiredVehicles && mission.requiredVehicles.includes('VPSP')) ? 1 : 0);
-    const initVtu = (preset && typeof preset.vtu === 'number') ? preset.vtu : 0;
-    const initVl = (preset && typeof preset.vl === 'number') ? preset.vl : 0;
+    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
+    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
+    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
 
-    // Création ou récupération de la modale
+    // Récupération dynamique des catalogues complets
+    const vehiclesCatalog = this.getDynamicVehiclesCatalog();
+    const lotsCatalog = this.getDynamicLotsCatalog();
+
+    // Analyse du stock de lots possédé par l'antenne locale
+    const stockLots = [];
+    lotsCatalog.forEach(lot => {
+      const ownedCount = game.workplaceEquipment?.[lot.id] || 0;
+      if (ownedCount > 0) {
+        stockLots.push({
+          ...lot,
+          ownedCount: ownedCount
+        });
+      }
+    });
+
+    // Analyse des besoins de la mission pour affichage visuel
+    const reqVehicles = Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0 
+      ? mission.requiredVehicles 
+      : (mission.isCrisis ? ['VTU', 'VPSP'] : ['VPSP']);
+
+    // Déduction des lots recommandés selon le type d'intervention
+    const expectedLotsList = [];
+    const t = ((mission.title || '') + ' ' + (mission.type || '') + ' ' + (mission.crisisType || '')).toLowerCase();
+    if (t.includes('inond') || t.includes('crue') || t.includes('eau')) {
+      expectedLotsList.push({ id: 'lot_pompage', name: 'Lot Pompage', reason: 'Évacuation des eaux' });
+      expectedLotsList.push({ id: 'remorque_motopompe', name: 'Remorque Motopompe', reason: 'Pompage gros débit' });
+      expectedLotsList.push({ id: 'lot_bachage', name: 'Lot Bâchage', reason: 'Mise hors d’eau' });
+    }
+    if (t.includes('temp') || t.includes('vent') || t.includes('arbr') || t.includes('dégag')) {
+      expectedLotsList.push({ id: 'lot_tronconnage', name: 'Lot Tronçonnage', reason: 'Dégagement d’arbres' });
+      expectedLotsList.push({ id: 'lot_bachage', name: 'Lot Bâchage', reason: 'Protection toitures' });
+      expectedLotsList.push({ id: 'lot_eclairage', name: 'Lot Éclairage', reason: 'Travail nocturne' });
+    }
+    if (t.includes('recherch') || t.includes('disparu') || t.includes('égaré')) {
+      expectedLotsList.push({ id: 'lot_drone_thermique', name: 'Pack Drone Thermique', reason: 'Reconnaissance thermique' });
+      expectedLotsList.push({ id: 'lot_drone_reco', name: 'Pack Drone 4K', reason: 'Cartographie aérienne' });
+    }
+    if (t.includes('accueil') || t.includes('sinistr') || t.includes('froid') || t.includes('héberg') || t.includes('cai') || t.includes('psy')) {
+      expectedLotsList.push({ id: 'lot_hebergement', name: 'Kit CHU (Lits Picots)', reason: 'Hébergement d’urgence' });
+      expectedLotsList.push({ id: 'lot_ravitaillement', name: 'Lot Ravitaillement', reason: 'Repas chauds' });
+      expectedLotsList.push({ id: 'lot_soutien_psy', name: 'Lot CAI / Psy', reason: 'Accueil des sinistrés' });
+    }
+    if (t.includes('novi') || t.includes('pma') || t.includes('poste') || t.includes('dps')) {
+      expectedLotsList.push({ id: 'lot_secours_a', name: 'Lot A (Poste / PMA)', reason: 'Tente NOVI & Triage' });
+      expectedLotsList.push({ id: 'lot_secours_b', name: 'Lot B (Secours)', reason: 'Soin d’urgence' });
+      expectedLotsList.push({ id: 'lot_secours_c', name: 'Lot C (Relevage)', reason: 'Brancardage' });
+    }
+    if (expectedLotsList.length === 0) {
+      expectedLotsList.push({ id: 'lot_secours_b', name: 'Lot B (Secours d’Urgence)', reason: 'Dotation secourisme' });
+    }
+
+    // Modal DOM
     let modal = document.getElementById('renfort-zone-modal');
     if (!modal) {
       modal = document.createElement('div');
@@ -231,171 +360,297 @@ window.ProtecMultiplayer = {
       document.body.appendChild(modal);
     }
 
-    const myDept = game.player?.departmentCode || game.stations?.[0]?.departmentCode || '54';
-    const zoneDef = window.ProtecDepartements?.getZoneDefense(myDept) || { name: 'Zone de Défense et de Sécurité', shortName: 'Zone Zonale' };
-    const isAdmin = (game.player?.role === 'admin') || (localStorage.getItem('protec_admin_auth') === 'true');
-
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-3xl lg:max-w-4xl rounded-3xl p-6 sm:p-7 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[92vh] overflow-y-auto">
+      <div class="glass-panel w-full max-w-4xl lg:max-w-5xl rounded-3xl p-5 sm:p-7 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 max-h-[94vh] overflow-y-auto">
+        <!-- HEADER -->
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
-              <i data-lucide="handshake" class="w-5 h-5"></i>
+            <div class="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md">
+              <i data-lucide="handshake" class="w-6 h-6"></i>
             </div>
             <div>
-              <h3 class="text-base font-black text-slate-900 leading-tight">Demande de Renfort Inter-Antennes Personnalisée</h3>
-              <p class="text-xs text-slate-500 font-semibold leading-relaxed">${mission.title} • Date : ${game.formatShortDate(mission.eventDate)}</p>
+              <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">Demande de Renfort Opérationnel Personnalisée</h3>
+              <p class="text-xs text-slate-500 font-semibold leading-relaxed">
+                ${mission.title} • Date : ${game.formatShortDate(mission.eventDate)} • ${mission.address || mission.city || 'Secteur'}
+              </p>
             </div>
           </div>
-          <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm">✕</button>
+          <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer">✕</button>
         </div>
 
-        <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 text-xs text-amber-950 font-bold flex items-center gap-2.5">
-          <span class="text-lg">🤝</span>
-          <div>
-            <span class="font-black text-amber-900 block">Doctrine Opérationnelle : L'un ne vient pas sans l'autre</span>
-            <span class="text-[11px] text-amber-800 font-medium">Tout véhicule de renfort arrive impérativement avec son équipage complet qualifié, et le personnel dépêché arrive obligatoirement véhiculé.</span>
+        <!-- 0. VISUEL COMPLET SUR LES BESOINS DE LA MISSION -->
+        <div class="p-4 rounded-2xl bg-gradient-to-br from-indigo-50/80 via-sky-50/60 to-white border border-indigo-200 shadow-xs space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-xs font-black">
+                <i data-lucide="clipboard-list" class="w-4 h-4"></i>
+              </span>
+              <h4 class="text-xs font-black text-indigo-950 uppercase tracking-wider">Tableau de Bord des Besoins de la Mission</h4>
+            </div>
+            <span class="text-[11px] font-extrabold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800">
+              Antenne d'attache : ${game.stations?.[0]?.name || 'Nancy'} (Dpt ${myDept})
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <!-- Besoins Humains -->
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">👥 Effectifs Secouristes</span>
+              <div class="flex items-baseline justify-between">
+                <span class="text-lg font-black text-slate-900">${reqVols} <span class="text-xs font-normal text-slate-500">requis</span></span>
+                <span class="text-xs font-black ${needed > 0 ? 'text-amber-600' : 'text-emerald-600'}">
+                  ${needed > 0 ? 'Déficit : ' + needed : 'Complet'}
+                </span>
+              </div>
+              <p class="text-[10px] text-slate-500">${regVols} secouriste(s) déjà inscrit(s) ou engagé(s).</p>
+            </div>
+
+            <!-- Besoins Véhicules -->
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">🚑 Véhicules Opérationnels</span>
+              <div class="font-black text-slate-900 text-xs truncate">
+                ${reqVehicles.join(', ')}
+              </div>
+              <p class="text-[10px] text-slate-500">VPSP pour transport sanitaire, VTU/VLHR pour soutien logistique.</p>
+            </div>
+
+            <!-- Besoins Spéciaux / Lots -->
+            <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
+              <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">📦 Spécialités & Lots Recommandés</span>
+              <div class="flex flex-wrap gap-1">
+                ${expectedLotsList.slice(0, 3).map(el => {
+                  const hasStock = (game.workplaceEquipment?.[el.id] || 0) > 0;
+                  return `
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${hasStock ? 'bg-emerald-50 text-emerald-800 border border-emerald-300' : 'bg-amber-50 text-amber-900 border border-amber-300'}" title="${el.reason}">
+                      ${hasStock ? '✓' : '⚠️'} ${el.name}
+                    </span>
+                  `;
+                }).join('')}
+              </div>
+              <p class="text-[10px] text-slate-500">✓ = Possédé en stock • ⚠️ = À demander en renfort.</p>
+            </div>
           </div>
         </div>
 
-        <!-- 1. PERSONNALISATION DES MOYENS HUMAINS -->
+        <div class="p-3 rounded-2xl bg-amber-500/10 border border-amber-300 text-xs text-amber-950 font-bold flex items-center gap-2.5">
+          <span class="text-lg">🤝</span>
+          <div>
+            <span class="font-black text-amber-900 block">Doctrine Opérationnelle de Renfort</span>
+            <span class="text-[11px] text-amber-800 font-medium">Vous pouvez demander un véhicule avec places LOG pour transporter vos lots en stock, demander directement des lots non possédés, ou solliciter des types de véhicules spécialisés.</span>
+          </div>
+        </div>
+
+        <!-- 1. EFFECTIF SECOURISTE DEMANDÉ -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
           <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">1. Effectif Secouriste Demandé :</label>
           <div class="flex items-center gap-3">
-            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.max(1, parseInt(el.value||1)-1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs">-</button>
-            <div class="flex-1">
-              <input type="number" id="renfort-vols-count" value="${needed}" min="1" max="30" class="w-full py-2 px-3 text-center text-sm font-black font-mono rounded-xl bg-white border border-slate-300 text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.max(1, parseInt(el.value||1)-1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs cursor-pointer">-</button>
+            <div class="flex-1 max-w-[120px]">
+              <input type="number" id="renfort-vols-count" value="${needed}" min="1" max="50" class="w-full py-2 px-3 text-center text-sm font-black font-mono rounded-xl bg-white border border-slate-300 text-slate-900 focus:ring-2 focus:ring-indigo-500">
             </div>
-            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.min(30, parseInt(el.value||1)+1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs">+</button>
+            <button onclick="const el=document.getElementById('renfort-vols-count'); el.value=Math.min(50, parseInt(el.value||1)+1);" class="w-9 h-9 rounded-xl bg-white border border-slate-300 text-slate-800 font-black text-base hover:bg-slate-100 transition shadow-xs cursor-pointer">+</button>
             <span class="text-xs font-bold text-slate-600">secouriste(s)</span>
           </div>
-          <p class="text-[11px] text-slate-500">Déficit actuel calculé pour l'événement : <strong>${needed}</strong> personne(s).</p>
+          <p class="text-[11px] text-slate-500">Déficit calculé pour cet événement : <strong>${needed}</strong> personne(s).</p>
         </div>
 
-        <!-- 2. MOYENS SPÉCIALISÉS & MATÉRIELS REQUIS (LOTS, VPSP, DRONE, CYNO) -->
-        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
-          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">2. Véhicules Spécialisés & Lots Matériels Demandés :</label>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-            <!-- VPSP -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🚑 VPSP (Secours d’Urgence)</span>
-                <span class="text-[10px] text-slate-500 block">Arrive avec équipage complet</span>
+        <!-- 2. DEMANDE DE VÉHICULES PAR TYPE (CATALOGUE DYNAMIQUE) -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">2. Types de Véhicules Spécialisés Demandés :</label>
+              <p class="text-[11px] text-slate-500">Issus du catalogue officiel dynamique (PS, VL, VTP, VTU, Cyno, Drone, PCM...).</p>
+            </div>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Catalogue Dynamique</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs max-h-60 overflow-y-auto pr-1">
+            ${vehiclesCatalog.map(veh => {
+              const initQty = (veh.type === 'VPSP' && mission.requiredVehicles?.includes('VPSP')) ? 1 : 0;
+              return `
+                <div class="p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs flex flex-col justify-between space-y-2">
+                  <div class="flex items-start gap-2">
+                    <div class="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 overflow-hidden text-base">
+                      ${veh.icon ? veh.icon : '🚒'}
+                    </div>
+                    <div class="min-w-0 flex-1">
+                      <span class="font-black text-slate-900 block text-xs truncate" title="${veh.name}">${veh.name}</span>
+                      <div class="flex items-center gap-1.5 flex-wrap mt-0.5">
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-indigo-50 text-indigo-700 border border-indigo-200">${veh.type}</span>
+                        <span class="text-[10px] text-slate-500 font-semibold">${veh.capacity || 2} pers. • ${veh.capacity_log || 0} LOG</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span class="text-[10px] font-bold text-slate-500">Quantité :</span>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                      <button type="button" onclick="window.ProtecMultiplayer.changeRenfortVehQty('${veh.type}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
+                      <input type="number" id="renfort-veh-${veh.type}-count" data-renfort-veh-type="${veh.type}" data-renfort-veh-name="${veh.name}" value="${initQty}" min="0" max="20" class="w-9 py-0.5 text-center font-mono font-black text-xs rounded border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                      <button type="button" onclick="window.ProtecMultiplayer.changeRenfortVehQty('${veh.type}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 3. TRANSPORT DES LOTS EN STOCK DANS MON ANTENNE (DEMANDER VÉHICULE AVEC PLACES LOG) -->
+        <div class="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-200 space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <label class="block text-xs font-black text-indigo-950 uppercase tracking-wider">
+                3. Transport de Mes Lots en Stock (Demander un véhicule avec X places LOG) :
+              </label>
+              <p class="text-[11px] text-indigo-900/80">
+                Vous possédez du matériel à l'antenne mais pas de fourgon disponible ? Demandez un véhicule allié pour venir charger vos lots.
+              </p>
+            </div>
+            <span id="renfort-log-slots-summary-badge" class="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-indigo-200 text-indigo-900">
+              0 place(s) LOG requise(s)
+            </span>
+          </div>
+
+          <!-- Lots en Stock à l'Antenne -->
+          ${stockLots.length === 0 ? `
+            <div class="p-3 rounded-xl bg-white/80 border border-indigo-200/60 text-slate-600 text-xs font-semibold">
+              ℹ️ Aucun lot logistique stocké dans votre antenne actuellement. Vous pouvez demander directement des lots non possédés à la section 4.
+            </div>
+          ` : `
+            <div class="space-y-1.5">
+              <span class="text-[11px] font-bold text-slate-700 block">Cochez les lots en stock à faire emporter :</span>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                ${stockLots.map(sl => {
+                  const size = sl.storageSize || 2;
+                  return `
+                    <label class="p-2.5 rounded-xl bg-white border border-indigo-100 hover:border-indigo-300 flex items-center justify-between gap-2 cursor-pointer shadow-2xs transition">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <input type="checkbox" name="renfort-carry-stock-lot" value="${sl.id}" data-name="${sl.name}" data-size="${size}" onchange="window.ProtecMultiplayer.updateCarriedLotsLogCalculation()" class="rounded text-indigo-600 focus:ring-0 cursor-pointer">
+                        <div class="min-w-0">
+                          <span class="font-black text-slate-900 block truncate">${sl.name}</span>
+                          <span class="text-[10px] text-slate-500">${sl.ownedCount} en stock à votre antenne</span>
+                        </div>
+                      </div>
+                      <span class="px-2 py-0.5 rounded-lg bg-indigo-50 text-indigo-700 text-[10px] font-black shrink-0 border border-indigo-200">
+                        ${size} places LOG
+                      </span>
+                    </label>
+                  `;
+                }).join('')}
               </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-veh-vpsp-count" value="${initVpsp}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-veh-vpsp-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
+            </div>
+          `}
+
+          <!-- Sélecteur de places LOG demandées -->
+          <div class="pt-2 border-t border-indigo-200/60 flex items-center justify-between flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-black text-slate-800">Places LOG demandées :</span>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="const el=document.getElementById('renfort-log-slots-count'); el.value=Math.max(0, parseInt(el.value||0)-1); window.ProtecMultiplayer.setRequestedLogSlots(parseInt(el.value));" class="w-7 h-7 rounded-lg bg-white border border-slate-300 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
+                <input type="number" id="renfort-log-slots-count" value="0" min="0" max="30" onchange="window.ProtecMultiplayer.setRequestedLogSlots(parseInt(this.value||0))" class="w-12 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                <button type="button" onclick="const el=document.getElementById('renfort-log-slots-count'); el.value=Math.min(30, parseInt(el.value||0)+1); window.ProtecMultiplayer.setRequestedLogSlots(parseInt(el.value));" class="w-7 h-7 rounded-lg bg-white border border-slate-300 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
               </div>
             </div>
 
-            <!-- Lot PMA -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">⛺ Lot PMA (Poste Médical Avancé)</span>
-                <span class="text-[10px] text-slate-500 block">Tente NOVI, brancards, triage</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-pma-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-mat-pma-count" value="${(mission.requiredAssets?.pma || mission.scale?.includes('PMA')) ? 1 : 0}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-pma-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
-              </div>
-            </div>
-
-            <!-- Lot CAI -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🏥 Lot CAI (Accueil Impliqués)</span>
-                <span class="text-[10px] text-slate-500 block">Accueil rescapés & soutien psy</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-cai-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-mat-cai-count" value="${(mission.isCumpCai || mission.title?.includes('CAI')) ? 1 : 0}" min="0" max="10" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-cai-count'); el.value=Math.min(10, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
-              </div>
-            </div>
-
-            <!-- Drone -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🚁 Drone de Reconnaissance & Télépilote</span>
-                <span class="text-[10px] text-slate-500 block">Reconnaissance aérienne / thermique</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-drone-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-mat-drone-count" value="${(mission.requiredAssets?.drone) ? 1 : 0}" min="0" max="5" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-drone-count'); el.value=Math.min(5, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
-              </div>
-            </div>
-
-            <!-- Cynotechnie -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">🐕 Équipe Cynotechnique (Cyno)</span>
-                <span class="text-[10px] text-slate-500 block">Chien de recherche et décombres</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-cyno-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-mat-cyno-count" value="${(mission.requiredAssets?.cyno || mission.crisisType === 'recherche_disparu') ? 1 : 0}" min="0" max="5" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-cyno-count'); el.value=Math.min(5, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
-              </div>
-            </div>
-
-            <!-- Lot Éclairage & Logistique -->
-            <div class="flex items-center justify-between p-2.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-              <div class="min-w-0 mr-2">
-                <span class="font-bold text-slate-800 block text-xs leading-tight whitespace-normal">💡 Lot Éclairage, Énergie & Logistique</span>
-                <span class="text-[10px] text-slate-500 block">Groupe électrogène & mâts</span>
-              </div>
-              <div class="flex items-center gap-1.5 shrink-0">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-eclairage-count'); el.value=Math.max(0, parseInt(el.value||0)-1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">-</button>
-                <input type="number" id="renfort-mat-eclairage-count" value="0" min="0" max="5" class="w-10 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
-                <button type="button" onclick="const el=document.getElementById('renfort-mat-eclairage-count'); el.value=Math.min(5, parseInt(el.value||0)+1);" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-sm flex items-center justify-center cursor-pointer transition">+</button>
-              </div>
+            <!-- Boutons de présélection de véhicules porteurs -->
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-[10px] font-bold text-slate-500">Gabarits rapides :</span>
+              <button type="button" onclick="window.ProtecMultiplayer.setRequestedLogSlots(2)" class="px-2 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-slate-300 text-[10px] font-black text-slate-700 cursor-pointer">2 LOG (VLHR)</button>
+              <button type="button" onclick="window.ProtecMultiplayer.setRequestedLogSlots(4)" class="px-2 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-slate-300 text-[10px] font-black text-slate-700 cursor-pointer">4 LOG (Fourgon)</button>
+              <button type="button" onclick="window.ProtecMultiplayer.setRequestedLogSlots(6)" class="px-2 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-slate-300 text-[10px] font-black text-slate-700 cursor-pointer">6 LOG (VTU)</button>
+              <button type="button" onclick="window.ProtecMultiplayer.setRequestedLogSlots(12)" class="px-2 py-1 rounded-lg bg-white hover:bg-indigo-50 border border-slate-300 text-[10px] font-black text-slate-700 cursor-pointer">12 LOG (FLIT)</button>
             </div>
           </div>
         </div>
 
-        <!-- 3. CONSIGNE D'ACHEMINEMENT (ALLER SUR PLACE OU PASSER PAR LA BASE) -->
+        <!-- 4. DEMANDE DIRECTE DE LOTS MATÉRIELS (NON POSSÉDÉS EN STOCK OU COMPLÉMENTAIRES) -->
+        <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">4. Demande Directe de Lots Matériels (Non Possédés ou Complémentaires) :</label>
+              <p class="text-[11px] text-slate-500">Demandez directement ces lots aux antennes alliées si vous ne les possédez pas dans votre stock.</p>
+            </div>
+            <span class="text-[10px] font-black px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">Catalogue Matériel</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs max-h-64 overflow-y-auto pr-1">
+            ${lotsCatalog.map(lot => {
+              const owned = (game.workplaceEquipment?.[lot.id] || 0);
+              const isRecommended = expectedLotsList.some(el => el.id === lot.id);
+              const initCount = (isRecommended && owned === 0) ? 1 : 0;
+
+              return `
+                <div class="p-2.5 rounded-xl bg-white border ${isRecommended ? 'border-amber-300 ring-1 ring-amber-300/40' : 'border-slate-200'} shadow-2xs flex flex-col justify-between space-y-2">
+                  <div class="space-y-1">
+                    <div class="flex items-start justify-between gap-1.5">
+                      <span class="font-black text-slate-900 block text-xs leading-tight">${lot.name}</span>
+                      <span class="px-1.5 py-0.2 rounded text-[9px] font-black shrink-0 ${owned > 0 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-600'}">
+                        ${owned > 0 ? 'En stock (x' + owned + ')' : 'Non possédé'}
+                      </span>
+                    </div>
+                    <p class="text-[10.5px] text-slate-500 leading-snug line-clamp-2">${lot.desc || ''}</p>
+                  </div>
+
+                  <div class="flex items-center justify-between pt-1 border-t border-slate-100">
+                    <span class="text-[10px] font-bold text-slate-500">Demander :</span>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                      <button type="button" onclick="window.ProtecMultiplayer.changeRenfortLotQty('${lot.id}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">-</button>
+                      <input type="number" id="renfort-lot-${lot.id}-count" data-renfort-lot-id="${lot.id}" data-renfort-lot-name="${lot.name}" value="${initCount}" min="0" max="20" class="w-9 py-0.5 text-center font-mono font-black text-xs rounded border border-slate-300 bg-white text-slate-900 focus:ring-1 focus:ring-indigo-500">
+                      <button type="button" onclick="window.ProtecMultiplayer.changeRenfortLotQty('${lot.id}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer transition">+</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <!-- 5. CONSIGNE D'ACHEMINEMENT (SUR PLACE OU PASSER PAR LA BASE) -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5">
           <div class="flex items-center justify-between">
-            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">3. Consigne d'Acheminement des Renforts :</label>
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">5. Consigne d'Acheminement des Renforts :</label>
             <span class="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-200">Ralliement</span>
           </div>
+
+          <div id="renfort-consigne-auto-notice" class="hidden p-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-900 text-[11px] font-bold">
+            ℹ️ Consigne « Passer par la base » automatiquement recommandée car vous demandez le transport de matériel en stock à votre antenne.
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-indigo-500 ring-2 ring-indigo-500/20 shadow-xs transition hover:bg-slate-50">
-              <input type="radio" name="renfort-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-slate-200 hover:border-indigo-400 shadow-xs transition">
+              <input type="radio" name="renfort-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
               <div>
                 <span class="font-black text-slate-900 block">📍 Directement sur place</span>
-                <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts convergent directement sur le lieu de mission sans détour.</p>
+                <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts convergent directement sur le lieu d'intervention sans détour.</p>
               </div>
             </label>
-            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-slate-200 shadow-xs transition hover:bg-slate-50">
-              <input type="radio" name="renfort-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-indigo-500">
+            <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-slate-200 hover:border-indigo-400 shadow-xs transition">
+              <input type="radio" name="renfort-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
               <div>
                 <span class="font-black text-slate-900 block">🏢 Passer par la base</span>
-                <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts font halte à notre base d'antenne (matériel / départ groupé).</p>
+                <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts font halte à notre antenne locale (charger matériel en stock / départ groupé).</p>
               </div>
             </label>
           </div>
         </div>
 
-        <!-- 3. INDEMNISATION PROPOSÉE (€) -->
+        <!-- 6. TARIF D'INDEMNISATION PROPOSÉ (€) -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
           <div class="flex items-center justify-between">
-            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">3. Tarif d'Indemnisation Proposé (€) :</label>
-            <span class="text-[10px] text-slate-500 font-semibold">Versé à l'antenne qui apporte son renfort</span>
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">6. Tarif d'Indemnisation Proposé (€) :</label>
+            <span class="text-[10px] text-slate-500 font-semibold">Versé à l'antenne qui apporte son concours</span>
           </div>
           <div class="relative rounded-xl shadow-xs">
-            <input type="number" id="renfort-custom-tariff" value="${Math.max(100, needed * 45 + 50)}" min="50" max="5000" step="10" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-mono font-black text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500">
+            <input type="number" id="renfort-custom-tariff" value="${Math.max(120, needed * 45 + 60)}" min="50" max="10000" step="10" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-mono font-black text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500">
             <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
           </div>
-          <p class="text-[11px] text-slate-500">Montant indicatif conseillé pour attirer rapidement des renforts volontaires.</p>
+          <p class="text-[11px] text-slate-500">Montant indicatif conseillé pour mobiliser rapidement des renforts volontaires.</p>
         </div>
 
-        <!-- 4. SÉLECTION DE L'ÉCHELON DE MOBILISATION -->
+        <!-- 7. SÉLECTION DE L'ÉCHELON DE MOBILISATION -->
         <div class="space-y-3 pt-1">
-          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">5. Échelon de Mobilisation & Envoi :</label>
+          <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">7. Échelon de Mobilisation & Envoi :</label>
 
           <!-- ÉCHELON DÉPARTEMENTAL -->
           <div class="p-3.5 rounded-2xl border ${eligibility.departemental.canRequest ? 'border-sky-300 bg-sky-50/60' : 'border-slate-200 bg-slate-50 opacity-70'} flex flex-col justify-between gap-2 transition">
@@ -449,7 +704,7 @@ window.ProtecMultiplayer = {
             </div>
           </div>
 
-          <!-- ZONE NATIONALE (FNPC) - RÉSERVÉE ADMIN -->
+          <!-- ZONE NATIONALE (FNPC) -->
           <div class="p-3.5 rounded-2xl border border-purple-200 bg-purple-50/40 flex flex-col justify-between gap-2 transition">
             <div class="flex items-center justify-between">
               <div class="flex items-center gap-2">
@@ -477,8 +732,8 @@ window.ProtecMultiplayer = {
         </div>
 
         <div class="flex justify-end pt-2 border-t border-slate-100">
-          <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
-            Annuler
+          <button onclick="document.getElementById('renfort-zone-modal').classList.add('hidden')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+            Fermer
           </button>
         </div>
       </div>
@@ -489,7 +744,7 @@ window.ProtecMultiplayer = {
   },
 
   submitRenfortRequest(game, missionId, zone) {
-    const mission = game.missions.find(m => m.id === missionId);
+    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     this.injectState(game);
@@ -501,38 +756,64 @@ window.ProtecMultiplayer = {
       return;
     }
 
-    // Récupération des paramètres personnalisés saisis par le joueur
+    // Récupération des paramètres saisis par le joueur
     const customVolsInput = document.getElementById('renfort-vols-count');
     const customTariffInput = document.getElementById('renfort-custom-tariff');
 
     const requestedVols = customVolsInput ? (parseInt(customVolsInput.value) || defaultNeeded) : defaultNeeded;
     const requestedTariff = customTariffInput ? (parseFloat(customTariffInput.value) || (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200)) : (zone === 'national' ? 450 : zone === 'regional' ? 300 : 200);
 
-    // Récupération des quantités de véhicules et matériels spécialisés demandés
-    const selectedVehicles = [];
-    const vpspQty = parseInt(document.getElementById('renfort-veh-vpsp-count')?.value || 0);
-    const pmaQty = parseInt(document.getElementById('renfort-mat-pma-count')?.value || 0);
-    const caiQty = parseInt(document.getElementById('renfort-mat-cai-count')?.value || 0);
-    const droneQty = parseInt(document.getElementById('renfort-mat-drone-count')?.value || 0);
-    const cynoQty = parseInt(document.getElementById('renfort-mat-cyno-count')?.value || 0);
-    const eclairageQty = parseInt(document.getElementById('renfort-mat-eclairage-count')?.value || 0);
+    // 1. Récupération des véhicules demandés par type dynamique
+    const requestedVehicles = [];
+    const requestedVehicleSummary = [];
+    document.querySelectorAll('input[data-renfort-veh-type]').forEach(input => {
+      const qty = parseInt(input.value || 0);
+      if (qty > 0) {
+        const vType = input.dataset.renfortVehType;
+        const vName = input.dataset.renfortVehName || vType;
+        requestedVehicles.push({ type: vType, name: vName, qty: qty });
+        requestedVehicleSummary.push(qty > 1 ? qty + ' ' + vType : '1 ' + vType);
+      }
+    });
 
-    if (vpspQty > 0) selectedVehicles.push(vpspQty > 1 ? `${vpspQty} VPSP` : '1 VPSP');
-    if (pmaQty > 0) selectedVehicles.push(pmaQty > 1 ? `${pmaQty} Lots PMA` : '1 Lot PMA');
-    if (caiQty > 0) selectedVehicles.push(caiQty > 1 ? `${caiQty} Lots CAI` : '1 Lot CAI');
-    if (droneQty > 0) selectedVehicles.push(droneQty > 1 ? `${droneQty} Drones` : '1 Drone & Télépilote');
-    if (cynoQty > 0) selectedVehicles.push(cynoQty > 1 ? `${cynoQty} Équipes Cyno` : '1 Équipe Cyno');
-    if (eclairageQty > 0) selectedVehicles.push(eclairageQty > 1 ? `${eclairageQty} Lots Éclairage` : '1 Lot Éclairage/Énergie');
+    // 2. Récupération des places LOG demandées (pour transporter stock local)
+    const logSlotsInput = document.getElementById('renfort-log-slots-count');
+    const requestedLogSlots = logSlotsInput ? (parseInt(logSlotsInput.value) || 0) : 0;
 
-    // Consigne d'acheminement choisie (sur place vs passer par la base)
+    const carriedStockLots = [];
+    document.querySelectorAll('input[name="renfort-carry-stock-lot"]:checked').forEach(cb => {
+      carriedStockLots.push({
+        id: cb.value,
+        name: cb.dataset.name,
+        storageSize: parseInt(cb.dataset.size || 2)
+      });
+    });
+
+    // 3. Récupération des lots demandés directement
+    const requestedLots = [];
+    const requestedLotsSummary = [];
+    document.querySelectorAll('input[data-renfort-lot-id]').forEach(input => {
+      const qty = parseInt(input.value || 0);
+      if (qty > 0) {
+        const lId = input.dataset.renfortLotId;
+        const lName = input.dataset.renfortLotName || lId;
+        requestedLots.push({ id: lId, name: lName, qty: qty });
+        requestedLotsSummary.push(qty > 1 ? qty + ' Lots ' + lName : '1 Lot ' + lName);
+      }
+    });
+
+    // 4. Consigne d'acheminement choisie
     const consigneRadios = document.getElementsByName('renfort-consigne-route');
     let routeConsigne = 'sur_place';
     for (const r of consigneRadios) { if (r.checked) { routeConsigne = r.value; break; } }
+    if (requestedLogSlots > 0 && carriedStockLots.length > 0) {
+      routeConsigne = 'base'; // Requis si chargement de lots à la base
+    }
 
     // Gestion du quota départemental
     if (zone === 'departemental') {
       if (game.weeklyDeptRenforts.count >= this.MAX_WEEKLY_DEPT_RENFORTS) {
-        game.showToast('Quota Atteint', `Vous avez atteint la limite de ${this.MAX_WEEKLY_DEPT_RENFORTS} renforts départementaux par semaine.`, 'orange');
+        game.showToast('Quota Atteint', 'Vous avez atteint la limite de ' + this.MAX_WEEKLY_DEPT_RENFORTS + ' renforts départementaux par semaine.', 'orange');
         return;
       }
       game.weeklyDeptRenforts.count += 1;
@@ -543,17 +824,26 @@ window.ProtecMultiplayer = {
 
     const zoneLabels = {
       departemental: 'Départementale',
-      regional: `Zone de Défense (${zoneDef.shortName})`,
+      regional: 'Zone de Défense (' + zoneDef.shortName + ')',
       national: 'Nationale FNPC'
     };
 
-    const unitRequestedStr = `${requestedVols} secouriste(s)${selectedVehicles.length > 0 ? ' + ' + selectedVehicles.join(', ') : ''}`;
+    // Construction propre du résumé textuel
+    const parts = [requestedVols + ' secouriste(s)'];
+    if (requestedVehicleSummary.length > 0) parts.push(requestedVehicleSummary.join(', '));
+    if (requestedLogSlots > 0) {
+      const carriedNames = carriedStockLots.map(l => l.name).join(', ');
+      parts.push('Véhicule avec ' + requestedLogSlots + ' place(s) LOG' + (carriedNames ? ' (transport stock : ' + carriedNames + ')' : ''));
+    }
+    if (requestedLotsSummary.length > 0) parts.push(requestedLotsSummary.join(', '));
+
+    const unitRequestedStr = parts.join(' + ');
 
     const myPlayerId = game.player?.id || window.ProtecAuth?.currentUser?.id || localStorage.getItem('protec_player_id') || 'directeur-local';
     const myPlayerName = game.player?.name || window.ProtecAuth?.currentUser?.username || localStorage.getItem('protec_player_name') || 'Responsable d’antenne';
 
     const renfortData = {
-      id: `renf-${Date.now()}`,
+      id: 'renf-' + Date.now(),
       isMine: true,
       requesterPlayerId: myPlayerId,
       requesterName: myPlayerName,
@@ -572,15 +862,18 @@ window.ProtecMultiplayer = {
       allianceTag: 'UFSC',
       zone: zone,
       zoneLabel: zoneLabels[zone],
-      title: `[${zoneLabels[zone].toUpperCase()}] Renfort pour ${mission.title}`,
-      desc: `Dispositif prévu le ${game.formatShortDate(mission.eventDate)}. Besoin de ${unitRequestedStr}.`,
+      title: '[' + zoneLabels[zone].toUpperCase() + '] Renfort pour ' + mission.title,
+      desc: 'Dispositif prévu le ' + game.formatShortDate(mission.eventDate) + '. Besoin de ' + unitRequestedStr + '.',
       unitRequested: unitRequestedStr,
       requestedVolunteersCount: requestedVols,
       requiredVolsCount: requestedVols,
-      requestedVehicles: selectedVehicles,
+      requestedVehicles: requestedVehicles,
+      requestedLogSlots: requestedLogSlots,
+      carriedStockLots: carriedStockLots,
+      requestedLots: requestedLots,
       consigne: routeConsigne,
       consigneLabel: routeConsigne === 'base' ? 'Passer d\'abord par la base' : 'Ralliement direct sur place',
-      needLabel: selectedVehicles.length > 0 ? selectedVehicles.join(', ') : `${requestedVols} secouristes`,
+      needLabel: requestedVehicleSummary.length > 0 ? requestedVehicleSummary.join(', ') : (requestedVols + ' secouristes'),
       slotsCommitted: 0,
       indemnite: requestedTariff,
       createdAt: new Date().toISOString(),
@@ -593,11 +886,11 @@ window.ProtecMultiplayer = {
     // Diffusion dans le bon canal de messagerie si le système est actif
     if (window.ProtecMessaging) {
       window.ProtecMessaging.injectState(game);
-      const msgText = `📢 [DEMANDE DE RENFORT ${zoneLabels[zone].toUpperCase()}] Besoin urgent : ${renfortData.unitRequested} pour « ${mission.title} ». Indemnité proposée : +${renfortData.indemnite} €.`;
-      const timeStr = `${String(new Date().getHours()).padStart(2, '0')}:${String(new Date().getMinutes()).padStart(2, '0')}`;
+      const msgText = '📢 [DEMANDE DE RENFORT ' + zoneLabels[zone].toUpperCase() + '] Besoin urgent : ' + renfortData.unitRequested + ' pour « ' + mission.title + ' ». Consigne : ' + renfortData.consigneLabel + '. Indemnité proposée : +' + renfortData.indemnite + ' €.';
+      const timeStr = String(new Date().getHours()).padStart(2, '0') + ':' + String(new Date().getMinutes()).padStart(2, '0');
       
       const newMsg = {
-        id: `renf-msg-${Date.now()}`,
+        id: 'renf-msg-' + Date.now(),
         type: 'renfort_request',
         senderId: myPlayerId,
         senderName: game.stations?.[0]?.name || 'Antenne Locale',
@@ -610,6 +903,9 @@ window.ProtecMultiplayer = {
         unitRequested: renfortData.unitRequested,
         requestedVolunteersCount: renfortData.requestedVolunteersCount,
         requestedVehicles: renfortData.requestedVehicles,
+        requestedLogSlots: renfortData.requestedLogSlots,
+        requestedLots: renfortData.requestedLots,
+        consigneLabel: renfortData.consigneLabel,
         indemnite: renfortData.indemnite,
         text: msgText,
         time: timeStr
@@ -649,7 +945,7 @@ window.ProtecMultiplayer = {
     const modal = document.getElementById('renfort-zone-modal');
     if (modal) modal.classList.add('hidden');
 
-    game.showToast('Appel à Renfort Diffusé', `Mobilisation ${zoneLabels[zone]} transmise sur le réseau avec succès !`, 'green');
+    game.showToast('Appel à Renfort Diffusé', 'Mobilisation ' + zoneLabels[zone] + ' transmise sur le réseau avec succès !', 'green');
     game.save();
     game.updateStatsUI();
     if (typeof game.renderMissions === 'function') game.renderMissions();
