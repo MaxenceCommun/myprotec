@@ -2063,6 +2063,24 @@ window.ProtecLocaux = {
             case 'chaise':
               moralBonus += 1;
               break;
+            case 'babyfoot':
+              moralBonus += 8;
+              break;
+            case 'tv_foyer':
+              moralBonus += 6;
+              energyRegen += 5;
+              break;
+            case 'console_jeux':
+              moralBonus += 10;
+              break;
+            case 'ping_pong':
+              moralBonus += 5;
+              energyRegen += 5;
+              break;
+            case 'distributeur_snacks':
+              moralBonus += 4;
+              energyRegen += 5;
+              break;
           }
         });
       }
@@ -3261,18 +3279,23 @@ window.ProtecLocaux = {
 
   // Catalogue des meubles et équipements pour l'agencement "Les Sims"
   FURNITURE_CATALOG: [
-    { type: 'bureau', name: 'Bureau Direction & PC', cat: 'bureau', w: 1.8, d: 0.9, color: '#334155', cost: 250, icon: '🗄️' },
+    { type: 'bureau', name: 'Bureau Direction & PC', cat: 'bureau', w: 1.8, d: 0.9, color: '#334155', cost: 250, icon: '🖥️' },
     { type: 'chaise', name: 'Chaise de Réunion', cat: 'bureau', w: 0.5, d: 0.5, color: '#0284c7', cost: 45, icon: '🪑' },
-    { type: 'table_formation', name: 'Table Formation Pédagogique', cat: 'formation', w: 2.2, d: 1.1, color: '#ea580c', cost: 180, icon: '🪑' },
+    { type: 'table_formation', name: 'Table Formation Pédagogique', cat: 'formation', w: 2.2, d: 1.1, color: '#ea580c', cost: 180, icon: '📚' },
     { type: 'tableau_blanc', name: 'Tableau Blanc Mural', cat: 'formation', w: 2.2, d: 0.2, color: '#f8fafc', cost: 120, icon: '📋' },
-    { type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cat: 'formation', w: 0.6, d: 1.2, color: '#f59e0b', cost: 320, icon: '🩺' },
+    { type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cat: 'formation', w: 0.6, d: 1.2, color: '#f59e0b', cost: 320, icon: '🫀' },
     { type: 'dae_mural', name: 'Défibrillateur DAE Mural', cat: 'secours', w: 0.35, d: 0.35, color: '#10b981', cost: 450, icon: '⚡' },
-    { type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cat: 'secours', w: 1.2, d: 0.4, color: '#dc2626', cost: 190, icon: '🧰' },
-    { type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cat: 'stockage', w: 0.6, d: 2.4, color: '#475569', cost: 150, icon: '📦' },
-    { type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cat: 'stockage', w: 0.6, d: 2.5, color: '#0f172a', cost: 180, icon: '👕' },
+    { type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cat: 'secours', w: 1.2, d: 0.4, color: '#dc2626', cost: 190, icon: '🩹', maxWeightKg: 80 },
+    { type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cat: 'stockage', w: 0.6, d: 2.4, color: '#475569', cost: 150, icon: '📦', maxWeightKg: 300 },
+    { type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cat: 'stockage', w: 0.6, d: 2.5, color: '#0f172a', cost: 180, icon: '🦺', maxWeightKg: 150 },
     { type: 'lit_garde', name: 'Lit de Camp / Astreinte', cat: 'detente', w: 1.0, d: 2.0, color: '#a855f7', cost: 220, icon: '🛏️' },
     { type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cat: 'detente', w: 2.0, d: 0.9, color: '#059669', cost: 280, icon: '🛋️' },
-    { type: 'machine_cafe', name: 'Machine à Café & Pause', cat: 'detente', w: 0.8, d: 0.6, color: '#d97706', cost: 85, icon: '☕' }
+    { type: 'machine_cafe', name: 'Machine à Café & Pause', cat: 'detente', w: 0.8, d: 0.6, color: '#d97706', cost: 85, icon: '☕' },
+    { type: 'babyfoot', name: 'Baby-foot Bonzini', cat: 'detente', w: 1.5, d: 1.0, color: '#16a34a', cost: 420, icon: '⚽', bonus: '+8% Moral et cohésion d’équipe lors des gardes' },
+    { type: 'tv_foyer', name: 'Téléviseur Mural / Écran Foyer', cat: 'detente', w: 1.4, d: 0.15, color: '#0f172a', cost: 350, icon: '📺', bonus: '+6% Détente et anti-stress en veille' },
+    { type: 'console_jeux', name: 'Console de Jeux & Coin Gaming', cat: 'detente', w: 1.0, d: 0.5, color: '#6366f1', cost: 480, icon: '🎮', bonus: '+10% Moral et attractivité jeunes recrues' },
+    { type: 'ping_pong', name: 'Table de Ping-Pong Pliante', cat: 'detente', w: 2.7, d: 1.5, color: '#0284c7', cost: 290, icon: '🏓', bonus: '+5% Énergie et convivialité d’équipe' },
+    { type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cat: 'detente', w: 0.9, d: 0.8, color: '#dc2626', cost: 380, icon: '🥤', bonus: '+5% Énergie et +4 Moral d’antenne' }
   ],
 
   // =========================================================================
@@ -3869,7 +3892,10 @@ window.ProtecLocaux = {
       d: catalogItem.d,
       color: catalogItem.color,
       label: catalogItem.name,
-      rotation: 0
+      icon: catalogItem.icon,
+      rotation: 0,
+      storedInventory: {},
+      maxWeightKg: catalogItem.maxWeightKg || 0
     };
 
     model.furniture.push(newItem);
@@ -3924,12 +3950,45 @@ window.ProtecLocaux = {
     if (!contextBar) return;
 
     if (item) {
+      const itype = item.type;
+      const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
+      const isComfort = ['canape_detente', 'lit_garde'].includes(itype);
+      const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
+
+      let actionBtnHTML = '';
+      if (isStorage) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openStorageInventory('${item.id}')" class="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>📦</span> <span>Gérer le Stock</span>
+          </button>
+        `;
+      } else if (isComfort) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openComfortModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🛋️</span> <span>Espace Confort</span>
+          </button>
+        `;
+      } else if (isFun) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openEntertainmentModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🎮</span> <span>Divertissement</span>
+          </button>
+        `;
+      } else {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openFunctionalModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>📋</span> <span>Fonctionnalité</span>
+          </button>
+        `;
+      }
+
       contextBar.innerHTML = `
         <div class="flex items-center gap-2 flex-wrap justify-center text-xs">
           <span class="flex items-center gap-1 font-bold text-amber-300">
-            <span>🛋️</span>
+            <span>${item.icon || '🛋️'}</span>
             <span class="truncate max-w-[130px] sm:max-w-none"><strong>${item.name || item.label || 'Mobilier'}</strong></span>
           </span>
+          ${actionBtnHTML}
           <div class="h-3.5 w-[1px] bg-slate-700 hidden sm:block"></div>
           <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
             <span>🔄</span> <span>Pivoter (90°)</span>
@@ -4344,6 +4403,17 @@ window.ProtecLocaux = {
         screenY
       };
     };
+
+    canvas.addEventListener('dblclick', (e) => {
+      const { wx, wy } = getMouseWorldPos(e.clientX, e.clientY);
+      const model = this.getArchitectModel();
+      const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
+        return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+      });
+      if (clickedFurniture) {
+        this.openFurnitureInteractionModal(clickedFurniture.id);
+      }
+    });
 
     const onPointerDown = (clientX, clientY, button) => {
       const { wx, wy } = getMouseWorldPos(clientX, clientY);
@@ -4765,6 +4835,624 @@ window.ProtecLocaux = {
     } else {
       this.render2D(ctx, w, h);
     }
+  },
+
+
+  // =========================================================================
+  // GESTION FONCTIONNELLE DU MOBILIER (STOCKAGE, FOYER, DIVERTISSEMENT)
+  // =========================================================================
+
+  getItemWeightKg(itemId) {
+    const WEIGHTS = {
+      lot_secours_a: 45,
+      lot_secours_b: 15,
+      lot_secours_c: 25,
+      lot_tronconnage: 30,
+      lot_pompage: 40,
+      lot_eclairage: 35,
+      lot_bachage: 25,
+      lot_hebergement: 60,
+      lot_ravitaillement: 35,
+      lot_soutien_psy: 20,
+      lot_poste_commandement_mobile: 15,
+      lot_drone_reco: 10,
+      lot_drone_thermique: 12,
+      caisse_rearmement: 10,
+      caisse_reassort: 8,
+      tenue_pc: 3,
+      tenue_f1: 3,
+      tenue_moto: 4,
+      tenue_usar: 5,
+      rangers1: 2,
+      rangers2: 2,
+      rangers3: 2,
+      mannequin_rcp_adulte: 12,
+      dsa_formation: 4,
+      telephone_garde: 0.5,
+      remorque_groupe_electro: 120,
+      remorque_motopompe: 100
+    };
+    return WEIGHTS[itemId] !== undefined ? WEIGHTS[itemId] : 5;
+  },
+
+  getItemDisplayName(itemId) {
+    if (window.ProtecEquipements && window.ProtecEquipements.LOTS_CATALOG) {
+      const found = window.ProtecEquipements.LOTS_CATALOG.find(x => x.id === itemId);
+      if (found) return found.name;
+    }
+    const NAMES = {
+      lot_secours_a: 'Lot A - Poste de secours',
+      lot_secours_b: 'Lot B - Secours à personne',
+      lot_secours_c: 'Lot C - Brancardage & relevage',
+      lot_tronconnage: 'Lot Tronçonnage',
+      lot_pompage: 'Lot Pompage',
+      lot_eclairage: 'Lot Éclairage d’urgence',
+      lot_bachage: 'Lot Bâchage',
+      lot_hebergement: 'Kit CHU (30 Lits Picots)',
+      lot_ravitaillement: 'Lot Ravitaillement',
+      lot_soutien_psy: 'Lot CAI (Soutien psychologique)',
+      lot_poste_commandement_mobile: 'Poste de commandement mobile',
+      lot_drone_reco: 'Pack Drone de reconnaissance',
+      lot_drone_thermique: 'Pack Drone thermique',
+      caisse_rearmement: 'Caisse de Réarmement VPSP',
+      caisse_reassort: 'Caisse de Réassort PS',
+      tenue_pc: 'Tenue d’intervention Protection Civile',
+      tenue_f1: 'Tenue de caserne F1 Protec',
+      tenue_moto: 'Tenue de pilote moto MPS',
+      tenue_usar: 'Tenue technique Sauvetage-Déblaiement',
+      rangers1: 'Rangers d’intervention Standard',
+      mannequin_rcp_adulte: 'Mannequin Secourisme RCP Adulte',
+      dsa_formation: 'Défibrillateur DSA de formation'
+    };
+    return NAMES[itemId] || itemId;
+  },
+
+  getItemIcon(itemId) {
+    const ICONS = {
+      lot_secours_a: '⛺',
+      lot_secours_b: '💼',
+      lot_secours_c: '🩹',
+      lot_tronconnage: '🪓',
+      lot_pompage: '🌊',
+      lot_eclairage: '💡',
+      lot_bachage: '🏠',
+      lot_hebergement: '🛏️',
+      lot_ravitaillement: '🍲',
+      lot_soutien_psy: '🤝',
+      lot_poste_commandement_mobile: '📡',
+      lot_drone_reco: '📷',
+      lot_drone_thermique: '👁️',
+      caisse_rearmement: '📦',
+      caisse_reassort: '🩹',
+      tenue_pc: '👕',
+      tenue_f1: '👖',
+      tenue_moto: '🏍️',
+      tenue_usar: '🦺',
+      mannequin_rcp_adulte: '🫀',
+      dsa_formation: '⚡'
+    };
+    return ICONS[itemId] || '📦';
+  },
+
+  getStorageMaxWeight(type) {
+    if (type === 'etagere_lots') return 300;
+    if (type === 'armoire_pharmacie') return 80;
+    if (type === 'casiers_vestiaire') return 150;
+    return 100;
+  },
+
+  openFurnitureInteractionModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const itype = item.type;
+    if (['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype)) {
+      this.openStorageInventory(furnitureId);
+    } else if (['canape_detente', 'lit_garde'].includes(itype)) {
+      this.openComfortModal(furnitureId);
+    } else if (['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype)) {
+      this.openEntertainmentModal(furnitureId);
+    } else {
+      this.openFunctionalModal(furnitureId);
+    }
+  },
+
+  // 1. INVENTAIRE DÉDIÉ ET GESTION DU POIDS (ÉTAGÈRES & ARMOIRES)
+  openStorageInventory(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    item.storedInventory = item.storedInventory || {};
+    const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+
+    let currentWeight = 0;
+    for (const [id, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) currentWeight += count * this.getItemWeightKg(id);
+    }
+
+    const percent = Math.min(100, Math.round((currentWeight / maxWeight) * 100));
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    const stationStock = (station && station.stock) ? station.stock : {};
+
+    // Liste du matériel actuellement stocké
+    const storedList = Object.entries(item.storedInventory).filter(([_, c]) => c > 0);
+
+    // Liste du matériel disponible dans l'antenne pouvant être déposé
+    const availableItems = Object.entries(stationStock).filter(([_, c]) => c > 0);
+
+    const oldModal = document.getElementById('furniture-storage-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-storage-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl bg-slate-900 border-2 border-amber-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-xl flex items-center justify-center">
+              ${item.icon || '📦'}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Rayonnage'}</h3>
+              <p class="text-xs text-slate-400">Rangement logistique avec calcul de charge utile (kg)</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <!-- Jauge de charge utile / Poids -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="text-slate-400 flex items-center gap-1.5">
+              <span>⚖️</span> Charge Utile Utilisée :
+            </span>
+            <span class="${percent >= 90 ? 'text-rose-400' : (percent >= 70 ? 'text-amber-400' : 'text-emerald-400')} font-mono font-black">
+              ${currentWeight} kg / ${maxWeight} kg (${percent}%)
+            </span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
+            <div class="h-full transition-all duration-300 ${percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : (percent >= 70 ? 'bg-amber-400' : 'bg-emerald-500')}" style="width: ${percent}%"></div>
+          </div>
+          <div class="flex items-center justify-between text-[10px] text-slate-500">
+            <span>Reste disponible : ${Math.max(0, maxWeight - currentWeight)} kg</span>
+            <span>Supporte Lots A/B, Caisses réarmement, Tenues, CAI...</span>
+          </div>
+        </div>
+
+        <!-- SECTION 1 : Matériel Actuellement Rangé -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-amber-400 tracking-wider">
+              1. Matériel en rayon (${storedList.reduce((s, [_, c]) => s + c, 0)}) :
+            </span>
+            <span class="text-[11px] text-slate-400">Dans ce meuble</span>
+          </div>
+
+          ${storedList.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
+              Cette étagère est actuellement vide. Rangez-y du matériel ci-dessous pour organiser vos réserves !
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${storedList.map(([sId, count]) => {
+                const uW = this.getItemWeightKg(sId);
+                const totalW = uW * count;
+                const dName = this.getItemDisplayName(sId);
+                const dIcon = this.getItemIcon(sId);
+                return `
+                  <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xl flex-shrink-0">${dIcon}</span>
+                      <div class="min-w-0 flex-1">
+                        <strong class="block text-white font-bold truncate">${dName}</strong>
+                        <span class="text-[10px] text-slate-400 font-mono">${count}x · ${totalW} kg (${uW}kg/u)</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 text-[10px] font-bold border border-rose-700/50 transition cursor-pointer" title="Retirer 1 exemplaire vers la réserve">
+                        - 1
+                      </button>
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', ${count})" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition cursor-pointer" title="Tout retirer vers la réserve">
+                        Tout
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- SECTION 2 : Déposer du Matériel depuis l'Antenne -->
+        <div class="space-y-2 pt-2 border-t border-slate-800">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-emerald-400 tracking-wider">
+              2. Ranger du matériel de l'antenne :
+            </span>
+            <span class="text-[11px] text-slate-400">Stock libre disponible</span>
+          </div>
+
+          ${availableItems.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
+              Aucun matériel non rangé en stock dans l'antenne. Commandez des lots ou des caisses dans l'onglet Équipements !
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-1">
+              ${availableItems.map(([sId, count]) => {
+                const uW = this.getItemWeightKg(sId);
+                const dName = this.getItemDisplayName(sId);
+                const dIcon = this.getItemIcon(sId);
+                const canFit = (currentWeight + uW) <= maxWeight;
+                return `
+                  <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between gap-2 text-xs">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xl flex-shrink-0">${dIcon}</span>
+                      <div class="min-w-0 flex-1">
+                        <strong class="block text-white font-bold truncate">${dName}</strong>
+                        <span class="text-[10px] text-slate-400 font-mono">Dispo: ${count} · ${uW} kg/u</span>
+                      </div>
+                    </div>
+                    <button type="button" ${canFit ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 1)" class="px-2.5 py-1.5 rounded-lg ${canFit ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-bold text-[10px] transition flex items-center gap-1">
+                      <span>+ Ranger</span>
+                    </button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  depositToStorage(furnitureId, itemId, qty = 1) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    const avail = station.stock[itemId] || 0;
+    if (avail < qty) {
+      if (game.showToast) game.showToast('Stock Insuffisant', 'Quantité insuffisante en réserve.', 'orange');
+      return;
+    }
+
+    item.storedInventory = item.storedInventory || {};
+    const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+
+    let currentWeight = 0;
+    for (const [id, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) currentWeight += count * this.getItemWeightKg(id);
+    }
+
+    const itemW = this.getItemWeightKg(itemId) * qty;
+    if (currentWeight + itemW > maxWeight) {
+      if (game.showToast) game.showToast('Charge Maximale Atteinte', `Cette étagère ne peut supporter que ${maxWeight} kg.`, 'orange');
+      return;
+    }
+
+    station.stock[itemId] -= qty;
+    if (station.stock[itemId] <= 0) delete station.stock[itemId];
+
+    item.storedInventory[itemId] = (item.storedInventory[itemId] || 0) + qty;
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Matériel Rangé', `${qty}x ${this.getItemDisplayName(itemId)} rangé(s) sur le meuble.`, 'green');
+  },
+
+  withdrawFromStorage(furnitureId, itemId, qty = 1) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item || !item.storedInventory) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    const current = item.storedInventory[itemId] || 0;
+    const toWithdraw = Math.min(current, qty);
+    if (toWithdraw <= 0) return;
+
+    item.storedInventory[itemId] -= toWithdraw;
+    if (item.storedInventory[itemId] <= 0) delete item.storedInventory[itemId];
+
+    station.stock[itemId] = (station.stock[itemId] || 0) + toWithdraw;
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Matériel Déchargé', `${toWithdraw}x ${this.getItemDisplayName(itemId)} remis en réserve libre.`, 'blue');
+  },
+
+  // 2. MODAL CONFORT & ESPACE REPOS (CANAPÉ, FOYER, LIT DE GARDE)
+  openComfortModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    const stationVols = (game && game.volunteers) ? game.volunteers.filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte')) : [];
+
+    const oldModal = document.getElementById('furniture-comfort-modal');
+    if (oldModal) oldModal.remove();
+
+    const isBed = item.type === 'lit_garde';
+    const modal = document.createElement('div');
+    modal.id = 'furniture-comfort-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-xl bg-slate-900 border-2 border-emerald-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-black text-xl flex items-center justify-center">
+              ${item.icon || '🛋️'}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Foyer & Repos'}</h3>
+              <p class="text-xs text-slate-400">${isBed ? 'Dortoir d’astreinte nocturne et gardes 24h' : 'Zone d’attente et de repos des bénévoles en faction'}</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-comfort-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <!-- Statistiques d'apport passif -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center gap-2.5">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 block uppercase">Régénération Énergie</span>
+              <strong class="text-sm font-black text-emerald-400">${isBed ? '+15%' : '+10%'} / veille</strong>
+            </div>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center gap-2.5">
+            <span class="text-2xl">😊</span>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 block uppercase">Sérénité & Moral</span>
+              <strong class="text-sm font-black text-amber-400">+5 pts d’antenne</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bénévoles présents au local -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-emerald-400 tracking-wider">
+              Bénévoles en attente de garde (${stationVols.length}) :
+            </span>
+            <span class="text-[11px] text-slate-400">Présents au foyer</span>
+          </div>
+
+          ${stationVols.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
+              Tous vos secouristes sont actuellement en intervention ou en formation.
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-1">
+              ${stationVols.map(v => `
+                <div class="p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/70 flex items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-lg flex-shrink-0">${v.avatar || '🧑‍🚒'}</span>
+                    <div class="min-w-0 flex-1">
+                      <strong class="block text-white font-bold truncate">${v.name}</strong>
+                      <span class="text-[10px] text-slate-400">${v.role || v.rank || 'Secouriste'}</span>
+                    </div>
+                  </div>
+                  <div class="text-right flex-shrink-0 font-mono text-[10px]">
+                    <span class="text-emerald-400 font-bold block">⚡ ${v.energy || 100}%</span>
+                    <span class="text-amber-400">😊 ${v.humeur || 85}%</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- Action interactive : Tournée de café -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+          <div class="text-[11px] text-slate-400">
+            Pause conviviale : booste immédiatement l’énergie (+5%) et le moral (+4).
+          </div>
+          <button type="button" onclick="window.ProtecLocaux.serveCoffeeBreak('${station ? station.id : ''}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-white font-black text-xs transition shadow cursor-pointer active:scale-95 flex items-center gap-1.5 flex-shrink-0">
+            <span>☕</span> <span>Servir un café</span>
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  serveCoffeeBreak(stationId) {
+    const game = window.game;
+    if (!game) return;
+    const station = (game.stations || []).find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+
+    const now = Date.now();
+    const lastCoffee = station._lastCoffeeTime || 0;
+    const cooldownMs = 15 * 60 * 1000; // 15 min
+    if (now - lastCoffee < cooldownMs) {
+      const remMin = Math.ceil((cooldownMs - (now - lastCoffee)) / 60000);
+      game.showToast('Cafetière en chauffe ☕', `Prochaine tournée de café disponible dans ${remMin} min.`, 'blue');
+      return;
+    }
+
+    station._lastCoffeeTime = now;
+    const vols = (game.volunteers || []).filter(v => v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte');
+    vols.forEach(v => {
+      v.energy = Math.min(100, (v.energy || 90) + 5);
+      v.humeur = Math.min(100, (v.humeur || 85) + 4);
+    });
+
+    if (game.saveGame) game.saveGame();
+    if (game.updateStatsUI) game.updateStatsUI();
+
+    game.showToast('☕ Tournée de Café Servie !', 'Moment de détente chaleureux au foyer. +5% énergie et +4 moral pour l’équipe en garde !', 'green');
+
+    const modal = document.getElementById('furniture-comfort-modal');
+    if (modal) {
+      this.openComfortModal(this.selectedFurnitureId);
+    }
+  },
+
+  // 3. MODAL DIVERTISSEMENT & VIE D'ÉQUIPE (BABYFOOT, TV, CONSOLE, PING-PONG, DISTRIBUTEUR)
+  openEntertainmentModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+
+    const TITLES = {
+      babyfoot: { title: 'Baby-foot Bonzini Professionnel', icon: '⚽', bonus: '+8% Moral & Cohésion', action: 'Lancer un tournoi de baby-foot', desc: 'Renforce les liens fraternels et détend les équipages entre deux sorties d’urgence.' },
+      tv_foyer: { title: 'Téléviseur Mural / Écran Foyer', icon: '📺', bonus: '+6% Détente & Veille', action: 'Suivre les alertes et reportages', desc: 'Idéal pour suivre l’évolution météo en direct et décompresser en soirée de garde.' },
+      console_jeux: { title: 'Console de Jeux & Coin Gaming', icon: '🎮', bonus: '+10% Moral & Recrutement Jeunes', action: 'Organiser une session gaming', desc: 'Attire les jeunes recrues et offre un sas de décompression convivial après les missions éprouvantes.' },
+      ping_pong: { title: 'Table de Ping-Pong Pliante', icon: '🏓', bonus: '+5% Énergie & Réflexes', action: 'Jouer un match amical', desc: 'Maintient la tonicité musculaire et la vivacité de réaction des secouristes.' },
+      distributeur_snacks: { title: 'Distributeur Boissons & En-cas', icon: '🥤', bonus: '+5% Énergie & Convivialité', action: 'Prendre une collation (-2 €)', desc: 'Des rafraîchissements et encas disponibles 24h/24 pour soutenir les équipages de garde.' }
+    };
+
+    const info = TITLES[item.type] || { title: item.label, icon: item.icon || '🎮', bonus: '+5% Moral', action: 'Interagir', desc: 'Mobilier de convivialité pour la caserne.' };
+
+    const oldModal = document.getElementById('furniture-fun-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-fun-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg bg-slate-900 border-2 border-indigo-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 font-black text-xl flex items-center justify-center">
+              ${info.icon}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${info.title}</h3>
+              <p class="text-xs text-indigo-300 font-semibold">${info.bonus}</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-fun-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+          ${info.desc}
+        </div>
+
+        <div class="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 flex items-center justify-between text-xs">
+          <span class="text-indigo-200 font-bold">Cohésion d’équipe active</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px]">En service ✓</span>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+          <button type="button" onclick="document.getElementById('furniture-fun-modal').remove()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer">
+            Fermer
+          </button>
+          <button type="button" onclick="window.ProtecLocaux.triggerEntertainmentAction('${furnitureId}', '${item.type}')" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white font-black text-xs transition shadow cursor-pointer active:scale-95 flex items-center justify-center gap-1.5">
+            <span>${info.icon}</span> <span>${info.action}</span>
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  triggerEntertainmentAction(furnitureId, type) {
+    const game = window.game;
+    if (!game) return;
+
+    const station = (game.stations || []).find(s => s.id === this.currentStationId) || game.stations[0];
+    const vols = (game.volunteers || []).filter(v => v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte');
+
+    if (type === 'babyfoot') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 6); });
+      game.showToast('🏆 Tournoi de Baby-foot !', 'Match acharné au foyer ! Rires et complicité au rendez-vous, +6 moral pour toute l’équipe !', 'green');
+    } else if (type === 'tv_foyer') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 4); v.energy = Math.min(100, (v.energy || 90) + 3); });
+      game.showToast('📺 Moment Détente Télé', 'Les bénévoles ont suivi les actualités et un reportage au chaud. Esprit apaisé !', 'blue');
+    } else if (type === 'console_jeux') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 8); });
+      game.showToast('🎮 Session Gaming au Foyer !', 'Partie endiablée en multijoueur ! Ambiance au top, +8 moral pour l’équipe !', 'green');
+    } else if (type === 'ping_pong') {
+      vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
+      game.showToast('🏓 Match de Ping-Pong', 'Échanges rapides et bonne humeur ! +5 énergie pour les équipages.', 'blue');
+    } else if (type === 'distributeur_snacks') {
+      if (game.resources && game.resources.money >= 2) {
+        game.resources.money -= 2;
+        vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
+        game.showToast('🥤 Collation Fraîche (-2 €)', 'Boisson et en-cas réconfortants ! +5 énergie pour les bénévoles.', 'green');
+      } else {
+        game.showToast('Caisse insuffisante', 'Pas assez de petite monnaie en caisse.', 'orange');
+      }
+    }
+
+    if (game.saveGame) game.saveGame();
+    if (game.updateStatsUI) game.updateStatsUI();
+
+    const modal = document.getElementById('furniture-fun-modal');
+    if (modal) modal.remove();
+  },
+
+  // 4. MODAL FONCTIONNALITÉS POUR AUTRES MEUBLES (BUREAU, MANNEQUIN, DAE, TABLEAU)
+  openFunctionalModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const oldModal = document.getElementById('furniture-func-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-func-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg bg-slate-900 border-2 border-sky-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 font-black text-xl flex items-center justify-center">
+              ${item.icon || '📋'}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Équipement'}</h3>
+              <p class="text-xs text-slate-400">Équipement opérationnel & pédagogique</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-func-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+          Cet équipement améliore directement les capacités de votre caserne :
+          ${item.type === 'mannequin_rcp' ? '<br>• <strong>+15% Qualité des formations</strong> PSC1 & SST<br>• Permet l’initiation aux gestes qui sauvent' : ''}
+          ${item.type === 'dae_mural' ? '<br>• <strong>+5% Sécurité d’urgence</strong> du centre de secours<br>• Conforme aux normes ERP' : ''}
+          ${item.type === 'tableau_blanc' ? '<br>• <strong>+10% Clarté pédagogique</strong> pour les cours' : ''}
+          ${item.type === 'bureau' ? '<br>• Poste de commandement administratif et planification opérationnelle' : ''}
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex justify-end">
+          <button type="button" onclick="document.getElementById('furniture-func-modal').remove()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition cursor-pointer">
+            Compris
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
   },
 
   // =========================================================================
@@ -5525,7 +6213,7 @@ window.ProtecLocaux = {
       if (item.type === 'mannequin_rcp') {
         ctx.fillStyle = '#fed7aa';
         ctx.beginPath();
-        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
+        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.22, 0, Math.PI * 2);
         ctx.fill();
       } else if (item.type === 'dae_mural') {
         ctx.fillStyle = '#ffffff';
@@ -5542,9 +6230,68 @@ window.ProtecLocaux = {
         ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33);
         ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66);
         ctx.stroke();
+
+        // Affichage des caisses et lots rangés sur l'étagère
+        const storedEntries = Object.entries(item.storedInventory || {}).filter(([_, c]) => c > 0);
+        if (storedEntries.length > 0) {
+          const colors = ['#ea580c', '#0284c7', '#16a34a', '#eab308', '#dc2626'];
+          let boxIdx = 0;
+          const numCols = Math.min(4, Math.max(2, Math.floor(iw / 8)));
+          for (const [sId, sCount] of storedEntries) {
+            for (let c = 0; c < Math.min(sCount, 3); c++) {
+              const bx = ix + 2 + (boxIdx % numCols) * (iw / numCols);
+              const by = iy + 2 + Math.floor(boxIdx / numCols) * 5;
+              if (by + 4 < iy + ih) {
+                ctx.fillStyle = colors[boxIdx % colors.length];
+                ctx.fillRect(bx, by, (iw / numCols) - 2, 4);
+              }
+              boxIdx++;
+            }
+          }
+        }
+      } else if (item.type === 'babyfoot') {
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih - 4);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66); ctx.stroke();
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.33 - 1.5, 3, 3);
+        ctx.fillStyle = '#3b82f6'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.66 - 1.5, 3, 3);
+      } else if (item.type === 'tv_foyer') {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+      } else if (item.type === 'console_jeux') {
+        ctx.fillStyle = '#312e81';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        ctx.fillStyle = '#a5b4fc';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.3, iw * 0.4, ih * 0.4);
+      } else if (item.type === 'ping_pong') {
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih / 2); ctx.lineTo(ix + iw, iy + ih / 2); ctx.stroke();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ix + iw / 2, iy); ctx.lineTo(ix + iw / 2, iy + ih); ctx.stroke();
+      } else if (item.type === 'distributeur_snacks') {
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih * 0.5);
       } else if (item.type === 'lit_garde') {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
+      } else if (item.type === 'casiers_vestiaire') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ix + iw * 0.33, iy); ctx.lineTo(ix + iw * 0.33, iy + ih);
+        ctx.moveTo(ix + iw * 0.66, iy); ctx.lineTo(ix + iw * 0.66, iy + ih);
+        ctx.stroke();
       }
 
       // Si le meuble est sélectionné ou survolé

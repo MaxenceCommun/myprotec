@@ -110,12 +110,17 @@ window.ProtecOnboarding = {
     { id: 'tableau_blanc', type: 'tableau_blanc', name: 'Tableau Blanc Mural', cost: 120, icon: '📋', defaultRoom: 'room_2', desc: 'Support visuel pour les cours de secourisme', w: 2.2, d: 0.2, color: '#f8fafc', bonus: '+10% qualité formation' },
     { id: 'mannequin_rcp', type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cost: 320, icon: '🫀', defaultRoom: 'room_2', desc: 'Indispensable pour l’apprentissage du massage cardiaque', w: 0.6, d: 1.2, color: '#f59e0b', bonus: '+15% qualité formation' },
     { id: 'dae_mural', type: 'dae_mural', name: 'Défibrillateur DAE Mural', cost: 450, icon: '⚡', defaultRoom: 'room_1', desc: 'Sécurité d’urgence et démonstration pratique', w: 0.35, d: 0.35, color: '#10b981', bonus: '+5% qualité & sécurité' },
-    { id: 'armoire_pharmacie', type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cost: 190, icon: '🩹', defaultRoom: 'room_3', desc: 'Stockage sécurisé des pansements et compresses', w: 1.2, d: 0.4, color: '#dc2626', bonus: '+20 capacité consommables' },
-    { id: 'etagere_lots', type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cost: 150, icon: '📦', defaultRoom: 'room_3', desc: 'Stockage robuste pour caisses PS et tentes', w: 0.6, d: 2.4, color: '#475569', bonus: '+35 capacité lots A/B' },
-    { id: 'casiers_vestiaire', type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cost: 180, icon: '🦺', defaultRoom: 'room_1', desc: 'Rangement des paquetages d’intervention', w: 0.6, d: 2.5, color: '#0f172a', bonus: '+25 capacité tenues & +2 moral' },
+    { id: 'armoire_pharmacie', type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cost: 190, icon: '🩹', defaultRoom: 'room_3', desc: 'Stockage sécurisé des pansements et compresses', w: 1.2, d: 0.4, color: '#dc2626', bonus: '+20 capacité consommables', maxWeightKg: 80 },
+    { id: 'etagere_lots', type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cost: 150, icon: '📦', defaultRoom: 'room_3', desc: 'Stockage robuste pour caisses PS et tentes', w: 0.6, d: 2.4, color: '#475569', bonus: '+35 capacité lots A/B', maxWeightKg: 300 },
+    { id: 'casiers_vestiaire', type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cost: 180, icon: '🦺', defaultRoom: 'room_1', desc: 'Rangement des paquetages d’intervention', w: 0.6, d: 2.5, color: '#0f172a', bonus: '+25 capacité tenues & +2 moral', maxWeightKg: 150 },
     { id: 'canape_detente', type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cost: 280, icon: '🛋️', defaultRoom: 'room_1', desc: 'Convivialité et récupération des secouristes', w: 2.0, d: 0.9, color: '#059669', bonus: '+10% régénération énergie & +5 moral' },
     { id: 'machine_cafe', type: 'machine_cafe', name: 'Machine à Café & Pause', cost: 85, icon: '☕', defaultRoom: 'room_1', desc: 'Point de pause convivial pour les équipes', w: 0.8, d: 0.6, color: '#d97706', bonus: '+5% régénération énergie & +3 moral' },
-    { id: 'lit_garde', type: 'lit_garde', name: 'Lit de Camp / Astreinte', cost: 220, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde pour les permanences SAMU', w: 1.0, d: 2.0, color: '#a855f7', bonus: '+1 lit d’astreinte & +10% énergie' }
+    { id: 'lit_garde', type: 'lit_garde', name: 'Lit de Camp / Astreinte', cost: 220, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde pour les permanences SAMU', w: 1.0, d: 2.0, color: '#a855f7', bonus: '+1 lit d’astreinte & +10% énergie' },
+    { id: 'babyfoot', type: 'babyfoot', name: 'Baby-foot de Foyer (Bonzini)', cost: 450, icon: '⚽', defaultRoom: 'room_1', desc: 'Le classique Bonzini de l’antenne pour la cohésion et le moral', w: 1.5, d: 1.0, color: '#16a34a', bonus: '+15 Moral & Décompression' },
+    { id: 'tv_foyer', type: 'tv_foyer', name: 'Écran TV & Débriefing', cost: 350, icon: '📺', defaultRoom: 'room_1', desc: 'Télévision murale pour les veilles météo, infos et séries en astreinte', w: 1.4, d: 0.25, color: '#0f172a', bonus: '+10 Moral & +8% repos astreinte' },
+    { id: 'console_jeux', type: 'console_jeux', name: 'Console de Jeux Vidéo', cost: 390, icon: '🎮', defaultRoom: 'room_1', desc: 'Tournois de jeux vidéo entre secouristes avant le départ en garde', w: 0.8, d: 0.5, color: '#4338ca', bonus: '+12 Moral & Réduit le stress' },
+    { id: 'ping_pong', type: 'ping_pong', name: 'Table de Tennis de Table', cost: 290, icon: '🏓', defaultRoom: 'room_1', desc: 'Parties dynamiques entre les interventions pour garder la forme', w: 2.7, d: 1.5, color: '#0284c7', bonus: '+8% Énergie & +10 Moral' },
+    { id: 'distributeur_snacks', type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cost: 520, icon: '🥤', defaultRoom: 'room_1', desc: 'En-cas et ravitaillement rapide 24h/24 pour les équipages', w: 0.9, d: 0.8, color: '#dc2626', bonus: '+15% Vitesse de régénération' }
   ],
 
   // 4. Affiliation FNPC
@@ -1727,26 +1732,56 @@ window.ProtecOnboarding = {
               </p>
             ` : `
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                ${activeRoomFurniture.map(f => `
-                  <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="text-lg flex-shrink-0">${f.icon}</span>
-                      <span class="font-bold text-white truncate">${f.name}</span>
+                ${activeRoomFurniture.map(f => {
+                  const itype = f.type || f.typeId;
+                  const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
+                  const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
+                  const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde'].includes(itype);
+                  const maxW = f.maxWeightKg || (itype === 'etagere_lots' ? 300 : itype === 'armoire_pharmacie' ? 80 : itype === 'casiers_vestiaire' ? 150 : 0);
+
+                  return `
+                  <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex flex-col gap-1.5 text-xs">
+                    <div class="flex items-center justify-between gap-2 min-w-0">
+                      <div class="flex items-center gap-2 min-w-0">
+                        <span class="text-lg flex-shrink-0">${f.icon}</span>
+                        <div class="min-w-0">
+                          <span class="font-bold text-white truncate block">${f.name}</span>
+                          ${maxW > 0 ? `<span class="text-[9.5px] font-mono text-amber-400 font-semibold">Capacité : ${maxW} kg</span>` : ''}
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-1 flex-shrink-0">
+                        <select onchange="window.ProtecOnboarding.moveFurniture('${f.id}', this.value)" class="text-[10px] py-0.5 px-1 rounded-lg bg-slate-900 border border-slate-600 text-slate-300 font-semibold cursor-pointer" title="Déplacer vers une autre salle">
+                          <option value="room_1" ${f.room === 'room_1' ? 'selected' : ''}>Salle 1</option>
+                          <option value="room_2" ${f.room === 'room_2' ? 'selected' : ''}>Salle 2</option>
+                          <option value="room_3" ${f.room === 'room_3' ? 'selected' : ''}>Salle 3</option>
+                        </select>
+                        <button type="button" onclick="window.ProtecOnboarding.removeFurniture('${f.id}')" class="px-1.5 py-0.5 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 text-[10px] font-bold border border-rose-700/50 transition cursor-pointer" title="Retirer et rembourser">
+                          ✕
+                        </button>
+                      </div>
                     </div>
-                    <div class="flex items-center gap-1.5 flex-shrink-0">
-                      <!-- Déplacer vers une autre salle -->
-                      <select onchange="window.ProtecOnboarding.moveFurniture('${f.id}', this.value)" class="text-[10px] py-1 px-1.5 rounded-lg bg-slate-900 border border-slate-600 text-slate-300 font-semibold cursor-pointer" title="Déplacer vers une autre salle">
-                        <option value="room_1" ${f.room === 'room_1' ? 'selected' : ''}>Salle 1</option>
-                        <option value="room_2" ${f.room === 'room_2' ? 'selected' : ''}>Salle 2</option>
-                        <option value="room_3" ${f.room === 'room_3' ? 'selected' : ''}>Salle 3</option>
-                      </select>
-                      <!-- Retirer -->
-                      <button type="button" onclick="window.ProtecOnboarding.removeFurniture('${f.id}')" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 text-[10px] font-bold border border-rose-700/50 transition cursor-pointer" title="Retirer et rembourser">
-                        ✕ Retirer
-                      </button>
+
+                    <!-- Bouton d'action et aperçu de la fonction -->
+                    <div class="flex items-center justify-between pt-1 border-t border-slate-700/60">
+                      ${isStorage ? `
+                        <button type="button" onclick="window.ProtecOnboarding.inspectFurniture('${f.id}')" class="w-full py-1 px-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
+                          <span>📦</span> <span>Gestion Stock (${maxW}kg max)</span>
+                        </button>
+                      ` : isFun ? `
+                        <button type="button" onclick="window.ProtecOnboarding.inspectFurniture('${f.id}')" class="w-full py-1 px-2 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
+                          <span>🎮</span> <span>Activité Foyer & Détente</span>
+                        </button>
+                      ` : isComfort ? `
+                        <button type="button" onclick="window.ProtecOnboarding.inspectFurniture('${f.id}')" class="w-full py-1 px-2 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
+                          <span>🛋️</span> <span>Espace Confort & Repos</span>
+                        </button>
+                      ` : `
+                        <span class="text-[9.5px] text-slate-400 italic">Équipement opérationnel actif</span>
+                      `}
                     </div>
                   </div>
-                `).join('')}
+                `;
+                }).join('')}
               </div>
             `}
           </div>
@@ -1814,6 +1849,121 @@ window.ProtecOnboarding = {
     `;
   },
 
+  // Inspection fonctionnelle d'un meuble dans le tutoriel (Stockage, Confort, Divertissement)
+  inspectFurniture(furnId) {
+    const f = this.placedFurniture.find(x => x.id === furnId);
+    if (!f) return;
+
+    const itype = f.type || f.typeId;
+    const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
+    const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
+    const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde'].includes(itype);
+
+    if (isStorage) {
+      const maxW = f.maxWeightKg || (itype === 'etagere_lots' ? 300 : itype === 'armoire_pharmacie' ? 80 : 150);
+      let allowedItems = [];
+      if (itype === 'etagere_lots') {
+        allowedItems = [
+          '• Lot A - Tente & Éclairage (45 kg)',
+          '• Lot B - Matériel PS / Brancards (15 kg)',
+          '• Kit CHU - Lits picots d\'hébergement (60 kg)',
+          '• Lot Tronçonnage (30 kg) & Pompage (40 kg)'
+        ];
+      } else if (itype === 'armoire_pharmacie') {
+        allowedItems = [
+          '• Caisses de Réassort / Réarmement VPSP (10 kg)',
+          '• Lot CAI - Soutien psychologique (20 kg)',
+          '• Pansements, DAE de réserve & consommables'
+        ];
+      } else {
+        allowedItems = [
+          '• Tenues d\'intervention F1 Protection Civile (3 kg/tenue)',
+          '• Paquetages d\'astreinte & Rangers'
+        ];
+      }
+
+      if (window.ProtecDialog) {
+        window.ProtecDialog.alert(
+          `<div class="space-y-3 text-left">
+            <div class="flex items-center gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+              <span class="text-3xl">${f.icon}</span>
+              <div>
+                <h4 class="font-black text-sm text-amber-400">${f.name}</h4>
+                <p class="text-xs text-slate-300">Capacité utile maximale : <strong class="text-white font-mono">${maxW} kg</strong></p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Tout comme les véhicules logistiques (LOG), vos meubles de rangement disposent d'une jauge de poids dédiée pour stocker le matériel de l'antenne :
+            </p>
+            <div class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-700 text-xs font-mono text-slate-300 space-y-1">
+              ${allowedItems.join('<br>')}
+            </div>
+            <p class="text-[11px] text-amber-300/80 italic">
+              💡 Une fois votre antenne créée, vous pourrez déposer et retirer vos lots et tenues en direct sur ce meuble !
+            </p>
+          </div>`,
+          "📦 Fonction de Stockage & Logistique"
+        );
+      }
+    } else if (isFun) {
+      const funActions = {
+        babyfoot: "Partie de Bonzini acharnée entre bénévoles ! Décompression assurée et cohésion d'équipe.",
+        tv_foyer: "Veille météo et visionnage des débriefings sur grand écran.",
+        console_jeux: "Tournoi Mario Kart endiablé avant le déclenchement de la garde SAMU.",
+        ping_pong: "Échanges rythmés pour maintenir les réflexes et la condition physique.",
+        distributeur_snacks: "Boissons fraîches et barres de céréales disponibles 24h/24 pour les équipages."
+      };
+
+      if (window.ProtecDialog) {
+        window.ProtecDialog.alert(
+          `<div class="space-y-3 text-left">
+            <div class="flex items-center gap-3 p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30">
+              <span class="text-3xl">${f.icon}</span>
+              <div>
+                <h4 class="font-black text-sm text-indigo-400">${f.name}</h4>
+                <p class="text-xs text-slate-300">Animation du Foyer & Espace de Vie</p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              ${funActions[itype] || "Équipement de divertissement pour le foyer de l'antenne."}
+            </p>
+            <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs space-y-1 text-slate-300">
+              <div class="font-bold text-white flex items-center gap-1.5"><span>⚡</span> Impact sur l'antenne :</div>
+              <div>• Boost permanent de la régénération d'énergie au Foyer</div>
+              <div>• Amélioration durable du moral et de la motivation des bénévoles</div>
+              <div>• Réduction du stress post-intervention après les missions difficiles</div>
+            </div>
+          </div>`,
+          "🎮 Espace Divertissement & Foyer"
+        );
+      }
+    } else if (isComfort) {
+      if (window.ProtecDialog) {
+        window.ProtecDialog.alert(
+          `<div class="space-y-3 text-left">
+            <div class="flex items-center gap-3 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+              <span class="text-3xl">${f.icon}</span>
+              <div>
+                <h4 class="font-black text-sm text-emerald-400">${f.name}</h4>
+                <p class="text-xs text-slate-300">Espace Détente & Récupération des Gardes</p>
+              </div>
+            </div>
+            <p class="text-xs text-slate-300 leading-relaxed">
+              Le Foyer est le cœur battant de la caserne. C'est ici que les secouristes se rassemblent en attente de départ lors des gardes SAMU ou SDIS.
+            </p>
+            <div class="p-3 rounded-xl bg-slate-900 border border-slate-700 text-xs space-y-1 text-slate-300">
+              <div class="font-bold text-white flex items-center gap-1.5"><span>☕</span> Avantages opérationnels :</div>
+              <div>• Récupération d'énergie accélérée pour tout le personnel présent</div>
+              <div>• Confort d'astreinte optimal pour les équipages de nuit</div>
+              <div>• Cohésion d'antenne renforcée</div>
+            </div>
+          </div>`,
+          "🛋️ Confort & Récupération"
+        );
+      }
+    }
+  },
+
   selectRoom(roomId) {
     this.selectedRoomId = roomId;
     this.saveProgress();
@@ -1873,7 +2023,9 @@ window.ProtecOnboarding = {
       y: posY,
       w: item.w || 1.2,
       d: item.d || 0.8,
-      color: item.color || '#475569'
+      color: item.color || '#475569',
+      maxWeightKg: item.maxWeightKg || (['etagere_lots'].includes(item.id) ? 300 : ['armoire_pharmacie'].includes(item.id) ? 80 : ['casiers_vestiaire'].includes(item.id) ? 150 : 0),
+      storedInventory: {}
     });
 
     this.saveProgress();
@@ -2429,6 +2581,39 @@ window.ProtecOnboarding = {
       } else if (itype === 'machine_cafe') {
         ctx.fillStyle = '#fef08a';
         ctx.fillRect(ix + iw * 0.35, iy + ih * 0.35, iw * 0.3, ih * 0.3);
+      } else if (itype === 'babyfoot') {
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih - 4);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66); ctx.stroke();
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.33 - 1.5, 3, 3);
+        ctx.fillStyle = '#3b82f6'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.66 - 1.5, 3, 3);
+      } else if (itype === 'tv_foyer') {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.45)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+      } else if (itype === 'console_jeux') {
+        ctx.fillStyle = '#312e81';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        ctx.fillStyle = '#a5b4fc';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.3, iw * 0.4, ih * 0.4);
+      } else if (itype === 'ping_pong') {
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih / 2); ctx.lineTo(ix + iw, iy + ih / 2); ctx.stroke();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ix + iw / 2, iy); ctx.lineTo(ix + iw / 2, iy + ih); ctx.stroke();
+      } else if (itype === 'distributeur_snacks') {
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih * 0.5);
       }
 
       if (item.icon && iw > 18 && ih > 18) {
@@ -2750,16 +2935,20 @@ window.ProtecOnboarding = {
             : null;
           let rx = f.x || (f.room === 'room_2' ? 11.5 : (f.room === 'room_3' ? 9.0 : 7.0));
           let ry = f.y || (f.room === 'room_3' ? 7.0 : 2.5);
+          const itemType = f.type || f.typeId;
+          const maxWeight = f.maxWeightKg || (catItem ? catItem.maxWeightKg : 0) || (itemType === 'etagere_lots' ? 300 : itemType === 'armoire_pharmacie' ? 80 : itemType === 'casiers_vestiaire' ? 150 : 0);
           return {
             id: f.id,
-            type: f.type || f.typeId,
+            type: itemType,
             label: f.name,
             x: rx,
             y: ry,
             w: f.w || (catItem ? catItem.w : 1.2),
             d: f.d || (catItem ? catItem.d : 0.8),
             color: f.color || (catItem ? catItem.color : '#475569'),
-            roomId: f.room
+            roomId: f.room,
+            maxWeightKg: maxWeight,
+            storedInventory: f.storedInventory || {}
           };
         });
       }
