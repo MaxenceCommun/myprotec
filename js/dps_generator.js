@@ -301,6 +301,178 @@
         name: `Terrain d’Enduro de ${commune}`,
         venue: `Circuit Tout-Terrain de ${commune}`
       })
+    },
+    {
+      id: 'centre_commercial',
+      titleTemplate: 'Braderie & Salon Commercial au {venue}',
+      poiCategory: 'centres_commerciaux',
+      osmQuery: '(node["shop"~"mall|department_store|supermarket"](around:{radius},{lat},{lng});way["shop"~"mall|department_store|supermarket"](around:{radius},{lat},{lng}););',
+      radiusKm: 20,
+      clientTemplate: 'Association des Commerçants de {commune}',
+      clientType: 'professionnel',
+      category: 'commercial',
+      dur: 6,
+      pubMin: 2000,
+      pubMax: 7000,
+      scale: 'DPS-PE (4 secouristes + VPSP)',
+      reqV: 4,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP'],
+      consumableCost: 35,
+      environment: 'ferme',
+      riskLevel: 'faible',
+      defaultFallback: (commune) => ({
+        name: `Centre Commercial de ${commune}`,
+        venue: `Centre Commercial de ${commune}`
+      })
+    },
+    {
+      id: 'regate_nautique',
+      titleTemplate: 'Régate Nautique & Compétition Fluviale - {venue}',
+      poiCategory: 'plans_eau',
+      osmQuery: '(node["natural"="water"](around:{radius},{lat},{lng});way["natural"="water"](around:{radius},{lat},{lng});way["waterway"="riverbank"](around:{radius},{lat},{lng}););',
+      radiusKm: 30,
+      clientTemplate: 'Club Nautique & Aviron de {commune}',
+      clientType: 'club_sportif',
+      category: 'sport',
+      specialite: 'nautique',
+      dur: 6,
+      pubMin: 800,
+      pubMax: 3000,
+      scale: 'DPS-PE (4 secouristes + Embarcation ERS)',
+      reqV: 4,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['ERS'],
+      requiredSkills: ['permis_bateau'],
+      consumableCost: 45,
+      environment: 'ouvert_nature',
+      riskLevel: 'moyen',
+      defaultFallback: (commune) => ({
+        name: `Plan d’Eau Municipal de ${commune}`,
+        venue: `Berges du Plan d’Eau de ${commune}`
+      })
+    },
+    {
+      id: 'poste_plage',
+      titleTemplate: 'Surveillance Estivale & Poste de Secours à la {venue}',
+      poiCategory: 'plages',
+      osmQuery: '(node["natural"="beach"](around:{radius},{lat},{lng});way["natural"="beach"](around:{radius},{lat},{lng});node["leisure"="beach_resort"](around:{radius},{lat},{lng});way["leisure"="beach_resort"](around:{radius},{lat},{lng}););',
+      radiusKm: 35,
+      clientTemplate: 'Service des Sports & Littoral de {commune}',
+      clientType: 'collectivite',
+      category: 'sport',
+      specialite: 'nautique',
+      dur: 7,
+      pubMin: 1200,
+      pubMax: 5000,
+      scale: 'DPS-PE (4 secouristes + VPSP)',
+      reqV: 4,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP'],
+      consumableCost: 40,
+      environment: 'ouvert_nature',
+      riskLevel: 'moyen',
+      defaultFallback: (commune) => ({
+        name: `Plage Aménagée de ${commune}`,
+        venue: `Poste de Secours Plage de ${commune}`
+      })
+    },
+    {
+      id: 'commemoration_patrimoine',
+      titleTemplate: 'Cérémonie & Défilé Commémoratif au {venue}',
+      poiCategory: 'monuments',
+      osmQuery: '(node["historic"~"monument|memorial|castle|ruins"](around:{radius},{lat},{lng});way["historic"~"monument|memorial|castle|ruins"](around:{radius},{lat},{lng});node["tourism"~"attraction|museum"](around:{radius},{lat},{lng});way["tourism"~"attraction|museum"](around:{radius},{lat},{lng}););',
+      radiusKm: 25,
+      clientTemplate: 'Comité du Souvenir & Mairie de {commune}',
+      clientType: 'collectivite',
+      category: 'culturel',
+      dur: 4,
+      pubMin: 600,
+      pubMax: 2500,
+      scale: 'PAPS (3 secouristes)',
+      reqV: 3,
+      ranks: ['PSE2', 'PSE1'],
+      reqVeh: [],
+      consumableCost: 20,
+      environment: 'ouvert_urbain',
+      riskLevel: 'faible',
+      defaultFallback: (commune) => ({
+        name: `Monument aux Morts de ${commune}`,
+        venue: `Esplanade du Monument de ${commune}`
+      })
+    },
+    {
+      id: 'meeting_aerien',
+      titleTemplate: 'Meeting Aérien & Salon Aéronautique à l’{venue}',
+      poiCategory: 'aeroports',
+      osmQuery: '(node["aeroway"~"aerodrome|terminal|helipad"](around:{radius},{lat},{lng});way["aeroway"~"aerodrome|terminal|helipad"](around:{radius},{lat},{lng}););',
+      radiusKm: 35,
+      clientTemplate: 'Aéro-Club & Comité de l’Air de {commune}',
+      clientType: 'association',
+      category: 'culturel',
+      dur: 7,
+      pubMin: 3000,
+      pubMax: 10000,
+      scale: 'DPS-ME (8 secouristes + 2 VPSP + VTU)',
+      reqV: 8,
+      ranks: ['CD', 'CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP', 'VTU'],
+      consumableCost: 70,
+      environment: 'ouvert_urbain',
+      riskLevel: 'eleve',
+      medicalTeamRequired: true,
+      defaultFallback: (commune) => ({
+        name: `Aérodrome de ${commune}`,
+        venue: `Aérodrome Régional de ${commune}`
+      })
+    },
+    {
+      id: 'portes_ouvertes_pompiers',
+      titleTemplate: 'Portes Ouvertes & Manœuvres Conjointes au {venue}',
+      poiCategory: 'casernes',
+      osmQuery: '(node["amenity"="fire_station"](around:{radius},{lat},{lng});way["amenity"="fire_station"](around:{radius},{lat},{lng}););',
+      radiusKm: 25,
+      clientTemplate: 'Amicale des Sapeurs-Pompiers de {commune}',
+      clientType: 'association',
+      category: 'culturel',
+      dur: 5,
+      pubMin: 800,
+      pubMax: 2500,
+      scale: 'PAPS (3 secouristes)',
+      reqV: 3,
+      ranks: ['PSE2', 'PSE1'],
+      reqVeh: [],
+      consumableCost: 20,
+      environment: 'ouvert_urbain',
+      riskLevel: 'faible',
+      defaultFallback: (commune) => ({
+        name: `Centre de Secours de ${commune}`,
+        venue: `Caserne des Pompiers de ${commune}`
+      })
+    },
+    {
+      id: 'chasse_croise_autoroute',
+      titleTemplate: 'Opération Halte Sécurité Routière & Chassé-Croisé - {venue}',
+      poiCategory: 'autoroutes',
+      osmQuery: '(node["highway"="motorway_junction"](around:{radius},{lat},{lng});way["highway"="motorway"](around:{radius},{lat},{lng});node["highway"="toll_gantry"](around:{radius},{lat},{lng}););',
+      radiusKm: 30,
+      clientTemplate: 'Société Concessionnaire d’Autoroutes',
+      clientType: 'professionnel',
+      category: 'transport',
+      dur: 6,
+      pubMin: 1500,
+      pubMax: 6000,
+      scale: 'DPS-PE (4 secouristes + VPSP + VTU)',
+      reqV: 4,
+      ranks: ['CE', 'PSE2', 'PSE1'],
+      reqVeh: ['VPSP', 'VTU'],
+      consumableCost: 40,
+      environment: 'ouvert_urbain',
+      riskLevel: 'moyen',
+      defaultFallback: (commune) => ({
+        name: `Aire d’Autoroute de ${commune}`,
+        venue: `Échangeur Autoroutier de ${commune}`
+      })
     }
   ];
 
@@ -492,15 +664,23 @@
     }
 
     // 3. Recherche ciblée du lieu sur OpenStreetMap autour de la commune du département
-    const radiusMeters = Math.min(15000, (template.radiusKm || 15) * 1000);
-    const location = await fetchLocationForDPS(
-      targetCommune.lat,
-      targetCommune.lng,
-      radiusMeters,
-      template.osmQuery,
-      template.defaultFallback,
-      commune
-    );
+    const radiusMeters = Math.min(25000, (template.radiusKm || 20) * 1000);
+    let location = null;
+    if (template.poiCategory && window.ProtecOSMPOISystem && typeof window.ProtecOSMPOISystem.fetchPOI === 'function') {
+      try {
+        location = await window.ProtecOSMPOISystem.fetchPOI(template.poiCategory, targetCommune.lat, targetCommune.lng, radiusMeters, commune);
+      } catch (e) {}
+    }
+    if (!location) {
+      location = await fetchLocationForDPS(
+        targetCommune.lat,
+        targetCommune.lng,
+        radiusMeters,
+        template.osmQuery,
+        template.defaultFallback,
+        commune
+      );
+    }
 
     // 3. Remplacement et assemblage du titre
     let venueClean = location.venue || location.name || `Site de ${commune}`;
@@ -586,7 +766,9 @@
       urgencyReason: isLastMinute ? 'Annulation de dernière minute d’une autre association agréée' : 'Planification anticipée d’événement',
       secondsLeft: isLastMinute ? (3 * 3600) : (6 * 3600),
       isSector: false,
-      templateId: template.id
+      templateId: template.id,
+      specialite: template.specialite || null,
+      requiredSkills: template.requiredSkills || []
     };
 
     // Calculs financiers (barème FNPC officiel)

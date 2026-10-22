@@ -1763,6 +1763,11 @@ class ProtecGame {
     this.updateDockAndFiltersVisibility();
     this.startSimulationClock();
 
+    // Préchauffage du cache POI Overpass OpenStreetMap (gares, hôpitaux, centres commerciaux, stades...)
+    if (window.ProtecOSMPOISystem && this.stations && this.stations[0]) {
+      window.ProtecOSMPOISystem.warmupCacheAroundStation(this.stations[0].lat, this.stations[0].lng, this.stations[0].city);
+    }
+
     // Raccordement au backend dédié temps réel OVH (Node.js / Express / Socket.io)
     if (window.ProtecAPI && typeof window.ProtecAPI.init === 'function') {
       window.ProtecAPI.init(this);
@@ -4975,6 +4980,17 @@ class ProtecGame {
         item.address = `${item.venue}, ${item.commune || currentCity}`;
       }
       return;
+    }
+
+    // Enrichissement contextuel automatique via les POI réels OpenStreetMap (Overpass Turbo)
+    if (window.ProtecOSMPOISystem && !item.isOsmRealLocation && !isMaraude) {
+      const baseStation = (this.stations || []).find(s => s.id === item.stationId) || this.stations[0];
+      window.ProtecOSMPOISystem.enrichMissionWithRealPOI(item, baseStation).then(poi => {
+        if (poi && poi.isOsmReal) {
+          if (typeof this.renderMissions === 'function') this.renderMissions();
+          if (typeof this.updateStatsUI === 'function') this.updateStatsUI();
+        }
+      }).catch(() => {});
     }
 
     if (isMaraude) {
