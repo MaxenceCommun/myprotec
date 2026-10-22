@@ -160,6 +160,9 @@ window.ProtecEcussons = {
               nom = 'Écusson Chat Blanc';
               img = 'images/ecusson_chat_blanc.png';
             }
+            if (!this.isValidBadgeImage(img)) {
+              img = 'images/badges/ecusson_inconnu.png';
+            }
             return {
               ...fb,
               ...item,
@@ -347,11 +350,11 @@ window.ProtecEcussons = {
   renderBadgeIconSvg(badge, size = 48, isOwned = true) {
     const unknownImg = 'images/badges/ecusson_inconnu.png';
 
-    // 1. Si l'écusson n'est pas encore découvert
+    // 1. Si l'écusson n'est pas encore découvert par le joueur
     if (isOwned === false) {
       const h = Math.round(size * 1.28);
       return `
-        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none opacity-85 hover:opacity-100" style="width: ${size}px; height: ${h}px;" title="Écusson non découvert">
+        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;" title="Écusson non découvert">
           <img src="${unknownImg}" alt="Écusson non découvert" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" />
         </div>
       `;
@@ -384,12 +387,12 @@ window.ProtecEcussons = {
       } else if (badge.code === 'badge_chat_blanc' || (badge.nom && badge.nom.toLowerCase().includes('chat blanc'))) {
         imgSrc = 'images/ecusson_chat_blanc.png';
       } else {
-        // Écusson non créé : image mystère par défaut
         imgSrc = unknownImg;
       }
     }
 
-    if (!imgSrc) {
+    // Si le fichier image n'est pas valide ou n'existe pas en vrai -> ecusson_inconnu.png
+    if (!this.isValidBadgeImage(imgSrc)) {
       imgSrc = unknownImg;
     }
 
@@ -520,9 +523,9 @@ window.ProtecEcussons = {
                 const hasDuplicate = qty > 1;
 
                 return `
-                  <div onclick="window.ProtecEcussons.openBadgeDetailsModal('${badge.code}')" class="relative group cursor-pointer flex flex-col items-center p-2 rounded-2xl transition transform hover:-translate-y-1 hover:scale-105 select-none ${isOwned ? '' : 'opacity-40 filter grayscale hover:opacity-60'}">
+                  <div onclick="window.ProtecEcussons.openBadgeDetailsModal('${badge.code}')" class="relative group cursor-pointer flex flex-col items-center p-2 rounded-2xl transition transform hover:-translate-y-1 hover:scale-105 select-none">
                     <!-- Punaise au sommet de l'écusson -->
-                    <div class="w-2.5 h-2.5 rounded-full bg-amber-200 border border-amber-800 shadow-sm -mb-1.5 z-10"></div>
+                    <div class="w-2.5 h-2.5 rounded-full ${isOwned ? 'bg-amber-200 border-amber-800' : 'bg-slate-300 border-slate-600'} shadow-sm -mb-1.5 z-10"></div>
                     
                     <!-- Visuel brodé du patch -->
                     <div class="relative p-1">
