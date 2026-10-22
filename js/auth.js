@@ -1378,7 +1378,7 @@ window.ProtecAuth = {
                 <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo Joueur</label>
                 <div class="relative">
                   <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Max_Lunéville" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
               </div>
 
