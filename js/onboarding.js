@@ -2464,6 +2464,37 @@ window.ProtecOnboarding = {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
         ctx.fillRect(sx, sy, sw, sd);
 
+        if (idx === 0) {
+          if (!this._vpspStarterTopImg) {
+            this._vpspStarterTopImg = new Image();
+            this._vpspStarterTopImg.onload = () => {
+              if (this.currentStep === 3) this.renderStep3Scene();
+            };
+            this._vpspStarterTopImg.src = 'images/vehicles/top/top_master3_vpsp.png';
+          }
+          if (this._vpspStarterTopImg.complete && this._vpspStarterTopImg.naturalWidth > 0) {
+            const isHorizontal = sw >= sd;
+            const localW = isHorizontal ? Math.min(sd * 0.76, 44 * dpr) : Math.min(sw * 0.76, 44 * dpr);
+            const localH = isHorizontal ? Math.min(sw * 0.85, 90 * dpr) : Math.min(sd * 0.85, 90 * dpr);
+            ctx.save();
+            ctx.translate(sx + sw / 2, sy + sd / 2);
+            if (isHorizontal) ctx.rotate(-Math.PI / 2);
+            // Ombre portée
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+            ctx.beginPath();
+            if (ctx.roundRect) ctx.roundRect(-localW / 2 + 3, -localH / 2 + 4, localW, localH, 5);
+            else ctx.rect(-localW / 2 + 3, -localH / 2 + 4, localW, localH);
+            ctx.fill();
+            // Dessin véhicule vue du dessus (VPSP de dotation)
+            const drawH = localH;
+            const imgScale = drawH / (this._vpspStarterTopImg.naturalHeight || 500);
+            const imgDrawW = (this._vpspStarterTopImg.naturalWidth || 500) * imgScale;
+            ctx.drawImage(this._vpspStarterTopImg, -imgDrawW / 2, -drawH / 2, imgDrawW, drawH);
+            ctx.restore();
+            return;
+          }
+        }
+
         ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         ctx.font = `bold ${Math.round(8.5 * dpr)}px "Plus Jakarta Sans", sans-serif`;
         ctx.textAlign = 'center';

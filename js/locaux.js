@@ -4420,6 +4420,25 @@ window.ProtecLocaux = {
       const model = this.getArchitectModel();
 
       if (button === 0) {
+        // 0. Détection de clic sur un véhicule garé dans la cour / hangar opérationnel
+        if (model.parking && model.parking.spots) {
+          const game = window.game;
+          const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+          const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
+
+          const clickedSpotIdx = model.parking.spots.findIndex(spot => {
+            return wx >= spot.x && wx <= spot.x + spot.w && wy >= spot.y && wy <= spot.y + spot.d;
+          });
+
+          if (clickedSpotIdx >= 0 && stVehs[clickedSpotIdx]) {
+            const clickedVeh = stVehs[clickedSpotIdx];
+            if (window.game && typeof window.game.openVehicleDetailsModal === 'function') {
+              window.game.openVehicleDetailsModal(clickedVeh.id);
+              return;
+            }
+          }
+        }
+
         // 1. Détection de clic sur un meuble (mode Les Sims)
         const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
           return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
@@ -4529,7 +4548,7 @@ window.ProtecLocaux = {
       if (model.parking && model.parking.spots) {
         const game = window.game;
         const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
-        const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
+        const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
 
         model.parking.spots.forEach((spot, idx) => {
           if (wx >= spot.x && wx <= spot.x + spot.w && wy >= spot.y && wy <= spot.y + spot.d) {
@@ -5617,32 +5636,97 @@ window.ProtecLocaux = {
 
   _vehicleTopDownImagesCache: {},
 
-  // Recherche et chargement asynchrone des images vue du dessus (avec cache mémoire)
+  // Recherche et chargement asynchrone des images vue du dessus (avec déduction automatique & cache)
   getVehicleTopDownImage(veh) {
     if (!veh) return null;
-    const key = veh.id || veh.type;
+    const key = veh.id || veh.variant || veh.image || veh.type;
     if (this._vehicleTopDownImagesCache[key] !== undefined) {
       return this._vehicleTopDownImagesCache[key]; // null si introuvable, ou HTMLImageElement chargé
     }
 
-    // Liste des chemins où le joueur peut déposer l'image du dessus
     const candidatePaths = [];
     if (veh.imageTopDown) candidatePaths.push(veh.imageTopDown);
     if (veh.topDownImage) candidatePaths.push(veh.topDownImage);
     if (veh.top_down_image) candidatePaths.push(veh.top_down_image);
 
-    const typeLower = (veh.type || '').toLowerCase();
-    candidatePaths.push(`images/vehicles/topdown/${veh.id}.png`);
-    candidatePaths.push(`images/vehicles/topdown/${typeLower}.png`);
-    candidatePaths.push(`images/vehicles/${typeLower}_topdown.png`);
-    candidatePaths.push(`images/vehicles/topdown_${typeLower}.png`);
-    candidatePaths.push(`images/vehicles/${typeLower}.png`);
+    // 1. Déduction directe depuis l'image du véhicule (ex: 'images/vehicles/master3_vpsp.png' -> 'master3_vpsp')
+    const rawImage = veh.image || '';
+    let baseFileName = '';
+    if (rawImage) {
+      const parts = rawImage.split('/');
+      baseFileName = parts[parts.length - 1].replace(/\.[^/.]+$/, '').toLowerCase();
+    }
+    const cleanName = baseFileName.replace(/^top_/, '');
 
-    this._vehicleTopDownImagesCache[key] = null; // Par défaut null
+    if (cleanName) {
+      candidatePaths.push(`images/vehicles/top/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/top/${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/topdown/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${cleanName}.png`);
+    }
+
+    // 2. Déduction à partir de la variante ou du modèle (ex: 'master3_vpsp', 'master3_vtu_log', 'master3')
+    const variant = (veh.variant || veh.variantId || '').toLowerCase().replace(/^top_/, '');
+    if (variant && variant !== cleanName) {
+      candidatePaths.push(`images/vehicles/top/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/top/${variant}.png`);
+      candidatePaths.push(`images/vehicles/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/topdown/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${variant}.png`);
+    }
+
+    const model = (veh.model || veh.modelId || '').toLowerCase().replace(/^top_/, '');
+    if (model && model !== cleanName && model !== variant) {
+      candidatePaths.push(`images/vehicles/top/top_${model}.png`);
+      candidatePaths.push(`images/vehicles/top/${model}.png`);
+      candidatePaths.push(`images/vehicles/top_${model}.png`);
+    }
+
+    // 3. Déduction à partir de l'identifiant du véhicule
+    if (veh.id) {
+      const cleanId = String(veh.id).toLowerCase().replace(/^top_/, '');
+      candidatePaths.push(`images/vehicles/top/top_${cleanId}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${cleanId}.png`);
+    }
+
+    // 4. Déduction à partir du type de véhicule (VPSP, VTU, VTP...)
+    const typeLower = (veh.type || '').toLowerCase().replace(/^top_/, '');
+    if (typeLower) {
+      candidatePaths.push(`images/vehicles/top/top_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/top/${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/top_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/${typeLower}_topdown.png`);
+      candidatePaths.push(`images/vehicles/topdown_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/${typeLower}.png`);
+
+      // Fallbacks intelligents officiels Protection Civile (Master 3)
+      if (typeLower === 'vpsp') {
+        candidatePaths.push(`images/vehicles/top/top_master3_vpsp.png`);
+        candidatePaths.push(`images/vehicles/top_master3_vpsp.png`);
+      } else if (typeLower === 'vtu') {
+        if (veh.capacity_log > 0 || (veh.name && veh.name.toLowerCase().includes('log'))) {
+          candidatePaths.push(`images/vehicles/top/top_master3_vtu_log.png`);
+          candidatePaths.push(`images/vehicles/top_master3_vtu_log.png`);
+        } else {
+          candidatePaths.push(`images/vehicles/top/top_master3_vtu_pop.png`);
+          candidatePaths.push(`images/vehicles/top_master3_vtu_pop.png`);
+        }
+      } else if (typeLower === 'vtp') {
+        candidatePaths.push(`images/vehicles/top/top_master3.png`);
+        candidatePaths.push(`images/vehicles/top_master3.png`);
+      }
+    }
+
+    // Déduplication ordonnée
+    const uniquePaths = [...new Set(candidatePaths.filter(Boolean))];
+
+    this._vehicleTopDownImagesCache[key] = null; // En cours de chargement
 
     const tryLoad = (idx) => {
-      if (idx >= candidatePaths.length) return;
-      const path = candidatePaths[idx];
+      if (idx >= uniquePaths.length) return;
+      const path = uniquePaths[idx];
       const img = new Image();
       img.onload = () => {
         this._vehicleTopDownImagesCache[key] = img;
@@ -5673,7 +5757,6 @@ window.ProtecLocaux = {
     ctx.rotate(rotationAngle);
 
     // Dimensions dans le repère local où le véhicule pointe vers le haut :
-    // localW = largeur du véhicule (côtés), localH = longueur du véhicule (du pare-chocs arrière au capot avant)
     const localW = isHorizontal ? Math.min(spotD * 0.76, 44) : Math.min(spotW * 0.76, 44);
     const localH = isHorizontal ? Math.min(spotW * 0.85, 90) : Math.min(spotD * 0.85, 90);
 
@@ -5686,8 +5769,12 @@ window.ProtecLocaux = {
       else ctx.rect(-localW / 2 + 3, -localH / 2 + 4, localW, localH);
       ctx.fill();
 
-      // Dessin de l'image vue du dessus fournie par le joueur
-      ctx.drawImage(img, -localW / 2, -localH / 2, localW, localH);
+      // Dessin de l'image vue du dessus avec respect parfait du ratio d'aspect
+      const drawH = localH;
+      const imgScale = drawH / (img.naturalHeight || 500);
+      const imgDrawW = (img.naturalWidth || 500) * imgScale;
+      const imgDrawH = drawH;
+      ctx.drawImage(img, -imgDrawW / 2, -imgDrawH / 2, imgDrawW, imgDrawH);
     } else {
       // Fallback vectoriel propre et réaliste orienté dans le même sens
       this.drawVectorVehicleTopDown(ctx, -localW / 2, -localH / 2, localW, localH, veh, isNight);
@@ -5885,7 +5972,7 @@ window.ProtecLocaux = {
       // Récupération des véhicules affectés à la station
       const game = window.game;
       const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
-      const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
+      const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
 
       (pk.spots || []).forEach((spot, idx) => {
         const sx = ox + spot.x * scale;
