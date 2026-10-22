@@ -1808,6 +1808,21 @@ class ProtecGame {
       }, 4000);
     }
 
+    // Persistance et horodatage fidèles à la fermeture / mise en veille (Jeu 24/24 en continu)
+    const recordExitTimestamp = () => {
+      try {
+        localStorage.setItem('protec_last_saved_at', String(Date.now()));
+        this.saveGame();
+      } catch (e) {}
+    };
+    window.addEventListener('pagehide', recordExitTimestamp);
+    window.addEventListener('beforeunload', recordExitTimestamp);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        recordExitTimestamp();
+      }
+    });
+
     if (this.stations.length === 0) {
       window.ProtecLoader?.finish();
       const isAuth = !!(window.ProtecAuth && window.ProtecAuth.currentUser && window.ProtecAuth.token);
@@ -2530,7 +2545,7 @@ class ProtecGame {
   // L'antenne vit 24h/24 : les missions en cours avancent, les organisateurs déposent des devis via le site,
   // et les bénévoles s'inscrivent spontanément sur les plannings.
   simulateOfflineCatchup(elapsedSeconds) {
-    if (!elapsedSeconds || elapsedSeconds < 60) return;
+    if (!elapsedSeconds || elapsedSeconds < 15) return;
     if (!this.stations || this.stations.length === 0) return;
 
     // Plafonner la simulation à 48h (172 800 secondes) pour éviter tout débordement
@@ -2540,15 +2555,67 @@ class ProtecGame {
       ? `${Math.floor(elapsedHours)}h ${Math.round((elapsedHours % 1) * 60)}min` 
       : `${Math.round(cappedSeconds / 60)} minutes`;
 
+    const now = Date.now();
     let missionsCompletedCount = 0;
     let revenueEarned = 0;
     let devisReceivedCount = 0;
     let volunteersRegisteredCount = 0;
+    let crisesEvolvedCount = 0;
+    let formationsFinishedCount = 0;
+    let smsAnsweredCount = 0;
+    let transitsArrivedCount = 0;
 
-    // 1. Progression des missions en cours (ongoing)
+    // 0. Synchronisation immédiate de l'horloge opérationnelle
+    const serverOffset = this.serverTimeOffset || 0;
+    const nowClock = new Date(now + serverOffset);
+    this.clock.hour = nowClock.getHours();
+    this.clock.minute = nowClock.getMinutes();
+    this.clock.second = nowClock.getSeconds();
+    this.clock.day = nowClock.getDate();
+    this.clock.month = nowClock.getMonth();
+    this.clock.year = nowClock.getFullYear();
+
+    // 1. Résolution de tous les transits de véhicules sur la carte (statusTarget 1, 2, 4...)
+    if (Array.isArray(this.transits) && this.transits.length > 0) {
+      this.transits.forEach(t => {
+        const arrivalTime = (t.startTime || 0) + (t.durationMs || 0);
+        if (now >= arrivalTime || cappedSeconds >= ((t.durationMs || 60000) / 1000)) {
+          t._completed = true;
+          transitsArrivedCount++;
+          const veh = (this.vehicles || []).find(v => v.id === (t.vehicleId || t.vehicle?.id));
+          if (veh) {
+            if (t.statusTarget === 1) { // Retour base
+              veh.status = 'dispo';
+              veh.needsRearming = true;
+            } else if (t.statusTarget === 2 || t.statusTarget === 3) { // Arrivée intervention
+              veh.status = 'sur_les_lieux';
+            } else if (t.statusTarget === 4) { // Hôpital
+              veh.status = 'hopital';
+            }
+          }
+        }
+      });
+      this.transits = this.transits.filter(t => !t._completed);
+    }
+
+    // 2. Progression et rattrapage précis des CRISES (Préalertes, Équipes en transit, Sinistres en cours)
     if (Array.isArray(this.missions)) {
       this.missions.forEach(m => {
-        if (m.status === 'ongoing') {
+        if (m.type === 'crise' || m.isCrisis) {
+          if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.updateCrisisOffline === 'function') {
+            const res = window.ProtecCriseLogistique.updateCrisisOffline(this, m, cappedSeconds);
+            if (res.prealertResolved || res.teamsArrivedCount > 0 || res.crisisCompleted) {
+              crisesEvolvedCount++;
+            }
+          }
+        }
+      });
+    }
+
+    // 3. Progression des missions standard en cours (ongoing - DPS, SAMU, Urgences)
+    if (Array.isArray(this.missions)) {
+      this.missions.forEach(m => {
+        if (m.status === 'ongoing' && m.type !== 'crise' && !m.isCrisis) {
           const totalDur = (m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 7200));
           const progGain = (cappedSeconds / totalDur) * 100;
           m.progress = Math.min(100, (m.progress || 0) + progGain);
@@ -2591,7 +2658,7 @@ class ProtecGame {
       });
     }
 
-    // 2. Inscriptions spontanées des bénévoles aux postes planifiés pendant l'absence
+    // 4. Inscriptions spontanées des bénévoles aux postes planifiés pendant l'absence
     if (Array.isArray(this.missions) && Array.isArray(this.volunteers)) {
       this.missions.forEach(m => {
         if (m.status === 'planifie') {
@@ -2618,7 +2685,73 @@ class ProtecGame {
       });
     }
 
-    // 3. Arrivée de nouveaux devis DPS selon l'état du site internet et la réputation (24/24)
+    // 5. Traitement hors-ligne des réponses aux SMS de mobilisation
+    if (Array.isArray(this.missions)) {
+      this.missions.forEach(m => {
+        if (m.smsResponses && typeof m.smsResponses === 'object') {
+          Object.keys(m.smsResponses).forEach(vId => {
+            if (m.smsResponses[vId]?.status === 'pending') {
+              const isDispo = Math.random() < 0.85;
+              m.smsResponses[vId] = {
+                status: isDispo ? 'dispo' : 'empeche',
+                reason: isDispo ? 'Disponible pour le détachement' : 'Indisponible (obligations familiales/pro)',
+                answeredAt: now - Math.floor(Math.random() * 30000)
+              };
+              smsAnsweredCount++;
+            }
+          });
+        }
+      });
+    }
+
+    // 6. Progression des Formations en cours
+    if (Array.isArray(this.formations) && this.formations.length > 0) {
+      this.formations.forEach(f => {
+        if (f.status === 'in_progress' || f.status === 'ongoing') {
+          f.progressSeconds = (f.progressSeconds || 0) + cappedSeconds;
+          const totalSec = f.durationSeconds || (f.durationHours ? f.durationHours * 3600 : 14400);
+          if (f.progressSeconds >= totalSec) {
+            f.status = 'completed';
+            formationsFinishedCount++;
+            (f.trainees || f.volunteers || []).forEach(volId => {
+              const v = (this.volunteers || []).find(vol => vol.id === (volId.id || volId));
+              if (v) {
+                if (!Array.isArray(v.skills)) v.skills = [];
+                if (f.skillReward && !v.skills.includes(f.skillReward)) {
+                  v.skills.push(f.skillReward);
+                }
+                v.status = 'dispo';
+                v.isBusy = false;
+              }
+            });
+          }
+        }
+      });
+    }
+
+    // 7. Régénération physique des bénévoles au repos (diminution fatigue, hausse énergie)
+    if (Array.isArray(this.volunteers)) {
+      const fatigueRecovery = Math.round(elapsedHours * 15);
+      this.volunteers.forEach(v => {
+        if (v.status === 'dispo') {
+          v.energy = Math.min(100, (v.energy || 70) + fatigueRecovery);
+          v.fatigue = Math.max(0, (v.fatigue || 20) - fatigueRecovery);
+          v.stress = Math.max(5, (v.stress || 10) - Math.round(elapsedHours * 10));
+        }
+      });
+    }
+
+    // 8. Réarmement des véhicules si délai suffisant
+    if (Array.isArray(this.vehicles) && elapsedHours >= 0.5) {
+      this.vehicles.forEach(veh => {
+        if (veh.needsRearming && veh.status === 'dispo') {
+          veh.needsRearming = false;
+          veh.a_rearme = true;
+        }
+      });
+    }
+
+    // 9. Arrivée de nouveaux devis DPS selon l'état du site internet et la réputation (24/24)
     const siteFreshness = (this.antenneWebsite && this.antenneWebsite.published) ? (this.antenneWebsite.freshness || 0) : 0;
     const pendingCount = (this.devis || []).filter(d => d.status === 'pending').length;
     const maxPending = this.getSimultaneousDevisLimit ? this.getSimultaneousDevisLimit() : 0;
@@ -2639,7 +2772,7 @@ class ProtecGame {
       }
     }
 
-    // 4. Décroissance de la fraîcheur du site web pendant l'absence (sauf si salarié délégué)
+    // 10. Décroissance de la fraîcheur du site web pendant l'absence (sauf si salarié délégué)
     if (this.antenneWebsite) {
       if (!this.antenneWebsite.autoPilotSalarieId) {
         const decay = Math.min(45, Math.floor(elapsedHours * 1.2));
@@ -2649,22 +2782,32 @@ class ProtecGame {
       }
     }
 
-    // 5. Inscriptions spontanées aux formations internes ouvertes au planning
+    // 11. Inscriptions spontanées aux formations internes ouvertes au planning
     if (window.ProtecFormations && typeof window.ProtecFormations.processVolunteerSpontaneousFormationRegistrations === 'function') {
       window.ProtecFormations.processVolunteerSpontaneousFormationRegistrations(this);
     }
 
-    // 7. Assainissement automatique du stockage de l'antenne (respect strict de la capacité)
+    // 12. Assainissement automatique du stockage de l'antenne (respect strict de la capacité)
     if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
       window.ProtecSocial.clampStorageToCapacity(this);
     }
 
-    // 6. Rapport immersif d'activité 24/24 présenté au joueur
-    if (missionsCompletedCount > 0 || devisReceivedCount > 0 || volunteersRegisteredCount > 0) {
+    // 13. Rapport immersif d'activité 24/24 présenté au joueur
+    const hasAnyActivity = missionsCompletedCount > 0 || devisReceivedCount > 0 || volunteersRegisteredCount > 0 || crisesEvolvedCount > 0 || formationsFinishedCount > 0 || smsAnsweredCount > 0 || transitsArrivedCount > 0;
+    if (hasAnyActivity) {
+      const details = [];
+      if (missionsCompletedCount > 0) details.push(`${missionsCompletedCount} mission(s) terminée(s) (+${revenueEarned} €)`);
+      if (crisesEvolvedCount > 0) details.push(`${crisesEvolvedCount} crise(s) évoluée(s) / sur site`);
+      if (transitsArrivedCount > 0) details.push(`${transitsArrivedCount} trajet(s) achevé(s)`);
+      if (formationsFinishedCount > 0) details.push(`${formationsFinishedCount} formation(s) validée(s)`);
+      if (devisReceivedCount > 0) details.push(`${devisReceivedCount} devis reçu(s) en ligne`);
+      if (volunteersRegisteredCount > 0) details.push(`${volunteersRegisteredCount} bénévole(s) inscrit(s)`);
+      if (smsAnsweredCount > 0) details.push(`${smsAnsweredCount} retour(s) SMS`);
+
       setTimeout(() => {
         this.showToast(
-          '🌙 Activité 24/24 de l’Antenne',
-          `Pendant votre absence (${hoursFormatted}) : ${missionsCompletedCount} mission(s) terminée(s) (+${revenueEarned} €), ${devisReceivedCount} nouveau(x) devis DPS reçu(s) en ligne, ${volunteersRegisteredCount} bénévole(s) inscrit(s) au planning !`,
+          '🌙 Activité 24/24 de votre Antenne',
+          `Pendant votre absence (${hoursFormatted}) : ${details.join(', ')}. Secouristes reposés et disponibles !`,
           'blue'
         );
       }, 1500);
@@ -29498,11 +29641,30 @@ class ProtecGame {
   // --- GESTIONNAIRE DE TEMPS RÉEL (1 SECONDE = 1 SECONDE RÉELLE) ---
   startSimulationClock() {
     this._lastTickTime = Date.now();
-    // 1. Horloge standard d'avant-plan (fenêtre active)
-    setInterval(() => {
+
+    // Rattrapage automatique lorsque l'onglet redevient visible ou après sortie de veille
+    document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
-        this.tickSimulation();
+        const now = Date.now();
+        const deltaSec = (now - (this._lastTickTime || now)) / 1000;
+        this._lastTickTime = now;
+        if (deltaSec >= 15 && typeof this.simulateOfflineCatchup === 'function') {
+          this.simulateOfflineCatchup(deltaSec);
+        }
       }
+    });
+
+    // 1. Horloge standard (s'exécute chaque seconde, rattrape automatiquement si deltaSec >= 15)
+    setInterval(() => {
+      const now = Date.now();
+      const deltaSec = (now - (this._lastTickTime || now)) / 1000;
+      this._lastTickTime = now;
+
+      if (deltaSec >= 15 && typeof this.simulateOfflineCatchup === 'function') {
+        this.simulateOfflineCatchup(deltaSec);
+      }
+
+      this.tickSimulation();
     }, 1000);
 
     // 2. Initialisation du Web Worker d'arrière-plan pour continuer de tourner même en veille / écran verrouillé
@@ -29536,7 +29698,7 @@ class ProtecGame {
       }
 
       this.missions.forEach(m => {
-        if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit) {
+        if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit || m.type === 'crise' || m.isCrisis) {
           const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
           let hasCrisisChanges = false;
 
@@ -29763,7 +29925,7 @@ class ProtecGame {
             if (m.type === 'crise' && typeof window.ProtecCriseLogistique.checkAndEscalateCrisis === 'function') {
               window.ProtecCriseLogistique.checkAndEscalateCrisis(this, m);
             }
-          } else {
+          } else if (m.status === 'ongoing') {
             // Dispositif classique (DPS, Maraude sociale programmée, Urgences)
             if (!m.startedAt) m.startedAt = currentTime;
             if (!m.durationSeconds) {

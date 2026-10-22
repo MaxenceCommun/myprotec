@@ -349,9 +349,9 @@ window.ProtecCriseLogistique = {
     };
   },
 
-  // Évolution de la main courante pendant le sinistre
+  // Évolution de la main courante pendant le sinistre (Préalerte, Déclenché, En Cours)
   progressCrisisMission(game, mission) {
-    if (!mission || mission.status !== 'ongoing') return;
+    if (!mission || !['prealerte', 'declenche', 'ongoing'].includes(mission.status)) return;
 
     // Si la crise a été déclarée prête à clôturer par le COS :
     // Ne plus rien ajouter et laisser le directeur décider de la clôture
@@ -365,16 +365,21 @@ window.ProtecCriseLogistique = {
     const now = Date.now();
     if (!mission.lastLogUpdate) mission.lastLogUpdate = now;
 
-    // CADENCE RÉALISTE : Intervalle d'au moins 120 à 180 secondes réelles (2 à 3 minutes) entre les messages
-    const updateIntervalMs = 120000;
+    // Cadence dynamique : 35s en crise active / 45s en veille pour une simulation vivante
+    const updateIntervalMs = mission.status === 'prealerte' ? 45000 : 35000;
+    const assets = this.getOperationalAssetsStatus(mission, game);
+
+    // Mettre à jour la progression fine en temps réel si ongoing
+    if (mission.status === 'ongoing') {
+      this.updateCrisisProgressionAndPhases(game, mission, assets, now);
+    }
+
     if (now - mission.lastLogUpdate < updateIntervalMs) {
       return;
     }
 
     mission.lastLogUpdate = now;
     const timeStr = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-
-    const assets = this.getOperationalAssetsStatus(mission, game);
 
     // Fatigue et stress progressifs UNIQUEMENT pour les secouristes réellement présents sur le terrain
     if (assets.volsOnScene > 0) {
@@ -387,8 +392,8 @@ window.ProtecCriseLogistique = {
         });
       }
       game.volunteers.filter(v => onSceneVolIds.has(v.id)).forEach(v => {
-        v.energy = Math.max(5, (v.energy || 80) - 2);
-        const stressInc = (100 - (v.stressResistance || 50)) > 40 ? 3 : 1;
+        v.energy = Math.max(5, (v.energy || 80) - 1);
+        const stressInc = (100 - (v.stressResistance || 50)) > 40 ? 2 : 1;
         v.stress = Math.min(100, (v.stress || 10) + stressInc);
       });
     }
@@ -407,24 +412,160 @@ window.ProtecCriseLogistique = {
     // Résolution finale du sinistre par le COS UNIQUEMENT SI :
     // 1. Des moyens et effectifs Protec sont réellement sur place
     // 2. Si incendie ou crise sanitaire : le VPSP a été sur place et a opéré
-    // 3. Durée réelle minimale de 12 à 15 minutes réelles écoulée
-    // 4. Au moins 6 entrées radio significatives enregistrées
-    const crisisDurationMs = now - (mission.startedAt || mission.spawnedAt || now);
-    const minCrisisDurationMs = 12 * 60 * 1000; // 12 minutes réelles minimum
+    // 3. Durée ou progression opérationnelle atteinte
+    // 4. Au moins 5 entrées radio significatives enregistrées
+    if (mission.status === 'ongoing') {
+      const crisisDurationMs = now - (mission.startedAt || mission.spawnedAt || now);
+      const totalDurMs = (mission.durationSeconds || 1200) * 1000;
+      const minCrisisDurationMs = Math.min(totalDurMs * 0.75, 10 * 60 * 1000);
 
-    const titleLower = (mission.title || '').toLowerCase();
-    const typeLower = (mission.crisisType || '').toLowerCase();
-    const isFireOrSanitary = titleLower.includes('feu') || titleLower.includes('incendie') || titleLower.includes('ehpad') || typeLower.includes('feu');
-    const requiredVpspCheck = isFireOrSanitary ? assets.vpspOnScene : true;
+      const titleLower = (mission.title || '').toLowerCase();
+      const typeLower = (mission.crisisType || '').toLowerCase();
+      const isFireOrSanitary = titleLower.includes('feu') || titleLower.includes('incendie') || titleLower.includes('ehpad') || typeLower.includes('feu');
+      const requiredVpspCheck = isFireOrSanitary ? assets.vpspOnScene : true;
 
-    if (
-      assets.hasAnyOnScene &&
-      requiredVpspCheck &&
-      crisisDurationMs >= minCrisisDurationMs &&
-      mission.operationalLog.length >= 6
-    ) {
-      this.triggerCrisisResolution(game, mission);
+      if (
+        assets.hasAnyOnScene &&
+        requiredVpspCheck &&
+        (crisisDurationMs >= minCrisisDurationMs || (mission.progress || 0) >= 95) &&
+        mission.operationalLog.length >= 5
+      ) {
+        this.triggerCrisisResolution(game, mission);
+      }
     }
+  },
+
+  // Calcul et mise à jour de la progression fine (0% à 100%) et des phases opérationnelles (1 à 3)
+  updateCrisisProgressionAndPhases(game, mission, assets, now) {
+    if (!now) now = Date.now();
+    const durSec = mission.durationSeconds || (mission.durationHours ? Math.round(mission.durationHours * 3600) : 1200);
+
+    if (assets && assets.hasAnyOnScene) {
+      if (!mission.onSceneStartedAt) mission.onSceneStartedAt = now;
+      const elapsedOnScene = Math.max(0, Math.floor((now - mission.onSceneStartedAt) / 1000));
+      mission.progress = Math.min(100, Math.round((elapsedOnScene / durSec) * 100));
+    } else {
+      const elapsedConv = Math.max(0, Math.floor((now - (mission.startedAt || now)) / 1000));
+      mission.progress = Math.min(15, Math.round((elapsedConv / 180) * 15));
+    }
+
+    const prevPhase = mission.currentPhaseIndex !== undefined ? mission.currentPhaseIndex : -1;
+    let newPhase = 0;
+    if (mission.progress >= 75) newPhase = 2;
+    else if (mission.progress >= 35) newPhase = 1;
+
+    const phaseLabels = [
+      'Phase 1 - Reconnaissance & Accueil Initial',
+      'Phase 2 - Montée en Puissance & Soins Actifs',
+      'Phase 3 - Stabilisation, Évacuations & Repli'
+    ];
+    mission.currentPhaseIndex = newPhase;
+    mission.currentPhaseLabel = phaseLabels[newPhase];
+
+    // Notification immersive de changement de phase
+    if (prevPhase !== -1 && newPhase !== prevPhase) {
+      const timeStr = new Date(now).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      const phaseOrders = [
+        'Installation du CAI et premières reconnaissances sur le terrain.',
+        'Accueil structuré et opérationnel. Intensification des prises en charge sanitaires et du soutien logistique.',
+        'Risque principal sous contrôle. Amorçage de la stabilisation et préparation au repli des moyens.'
+      ];
+      if (!mission.operationalLog) mission.operationalLog = [];
+      mission.operationalLog.unshift({
+        timestamp: now,
+        time: timeStr,
+        source: 'Commandant des Opérations (COS)',
+        text: `📢 [${mission.currentPhaseLabel.toUpperCase()}] ${phaseOrders[newPhase]}`,
+        type: 'milestone'
+      });
+      if (window.ProtecAudio && typeof window.ProtecAudio.playAlertChime === 'function') {
+        window.ProtecAudio.playAlertChime();
+      }
+      if (game && typeof game.showToast === 'function') {
+        game.showToast('Évolution de la Crise ⚡', `${mission.title} : Passage en ${mission.currentPhaseLabel}`, 'blue');
+      }
+    }
+  },
+
+  // Rattrapage hors-ligne précis pour une crise (Préalerte, Déploiements, Transit, Progression sur site)
+  updateCrisisOffline(game, mission, elapsedSeconds) {
+    if (!mission) return {};
+    const now = Date.now();
+    const cappedSec = Math.min(172800, elapsedSeconds);
+
+    if (mission.status === 'prealerte') {
+      mission.prealertSecondsLeft = Math.max(0, (mission.prealertSecondsLeft || 120) - cappedSec);
+      if (mission.prealertSecondsLeft <= 0) {
+        if (Math.random() < 0.35) {
+          game.resolvePrealertFavorable(mission);
+        } else {
+          game.resolvePrealertAggravation(mission);
+        }
+        return { prealertResolved: true };
+      }
+    } else if (mission.status === 'declenche' || mission.status === 'ongoing') {
+      let teamsArrivedCount = 0;
+      if (mission.crisisTeamDeployments && typeof mission.crisisTeamDeployments === 'object') {
+        Object.keys(mission.crisisTeamDeployments).forEach(tId => {
+          const dep = mission.crisisTeamDeployments[tId];
+          if (!dep) return;
+
+          if (now >= dep.maxArrivalBaseAt && !dep.loggedBaseArrival) {
+            dep.status = 'armement_2min';
+            dep.loggedBaseArrival = true;
+          }
+          if (now >= dep.vehicleDepartureAt && !dep.loggedDeparture) {
+            dep.loggedDeparture = true;
+          }
+          if (now >= dep.crisisArrivalAt && !dep.loggedCrisisArrival) {
+            dep.status = 'sur_les_lieux';
+            dep.loggedCrisisArrival = true;
+            mission.firstVehicleArrived = true;
+            if (!mission.firstVehicleArrivalAt) mission.firstVehicleArrivalAt = dep.crisisArrivalAt;
+            if (!mission.onSceneStartedAt) mission.onSceneStartedAt = dep.crisisArrivalAt;
+            teamsArrivedCount++;
+
+            if (dep.assignedVeh) {
+              const veh = (game.vehicles || []).find(v => v.id === dep.assignedVeh.id);
+              if (veh) veh.status = 'mission';
+            }
+            (dep.volunteerIds || []).forEach(vId => {
+              const vol = (game.volunteers || []).find(v => v.id === vId);
+              if (vol) vol.status = 'mission';
+            });
+            if (mission.operationalLog) {
+              mission.operationalLog.unshift({
+                time: new Date(dep.crisisArrivalAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+                text: `Arrivée sur site pendant votre absence : Équipe ${dep.teamName} sur place à « ${mission.title} ».`,
+                author: 'Sur les Lieux',
+                isCritical: true
+              });
+            }
+          }
+        });
+      }
+
+      if (mission.status === 'ongoing') {
+        const dur = mission.durationSeconds || 1200;
+        const progGain = (cappedSec / dur) * 100;
+        mission.progress = Math.min(100, (mission.progress || 0) + progGain);
+
+        if (mission.progress >= 75) {
+          mission.currentPhaseLabel = 'Phase 3 - Stabilisation, Évacuations & Repli';
+          mission.currentPhaseIndex = 2;
+        } else if (mission.progress >= 35) {
+          mission.currentPhaseLabel = 'Phase 2 - Montée en Puissance & Soins Actifs';
+          mission.currentPhaseIndex = 1;
+        }
+
+        if (mission.progress >= 100 && !mission.crisisCanClose) {
+          this.triggerCrisisResolution(game, mission);
+          return { crisisCompleted: true, teamsArrivedCount };
+        }
+      }
+      return { teamsArrivedCount };
+    }
+    return {};
   },
 
   // Vérifie si un véhicule logistique / matériel est présent sur les lieux
@@ -552,9 +693,37 @@ window.ProtecCriseLogistique = {
     let pool = [];
 
     // =========================================================================
+    // PHASE 0 : VEILLE OPÉRATIONNELLE / PRÉALERTE (mission.status === 'prealerte')
+    // =========================================================================
+    if (mission.status === 'prealerte') {
+      const auth = mission.authorityLabel || 'Préfecture';
+      pool = [
+        {
+          source: `Cellule de Veille ${auth}`,
+          text: `Veille opérationnelle confirmée. Surveillance active du secteur pour « ${mission.title} ». Maintenez vos équipiers informés.`,
+          type: 'info'
+        },
+        {
+          source: 'CODIS 18 / CTA',
+          text: 'Les premiers moyens de reconnaissance des sapeurs-pompiers sont acheminés pour évaluer l\'intensité du risque et les besoins d\'appui associatif.',
+          type: 'info'
+        },
+        {
+          source: 'Point de Situation Autorités',
+          text: `Consignes de vigilance transmises aux services communaux. Les associations agréées de sécurité civile sont maintenues en posture d'écoute active.`,
+          type: 'info'
+        },
+        {
+          source: 'Régulation Opérationnelle',
+          text: 'Évaluation en cours par les autorités compétentes pour déterminer le besoin d’une réquisition d’urgence ou d’une levée de préalerte.',
+          type: 'info'
+        }
+      ];
+    }
+    // =========================================================================
     // PHASE 1 : AUCUN MOYEN PROTEC N'A QUITTÉ LA BASE (!hasDeparted)
     // =========================================================================
-    if (!hasDeparted) {
+    else if (!hasDeparted) {
       if (isFire) {
         pool = [
           {
@@ -916,7 +1085,13 @@ window.ProtecCriseLogistique = {
 
     // Si tous les messages de la phase actuelle ont déjà été envoyés, on émet une ambiance contextuelle sans doublon
     if (!selected) {
-      if (!hasDeparted) {
+      if (mission.status === 'prealerte') {
+        selected = {
+          source: `Veille Opérationnelle ${mission.authorityLabel || 'SIDPC'}`,
+          text: 'Suivi de la situation en temps réel. Maintenez le dispositif d’alerte prêt.',
+          type: 'info'
+        };
+      } else if (!hasDeparted) {
         selected = {
           source: 'PC de Crise CODIS 18',
           text: 'Situation toujours en cours sur zone. En attente de la confirmation d’engagement et de départ de vos effectifs Protec.',
@@ -2093,25 +2268,96 @@ window.ProtecCriseLogistique = {
     if (!isCrisis) return '';
 
     const engaged = (game.volunteers || []).filter(v => (mission.registeredVolunteers || []).includes(v.id) || (mission.assignedCrew?.volunteers || []).includes(v.id));
+    const assets = this.getOperationalAssetsStatus(mission, game);
+
+    // 1. CAS PRÉALERTE
+    if (mission.status === 'prealerte') {
+      const mLeft = typeof mission.prealertSecondsLeft === 'number' ? Math.floor(mission.prealertSecondsLeft / 60) : 0;
+      const sLeft = typeof mission.prealertSecondsLeft === 'number' ? (mission.prealertSecondsLeft % 60) : 0;
+      const timeStr = mLeft > 0 ? `${mLeft}m ${sLeft.toString().padStart(2, '0')}s` : `${sLeft}s`;
+      const isPreMob = Boolean(mission.preMobilisationActive);
+
+      return `
+        <div class="p-4 rounded-3xl bg-amber-50/95 border-2 border-amber-400 text-amber-950 dark:bg-slate-900 dark:border-amber-500/60 dark:text-white shadow-md space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase flex items-center gap-2 text-amber-800 dark:text-amber-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
+              VEILLE OPÉRATIONNELLE AASC (${mission.authorityLabel || 'PRÉFECTURE'})
+            </span>
+            <span class="px-2.5 py-1 rounded-xl text-xs font-mono font-black bg-amber-200/80 text-amber-950 border border-amber-300 shadow-2xs">
+              ⏱️ ${timeStr} restant
+            </span>
+          </div>
+          <p class="text-[11px] text-amber-900/90 dark:text-slate-300 leading-snug">
+            Évaluation en cours par les autorités préfectorales. Posture actuelle : <b>${isPreMob ? 'Pré-mobilisation active (effectifs en alerte)' : 'Veille simple (écoute active)'}</b>. Les autorités statuent à l'issue de l'évaluation.
+          </p>
+          <div class="flex items-center justify-between pt-1 border-t border-amber-200 dark:border-white/10 text-[11px]">
+            <span class="text-amber-900/70 dark:text-slate-400">Effectifs pré-mobilisés :</span>
+            <span class="font-extrabold text-amber-900 dark:text-amber-300 mono-num">${engaged.length} / ${mission.requiredVolunteers || 6} secouristes prêts</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // 2. CAS DÉCLENCHÉ (Non encore sur les lieux)
+    if (mission.status === 'declenche' && !assets.hasAnyOnScene) {
+      const isTransit = assets.hasAnyAssetDeparted;
+      return `
+        <div class="p-4 rounded-3xl bg-rose-50/95 border-2 border-rose-500 text-rose-950 dark:bg-slate-900 dark:border-rose-600 dark:text-white shadow-md space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase flex items-center gap-2 text-rose-700 dark:text-rose-400">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-600 animate-ping"></span>
+              RÉQUISITION OFFICIELLE ACTIVE (DÉCLENCHEMENT CONFIRMÉ)
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${isTransit ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-rose-200 text-rose-900 border border-rose-400'}">
+              ${isTransit ? '⚡ En transit routier' : '⏳ En attente de départ'}
+            </span>
+          </div>
+          <p class="text-[11px] text-rose-900/90 dark:text-slate-300 leading-snug">
+            ${isTransit ? 'Vos équipages sont en route vers le sinistre. La main courante radio est ouverte.' : 'L\'autorité requiert l\'engagement immédiat de vos équipes pour appuyer les secours publics sur place.'}
+          </p>
+          <div class="flex items-center justify-between pt-1 border-t border-rose-200 dark:border-white/10 text-[11px]">
+            <span class="text-rose-900/70 dark:text-slate-400">Effectifs engagés :</span>
+            <span class="font-extrabold text-rose-900 dark:text-rose-300 mono-num">${engaged.length} secouristes</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. CAS ONGOING (Sur les lieux avec progression des phases)
+    const prog = Math.min(100, Math.max(0, mission.progress || 0));
+    const phaseLabel = mission.currentPhaseLabel || 'Phase 1 - Reconnaissance & Accueil Initial';
+    const isResolved = Boolean(mission.crisisCanClose);
 
     return `
       <!-- Bandeau d'état opérationnel Cellule de Crise Active -->
-      <div class="p-4 rounded-3xl bg-amber-50/90 border border-amber-300 text-amber-950 dark:bg-slate-900 dark:border-slate-800 dark:text-white shadow-md space-y-2.5">
+      <div class="p-4 rounded-3xl ${isResolved ? 'bg-emerald-50/95 border-2 border-emerald-500 text-emerald-950 dark:bg-slate-900 dark:border-emerald-500' : 'bg-slate-900 border-2 border-pc-orange text-white shadow-lg'} space-y-2.5">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-black uppercase flex items-center gap-2 text-amber-800 dark:text-pc-orange">
-            <span class="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping"></span>
-            CELLULE DE CRISE ACTIVE (CODIS / PRÉFECTURE)
+          <span class="text-xs font-black uppercase flex items-center gap-2 ${isResolved ? 'text-emerald-700 dark:text-emerald-400' : 'text-pc-orange'}">
+            <span class="w-2.5 h-2.5 rounded-full ${isResolved ? 'bg-emerald-500' : 'bg-pc-orange animate-ping'}"></span>
+            ${isResolved ? 'DISPOSITIF MAÎTRISÉ • ACCORD DU COS' : 'DISPOSITIF ACTIF SUR LE TERRAIN'}
           </span>
-          <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-100 text-amber-900 border border-amber-300 dark:bg-white/10 dark:text-slate-300 dark:border-transparent">
-            Rotations : ${mission.rotationsCount || 0}
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isResolved ? 'bg-emerald-100 text-emerald-900 border border-emerald-300' : 'bg-white/10 text-pc-orange border border-pc-orange/30'}">
+            ${phaseLabel}
           </span>
         </div>
-        <p class="text-[11px] text-amber-900/80 dark:text-slate-300 leading-snug">
-          Durée indéterminée dépendante de l'évolution du sinistre sur le terrain. Surveillez la main courante radio et gérez la fatigue de vos secouristes.
-        </p>
-        <div class="flex items-center justify-between pt-1 border-t border-amber-200 dark:border-white/10 text-[11px]">
-          <span class="text-amber-900/70 dark:text-slate-400">Effectifs engagés en première ligne :</span>
-          <span class="font-extrabold text-amber-900 dark:text-pc-orange mono-num">${engaged.length} secouristes</span>
+
+        <!-- Jauge d'évolution opérationnelle en direct -->
+        <div class="space-y-1">
+          <div class="flex items-center justify-between text-[11px] font-bold">
+            <span class="text-slate-300">${isResolved ? 'Objectifs atteints à 100%' : 'Progression du dispositif :'}</span>
+            <span class="mono-num ${isResolved ? 'text-emerald-600 dark:text-emerald-400' : 'text-pc-orange'}">${prog}%</span>
+          </div>
+          <div class="w-full bg-slate-700/60 h-2 rounded-full overflow-hidden shadow-inner">
+            <div class="h-full rounded-full transition-all duration-500 ${isResolved ? 'bg-emerald-500' : 'bg-gradient-to-r from-pc-orange via-amber-400 to-emerald-500'}" style="width: ${prog}%"></div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-1 border-t ${isResolved ? 'border-emerald-200' : 'border-white/10'} text-[11px]">
+          <span class="text-slate-400">Moyens engagés :</span>
+          <span class="font-extrabold ${isResolved ? 'text-emerald-800 dark:text-emerald-300' : 'text-white'} mono-num">
+            ${assets.volsOnScene > 0 ? `${assets.volsOnScene} secouristes sur site` : `${engaged.length} secouristes`} ${assets.vpspOnScene ? '• 🚑 VPSP' : ''} ${assets.logOnScene ? '• 📦 Logistique' : ''}
+          </span>
         </div>
       </div>
     `;
