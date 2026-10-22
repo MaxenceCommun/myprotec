@@ -29092,7 +29092,7 @@ class ProtecGame {
                 <div class="p-2.5 rounded-xl border ${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'bg-sky-50/70 border-sky-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
                   <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg ${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'bg-sky-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-sm">
-                      🩺
+                      <img src="images/vehicles/icons/tensio.png" class="w-5 h-5 object-contain" alt="" onerror="this.outerHTML='🩺'" />
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900">Tensiomètre Auto NIBP</h5>
@@ -29122,7 +29122,7 @@ class ProtecGame {
                 <div class="p-2.5 rounded-xl border ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-50/70 border-purple-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
                   <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-sm">
-                      📟
+                      <img src="images/vehicles/icons/t7.png" class="w-5 h-5 object-contain" alt="" onerror="this.outerHTML='📟'" />
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900">Schiller Touch 7 (ECG)</h5>

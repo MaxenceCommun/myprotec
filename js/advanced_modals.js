@@ -342,6 +342,36 @@ window.ProtecAdvancedModals = {
       icon: '🔗',
       desc: 'Permet de tracter remorques lourdes, tentes PMA, lots d’éclairage et bateaux ERS.'
     },
+  canVehicleHaveTowHitch(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return !['ERS', 'BATEAU', 'VELO', 'MPS', 'MOTO', 'QUAD', 'REM'].includes(t);
+  },
+
+  canVehicleHaveClimate(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return !['ERS', 'BATEAU', 'VELO', 'MPS', 'MOTO', 'QUAD', 'REM'].includes(t);
+  },
+
+  canVehicleHaveConverter(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return !['ERS', 'BATEAU', 'VELO', 'MPS', 'MOTO', 'QUAD', 'REM'].includes(t);
+  },
+
+  canVehicleHaveLedBar(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return !['ERS', 'BATEAU', 'VELO', 'REM'].includes(t);
+  },
+
+  getClimateOptionLabel(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return t === 'VPSP' ? 'Climatisation / Webasto' : 'Climatisation & Chauffage';
+  },
+
+  getClimateOptionInstalledText(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    return t === 'VPSP' ? 'Pack Climatisation Cellule & Chauffage Webasto' : 'Pack Climatisation & Chauffage Habitacle';
+  },
+
     ledBar: {
       id: 'ledBar',
       label: 'Rampe LED Haute Puissance & Feux Calandre',
@@ -454,23 +484,27 @@ window.ProtecAdvancedModals = {
     const selOpts = this.getVehicleSelectedOptions(variantId);
     let optionsExtraCost = 0;
     const activeOptionsList = [];
-    const hasNativeTowHitch = Boolean(foundVariant?.hasTowHitch);
+    const vehType = (vehicleType || foundVariant?.type || '').toUpperCase();
+    const isVPSP = vehType === 'VPSP';
+    const canTow = this.canVehicleHaveTowHitch(vehType);
+    const canClimate = this.canVehicleHaveClimate(vehType);
+    const canLed = this.canVehicleHaveLedBar(vehType);
+    const canConvert = this.canVehicleHaveConverter(vehType);
+    const hasNativeTowHitch = Boolean(foundVariant?.hasTowHitch) && canTow;
     let finalTowHitch = hasNativeTowHitch;
 
-    const isVPSP = vehicleType === 'VPSP' || foundVariant?.type === 'VPSP';
-
-    if (!hasNativeTowHitch && selOpts.towHitch) {
+    if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
       optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
-    if (!isVPSP && selOpts.ledBar) {
+    if (canLed && !isVPSP && selOpts.ledBar) {
       optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
     }
-    if (selOpts.climatisation) {
+    if (canClimate && selOpts.climatisation) {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+      activeOptionsList.push(this.getClimateOptionInstalledText(vehType));
     }
     if (isVPSP && selOpts.tensiometre_auto) {
       optionsExtraCost += this.VEHICLE_OPTIONS.tensiometre_auto.cost;
@@ -483,9 +517,9 @@ window.ProtecAdvancedModals = {
 
     const customOptions = Object.assign({}, foundVariant, {
       cost: (foundVariant?.cost || 20000) + optionsExtraCost,
-      hasTowHitch: finalTowHitch,
-      hasLedBar: isVPSP || Boolean(selOpts.ledBar) || Boolean(foundVariant?.hasLedBar),
-      hasConverter230v: true,
+      hasTowHitch: canTow && finalTowHitch,
+      hasLedBar: isVPSP || (canLed && Boolean(selOpts.ledBar)) || Boolean(foundVariant?.hasLedBar),
+      hasConverter230v: canConvert,
       hasTensiometreAuto: isVPSP && Boolean(selOpts.tensiometre_auto),
       hasSchillerT7: isVPSP && Boolean(selOpts.schiller_t7),
       installedOptions: activeOptionsList,
@@ -690,15 +724,21 @@ window.ProtecAdvancedModals = {
             // Options configurables actives pour cette variante
             const selOpts = this.getVehicleSelectedOptions(currentVariant.id);
             let optionsExtraCost = 0;
-            const hasNativeTowHitch = Boolean(currentVariant.hasTowHitch);
+            const vehType = (currentVariant.type || currentChassis.type || 'VTU').toUpperCase();
+            const canTow = this.canVehicleHaveTowHitch(vehType);
+            const canClimate = this.canVehicleHaveClimate(vehType);
+            const canLed = this.canVehicleHaveLedBar(vehType);
+            const canConvert = this.canVehicleHaveConverter(vehType);
+            const climateLabel = this.getClimateOptionLabel(vehType);
+            const hasNativeTowHitch = Boolean(currentVariant.hasTowHitch) && canTow;
 
-            if (!hasNativeTowHitch && selOpts.towHitch) {
+            if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
-            if (!isVPSP && selOpts.ledBar) {
+            if (canLed && !isVPSP && selOpts.ledBar) {
               optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
             }
-            if (selOpts.climatisation) {
+            if (canClimate && selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
             }
             if (isVPSP && selOpts.tensiometre_auto) {
@@ -855,10 +895,13 @@ window.ProtecAdvancedModals = {
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10.5px]">
-                      <!-- Option Boule d'attelage -->
-                      ${hasNativeTowHitch ? `
+                      <!-- Option Boule d'attelage : uniquement si véhicule remorqueur possible -->
+                      ${canTow ? (hasNativeTowHitch ? `
                         <div class="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between">
-                          <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/attelage.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
+                            <span>Boule d’attelage</span>
+                          </span>
                           <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                         </div>
                       ` : `
@@ -867,15 +910,21 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'towHitch', '${st?.id}')"
                           class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1.5"><span>🔗</span> Boule d’attelage</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/attelage.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
+                            <span>Boule d’attelage</span>
+                          </span>
                           <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
                         </button>
-                      `}
+                      `) : ''}
 
                       <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
-                      ${isVPSP ? `
+                      ${canLed ? (isVPSP ? `
                         <div class="p-2 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-bold flex items-center justify-between text-xs">
-                          <span class="flex items-center gap-1.5"><span>🚨</span> Rampe Gyrophares LED</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/gyro.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
+                            <span>Rampe Gyrophares LED</span>
+                          </span>
                           <span class="text-[9px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
                         </div>
                       ` : `
@@ -884,26 +933,39 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'ledBar', '${st?.id}')"
                           class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1.5"><span>🚨</span> Rampe LED & Calandre</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/gyro.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
+                            <span>Rampe LED & Calandre</span>
+                          </span>
                           <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
                         </button>
-                      `}
+                      `) : ''}
 
-                      <!-- Option Climatisation / Chauffage -->
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'climatisation', '${st?.id}')"
-                        class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
-                      >
-                        <span class="flex items-center gap-1.5"><span>❄️</span> Climatisation / Webasto</span>
-                        <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
-                      </button>
+                      <!-- Option Climatisation / Chauffage : Webasto réservé uniquement aux ambulances VPSP -->
+                      ${canClimate ? `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'climatisation', '${st?.id}')"
+                          class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
+                        >
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/clim_chau.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
+                            <span>${climateLabel}</span>
+                          </span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
+                        </button>
+                      ` : ''}
 
-                      <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
-                      <div class="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-xs">
-                        <span class="flex items-center gap-1.5"><span>⚡</span> Convertisseur 230V Sinus</span>
-                        <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
-                      </div>
+                      <!-- Équipement de Série : Convertisseur 230V Sinus (Véhicules fermés uniquement) -->
+                      ${canConvert ? `
+                        <div class="p-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-xs">
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/convertisseur.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="230V" onerror="this.outerHTML='<span>⚡</span>'" />
+                            <span>Convertisseur 230V Sinus</span>
+                          </span>
+                          <span class="text-[9px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
+                        </div>
+                      ` : ''}
 
                       <!-- Options Médicales de Confort spécifiques VPSP -->
                       ${isVPSP ? `
@@ -912,7 +974,10 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'tensiometre_auto', '${st?.id}')"
                           class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.tensiometre_auto ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1.5"><span>🩺</span> Tensiomètre Auto NIBP</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/tensio.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="NIBP" onerror="this.outerHTML='<span>🩺</span>'" />
+                            <span>Tensiomètre Auto NIBP</span>
+                          </span>
                           <span class="font-mono font-black text-[10px] ${selOpts.tensiometre_auto ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+450 €</span>
                         </button>
 
@@ -921,7 +986,10 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${currentVariant.id}', 'schiller_t7', '${st?.id}')"
                           class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.schiller_t7 ? 'bg-purple-100/70 dark:bg-purple-950/50 border-purple-500 text-purple-900 dark:text-purple-200 font-black shadow-xs ring-1 ring-purple-400/50' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1.5"><span>📟</span> Schiller Touch 7 (ECG)</span>
+                          <span class="flex items-center gap-1.5">
+                            <img src="images/vehicles/icons/t7.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Schiller T7" onerror="this.outerHTML='<span>📟</span>'" />
+                            <span>Schiller Touch 7 (ECG)</span>
+                          </span>
                           <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+3 800 €</span>
                         </button>
                       ` : ''}
@@ -1508,16 +1576,22 @@ window.ProtecAdvancedModals = {
             // Options configurables actives pour cette carte
             const selOpts = this.getVehicleSelectedOptions(card.id);
             let optionsExtraCost = 0;
-            const isVPSP = card.type === 'VPSP';
-            const hasNativeTowHitch = Boolean(card.hasTowHitch);
+            const vehType = (card.type || 'VTU').toUpperCase();
+            const isVPSP = vehType === 'VPSP';
+            const canTow = this.canVehicleHaveTowHitch(vehType);
+            const canClimate = this.canVehicleHaveClimate(vehType);
+            const canLed = this.canVehicleHaveLedBar(vehType);
+            const canConvert = this.canVehicleHaveConverter(vehType);
+            const climateLabel = this.getClimateOptionLabel(vehType);
+            const hasNativeTowHitch = Boolean(card.hasTowHitch) && canTow;
 
-            if (!hasNativeTowHitch && selOpts.towHitch) {
+            if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
-            if (!isVPSP && selOpts.ledBar) {
+            if (canLed && !isVPSP && selOpts.ledBar) {
               optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
             }
-            if (selOpts.climatisation) {
+            if (canClimate && selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
             }
 
@@ -1654,9 +1728,12 @@ window.ProtecAdvancedModals = {
                     </div>
 
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px]">
-                      ${hasNativeTowHitch ? `
+                      ${canTow ? (hasNativeTowHitch ? `
                         <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between">
-                          <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/attelage.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
+                            <span>Attelage</span>
+                          </span>
                           <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
                         </div>
                       ` : `
@@ -1665,15 +1742,45 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'towHitch', '${st?.id}')"
                           class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.towHitch ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1"><span>🔗</span> Attelage</span>
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/attelage.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
+                            <span>Attelage</span>
+                          </span>
                           <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
                         </button>
-                      `}
+                      `) : (card.type === 'ERS' ? `
+                        <div class="p-1.5 rounded-lg bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200 font-bold flex items-center justify-between col-span-1 sm:col-span-2 text-[9.5px]">
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/attelage.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Remorque" />
+                            <span>Remorque routière de mise à l'eau fournie</span>
+                          </span>
+                          <span class="text-[8.5px] font-black uppercase bg-sky-200/80 dark:bg-sky-800/60 px-1 rounded text-sky-900 dark:text-sky-100">Inclus</span>
+                        </div>
+                      ` : card.type === 'VELO' ? `
+                        <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between col-span-1 sm:col-span-2 text-[9.5px]">
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/tensio.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="DAE" />
+                            <span>Sacoches de premiers secours & DAE</span>
+                          </span>
+                          <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1 rounded text-emerald-900 dark:text-emerald-100">Complet</span>
+                        </div>
+                      ` : card.type === 'QUAD' ? `
+                        <div class="p-1.5 rounded-lg bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 font-bold flex items-center justify-between col-span-1 sm:col-span-2 text-[9.5px]">
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/attelage.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Remorque" />
+                            <span>Remorque de transport routier fournie</span>
+                          </span>
+                          <span class="text-[8.5px] font-black uppercase bg-amber-200/80 dark:bg-amber-800/60 px-1 rounded text-amber-900 dark:text-amber-100">Inclus</span>
+                        </div>
+                      ` : '')}
 
                       <!-- Option Rampe LED : Obligatoire et de série sur VPSP, optionnelle sur les autres -->
-                      ${isVPSP ? `
+                      ${canLed ? (isVPSP ? `
                         <div class="p-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200 font-bold flex items-center justify-between text-[10px]">
-                          <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/gyro.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
+                            <span>Rampe LED</span>
+                          </span>
                           <span class="text-[8.5px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
                         </div>
                       ` : `
@@ -1682,25 +1789,38 @@ window.ProtecAdvancedModals = {
                           onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'ledBar', '${st?.id}')"
                           class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.ledBar ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
-                          <span class="flex items-center gap-1"><span>🚨</span> Rampe LED</span>
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/gyro.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
+                            <span>Rampe LED</span>
+                          </span>
                           <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
                         </button>
-                      `}
+                      `) : ''}
 
-                      <button 
-                        type="button" 
-                        onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'climatisation', '${st?.id}')"
-                        class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
-                      >
-                        <span class="flex items-center gap-1"><span>❄️</span> Climatisation/Chauffage</span>
-                        <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
-                      </button>
+                      ${canClimate ? `
+                        <button 
+                          type="button" 
+                          onclick="window.ProtecAdvancedModals.toggleVehicleOption('${card.id}', 'climatisation', '${st?.id}')"
+                          class="p-1.5 rounded-lg border text-left transition flex items-center justify-between cursor-pointer ${selOpts.climatisation ? 'bg-pc-blue/15 dark:bg-pc-blue/30 border-pc-blue text-pc-blue dark:text-blue-300 font-black shadow-xs ring-1 ring-pc-blue/30' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
+                        >
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/clim_chau.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
+                            <span>${climateLabel}</span>
+                          </span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
+                        </button>
+                      ` : ''}
 
-                      <!-- Équipement de Série : Convertisseur 230V Sinus (Systématique) -->
-                      <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-[10px]">
-                        <span class="flex items-center gap-1"><span>⚡</span> 230V Pur Sinus</span>
-                        <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
-                      </div>
+                      <!-- Équipement de Série : Convertisseur 230V Sinus (Véhicules fermés uniquement) -->
+                      ${canConvert ? `
+                        <div class="p-1.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 font-bold flex items-center justify-between text-[10px]">
+                          <span class="flex items-center gap-1">
+                            <img src="images/vehicles/icons/convertisseur.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="230V" onerror="this.outerHTML='<span>⚡</span>'" />
+                            <span>230V Pur Sinus</span>
+                          </span>
+                          <span class="text-[8.5px] font-black uppercase bg-emerald-200/80 dark:bg-emerald-800/60 px-1.5 py-0.5 rounded text-emerald-900 dark:text-emerald-100">De Série</span>
+                        </div>
+                      ` : ''}
                     </div>
                   </div>
                 </div>
@@ -1900,29 +2020,34 @@ window.ProtecAdvancedModals = {
       };
     }
 
-    const isVPSP = vehicleType === 'VPSP' || (cardId && cardId.includes('vpsp'));
+    const vehType = (vehicleType || (cardId && cardId.includes('vpsp') ? 'VPSP' : '') || catalogItem?.type || '').toUpperCase();
+    const isVPSP = vehType === 'VPSP';
+    const canTow = this.canVehicleHaveTowHitch(vehType);
+    const canClimate = this.canVehicleHaveClimate(vehType);
+    const canLed = this.canVehicleHaveLedBar(vehType);
+    const canConvert = this.canVehicleHaveConverter(vehType);
     const targetOpt = options || Object.assign({}, catalogItem);
-    const hasNativeTowHitch = Boolean(targetOpt.hasTowHitch);
+    const hasNativeTowHitch = Boolean(targetOpt.hasTowHitch) && canTow;
     let finalTowHitch = hasNativeTowHitch;
 
-    if (!hasNativeTowHitch && selOpts.towHitch) {
+    if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
       optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
-    if (!isVPSP && selOpts.ledBar) {
+    if (canLed && !isVPSP && selOpts.ledBar) {
       optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
       activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
     }
-    if (selOpts.climatisation) {
+    if (canClimate && selOpts.climatisation) {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+      activeOptionsList.push(this.getClimateOptionInstalledText(vehType));
     }
 
     targetOpt.cost = (targetOpt.cost || 20000) + optionsExtraCost;
-    targetOpt.hasTowHitch = finalTowHitch;
-    targetOpt.hasLedBar = isVPSP || Boolean(selOpts.ledBar) || Boolean(targetOpt.hasLedBar);
-    targetOpt.hasConverter230v = true;
+    targetOpt.hasTowHitch = canTow && finalTowHitch;
+    targetOpt.hasLedBar = isVPSP || (canLed && Boolean(selOpts.ledBar)) || Boolean(targetOpt.hasLedBar);
+    targetOpt.hasConverter230v = canConvert;
     targetOpt.installedOptions = activeOptionsList;
 
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {
