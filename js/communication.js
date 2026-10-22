@@ -683,7 +683,7 @@ window.ProtecCommunication = {
 
     game.showToast(
       'Reportage Photo Publié ! 📸',
-      `Le reportage « ${folder.title} » a été publié avec succès sur vos réseaux sociaux (+${visGain}% visibilité, +${repGain} popularité).`,
+      `Le reportage « ${folder.title} » est publié ! Les interactions des citoyens arriveront progressivement au cours des 12 prochaines heures.`,
       'purple'
     );
 
@@ -834,7 +834,7 @@ window.ProtecCommunication = {
     const reachLabel = commu.level === 1 ? 'Portée naissante (début d’antenne)' : `Portée ${Math.round(reachMult * 100)}% (${commu.followers} abonnés)`;
     game.showToast(
       'Publication Publiée ! 📱 (0 €)',
-      `Votre post sur « ${theme.title} » est en ligne (${reachLabel}) : +${gain}% visibilité, 👥 +${newFollowers} nouveaux abonnés, ❤️ ${postLikes} j'aime.${impactDetail}`,
+      `Votre post sur « ${theme.title} » est en ligne (${reachLabel}). Les interactions et nouveaux abonnés arriveront progressivement au cours des 12 prochaines heures !${impactDetail}`,
       'purple'
     );
 
@@ -1724,7 +1724,15 @@ window.ProtecCommunication = {
                   </div>
                 </div>
 
-                <span class="text-xs text-slate-400">📱 Réseaux</span>
+                ${(() => {
+                const dur = post.interactionDurationMs || (12 * 3600 * 1000);
+                const el = Math.max(0, Date.now() - (post.timestamp || Date.now()));
+                if (el < dur) {
+                  const hrs = Math.max(1, Math.ceil((dur - el) / 3600000));
+                  return `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1 shadow-2xs" title="Les réactions arrivent progressivement sur 12h"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span><span>En direct (~${hrs}h)</span></span>`;
+                }
+                return '<span class="text-xs text-slate-400">📱 Réseaux</span>';
+              })()}
               </div>
 
               <!-- Contenu du Post -->

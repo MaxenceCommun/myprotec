@@ -2169,9 +2169,6 @@ window.ProtecAdvanced = {
     if (!game) game = window.game;
     if (!game) return;
 
-    // Marquer l'étape comme engagée / consultée
-    this.markStarterStepCompleted(game, stepId);
-
     if (stepId === 'step_pub') {
       if (typeof game.openModule === 'function') game.openModule('communication');
     } else if (stepId === 'step_rearm') {
@@ -2209,72 +2206,77 @@ window.ProtecAdvanced = {
     const claimedList = game.starterGuide.stepsClaimed || [];
     const completedList = game.starterGuide.stepsCompleted || [];
 
-    // Détection en temps réel de chaque étape avec conditions exhaustives
+    // Détection stricte et réelle de chaque étape (actions véritablement accomplies)
     const donePub = Boolean(
+      claimedList.includes('step_pub') ||
       (game.resources?.campaigns?.social || game.resources?.campaigns?.posters) ||
       (game.socialMedia?.feed && game.socialMedia.feed.some(p => p.id !== 'post-init-1' && p.id !== 'post-init-2')) ||
       (game.photoFolders && game.photoFolders.some(f => f.published)) ||
       (game.socialPostsCount > 0) ||
-      (game.stats?.adsWatched > 0) ||
-      completedList.includes('step_pub') ||
-      game.starterGuide.step_pub ||
-      claimedList.includes('step_pub')
+      (game.stats?.adsWatched > 0)
     );
 
-    const doneRearm = Boolean(
-      (game.vehicles && game.vehicles.some(v => v.needsRearming === false || (v.armementLevel || 0) >= 80 || v.isRearmed === true)) ||
-      (game.missions && game.missions.some(m => m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique')) ||
-      (game.stations && game.stations.some(s => (s.stock?.caisse_rearmement || 0) > 0)) ||
-      (game.history && game.history.some(h => h.type === 'rearmement')) ||
+    // Étape 2 : Nécessite une véritable Mission Logistique créée/planifiée ou un réarmement effectivement accompli
+    const hasRearmLogMission = Boolean(
+      (game.missions && game.missions.some(m => 
+        m.isRearmamentWorkshop === true ||
+        m.type === 'rearmement' ||
+        (m.type === 'logistique' && m.title && m.title.toLowerCase().includes('réarmement'))
+      )) ||
       (game.stats?.rearmCount > 0) ||
-      completedList.includes('step_rearm') ||
-      game.starterGuide.step_rearm ||
-      claimedList.includes('step_rearm')
+      (game.rearmWorkshopsCompleted > 0) ||
+      (game.history && game.history.some(h => h.type === 'rearmement' || h.type === 'mission_logistique_rearm'))
     );
+    const doneRearm = Boolean(claimedList.includes('step_rearm') || hasRearmLogMission);
 
+    // Étape 3 : Paramètres ou Pôles véritablement configurés
     const doneParams = Boolean(
+      claimedList.includes('step_params') ||
       (game.poles && game.poles.length > 0) ||
       game.antennaSettingsConfigured ||
-      game.antennaSettingsVisited ||
-      (game.stationSettings && Object.keys(game.stationSettings).length > 0) ||
       (game.rolesAccessMode && game.rolesAccessMode !== 'validation') ||
-      (game.mealAllowancePerVolunteer !== undefined && game.mealAllowancePerVolunteer !== 15) ||
-      completedList.includes('step_params') ||
-      game.starterGuide.step_params ||
-      claimedList.includes('step_params')
+      (game.mealAllowancePerVolunteer !== undefined && game.mealAllowancePerVolunteer !== 15)
     );
 
+    // Étape 4 : Achat réel d'un second véhicule
     const doneVehicule = Boolean(
+      claimedList.includes('step_vehicule') ||
       (game.vehicles && game.vehicles.length >= 2) ||
       (game.deliveries && game.deliveries.some(d => d.type === 'vehicle')) ||
-      (game.stats?.boughtVehiclesCount > 0) ||
-      completedList.includes('step_vehicule') ||
-      game.starterGuide.step_vehicule ||
-      claimedList.includes('step_vehicule')
+      (game.stats?.boughtVehiclesCount > 0)
     );
 
+    // Étape 5 : Poste de secours ou devis réel
     const doneMission = Boolean(
-      (game.missions && game.missions.some(m => ['planifie', 'accepted', 'declenche', 'en_cours', 'sur_les_lieux', 'completed', 'termine', 'ongoing', 'active'].includes(m.status))) ||
+      claimedList.includes('step_mission') ||
+      (game.missions && game.missions.some(m => ['planifie', 'accepted', 'declenche', 'en_cours', 'sur_les_lieux', 'completed', 'termine', 'ongoing', 'active'].includes(m.status) && !m.isRearmamentWorkshop && m.type !== 'rearmement')) ||
       (game.devis && game.devis.some(d => ['accepted', 'validated', 'signed'].includes(d.status))) ||
       (game.vehicles && game.vehicles.some(v => v.status === 'mission')) ||
-      (game.history && game.history.some(h => h.type === 'mission' || h.type === 'dps')) ||
-      (game.stats?.completedMissionsCount > 0) ||
-      completedList.includes('step_mission') ||
-      game.starterGuide.step_mission ||
-      claimedList.includes('step_mission')
+      (game.history && game.history.some(h => (h.type === 'mission' || h.type === 'dps') && h.type !== 'rearmement')) ||
+      (game.stats?.completedMissionsCount > 0)
     );
 
-    const doneFormation = Boolean(
+    // Étape 6 : Session de formation (PSC1/SST/B2B) effectivement créée ou accomplie
+    const hasFormationSession = Boolean(
       (game.sessionsFormation && game.sessionsFormation.length > 0) ||
       (game.formationB2BProposals && game.formationB2BProposals.some(p => ['accepted', 'in_progress', 'completed'].includes(p.status))) ||
       (game.formations && game.formations.length > 0) ||
       (game.trainingSessions && game.trainingSessions.length > 0) ||
-      (game.volunteers && game.volunteers.some(v => (v.skills || []).length > 2 || (v.formations && v.formations.length > 0))) ||
-      (game.stats?.formationsCount > 0) ||
-      completedList.includes('step_formation') ||
-      game.starterGuide.step_formation ||
-      claimedList.includes('step_formation')
+      (game.stats?.formationsCount > 0)
     );
+    const doneFormation = Boolean(claimedList.includes('step_formation') || hasFormationSession);
+
+    // Nettoyage automatique des validations prématurées non réclamées
+    if (Array.isArray(game.starterGuide.stepsCompleted)) {
+      if (!doneRearm && !claimedList.includes('step_rearm')) {
+        game.starterGuide.stepsCompleted = game.starterGuide.stepsCompleted.filter(id => id !== 'step_rearm');
+        delete game.starterGuide.step_rearm;
+      }
+      if (!doneFormation && !claimedList.includes('step_formation')) {
+        game.starterGuide.stepsCompleted = game.starterGuide.stepsCompleted.filter(id => id !== 'step_formation');
+        delete game.starterGuide.step_formation;
+      }
+    }
 
     return [
       {
@@ -2297,12 +2299,12 @@ window.ProtecAdvanced = {
         badge: 'Étape 2 • Préparation Opérationnelle',
         icon: 'wrench',
         color: 'text-amber-700 bg-amber-50 dark:bg-amber-950/60 border-amber-200 dark:border-amber-800',
-        title: 'Préparer un réarmement de vos véhicules',
-        desc: 'Les interventions consomment du matériel de soins d’urgence. Ouvrez l’atelier de réarmement flotte ou préparez vos lots de secours pour vos prochains départs.',
+        title: 'Organiser une Mission Logistique de réarmement',
+        desc: 'Les interventions consomment du matériel de soins d’urgence. Lancez une Mission Logistique pour réarmer votre flotte de véhicules et reconstituer vos lots opérationnels.',
         reward: 400,
         isCompleted: doneRearm,
         isClaimed: claimedList.includes('step_rearm'),
-        actionLabel: 'Atelier de Réarmement',
+        actionLabel: 'Mission Logistique',
         actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_rearm')"
       },
       {

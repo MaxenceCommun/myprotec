@@ -349,8 +349,88 @@ window.ProtecOnboarding = {
     } else if (this.currentStep === 4) {
       setTimeout(() => {
         this.initStep4Signature();
-      }, 120);
+        this.playStepVoiceOver(this.currentStep);
+  }, 120);
     }
+  },
+  // -------------------------------------------------------------
+  // GESTION DU SYSTÈME DE VOIX OFF DU TUTORIEL (4 FICHIERS MP3 DANS /SONS)
+  // -------------------------------------------------------------
+  currentAudio: null,
+
+  isVoiceOverMuted() {
+    try {
+      return localStorage.getItem('protec_voiceover_muted') === 'true';
+    } catch (e) {
+      return false;
+    }
+  },
+
+  toggleVoiceOver() {
+    const nextMuted = !this.isVoiceOverMuted();
+    try {
+      localStorage.setItem('protec_voiceover_muted', nextMuted ? 'true' : 'false');
+    } catch (e) {}
+
+    if (nextMuted) {
+      this.stopVoiceOver();
+    } else {
+      this.playStepVoiceOver(this.currentStep);
+    }
+    this.renderWizard();
+  },
+
+  stopVoiceOver() {
+    if (this.currentAudio) {
+      try {
+        this.currentAudio.pause();
+        this.currentAudio.currentTime = 0;
+      } catch (e) {}
+      this.currentAudio = null;
+    }
+  },
+
+  playStepVoiceOver(step) {
+    this.stopVoiceOver();
+    if (this.isVoiceOverMuted()) return;
+
+    const s = Math.max(1, Math.min(4, Number(step) || 1));
+    const candidates = [
+      'sons/tuto_etape_' + s + '.mp3',
+      'sons/tuto_etape' + s + '.mp3',
+      'sons/voix_off_etape_' + s + '.mp3',
+      'sons/voix_off_etape' + s + '.mp3',
+      'sons/tuto_' + s + '.mp3',
+      'sons/etape_' + s + '.mp3',
+      'sons/etape' + s + '.mp3',
+      'sons/tuto_step_' + s + '.mp3'
+    ];
+
+    const audio = new Audio();
+    this.currentAudio = audio;
+    let index = 0;
+
+    const tryCandidate = () => {
+      if (this.currentAudio !== audio) return;
+      if (index >= candidates.length) {
+        this.currentAudio = null;
+        return;
+      }
+      const p = candidates[index++];
+      audio.src = p;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          tryCandidate();
+        });
+      }
+    };
+
+    audio.onerror = () => {
+      tryCandidate();
+    };
+
+    tryCandidate();
   },
 
   setStep(step) {
@@ -365,6 +445,7 @@ window.ProtecOnboarding = {
     this.currentStep = Math.max(1, Math.min(4, step));
     this.saveProgress();
     this.renderWizard();
+    this.playStepVoiceOver(this.currentStep);
 
     // Initialisation réactive selon l'étape active
     if (this.currentStep === 2) {
@@ -401,7 +482,18 @@ window.ProtecOnboarding = {
         <div class="space-y-2 pb-3 border-b border-slate-200 dark:border-slate-800">
           <div class="flex items-center justify-between text-xs font-black uppercase tracking-wider text-slate-400 dark:text-slate-400">
             <span>Tutoriel Fondateur • Protection Civile</span>
-            <span class="text-pc-blue dark:text-blue-400 font-bold">Étape ${this.currentStep} sur 4</span>
+            <div class="flex items-center gap-3">
+              <button 
+                type="button" 
+                onclick="window.ProtecOnboarding.toggleVoiceOver()" 
+                id="btn-voiceover-toggle" 
+                class="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border transition shadow-xs cursor-pointer ${this.isVoiceOverMuted() ? 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-slate-300 dark:border-slate-700 hover:bg-slate-200' : 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700 hover:brightness-105'}"
+                title="${this.isVoiceOverMuted() ? 'Réactiver les voix off du tutoriel' : 'Couper la voix off du tutoriel'}">
+                <i data-lucide="${this.isVoiceOverMuted() ? 'volume-x' : 'volume-2'}" class="w-3.5 h-3.5"></i>
+                <span>${this.isVoiceOverMuted() ? 'Voix off : Coupée' : 'Voix off : Active'}</span>
+              </button>
+              <span class="text-pc-blue dark:text-blue-400 font-bold">Étape ${this.currentStep} sur 4</span>
+            </div>
           </div>
 
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">

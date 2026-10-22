@@ -8513,9 +8513,9 @@ class ProtecGame {
       id: missionId,
       type: 'logistique',
       category: 'logistique',
-      categoryLabel: '📦 Logistique - Atelier de Réarmement',
-      title: `Atelier Logistique : Réarmement ${veh.name}`,
-      desc: `Réarmement, désinfection et remise à niveau complète de la dotation (pansements, compresses, désinfectant, O2) pour ${veh.name} (${veh.model || veh.type}) au garage de l'antenne. Inscription des bénévoles ouverte.`,
+      categoryLabel: '📦 Mission Logistique - Réarmement',
+      title: `Mission Logistique : Réarmement ${veh.name}`,
+      desc: `Mission Logistique de réarmement, désinfection et remise à niveau complète de la dotation (pansements, compresses, désinfectant, O2) pour ${veh.name} (${veh.model || veh.type}) au garage de l'antenne. Inscription des bénévoles ouverte.`,
       targetVehicleId: veh.id,
       targetVehicleIds: [veh.id],
       isRearmamentWorkshop: true,
@@ -8561,7 +8561,7 @@ class ProtecGame {
     this.saveGame();
 
     if (!autoCreated) {
-      this.showToast('Mission Logistique Créée ! 📦', `L'atelier de réarmement pour ${veh.name} est au planning. Vos bénévoles peuvent s'y inscrire !`, 'green');
+      this.showToast('Mission Logistique Créée ! 📦', `La Mission Logistique de réarmement pour ${veh.name} est au planning. Vos bénévoles peuvent s'y inscrire !`, 'green');
       if (window.ProtecAudio && typeof window.ProtecAudio.playClickSound === 'function') {
         window.ProtecAudio.playClickSound();
       }
@@ -8641,7 +8641,7 @@ class ProtecGame {
           text: `Atelier logistique planifié automatiquement pour ${targetVeh.name} (Armement : ${armLevel}%).`
         });
       }
-      this.showToast('📦 Gestion Logistique Automatique', `${resp.name} a planifié l'atelier de réarmement pour ${targetVeh.name} (Armement: ${armLevel}%).`, 'teal');
+      this.showToast('📦 Gestion Logistique Automatique', `${resp.name} a planifié la Mission Logistique de réarmement pour ${targetVeh.name} (Armement: ${armLevel}%).`, 'teal');
     }
   }
 
@@ -26888,7 +26888,7 @@ class ProtecGame {
               </button>
               <button onclick="window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="wrench" class="w-4 h-4"></i>
-                <span>Atelier Réarmement Flotte</span>
+                <span>Mission Logistique</span>
               </button>
             </div>
           </div>

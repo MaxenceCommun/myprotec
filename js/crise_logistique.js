@@ -1657,7 +1657,7 @@ window.ProtecCriseLogistique = {
               <i data-lucide="wrench" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-sm sm:text-base font-black text-slate-900">Atelier de Réarmement Flotte</h3>
+              <h3 class="text-sm sm:text-base font-black text-slate-900">Mission Logistique - Réarmement Flotte</h3>
               <p class="text-[11px] text-slate-500 font-semibold">Reconditionnement, désinfection et réarmement en équipe</p>
             </div>
           </div>
@@ -1681,7 +1681,7 @@ window.ProtecCriseLogistique = {
         </div>
 
         <p class="text-xs text-slate-600 leading-snug">
-          Sélectionnez les véhicules contenant du matériel PS à reconditionner lors de cette mission atelier au local.
+          Sélectionnez les véhicules contenant du matériel PS à reconditionner lors de cette Mission Logistique au local.
           <br><strong>Barème horaire :</strong> ~1h par VPSP à charge complète (désinfection et réarmement consommables PS).
         </p>
 
@@ -1726,7 +1726,7 @@ window.ProtecCriseLogistique = {
           </button>
           <button type="button" onclick="window.ProtecCriseLogistique.submitRearmWorkshopMission()" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
             <i data-lucide="calendar-plus" class="w-4 h-4"></i>
-            <span>Créer la Mission d'Atelier</span>
+            <span>Créer la Mission Logistique</span>
           </button>
         </div>
       </div>
@@ -1807,9 +1807,10 @@ window.ProtecCriseLogistique = {
     const mission = {
       id: `rearm_workshop_${now}`,
       type: 'rearmement',
-      title: `Atelier Réarmement Flotte (${vehIds.length} vhc)`,
+      title: `Mission Logistique - Réarmement Flotte (${vehIds.length} vhc)`,
+      scale: 'LOGISTIQUE',
       subtitle: 'Nettoyage, désinfection, réarmement des consommables et reconditionnement',
-      description: `Atelier logistique au local pour réarmer et désinfecter ${vehIds.length} véhicule(s). Les bénévoles inscrits travaillent en équipe pour réduire la durée.`,
+      description: `Mission Logistique au local pour réarmer et désinfecter ${vehIds.length} véhicule(s). Les bénévoles inscrits travaillent en équipe pour réduire la durée.`,
       category: 'logistique',
       status: 'planifie',
       isRearmamentWorkshop: true,
@@ -1833,7 +1834,10 @@ window.ProtecCriseLogistique = {
     const modal = document.getElementById('rearm-workshop-modal');
     if (modal) modal.remove();
 
-    game.showToast('Atelier Créé ! 🛠️', `La mission d'atelier pour ${vehIds.length} véhicule(s) est planifiée. Ouvrez-la pour y inscrire vos bénévoles !`, 'green');
+    game.showToast('Mission Logistique Créée ! 📦', `La Mission Logistique de réarmement pour ${vehIds.length} véhicule(s) est planifiée. Ouvrez-la pour y inscrire vos bénévoles !`, 'green');
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.markStarterStepCompleted === 'function') {
+      window.ProtecAdvanced.markStarterStepCompleted(game, 'step_rearm');
+    }
     if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
     game.saveGame();
     if (typeof game.openMissionDetails === 'function') {
@@ -1968,7 +1972,7 @@ window.ProtecCriseLogistique = {
                   }
                 });
 
-                game.showToast('🛠️ Atelier Réarmement Terminé !', `${rearmedCount} véhicule(s) ont été reconditionnés et réarmés à 100% au local.`, 'green');
+                game.showToast('✅ Mission Logistique Terminée !', `${rearmedCount} véhicule(s) ont été reconditionnés et réarmés à 100% au local.`, 'green');
                 if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
                 if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
                 if (typeof game.refreshCurrentModalIfSafe === 'function') game.refreshCurrentModalIfSafe();
