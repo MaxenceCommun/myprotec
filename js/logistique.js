@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PROTEC LIVE - MODULE LOGISTIQUE & CENTRALE D'ACHATS PROTECTION CIVILE
  * 
  * Fonctionne comme une véritable boutique en ligne e-commerce :
@@ -805,7 +805,7 @@ window.ProtecLogistique = {
       image: 'images/equipements/moniteur_t7.png',
       price: 2600,
       unit: 'appareil complet',
-      badge: 'Simulation Médicale',
+      badge: 'Formation • Simulation',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Moniteur-défibrillateur de simulation Touch 7 connecté en Bluetooth à la tablette du formateur. Permet de générer des scénarios ECG dynamiques (FV, TV, asystolie), piloter les constantes (SpO2, NIBP) et simuler des bilans réalistes pour les formations PSE.',
       usage: 'Simulation haute fidélité pour les formations PSE1, PSE2 et recyclages opérationnels.'
