@@ -1,26 +1,25 @@
 /**
- * PROTEC LIVE - MODULE DE GESTIONNAIRE & GÉNÉRATEUR DE SCÉNARIOS OPÉRATIONNELS
+ * PROTEC LIVE - GESTIONNAIRE & GÉNÉRATEUR UNIVERSEL DE SCÉNARIOS OPÉRATIONNELS
  * 
- * Permet de visualiser, créer, paramétrer, modifier, dupliquer, supprimer et déclencher à la demande
- * n'importe quel scénario opérationnel :
- * - Dispositifs Prévisionnels de Secours (DPS)
- * - Situations d'urgence & Réquisitions SAMU 15 / SDIS
- * - Crises majeures & Plans NOVI / ORSEC déclenchés par la Préfecture
+ * Permet de visualiser, créer, paramétrer, modifier, cloner et déclencher à la demande
+ * n'importe quel scénario d'intervention (DPS, SAMU 15, SDIS, Crises NOVI/ORSEC Préfecture).
  * 
- * Fonctionnalités avancées :
- * 1. TEMPORALITÉ : Anticipation / Pré-alerte Programmée (ex: manifestations, météo J-1) vs Crise Imprévisible / Alerte Réflexe (ex: crash, attentat, explosion).
- * 2. DIMENSIONNEMENT VARIABLE : Mode Adaptatif dynamique aux moyens réels du joueur (petite, moyenne, forte, catastrophe) ou Fourchettes Min-Max.
- * 3. LOGISTIQUE & LOTS : Armement automatique ou imposé (VPSP, VTU, Lots A/B/C, CHU, CAI, Ravitaillement, Pompage).
- * 4. PÉRIPÉTIES & ÉVOLUTIONS : Bibliothèque d'incidents rapides et scénarios multi-phases.
+ * Modules inclus :
+ * 1. TEMPORALITÉ : Anticipation / Pré-alerte Programmée (avec délai paramétrable) vs Crise Imprévisible / Alerte Réflexe.
+ * 2. DIMENSIONNEMENT VARIABLE : Mode Adaptatif dynamique aux moyens réels de l'antenne ou Fourchettes Min-Max.
+ * 3. GESTION DES PHASES & ÉVOLUTIONS (DIAGRAMME DE SANKEY) : Modélisation visuelle des flux, des embranchements
+ *    et des probabilités de transition entre phases opérationnelles (Escalade, Maintien, Stabilisation).
+ * 4. LOGISTIQUE & LOTS : Armement automatique ou manuel (VPSP, VTU, Lots A/B/C, CAI, CHU, Ravitaillement, Pompage).
+ * 5. BIBLIOTHÈQUE D'INCIDENTS : Insertion rapide de péripéties classées par thématiques opérationnelles.
  */
 
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'protec_custom_scenarios_v2';
-  const OVERRIDES_KEY = 'protec_scenario_overrides_v2';
+  const STORAGE_KEY = 'protec_custom_scenarios_v3';
+  const OVERRIDES_KEY = 'protec_scenario_overrides_v3';
 
-  // 1. CATALOGUE PAR DÉFAUT DES SCÉNARIOS OFFICIELS ENRICHIS
+  // 1. CATALOGUE OFFICIEL DES SCÉNARIOS PAR DÉFAUT
   const DEFAULT_SCENARIOS = [
     // =========================================================================
     // A. DISPOSITIFS PRÉVISIONNELS DE SECOURS (DPS)
@@ -28,7 +27,7 @@
     {
       id: 'dps_football_regional',
       type: 'dps',
-      category: 'sport',
+      category: 'secours_evenementiel',
       timing: 'anticipation',
       anticipationDelay: 120,
       scalingMode: 'adaptive',
@@ -54,6 +53,19 @@
       riskLevel: 'moyen',
       urgency: 'normale',
       environment: 'ouvert_urbain',
+      isEvolutive: true,
+      phases: [
+        { id: 'p1', step: 1, name: 'Phase 1 : Mise en place & Échauffement', direction: 'stable', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+        { id: 'p2a', step: 2, name: 'Phase 2A : Match intense & Traumatologie', direction: 'montante', durationMin: 120, requiredVolunteers: 4, color: '#f59e0b' },
+        { id: 'p2b', step: 2, name: 'Phase 2B : Rencontre calme & Bobologie', direction: 'descendante', durationMin: 120, requiredVolunteers: 4, color: '#10b981' },
+        { id: 'p3', step: 3, name: 'Phase 3 : Évacuation spectateurs & Clôture', direction: 'descendante', durationMin: 45, requiredVolunteers: 4, color: '#6366f1' }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 45, label: 'Engagement musclé' },
+        { source: 'p1', target: 'p2b', probability: 55, label: 'Match sous contrôle' },
+        { source: 'p2a', target: 'p3', probability: 45, label: 'Fin de match' },
+        { source: 'p2b', target: 'p3', probability: 55, label: 'Fin de match' }
+      ],
       peripeties: [
         'Traumatisme de la cheville d\'un joueur sur tacle appuyé (MID et évacuation)',
         'Malaise vagal d\'un spectateur en tribune basse',
@@ -65,7 +77,7 @@
     {
       id: 'dps_festival_musique',
       type: 'dps',
-      category: 'concert',
+      category: 'secours_evenementiel',
       timing: 'anticipation',
       anticipationDelay: 240,
       scalingMode: 'adaptive',
@@ -91,11 +103,23 @@
       riskLevel: 'eleve',
       urgency: 'haute',
       environment: 'ouvert_urbain',
+      isEvolutive: true,
+      phases: [
+        { id: 'p1', step: 1, name: 'Phase 1 : Ouverture des portes & Patrouilles', direction: 'stable', durationMin: 120, requiredVolunteers: 8, color: '#38bdf8' },
+        { id: 'p2a', step: 2, name: 'Phase 2A : Pic de foule & Malaises / Alcoolisations', direction: 'montante', durationMin: 240, requiredVolunteers: 12, color: '#ef4444' },
+        { id: 'p2b', step: 2, name: 'Phase 2B : Soirée festive maîtrisée', direction: 'stable', durationMin: 240, requiredVolunteers: 8, color: '#10b981' },
+        { id: 'p3', step: 3, name: 'Phase 3 : Évacuation du site & Débriefing', direction: 'descendante', durationMin: 90, requiredVolunteers: 8, color: '#8b5cf6' }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 65, label: 'Afflux au poste' },
+        { source: 'p1', target: 'p2b', probability: 35, label: 'Activité modérée' },
+        { source: 'p2a', target: 'p3', probability: 65, label: 'Fermeture site' },
+        { source: 'p2b', target: 'p3', probability: 35, label: 'Fermeture site' }
+      ],
       peripeties: [
         'Multiples états d\'ivresse aiguë et déshydratations sous la chaleur',
         'Traumatisme crânien léger suite à un mouvement de foule devant la scène',
-        'Coupure profonde à la main par bris de verre au bar',
-        'Crise d\'angoisse et détresse respiratoire claustrophobe'
+        'Coupure profonde à la main par bris de verre au bar'
       ],
       isDefault: true,
       enabled: true
@@ -103,7 +127,7 @@
     {
       id: 'dps_trail_nature',
       type: 'dps',
-      category: 'sport',
+      category: 'secours_evenementiel',
       timing: 'anticipation',
       anticipationDelay: 180,
       scalingMode: 'range',
@@ -136,42 +160,6 @@
       isDefault: true,
       enabled: true
     },
-    {
-      id: 'dps_brocante_paps',
-      type: 'dps',
-      category: 'public',
-      timing: 'anticipation',
-      anticipationDelay: 120,
-      scalingMode: 'fixed',
-      minVolunteers: 2,
-      maxVolunteers: 2,
-      minDurationHours: 6.0,
-      maxDurationHours: 6.0,
-      minRewardMoney: 260,
-      maxRewardMoney: 260,
-      authority: 'mairie',
-      scale: 'PAPS (2 secouristes)',
-      title: 'Brocante & Foire Communale de Printemps',
-      desc: 'Point d\'Alerte et de Premiers Secours itinérant au milieu des étals des brocanteurs. Soins de bobologie, malaises et chutes de personnes âgées.',
-      requiredVolunteers: 2,
-      requiredRanks: ['PSE2', 'PSE1'],
-      requiredVehicles: [],
-      vehiclesMode: 'fixed',
-      requiredLots: ['lot_secours_b'],
-      durationHours: 6.0,
-      rewardMoney: 260,
-      rewardReputation: 20,
-      riskLevel: 'faible',
-      urgency: 'normale',
-      environment: 'ouvert_urbain',
-      peripeties: [
-        'Plaie superficielle au doigt nécessitant pansement compressif',
-        'Hypoglycémie chez une personne âgée déambulante',
-        'Perte d\'un enfant rapidement retrouvé et réconforté au poste'
-      ],
-      isDefault: true,
-      enabled: true
-    },
 
     // =========================================================================
     // B. RÉQUISITIONS & URGENCES SAMU 15 / SDIS
@@ -179,7 +167,7 @@
     {
       id: 'samu_garde_postee_vpsp',
       type: 'samu',
-      category: 'garde',
+      category: 'urgence_sanitaire',
       timing: 'anticipation',
       anticipationDelay: 60,
       scalingMode: 'fixed',
@@ -215,7 +203,7 @@
     {
       id: 'samu_renfort_noria',
       type: 'samu',
-      category: 'urgence',
+      category: 'urgence_sanitaire',
       timing: 'imprevisible',
       anticipationDelay: 0,
       scalingMode: 'adaptive',
@@ -228,7 +216,7 @@
       maxRewardMoney: 750,
       authority: 'samu',
       scale: 'Noria Sanitaire d\'Urgence (VPSP)',
-      title: 'Réquisition Réflexe : Soutien Saturations Urgences SAMU',
+      title: 'Réquisition Réflexe : Saturations Urgences SAMU',
       desc: 'Pic d\'appels extrême au centre de régulation médicale. Réquisition immédiate de l\'équipage Protection Civile pour réaliser des évacuations sanitaires vers le CHU.',
       requiredVolunteers: 4,
       requiredRanks: ['CE', 'PSE2', 'PSE1'],
@@ -251,56 +239,12 @@
     },
 
     // =========================================================================
-    // C. CRISES MAJEURES, ÉMEUTES, PLANS NOVI & ORSEC (PRÉFECTURE)
+    // C. CRISES MAJEURES, PLANS NOVI & ORSEC (PRÉFECTURE)
     // =========================================================================
-    {
-      id: 'crise_emeutes_manifestations',
-      type: 'crise',
-      category: 'emeutes',
-      timing: 'anticipation',
-      anticipationDelay: 120, // 2h de préalerte
-      scalingMode: 'adaptive',
-      scaleIntensity: 'moyenne',
-      minVolunteers: 4,
-      maxVolunteers: 14,
-      minDurationHours: 4.0,
-      maxDurationHours: 7.0,
-      minRewardMoney: 800,
-      maxRewardMoney: 2100,
-      authority: 'prefecture',
-      scale: 'PRÉFECTURE - DISPOSITIF SÉCURISÉ & SOUTIEN SANITAIRE',
-      title: 'Émeutes Urbaines suite aux Manifestations',
-      desc: 'Suite à des manifestations revendicatives, de fortes tensions et des violences urbaines sont signalées. La Préfecture active une préalerte puis ordonne un dispositif sanitaire d\'urgence pour relever les blessés civils et assurer les évacuations sous protection des forces de l\'ordre.',
-      requiredVolunteers: 6,
-      requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
-      requiredVehicles: ['VPSP', 'VTU'],
-      vehiclesMode: 'auto',
-      requiredLots: ['lot_secours_b', 'lot_secours_a', 'caisse_rearmement'],
-      durationHours: 5.0,
-      rewardMoney: 1250,
-      rewardReputation: 80,
-      riskLevel: 'critique',
-      urgency: 'critique',
-      environment: 'ouvert_urbain',
-      isEvolutive: true,
-      phases: [
-        'Phase 1 : Mise en préalerte et rassemblement sécurisé au centre de secours',
-        'Phase 2 : Montée en tension, jets de projectiles et afflux de blessés civils',
-        'Phase 3 : Évacuations sanitaires VPSP sous protection et désescalade'
-      ],
-      peripeties: [
-        'Tirs de mortiers d\'artifice à proximité nécessitant un repli d\'urgence',
-        'Prise en charge de 3 manifestants intoxiqués aux gaz lacrymogènes',
-        'Plaie profonde à l\'avant-bras par bris de verre d\'une vitrine brisée',
-        'Évacuation sanitaire coordonnée sous escorte des forces de sécurité'
-      ],
-      isDefault: true,
-      enabled: true
-    },
     {
       id: 'crise_carambolage_voie_rapide',
       type: 'crise',
-      category: 'novi',
+      category: 'accident_collectif',
       timing: 'imprevisible',
       anticipationDelay: 0,
       scalingMode: 'adaptive',
@@ -326,6 +270,19 @@
       riskLevel: 'critique',
       urgency: 'critique',
       environment: 'autoroute',
+      isEvolutive: true,
+      phases: [
+        { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Balisage sécurisé', direction: 'montante', durationMin: 45, requiredVolunteers: 6, color: '#f43f5e' },
+        { id: 'p2a', step: 2, name: 'Phase 2A : Tri SINUS & Noria d\'évacuations lourdes', direction: 'montante', durationMin: 150, requiredVolunteers: 10, color: '#ef4444' },
+        { id: 'p2b', step: 2, name: 'Phase 2B : Soins légers & Bilan ambulatoire', direction: 'descendante', durationMin: 90, requiredVolunteers: 6, color: '#10b981' },
+        { id: 'p3', step: 3, name: 'Phase 3 : Évacuation PMA & Clôture de voie', direction: 'descendante', durationMin: 60, requiredVolunteers: 6, color: '#6366f1' }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 70, label: 'Urgences absolues multiples' },
+        { source: 'p1', target: 'p2b', probability: 30, label: 'Bilan stable / Blessés légers' },
+        { source: 'p2a', target: 'p3', probability: 70, label: 'Noria terminée' },
+        { source: 'p2b', target: 'p3', probability: 30, label: 'Voie dégagée' }
+      ],
       peripeties: [
         'Chaîne de triage des victimes : 3 Urgences Absolues (UA), 9 Urgences Relatives (UR)',
         'Mise en place d\'un Poste Médical Avancé (PMA) sous tente gonflable Lot A',
@@ -338,7 +295,7 @@
     {
       id: 'crise_inondations_crues',
       type: 'crise',
-      category: 'inondation',
+      category: 'catastrophe_naturelle',
       timing: 'anticipation',
       anticipationDelay: 180,
       scalingMode: 'adaptive',
@@ -357,13 +314,26 @@
       requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
       requiredVehicles: ['VTU', 'VTU'],
       vehiclesMode: 'auto',
-      requiredLots: ['lot_secours_a', 'lot_chu', 'lot_ravitaillement', 'caisse_rearmement'],
+      requiredLots: ['lot_secours_a', 'lot_chu', 'lot_ravitaillement', 'lot_epuisement'],
       durationHours: 7.0,
       rewardMoney: 1450,
       rewardReputation: 70,
       riskLevel: 'critique',
       urgency: 'haute',
       environment: 'eau',
+      isEvolutive: true,
+      phases: [
+        { id: 'p1', step: 1, name: 'Phase 1 : Pré-alerte Météo & Reconnaissance des digues', direction: 'stable', durationMin: 60, requiredVolunteers: 4, color: '#38bdf8' },
+        { id: 'p2a', step: 2, name: 'Phase 2A : Débordement majeur, Évacuations & CHU', direction: 'montante', durationMin: 240, requiredVolunteers: 10, color: '#ef4444' },
+        { id: 'p2b', step: 2, name: 'Phase 2B : Pompage localisé & Protection habitations', direction: 'stable', durationMin: 180, requiredVolunteers: 6, color: '#f59e0b' },
+        { id: 'p3', step: 3, name: 'Phase 3 : Décrue, Désarmement du gymnase & Bilan', direction: 'descendante', durationMin: 90, requiredVolunteers: 6, color: '#10b981' }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 60, label: 'Rupture de berge / Crue' },
+        { source: 'p1', target: 'p2b', probability: 40, label: 'Infiltrations maîtrisées' },
+        { source: 'p2a', target: 'p3', probability: 60, label: 'Fin de décrue' },
+        { source: 'p2b', target: 'p3', probability: 40, label: 'Fin d\'épuisement' }
+      ],
       peripeties: [
         'Évacuation de 14 riverains bloqués à l\'étage de leur maison',
         'Mise en batterie des motopompes et groupes électrogènes de secours',
@@ -375,7 +345,7 @@
     {
       id: 'crise_orsec_grand_froid',
       type: 'crise',
-      category: 'orsec',
+      category: 'soutien_sinistres',
       timing: 'anticipation',
       anticipationDelay: 240,
       scalingMode: 'adaptive',
@@ -413,7 +383,7 @@
     {
       id: 'crise_evacuation_cai',
       type: 'crise',
-      category: 'cai',
+      category: 'soutien_sinistres',
       timing: 'imprevisible',
       anticipationDelay: 0,
       scalingMode: 'adaptive',
@@ -451,7 +421,7 @@
     {
       id: 'crise_deraillement_novi',
       type: 'crise',
-      category: 'novi',
+      category: 'accident_collectif',
       timing: 'imprevisible',
       anticipationDelay: 0,
       scalingMode: 'adaptive',
@@ -526,7 +496,6 @@
       }
     },
 
-    // Récupérer l'ensemble des scénarios avec fusion des surcharges et personnalisés
     getAllScenarios(filterType = null, query = null) {
       const customList = this.getCustomScenarios();
       const overrides = this.getOverrides();
@@ -563,7 +532,7 @@
       return all.find(s => s.id === id) || null;
     },
 
-    // Enregistrer un scénario (création ou modification)
+    // Enregistrer un scénario
     saveScenario(data) {
       this.ensureStorage();
       const isNew = !data.id || data.id === 'new';
@@ -572,8 +541,8 @@
       const cleanScenario = {
         id: scenarioId,
         type: data.type || 'crise',
-        category: data.category || 'emeutes',
-        timing: data.timing || 'anticipation',
+        category: data.category || 'accident_collectif',
+        timing: data.timing || 'imprevisible',
         anticipationDelay: parseInt(data.anticipationDelay, 10) || 120,
         authority: data.authority || 'prefecture',
         scalingMode: data.scalingMode || 'adaptive',
@@ -600,6 +569,7 @@
         environment: data.environment || 'ouvert_urbain',
         isEvolutive: Boolean(data.isEvolutive),
         phases: Array.isArray(data.phases) ? data.phases : [],
+        evolutions: Array.isArray(data.evolutions) ? data.evolutions : [],
         peripeties: Array.isArray(data.peripeties) ? data.peripeties.filter(p => p && p.trim()) : [],
         isCustom: !DEFAULT_SCENARIOS.some(d => d.id === scenarioId),
         enabled: data.enabled !== false,
@@ -624,7 +594,6 @@
       return cleanScenario;
     },
 
-    // Dupliquer un scénario
     duplicateScenario(id) {
       const src = this.getScenarioById(id);
       if (!src) return null;
@@ -664,7 +633,7 @@
     },
 
     // =========================================================================
-    // CALCUL DYNAMIQUE & ADAPTATIF DES MOYENS SELON LE JOUEUR
+    // CALCUL DYNAMIQUE & ADAPTATIF DES MOYENS
     // =========================================================================
     calculateDynamicRequirements(game, sc) {
       const allVols = Array.isArray(game?.volunteers) ? game.volunteers : [];
@@ -687,7 +656,6 @@
         calcVolunteers = Math.max(minV, Math.min(maxV, availableVolsCount));
       }
 
-      // Véhicules requis
       let calcVehicles = [];
       if (sc.vehiclesMode === 'auto') {
         const vpspCount = Math.max(1, Math.floor(calcVolunteers / 4));
@@ -706,7 +674,6 @@
           : ['VPSP'];
       }
 
-      // Durée & Rémunération
       let calcDuration = sc.durationHours || 4.0;
       if (sc.maxDurationHours && sc.maxDurationHours > (sc.minDurationHours || sc.durationHours)) {
         const minD = sc.minDurationHours || sc.durationHours;
@@ -715,7 +682,6 @@
 
       let calcReward = sc.rewardMoney || 400;
       if (sc.scalingMode === 'adaptive') {
-        // Taux horaire réaliste par secouriste engagé (~28 à 35 €/h/secouriste)
         calcReward = Math.round(calcVolunteers * calcDuration * 30);
       } else if (sc.maxRewardMoney && sc.maxRewardMoney > (sc.minRewardMoney || sc.rewardMoney)) {
         const minR = sc.minRewardMoney || sc.rewardMoney;
@@ -731,7 +697,7 @@
     },
 
     // =========================================================================
-    // DÉCLENCHEMENT IMMÉDIAT EN JEU D'UN SCÉNARIO
+    // DÉCLENCHEMENT D'UN SCÉNARIO
     // =========================================================================
     triggerScenarioNow(game, scenarioId, stationId = null) {
       if (!game) game = window.game;
@@ -751,9 +717,8 @@
       const locType = sc.type === 'crise' ? 'crise' : (sc.type === 'samu' ? 'urgences' : 'dps');
       const loc = game.calculateRealisticMissionLocation ? game.calculateRealisticMissionLocation(st, locType) : { lat: st?.lat || 48.8566, lng: st?.lng || 2.3522 };
 
-      // Calcul dynamique des besoins selon l'ampleur et les moyens réels du joueur
       const dyn = this.calculateDynamicRequirements(game, sc);
-      const durationSec = Math.round(dyn.duration * 60); // 1h in-game = 60s
+      const durationSec = Math.round(dyn.duration * 60);
       const dept = st?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
 
       const isAnticipation = sc.timing === 'anticipation';
@@ -798,13 +763,15 @@
         peripeties: sc.peripeties || [],
         isEvolutive: Boolean(sc.isEvolutive),
         phases: sc.phases || [],
+        evolutions: sc.evolutions || [],
+        currentPhaseId: sc.phases?.[0]?.id || null,
         isScenarioTriggered: true,
         operationalLog: [
           {
             timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
             text: isAnticipation 
-              ? `PRÉFECTURE (COD) : Pré-alerte opérationnelle activée (délai : ${delayMin} min). Mobilisation préventive des moyens de secours demandée.`
-              : `ALERTE IMMÉDIATE : Déclenchement d'urgence réflexe. Ordre de départ opérationnel émis.`,
+              ? `PRÉFECTURE (COD) : Pré-alerte opérationnelle activée (délai : ${delayMin} min). Mobilisation préventive en cours.`
+              : `DÉCLENCHEMENT IMMÉDIAT : Ordre de départ opérationnel émis.`,
             author: sc.authority ? sc.authority.toUpperCase() : 'COMMANDEMENT'
           }
         ]
@@ -813,7 +780,6 @@
       if (!Array.isArray(game.missions)) game.missions = [];
       game.missions.unshift(mission);
 
-      // Audio & Notifications
       if (sc.type === 'samu') {
         if (window.ProtecAudio?.playRadioBeep) window.ProtecAudio.playRadioBeep();
         if (window.ProtecNotifications?.notifyCategory) {
@@ -824,7 +790,7 @@
         if (window.ProtecNotifications?.notifyCategory) {
           const notifTitle = isAnticipation ? '📅 Pré-alerte Préfecture Activée' : '⚠️ Alerte Majeure Préfecture (COD)';
           const notifMsg = isAnticipation 
-            ? `Pré-alerte émise pour « ${sc.title} ». Rassemblement des équipages sous ${delayMin} min.`
+            ? `Pré-alerte émise pour « ${sc.title} ». Rassemblement sous ${delayMin} min.`
             : `Déclenchement immédiat : « ${sc.title} » sur le département ${dept}.`;
           window.ProtecNotifications.notifyCategory('crise', notifTitle, notifMsg, `crise-notif-${mission.id}`);
         }
@@ -839,7 +805,7 @@
       game.saveGame?.();
 
       if (game.showToast) {
-        const typeBadge = isAnticipation ? '📅 PRÉ-ALERTE' : (sc.type === 'crise' ? '🚨 CRISE MAJEURE' : (sc.type === 'samu' ? '🚑 SAMU 15' : '📋 DPS'));
+        const typeBadge = isAnticipation ? '📅 PRÉ-ALERTE' : (sc.type === 'crise' ? '🚨 CRISE' : (sc.type === 'samu' ? '🚑 SAMU' : '📋 DPS'));
         game.showToast(
           `${typeBadge} Déclenché avec Succès !`,
           `« ${sc.title} » (${dyn.volunteers} secouristes, ${dyn.vehicles.join('/')}) est disponible sur la carte.`,
@@ -851,7 +817,176 @@
     },
 
     // =========================================================================
-    // RENDU DE L'INTERFACE ADMIN (GESTIONNAIRE & GÉNÉRATEUR COMPLET)
+    // RENDU DU DIAGRAMME DE SANKEY (SVG FLUIDE & EMBRANCHEMENTS)
+    // =========================================================================
+    renderSankeyDiagram(phases = [], evolutions = []) {
+      if (!Array.isArray(phases) || phases.length === 0) {
+        return `
+          <div class="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 text-center space-y-2">
+            <span class="text-2xl">🌱</span>
+            <p class="text-xs font-bold text-slate-300">Aucune phase configurée pour ce scénario.</p>
+            <p class="text-[11px] text-slate-500">Utilisez un modèle d'évolution ci-dessous pour générer l'arbre des phases en un clic.</p>
+          </div>
+        `;
+      }
+
+      const svgW = 820;
+      const svgH = 260;
+
+      // Grouper les phases par étape chronologique (step)
+      const steps = {};
+      phases.forEach(p => {
+        const s = parseInt(p.step, 10) || 1;
+        if (!steps[s]) steps[s] = [];
+        steps[s].push(p);
+      });
+
+      const stepKeys = Object.keys(steps).map(Number).sort((a,b) => a-b);
+      const colCount = Math.max(1, stepKeys.length);
+      const nodeW = 165;
+      const paddingX = 40;
+      const availW = svgW - (paddingX * 2) - nodeW;
+
+      // Calculer la géométrie des nœuds
+      const nodeMap = {};
+      stepKeys.forEach((sKey, colIdx) => {
+        const colX = paddingX + (colCount > 1 ? (colIdx / (colCount - 1)) * availW : (availW / 2));
+        const colNodes = steps[sKey];
+        const count = colNodes.length;
+        const paddingY = 25;
+        const availH = svgH - (paddingY * 2);
+        const nodeH = Math.max(38, Math.min(62, (availH - ((count - 1) * 14)) / count));
+
+        colNodes.forEach((n, rowIdx) => {
+          const nodeY = paddingY + rowIdx * (nodeH + 14);
+          nodeMap[n.id] = {
+            ...n,
+            x: colX,
+            y: nodeY,
+            w: nodeW,
+            h: nodeH,
+            color: n.color || (n.direction === 'montante' ? '#f43f5e' : (n.direction === 'descendante' ? '#10b981' : '#38bdf8'))
+          };
+        });
+      });
+
+      // Calculer les rubans de liaison Sankey
+      const outOffsets = {};
+      const inOffsets = {};
+      phases.forEach(p => { outOffsets[p.id] = 0; inOffsets[p.id] = 0; });
+
+      const ribbons = [];
+      const defsGradients = [];
+
+      (evolutions || []).forEach((evo, idx) => {
+        const src = nodeMap[evo.source];
+        const tgt = nodeMap[evo.target];
+        if (!src || !tgt) return;
+
+        const prob = Math.max(5, Math.min(100, parseInt(evo.probability, 10) || 50));
+        const ribbonH = Math.max(7, Math.min(24, (prob / 100) * src.h));
+
+        const y1_top = src.y + 8 + (outOffsets[evo.source] || 0);
+        const y1_bot = y1_top + ribbonH;
+        const y2_top = tgt.y + 8 + (inOffsets[evo.target] || 0);
+        const y2_bot = y2_top + ribbonH;
+
+        outOffsets[evo.source] = (outOffsets[evo.source] || 0) + ribbonH + 2;
+        inOffsets[evo.target] = (inOffsets[evo.target] || 0) + ribbonH + 2;
+
+        const x1 = src.x + src.w;
+        const x2 = tgt.x;
+        const cpx1 = x1 + (x2 - x1) * 0.45;
+        const cpx2 = x1 + (x2 - x1) * 0.55;
+
+        const pathD = `M ${x1} ${y1_top} C ${cpx1} ${y1_top}, ${cpx2} ${y2_top}, ${x2} ${y2_top} L ${x2} ${y2_bot} C ${cpx2} ${y2_bot}, ${cpx1} ${y1_bot}, ${x1} ${y1_bot} Z`;
+
+        const gradId = `sankey-grad-${idx}`;
+        defsGradients.push(`
+          <linearGradient id="${gradId}" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="${src.color}" stop-opacity="0.65" />
+            <stop offset="100%" stop-color="${tgt.color}" stop-opacity="0.65" />
+          </linearGradient>
+        `);
+
+        ribbons.push({
+          id: evo.id || `evo-${idx}`,
+          pathD,
+          gradId,
+          midX: (x1 + x2) / 2,
+          midY: (y1_top + y2_top) / 2,
+          prob,
+          label: evo.label || ''
+        });
+      });
+
+      return `
+        <div class="relative w-full rounded-2xl bg-slate-950/90 border border-slate-800 p-3 overflow-hidden shadow-inner">
+          <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-auto select-none font-sans" style="max-height: 290px;">
+            <defs>
+              ${defsGradients.join('')}
+              <filter id="node-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.5"/>
+              </filter>
+            </defs>
+
+            <!-- Rubans de flux Sankey -->
+            <g class="sankey-ribbons">
+              ${ribbons.map(r => `
+                <g class="transition-opacity hover:opacity-100 cursor-pointer group" opacity="0.85">
+                  <path d="${r.pathD}" fill="url(#${r.gradId})" stroke="#ffffff" stroke-opacity="0.1" stroke-width="0.5" />
+                  <rect x="${r.midX - 35}" y="${r.midY - 9}" width="70" height="18" rx="9" fill="#0f172a" stroke="#475569" stroke-width="0.8" />
+                  <text x="${r.midX}" y="${r.midY + 3.5}" text-anchor="middle" fill="#f8fafc" font-size="9" font-weight="900">${r.prob}%</text>
+                  ${r.label ? `
+                    <title>${r.prob}% : ${r.label}</title>
+                  ` : ''}
+                </g>
+              `).join('')}
+            </g>
+
+            <!-- Nœuds de phases -->
+            <g class="sankey-nodes">
+              ${Object.values(nodeMap).map(n => {
+                const icon = n.direction === 'montante' ? '🔺' : (n.direction === 'descendante' ? '🔻' : '🔹');
+                const dirLabel = n.direction === 'montante' ? 'Escalade' : (n.direction === 'descendante' ? 'Repli' : 'Stable');
+                return `
+                  <g transform="translate(${n.x}, ${n.y})" filter="url(#node-glow)" class="cursor-pointer group">
+                    <rect width="${n.w}" height="${n.h}" rx="10" fill="#0f172a" stroke="${n.color}" stroke-width="1.8" />
+                    <rect x="0" y="0" width="5" height="${n.h}" rx="2.5" fill="${n.color}" />
+                    
+                    <!-- Texte Phase -->
+                    <text x="12" y="16" fill="#ffffff" font-size="9.5" font-weight="900">
+                      ${n.name.length > 22 ? n.name.slice(0, 20) + '…' : n.name}
+                    </text>
+                    
+                    <text x="12" y="30" fill="${n.color}" font-size="8.5" font-weight="700">
+                      ${icon} ${dirLabel} • ${n.durationMin || 45}m
+                    </text>
+
+                    <text x="12" y="n.h > 45 ? 43 : 32" fill="#94a3b8" font-size="8" font-weight="600">
+                      👥 ${n.requiredVolunteers || 4} secouristes
+                    </text>
+                  </g>
+                `;
+              }).join('')}
+            </g>
+          </svg>
+
+          <!-- Légende interactive sous le diagramme -->
+          <div class="flex items-center justify-between text-[10px] text-slate-400 pt-2 border-t border-slate-800/80 mt-1 flex-wrap gap-2">
+            <div class="flex items-center gap-3">
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-rose-500"></span> Escalade / Aggravation</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-sky-400"></span> Maintien / Stable</span>
+              <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> Stabilisation / Repli</span>
+            </div>
+            <span class="font-bold text-slate-300">Épaisseur du flux = Probabilité d'occurrence (%)</span>
+          </div>
+        </div>
+      `;
+    },
+
+    // =========================================================================
+    // RENDU DE L'INTERFACE D'ADMINISTRATION
     // =========================================================================
     renderAdminView(container, game) {
       if (!container) return;
@@ -872,18 +1007,18 @@
       container.innerHTML = `
         <div class="space-y-4">
 
-          <!-- BANDEAU D'EN-TÊTE DU GESTIONNAIRE -->
+          <!-- BANDEAU D'EN-TÊTE -->
           <div class="p-4 rounded-3xl bg-gradient-to-r from-indigo-950 via-slate-900 to-blue-950 text-white shadow-xl border border-indigo-800/40 flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
               <div class="flex items-center gap-2">
                 <span class="text-xl">🎭</span>
-                <h3 class="text-sm font-black uppercase tracking-wider text-indigo-200">Générateur & Éditeur de Scénarios Opérationnels</h3>
+                <h3 class="text-sm font-black uppercase tracking-wider text-indigo-200">Générateur & Gestionnaire de Scénarios Opérationnels</h3>
                 <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-300 border border-indigo-400/30">
-                  Anticipation • Imprévisible • Moyens Adaptatifs
+                  Anticipation • Imprévisible • Diagramme de Sankey
                 </span>
               </div>
               <p class="text-[11px] text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                Créez et paramétrez tous vos scénarios (Émeutes, Manifestations, NOVI, Crues, Gardes). Ajustez la temporalité (pré-alerte ou crise réflexe) et laissez le dimensionnement s'adapter dynamiquement aux moyens réels de votre antenne.
+                Créez et paramétrez vos scénarios d'intervention. Définissez la temporalité (pré-alerte ou crise réflexe), les moyens adaptatifs selon votre antenne, et modélisez les flux de phases avec le diagramme de Sankey.
               </p>
             </div>
 
@@ -897,7 +1032,7 @@
             </div>
           </div>
 
-          <!-- FORMULAIRE D'ÉDITION / CRÉATION (MODE ÉDITEUR COMPLET) -->
+          <!-- FORMULAIRE D'ÉDITION DU SCÉNARIO -->
           ${isEditing && editingScenario ? `
             <div id="scenario-editor-box" class="p-5 sm:p-6 rounded-3xl bg-slate-900 text-slate-100 border-2 border-indigo-500/80 shadow-2xl space-y-5 animate-in fade-in duration-200">
               
@@ -907,9 +1042,9 @@
                   <span class="text-xl">${editingScenario.id.startsWith('custom_') || editingScenario.id === 'new' ? '✨' : '✏️'}</span>
                   <div>
                     <h4 class="text-sm font-black text-white uppercase tracking-wide">
-                      ${editingScenario.id === 'new' ? 'Création d’un Nouveau Scénario' : `Édition : « ${editingScenario.title} »`}
+                      ${editingScenario.id === 'new' ? 'Création d’un Nouveau Scénario' : `Édition : « ${editingScenario.title || 'Scénario'} »`}
                     </h4>
-                    <p class="text-[11px] text-slate-400">Configurez la temporalité, l'ampleur variable et les moyens requis.</p>
+                    <p class="text-[11px] text-slate-400">Paramétrez le titre, la temporalité, les moyens et l'arbre d'évolution des phases.</p>
                   </div>
                 </div>
                 <button onclick="window.ProtecScenariosManager.closeEditor()" class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs transition cursor-pointer">
@@ -924,7 +1059,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div class="md:col-span-2">
                     <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Titre du Scénario :</label>
-                    <input type="text" id="scen-edit-title" value="${editingScenario.title || ''}" required placeholder="Ex: Émeutes Urbaines suite aux Manifestations" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-white focus:ring-2 focus:ring-indigo-500 placeholder-slate-500" />
+                    <input type="text" id="scen-edit-title" value="${editingScenario.title || ''}" required placeholder="Ex: Accident Collectif / Alerte Canicule / DPS Tripartite" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-white focus:ring-2 focus:ring-indigo-500 placeholder-slate-500" />
                   </div>
                   <div>
                     <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Type d'Opération :</label>
@@ -936,57 +1071,49 @@
                   </div>
                 </div>
 
-                <!-- SECTION 2 : TEMPORALITÉ & DÉCLENCHEMENT (ANTICIPATION VS IMPRÉVISIBLE) -->
+                <!-- SECTION 2 : TEMPORALITÉ & ANTICIPATION -->
                 <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
                       <i data-lucide="clock" class="w-3.5 h-3.5"></i>
-                      Temporalité du Scénario : Anticipation vs Imprévisible
+                      Temporalité : Anticipation vs Crise Imprévisible
                     </span>
-                    <span class="text-[10px] text-slate-400">Définit si une pré-alerte précède l'événement</span>
+                    <span class="text-[10px] text-slate-400">Détermine la phase de pré-alerte avant l'engagement</span>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <!-- Option 1 : Anticipation / Pré-alerte -->
                     <label class="p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition ${editingScenario.timing === 'anticipation' ? 'bg-amber-950/40 border-amber-500/80 text-amber-200' : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'}">
                       <input type="radio" name="scen-edit-timing" value="anticipation" ${editingScenario.timing === 'anticipation' ? 'checked' : ''} onchange="window.ProtecScenariosManager.onTimingChange('anticipation')" class="mt-0.5 text-amber-500 focus:ring-amber-500" />
                       <div>
-                        <div class="text-xs font-black flex items-center gap-1.5 text-amber-300">
-                          <span>📅 Anticipation / Pré-alerte Programmée</span>
-                        </div>
+                        <div class="text-xs font-black text-amber-300">📅 Anticipation / Pré-alerte Programmée</div>
                         <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">
-                          Événement prévisible (manifestation, match à risque, alerte météo J-1). La Préfecture envoie une pré-alerte avant l'engagement.
+                          Événement prévisible ou programmé (vigilance météo, rassemblement, pré-alerte Préfecture).
                         </p>
                       </div>
                     </label>
 
-                    <!-- Option 2 : Imprévisible / Alerte réflexe -->
                     <label class="p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition ${editingScenario.timing !== 'anticipation' ? 'bg-rose-950/40 border-rose-500/80 text-rose-200' : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'}">
                       <input type="radio" name="scen-edit-timing" value="imprevisible" ${editingScenario.timing !== 'anticipation' ? 'checked' : ''} onchange="window.ProtecScenariosManager.onTimingChange('imprevisible')" class="mt-0.5 text-rose-500 focus:ring-rose-500" />
                       <div>
-                        <div class="text-xs font-black flex items-center gap-1.5 text-rose-300">
-                          <span>🚨 Crise Imprévisible / Alerte Réflexe</span>
-                        </div>
+                        <div class="text-xs font-black text-rose-300">🚨 Crise Imprévisible / Alerte Réflexe</div>
                         <p class="text-[10px] text-slate-400 mt-0.5 leading-snug">
-                          Accident soudain, crash, carambolage, explosion. Déclenchement d'urgence immédiat sans aucun préavis.
+                          Accident soudain, collision, explosion. Déclenchement d'urgence immédiat sans aucun préavis.
                         </p>
                       </div>
                     </label>
                   </div>
 
-                  <!-- Paramètres d'anticipation si activée -->
                   <div id="scen-anticipation-box" class="${editingScenario.timing === 'anticipation' ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
                     <div>
-                      <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">⏱️ Délai de Préavis / Pré-alerte avant l'action :</label>
+                      <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">⏱️ Délai de Préavis / Pré-alerte :</label>
                       <select id="scen-edit-anticipation-delay" class="w-full px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-amber-500">
                         <option value="15" ${editingScenario.anticipationDelay == 15 ? 'selected' : ''}>15 minutes (Alerte rapide)</option>
                         <option value="30" ${editingScenario.anticipationDelay == 30 ? 'selected' : ''}>30 minutes</option>
                         <option value="60" ${editingScenario.anticipationDelay == 60 ? 'selected' : ''}>1 heure</option>
                         <option value="120" ${editingScenario.anticipationDelay == 120 || !editingScenario.anticipationDelay ? 'selected' : ''}>2 heures (Standard Préfecture)</option>
                         <option value="240" ${editingScenario.anticipationDelay == 240 ? 'selected' : ''}>4 heures</option>
-                        <option value="720" ${editingScenario.anticipationDelay == 720 ? 'selected' : ''}>12 heures (Veille nuit)</option>
-                        <option value="1440" ${editingScenario.anticipationDelay == 1440 ? 'selected' : ''}>J-1 (24 heures à l'avance)</option>
-                        <option value="2880" ${editingScenario.anticipationDelay == 2880 ? 'selected' : ''}>J-2 (48 heures à l'avance)</option>
+                        <option value="720" ${editingScenario.anticipationDelay == 720 ? 'selected' : ''}>12 heures (Veille de nuit)</option>
+                        <option value="1440" ${editingScenario.anticipationDelay == 1440 ? 'selected' : ''}>J-1 (24 heures)</option>
                       </select>
                     </div>
 
@@ -1003,32 +1130,32 @@
                   </div>
                 </div>
 
-                <!-- SECTION 3 : DESCRIPTION & ÉCHELLE OPÉRATIONNELLE -->
+                <!-- SECTION 3 : DESCRIPTION & ÉCHELLE -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div class="md:col-span-2">
                     <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Description Opérationnelle :</label>
-                    <textarea id="scen-edit-desc" rows="2" placeholder="Contexte de crise, tensions, blessés attendus, rôle de la Protection Civile..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:ring-2 focus:ring-indigo-500 placeholder-slate-500">${editingScenario.desc || ''}</textarea>
+                    <textarea id="scen-edit-desc" rows="2" placeholder="Contexte opérationnel, risques identifiés, mission confiée aux secouristes..." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white focus:ring-2 focus:ring-indigo-500 placeholder-slate-500">${editingScenario.desc || ''}</textarea>
                   </div>
                   <div>
-                    <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Échelle & Format Opérationnel :</label>
-                    <input type="text" id="scen-edit-scale" value="${editingScenario.scale || ''}" placeholder="Ex: PRÉFECTURE - DISPOSITIF SÉCURISÉ" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-amber-300 focus:ring-2 focus:ring-indigo-500 placeholder-slate-500" />
+                    <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Échelle & Format :</label>
+                    <input type="text" id="scen-edit-scale" value="${editingScenario.scale || ''}" placeholder="Ex: PLAN NOVI / DPS-PE" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-amber-300 focus:ring-2 focus:ring-indigo-500 placeholder-slate-500" />
                     <div class="mt-1 flex flex-wrap gap-1">
-                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'PRÉFECTURE - DISPOSITIF SÉCURISÉ & SOUTIEN SANITAIRE'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">Émeutes</button>
-                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'PLAN NOVI - PMA & NORIA VPSP'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">NOVI</button>
-                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'PLAN ORSEC - SOUTIEN AUX POPULATIONS (CHU/CAI)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">ORSEC</button>
-                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'DPS-PE (4 secouristes + VPSP)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">DPS</button>
+                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'PLAN NOVI (PMA & Noria VPSP)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">NOVI</button>
+                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'PLAN ORSEC (Soutien & CHU/CAI)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">ORSEC</button>
+                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'Garde Postée SAMU 15 (1 VPSP)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">SAMU</button>
+                      <button type="button" onclick="document.getElementById('scen-edit-scale').value = 'DPS-PE (4 secouristes + VPSP)'" class="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-400">DPS-PE</button>
                     </div>
                   </div>
                 </div>
 
-                <!-- SECTION 4 : DIMENSIONNEMENT VARIABLE DES MOYENS (ADAPTATIF AUX MOYENS DU JOUEUR) -->
+                <!-- SECTION 4 : DIMENSIONNEMENT VARIABLE DES MOYENS -->
                 <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-3">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-black uppercase text-indigo-300 tracking-wider flex items-center gap-1.5">
                       <i data-lucide="sliders" class="w-3.5 h-3.5"></i>
                       Dimensionnement des Moyens : Adaptatif ou Personnalisé
                     </span>
-                    <span class="text-[10px] text-slate-400">S'ajuste aux effectifs et véhicules de votre antenne</span>
+                    <span class="text-[10px] text-slate-400">Calcul automatique selon les moyens réels du joueur</span>
                   </div>
 
                   <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -1048,7 +1175,6 @@
                     </label>
                   </div>
 
-                  <!-- Paramètres Ampleur Adaptative -->
                   <div id="scen-box-adaptive" class="${editingScenario.scalingMode === 'adaptive' || !editingScenario.scalingMode ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-800">
                     <div>
                       <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">Niveau d'Ampleur :</label>
@@ -1089,7 +1215,6 @@
                     </div>
                   </div>
 
-                  <!-- Paramètres Fixes ou Fourchette Manuelle -->
                   <div id="scen-box-manual" class="${editingScenario.scalingMode === 'range' || editingScenario.scalingMode === 'fixed' ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-slate-800">
                     <div>
                       <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">👥 Secouristes Requis :</label>
@@ -1106,9 +1231,103 @@
                   </div>
                 </div>
 
-                <!-- SECTION 5 : VÉHICULES & MATÉRIELS REQUIS -->
+                <!-- SECTION 5 : ÉVOLUTIONS OPÉRATIONNELLES & DIAGRAMME DE SANKEY DES PHASES -->
+                <div class="p-4 rounded-3xl bg-slate-950/80 border border-indigo-500/40 space-y-3.5 shadow-lg">
+                  <div class="flex items-center justify-between flex-wrap gap-2">
+                    <div>
+                      <span class="text-xs font-black uppercase text-indigo-300 tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="git-branch" class="w-4 h-4 text-indigo-400"></i>
+                        Évolutions Possibles & Diagramme de Sankey des Phases
+                      </span>
+                      <p class="text-[10px] text-slate-400 mt-0.5">
+                        Modélisez le déroulement opérationnel, les embranchements (escalade / stabilisation) et visualisez le flux Sankey en temps réel.
+                      </p>
+                    </div>
+
+                    <!-- Presets en 1 clic -->
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-[10px] font-bold text-slate-400">Modèles de flux :</span>
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('arbre_2_branches')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                        🌿 Arbre à 2 Branches (60/40)
+                      </button>
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('escalade_3_niveaux')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                        📈 Escalade à 3 Niveaux
+                      </button>
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('lineaire')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                        ➡️ Linéaire Simple
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Conteneur d'affichage dynamique du diagramme de Sankey -->
+                  <div id="sankey-diagram-container">
+                    ${this.renderSankeyDiagram(editingScenario.phases, editingScenario.evolutions)}
+                  </div>
+
+                  <!-- Édition détaillée des phases et des transitions -->
+                  <div class="pt-2 border-t border-slate-800 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <h5 class="text-[10px] font-black uppercase text-slate-400">Détail des Phases du Scénario :</h5>
+                      <button type="button" onclick="window.ProtecScenariosManager.addNewPhasePrompt()" class="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold transition">
+                        + Ajouter une Phase
+                      </button>
+                    </div>
+
+                    <div id="scen-phases-editor-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
+                      ${(editingScenario.phases || []).map((p, idx) => `
+                        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5 relative group">
+                          <div class="flex items-center justify-between">
+                            <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900" style="color: ${p.color || '#38bdf8'}">
+                              Étape ${p.step || 1}
+                            </span>
+                            <button type="button" onclick="window.ProtecScenariosManager.removePhase('${p.id}')" class="text-slate-400 hover:text-rose-400 text-xs font-bold" title="Supprimer la phase">✕</button>
+                          </div>
+                          
+                          <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'name', this.value)" class="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-bold text-white" />
+
+                          <div class="grid grid-cols-2 gap-1 text-[10px]">
+                            <select onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'direction', this.value)" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-slate-300">
+                              <option value="montante" ${p.direction === 'montante' ? 'selected' : ''}>🔺 Escalade</option>
+                              <option value="stable" ${p.direction === 'stable' ? 'selected' : ''}>🔹 Maintien</option>
+                              <option value="descendante" ${p.direction === 'descendante' ? 'selected' : ''}>🔻 Repli</option>
+                            </select>
+
+                            <input type="number" value="${p.durationMin || 45}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-center text-white" />
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+
+                    <!-- Évolutions / Transitions et probabilités -->
+                    <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                      <div class="flex items-center justify-between">
+                        <h5 class="text-[10px] font-black uppercase text-slate-400">Branches d'Évolution & Probabilités (%) :</h5>
+                        <button type="button" onclick="window.ProtecScenariosManager.addNewEvolutionPrompt()" class="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition">
+                          + Ajouter une Transition
+                        </button>
+                      </div>
+
+                      <div id="scen-evolutions-editor-list" class="space-y-1.5">
+                        ${(editingScenario.evolutions || []).map((e, idx) => `
+                          <div class="flex items-center gap-2 p-2 rounded-xl bg-slate-800/60 border border-slate-700/80 text-xs">
+                            <span class="text-indigo-400 font-mono text-[11px] font-bold shrink-0">
+                              ${e.source} ➔ ${e.target}
+                            </span>
+                            <input type="text" value="${(e.label || '').replace(/"/g, '&quot;')}" placeholder="Condition / Intitulé de transition..." onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'label', this.value)" class="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white" />
+                            <div class="flex items-center gap-1 shrink-0">
+                              <input type="number" min="5" max="100" step="5" value="${e.probability || 50}" onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'probability', parseInt(this.value,10))" class="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-center font-bold text-amber-300" />
+                              <span class="text-[10px] text-slate-400">%</span>
+                            </div>
+                            <button type="button" onclick="window.ProtecScenariosManager.removeEvolution(${idx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs">✕</button>
+                          </div>
+                        `).join('')}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SECTION 6 : VÉHICULES & MATÉRIELS REQUIS -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <!-- Véhicules -->
                   <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
                     <div class="flex items-center justify-between">
                       <label class="block text-[10px] font-black uppercase text-slate-300">🚑 Dotation Véhicules :</label>
@@ -1120,7 +1339,7 @@
 
                     <div id="scen-veh-checkboxes" class="grid grid-cols-3 gap-1.5 text-[11px] font-bold">
                       ${['VPSP', 'VTU', 'VL', 'Minibus', 'Quad', 'Vélo'].map(vType => {
-                        const checked = (editingScenario.requiredVehicles || ['VPSP', 'VTU']).includes(vType);
+                        const checked = (editingScenario.requiredVehicles || ['VPSP']).includes(vType);
                         return `
                           <label class="p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer ${checked ? 'bg-indigo-950/60 border-indigo-500 text-indigo-200' : 'bg-slate-800/60 border-slate-700 text-slate-400'}">
                             <input type="checkbox" name="scen-veh" value="${vType}" ${checked ? 'checked' : ''} class="rounded text-indigo-600" />
@@ -1131,7 +1350,6 @@
                     </div>
                   </div>
 
-                  <!-- Lots et équipements -->
                   <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
                     <label class="block text-[10px] font-black uppercase text-slate-300">📦 Lots Opérationnels & Matériels Requis :</label>
                     <div class="grid grid-cols-2 gap-1.5 text-[10.5px] font-bold">
@@ -1157,54 +1375,40 @@
                   </div>
                 </div>
 
-                <!-- SECTION 6 : ÉVOLUTION DU SCÉNARIO & MULTI-PHASES -->
-                <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2">
-                  <div class="flex items-center justify-between">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" id="scen-edit-evolutive" ${editingScenario.isEvolutive ? 'checked' : ''} onchange="window.ProtecScenariosManager.onEvolutiveToggle(this.checked)" class="rounded text-purple-600 focus:ring-purple-500" />
-                      <span class="text-xs font-black text-purple-300">Scénario Évolutif Multi-Phases (Escalade & Dégénérescence en cours de mission)</span>
-                    </label>
-                  </div>
-                  <div id="scen-box-phases" class="${editingScenario.isEvolutive ? 'block' : 'hidden'} text-[11px] text-slate-300 space-y-1.5 pt-2 border-t border-slate-800">
-                    <p class="text-[10px] text-slate-400">Le scénario progressera automatiquement à travers des phases opérationnelles :</p>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                      <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-                        <span class="block text-[9px] font-black text-amber-400 uppercase">Phase 1</span>
-                        <span>Préalerte & Regroupement sécurisé</span>
-                      </div>
-                      <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-                        <span class="block text-[9px] font-black text-rose-400 uppercase">Phase 2</span>
-                        <span>Tensions, violences & afflux de blessés</span>
-                      </div>
-                      <div class="p-2 rounded-xl bg-slate-800 border border-slate-700">
-                        <span class="block text-[9px] font-black text-emerald-400 uppercase">Phase 3</span>
-                        <span>Évacuations sous escorte & désengagement</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- SECTION 7 : PÉRIPÉTIES & INCIDENTS (AVEC BIBLIOTHÈQUE EN 1 CLIC) -->
+                <!-- SECTION 7 : PÉRIPÉTIES & INCIDENTS (THÉMATIQUES CLÉS) -->
                 <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5">
                   <div class="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <label class="block text-[10px] font-black uppercase text-slate-300">⚡ Péripéties & Incidents possibles pendant la mission :</label>
-                      <p class="text-[10px] text-slate-400">Cliquez sur les suggestions pour les insérer instantanément</p>
+                      <p class="text-[10px] text-slate-400">Cliquez sur les suggestions thématiques pour les insérer en 1 clic</p>
                     </div>
                     <button type="button" onclick="window.ProtecScenariosManager.addPeripetieInput()" class="px-2.5 py-1 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold flex items-center gap-1 cursor-pointer">
                       <span>+ Ajouter un incident personnalisé</span>
                     </button>
                   </div>
 
-                  <!-- Suggestions en 1 clic -->
-                  <div class="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-800/60 border border-slate-800">
-                    <span class="text-[9.5px] font-black text-slate-400 self-center mr-1">Suggestions rapides :</span>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Tirs de mortiers d\\\'artifice à proximité (repli d\\\'urgence)')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">💥 Tirs de mortiers (repli)</button>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Afflux de 4 victimes intoxiquées aux gaz lacrymogènes')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">💨 Gaz lacrymogène</button>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Plaie profonde au bras par bris de vitrine')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">🩹 Bris de vitrine</button>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Évacuation sanitaire sous protection des forces de l\\\'ordre')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">👮 Escorte forces de l'ordre</button>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Arrêt cardio-respiratoire (réanimation RCP + DAE)')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">❤️ Arrêt cardiaque (DAE)</button>
-                    <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Montage d\\\'urgence du sas d\\\'accueil des impliqués (CAI)')" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-700 hover:bg-indigo-600 text-slate-200 transition">⛺ Accueil CAI</button>
+                  <!-- Suggestions catégorisées par thèmes réalistes -->
+                  <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-800 space-y-2">
+                    <div class="flex items-center gap-1 flex-wrap text-[10px]">
+                      <span class="font-black text-rose-400 mr-1">🚑 Médical :</span>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Arrêt cardio-respiratoire (réanimation RCP + DAE)')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">❤️ ACR (DAE)</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Détresse respiratoire sévère sous inhalation d\\\'oxygène')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">🫁 Détresse O2</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Polytraumatisme avec suspicion de fracture du rachis (MID)')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">🦴 Polytrauma</button>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-wrap text-[10px]">
+                      <span class="font-black text-amber-400 mr-1">💥 Accident & Triage :</span>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Tri SINUS : 2 Urgences Absolues (UA) et 6 Urgences Relatives (UR)')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">🏷️ Tri SINUS</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Montage d\\\'urgence du Centre d\\\'Accueil des Impliqués (CAI)')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">⛺ Accueil CAI</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Noria continue de VPSP vers les urgences hospitalières')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">🚑 Noria CHU</button>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-wrap text-[10px]">
+                      <span class="font-black text-cyan-400 mr-1">🌊 Intempéries & Risques :</span>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Voie d\\\'accès coupée nécessitant un itinéraire de déviation')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">🚧 Route coupée</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Mise en batterie des motopompes pour épuisement de sous-sols')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">💧 Pompage</button>
+                      <button type="button" onclick="window.ProtecScenariosManager.insertQuickPeripetie('Perte temporaire du relais radio en zone blanche')" class="px-2 py-0.5 rounded bg-slate-700 hover:bg-indigo-600 text-slate-200">📻 Perte Radio</button>
+                    </div>
                   </div>
 
                   <!-- Liste des péripéties configurées -->
@@ -1212,12 +1416,12 @@
                     ${(editingScenario.peripeties || []).map(p => `
                       <div class="flex items-center gap-2">
                         <input type="text" name="scen-peripetie" value="${p.replace(/"/g, '&quot;')}" placeholder="Incident ou événement survenant pendant l'intervention..." class="flex-1 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500" />
-                        <button type="button" onclick="this.parentElement.remove()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition" title="Supprimer">✕</button>
+                        <button type="button" onclick="this.parentElement.remove()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition">✕</button>
                       </div>
                     `).join('')}
                     ${(!editingScenario.peripeties || editingScenario.peripeties.length === 0) ? `
                       <div class="flex items-center gap-2">
-                        <input type="text" name="scen-peripetie" value="" placeholder="Ex: Tirs de projectiles à proximité de l'équipage..." class="flex-1 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500" />
+                        <input type="text" name="scen-peripetie" value="" placeholder="Ex: Malaise d'un impliqué avec prise en charge sous oxygène..." class="flex-1 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500" />
                         <button type="button" onclick="this.parentElement.remove()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition">✕</button>
                       </div>
                     ` : ''}
@@ -1249,7 +1453,7 @@
                 Tous (${countTotal})
               </button>
               <button onclick="window.ProtecScenariosManager.setFilter('crise')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'crise' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-800 text-rose-300 hover:bg-rose-950/40'}">
-                🚨 Crises & Émeutes (${countCrise})
+                🚨 Crises & NOVI (${countCrise})
               </button>
               <button onclick="window.ProtecScenariosManager.setFilter('samu')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'samu' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-800 text-amber-300 hover:bg-amber-950/40'}">
                 🚑 SAMU 15 (${countSAMU})
@@ -1265,7 +1469,7 @@
             </div>
 
             <div class="relative w-full sm:w-64 flex-shrink-0">
-              <input type="text" value="${this.searchQuery}" oninput="window.ProtecScenariosManager.setSearch(this.value)" placeholder="Rechercher émeutes, NOVI, DPS..." class="w-full px-3.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500" />
+              <input type="text" value="${this.searchQuery}" oninput="window.ProtecScenariosManager.setSearch(this.value)" placeholder="Rechercher un scénario (titre, format)..." class="w-full px-3.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500" />
             </div>
           </div>
 
@@ -1284,24 +1488,20 @@
                 <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-3 shadow-md hover:border-slate-700 transition">
                   <div class="space-y-2">
                     
-                    <!-- Badges d'en-tête -->
                     <div class="flex items-center justify-between gap-2 flex-wrap">
                       <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${badgeColor}">
                         ${isCrisis ? '🚨 CRISE' : (isSamu ? '🚑 SAMU' : '📋 DPS')}
                       </span>
 
-                      <!-- Badge Temporalité -->
                       <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isAnticipation ? 'bg-amber-950 text-amber-300 border border-amber-800/60' : 'bg-rose-950 text-rose-300 border border-rose-800/60'}">
                         ${isAnticipation ? `📅 Préalerte (${sc.anticipationDelay || 120}m)` : '🚨 Imprévisible'}
                       </span>
 
-                      <!-- Badge Dimensionnement -->
                       <span class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
                         ${sc.scalingMode === 'adaptive' ? `⚡ Adaptatif (${sc.scaleIntensity || 'Moyen'})` : (sc.scalingMode === 'range' ? `🎯 ${sc.minVolunteers}-${sc.maxVolunteers} sec.` : `👥 ${sc.requiredVolunteers} sec.`)}
                       </span>
                     </div>
 
-                    <!-- Titre & Description -->
                     <div>
                       <h4 class="text-xs font-black text-white leading-snug line-clamp-2">${sc.title}</h4>
                       <p class="text-[10px] font-bold text-amber-400 mt-0.5">${sc.scale || 'Format Standard'}</p>
@@ -1324,31 +1524,30 @@
                       </div>
                     </div>
 
-                    <!-- Lots requis -->
-                    ${(sc.requiredLots && sc.requiredLots.length > 0) ? `
-                      <div class="flex items-center gap-1 flex-wrap">
-                        ${sc.requiredLots.map(l => `
-                          <span class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-slate-800 text-orange-300 border border-slate-700">${l.replace('lot_', '').replace('secours_', 'Lot ').toUpperCase()}</span>
-                        `).join('')}
+                    <!-- Nombre de phases si multi-phases -->
+                    ${(sc.phases && sc.phases.length > 0) ? `
+                      <div class="flex items-center gap-1.5 text-[9.5px] text-indigo-300 font-bold bg-indigo-950/40 px-2 py-1 rounded-xl border border-indigo-900/40">
+                        <span>📊 ${sc.phases.length} Phases modélisées</span>
+                        <span>•</span>
+                        <span>${sc.evolutions?.length || 0} transitions Sankey</span>
                       </div>
                     ` : ''}
                   </div>
 
-                  <!-- Boutons d'action -->
                   <div class="pt-2.5 border-t border-slate-800 flex items-center justify-between gap-1.5">
                     <div class="flex items-center gap-1">
-                      <button onclick="window.ProtecScenariosManager.openEditor('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold transition" title="Modifier">
+                      <button onclick="window.ProtecScenariosManager.openEditor('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold transition cursor-pointer" title="Modifier">
                         ✏️ Éditer
                       </button>
-                      <button onclick="window.ProtecScenariosManager.handleDuplicate('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold transition" title="Dupliquer">
+                      <button onclick="window.ProtecScenariosManager.handleDuplicate('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-bold transition cursor-pointer" title="Dupliquer">
                         📑 Cloner
                       </button>
                       ${sc.isCustom ? `
-                        <button onclick="window.ProtecScenariosManager.handleDelete('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-rose-400 text-[10px] font-bold transition" title="Supprimer">
+                        <button onclick="window.ProtecScenariosManager.handleDelete('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-rose-400 text-[10px] font-bold transition cursor-pointer" title="Supprimer">
                           🗑️
                         </button>
                       ` : sc.hasOverride ? `
-                        <button onclick="window.ProtecScenariosManager.handleResetOne('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold transition" title="Rétablir défaut">
+                        <button onclick="window.ProtecScenariosManager.handleResetOne('${sc.id}')" class="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 text-[10px] font-bold transition cursor-pointer" title="Rétablir défaut">
                           ↺
                         </button>
                       ` : ''}
@@ -1373,43 +1572,245 @@
       return {
         id: 'new',
         type: this.activeFilter !== 'all' ? this.activeFilter : 'crise',
-        category: 'emeutes',
-        timing: 'anticipation',
-        anticipationDelay: 120,
+        category: 'accident_collectif',
+        timing: 'imprevisible',
+        anticipationDelay: 60,
         authority: 'prefecture',
         scalingMode: 'adaptive',
         scaleIntensity: 'moyenne',
-        scale: 'PRÉFECTURE - DISPOSITIF SÉCURISÉ & SOUTIEN SANITAIRE',
-        title: 'Émeutes Urbaines suite aux Manifestations',
-        desc: 'Tensions et risques de violences urbaines suite aux récentes manifestations. La Préfecture active une préalerte pour armer un dispositif sanitaire sécurisé et assurer les évacuations.',
+        scale: '',
+        title: '',
+        desc: '',
         minVolunteers: 4,
         maxVolunteers: 12,
         requiredVolunteers: 6,
-        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
         vehiclesMode: 'auto',
         requiredVehicles: ['VPSP', 'VTU'],
-        requiredLots: ['lot_secours_b', 'lot_secours_a', 'caisse_rearmement'],
-        minDurationHours: 3.5,
-        maxDurationHours: 6.5,
+        requiredLots: ['lot_secours_b'],
+        minDurationHours: 3.0,
+        maxDurationHours: 6.0,
         durationHours: 4.5,
-        minRewardMoney: 600,
-        maxRewardMoney: 1600,
-        rewardMoney: 950,
-        rewardReputation: 60,
-        riskLevel: 'critique',
-        urgency: 'haute',
+        minRewardMoney: 500,
+        maxRewardMoney: 1500,
+        rewardMoney: 850,
+        rewardReputation: 50,
+        riskLevel: 'moyen',
+        urgency: 'normale',
         environment: 'ouvert_urbain',
         isEvolutive: true,
-        peripeties: [
-          'Tirs de mortiers d\'artifice à proximité (repli d\'urgence)',
-          'Afflux de victimes intoxiquées par les gaz lacrymogènes',
-          'Plaie profonde par bris de verre d\'une vitrine brisée'
-        ]
+        phases: [
+          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'montante', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p2a', step: 2, name: 'Phase 2A : Escalade & Prise en Charge', direction: 'montante', durationMin: 120, requiredVolunteers: 8, color: '#f43f5e' },
+          { id: 'p2b', step: 2, name: 'Phase 2B : Stabilisation & Maîtrise', direction: 'descendante', durationMin: 90, requiredVolunteers: 4, color: '#10b981' },
+          { id: 'p3', step: 3, name: 'Phase 3 : Clôture & Repli', direction: 'descendante', durationMin: 45, requiredVolunteers: 4, color: '#8b5cf6' }
+        ],
+        evolutions: [
+          { source: 'p1', target: 'p2a', probability: 60, label: 'Aggravation de la situation' },
+          { source: 'p1', target: 'p2b', probability: 40, label: 'Maîtrise rapide de l\'incident' },
+          { source: 'p2a', target: 'p3', probability: 60, label: 'Évacuations terminées' },
+          { source: 'p2b', target: 'p3', probability: 40, label: 'Retour au calme' }
+        ],
+        peripeties: []
       };
+    },
+
+    // =========================================================================
+    // GESTIONNAIRE INTERACTIF DE PHASES & DIAGRAMME SANKEY
+    // =========================================================================
+    applySankeyPreset(presetKey) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen) return;
+
+      if (presetKey === 'arbre_2_branches') {
+        scen.phases = [
+          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'montante', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p2a', step: 2, name: 'Phase 2A : Escalade & Afflux de Victimes', direction: 'montante', durationMin: 150, requiredVolunteers: 10, color: '#f43f5e' },
+          { id: 'p2b', step: 2, name: 'Phase 2B : Stabilisation & Maîtrise rapide', direction: 'descendante', durationMin: 90, requiredVolunteers: 4, color: '#10b981' },
+          { id: 'p3', step: 3, name: 'Phase 3 : Clôture Opérationnelle & Repli', direction: 'descendante', durationMin: 45, requiredVolunteers: 4, color: '#8b5cf6' }
+        ];
+        scen.evolutions = [
+          { source: 'p1', target: 'p2a', probability: 60, label: 'Aggravation de la situation' },
+          { source: 'p1', target: 'p2b', probability: 40, label: 'Maîtrise rapide' },
+          { source: 'p2a', target: 'p3', probability: 60, label: 'Évacuations terminées' },
+          { source: 'p2b', target: 'p3', probability: 40, label: 'Retour au calme' }
+        ];
+      } else if (presetKey === 'escalade_3_niveaux') {
+        scen.phases = [
+          { id: 'p1', step: 1, name: 'Phase 1 : Veille & Pré-alerte Préfecture', direction: 'stable', durationMin: 60, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p2', step: 2, name: 'Phase 2 : Montée en Puissance & Premiers Soins', direction: 'montante', durationMin: 120, requiredVolunteers: 8, color: '#f59e0b' },
+          { id: 'p3a', step: 3, name: 'Phase 3A : Crise Aiguë (PMA / CHU / Noria)', direction: 'montante', durationMin: 240, requiredVolunteers: 14, color: '#ef4444' },
+          { id: 'p3b', step: 3, name: 'Phase 3B : Stabilisation & Soins légers', direction: 'descendante', durationMin: 120, requiredVolunteers: 6, color: '#10b981' },
+          { id: 'p4', step: 4, name: 'Phase 4 : Désengagement & Clôture', direction: 'descendante', durationMin: 60, requiredVolunteers: 4, color: '#6366f1' }
+        ];
+        scen.evolutions = [
+          { source: 'p1', target: 'p2', probability: 100, label: 'Confirmation d\'engagement' },
+          { source: 'p2', target: 'p3a', probability: 55, label: 'Escalade majeure' },
+          { source: 'p2', target: 'p3b', probability: 45, label: 'Circonscrit sans complication' },
+          { source: 'p3a', target: 'p4', probability: 55, label: 'Fin des norias' },
+          { source: 'p3b', target: 'p4', probability: 45, label: 'Fin de dispositif' }
+        ];
+      } else if (presetKey === 'lineaire') {
+        scen.phases = [
+          { id: 'p1', step: 1, name: 'Phase 1 : Engagement & Balisage', direction: 'stable', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p2', step: 2, name: 'Phase 2 : Prise en Charge & Soins', direction: 'montante', durationMin: 150, requiredVolunteers: 6, color: '#f59e0b' },
+          { id: 'p3', step: 3, name: 'Phase 3 : Évacuations & Désarmement', direction: 'descendante', durationMin: 60, requiredVolunteers: 4, color: '#10b981' }
+        ];
+        scen.evolutions = [
+          { source: 'p1', target: 'p2', probability: 100, label: 'Dispositif opérationnel' },
+          { source: 'p2', target: 'p3', probability: 100, label: 'Fin des prises en charge' }
+        ];
+      }
+
+      this.refreshSankeyView();
+    },
+
+    getCurrentEditingScenario() {
+      if (!this.editingScenarioId) return null;
+      if (this.editingScenarioId === 'new') {
+        if (!this._tempNewScenario) this._tempNewScenario = this.getEmptyScenarioTemplate();
+        return this._tempNewScenario;
+      }
+      return this.getScenarioById(this.editingScenarioId);
+    },
+
+    refreshSankeyView() {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen) return;
+
+      const container = document.getElementById('sankey-diagram-container');
+      if (container) {
+        container.innerHTML = this.renderSankeyDiagram(scen.phases, scen.evolutions);
+      }
+
+      const phasesList = document.getElementById('scen-phases-editor-list');
+      if (phasesList) {
+        phasesList.innerHTML = (scen.phases || []).map(p => `
+          <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5 relative group">
+            <div class="flex items-center justify-between">
+              <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900" style="color: ${p.color || '#38bdf8'}">
+                Étape ${p.step || 1}
+              </span>
+              <button type="button" onclick="window.ProtecScenariosManager.removePhase('${p.id}')" class="text-slate-400 hover:text-rose-400 text-xs font-bold" title="Supprimer la phase">✕</button>
+            </div>
+            
+            <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'name', this.value)" class="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-bold text-white" />
+
+            <div class="grid grid-cols-2 gap-1 text-[10px]">
+              <select onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'direction', this.value)" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-slate-300">
+                <option value="montante" ${p.direction === 'montante' ? 'selected' : ''}>🔺 Escalade</option>
+                <option value="stable" ${p.direction === 'stable' ? 'selected' : ''}>🔹 Maintien</option>
+                <option value="descendante" ${p.direction === 'descendante' ? 'selected' : ''}>🔻 Repli</option>
+              </select>
+
+              <input type="number" value="${p.durationMin || 45}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-center text-white" />
+            </div>
+          </div>
+        `).join('');
+      }
+
+      const evoList = document.getElementById('scen-evolutions-editor-list');
+      if (evoList) {
+        evoList.innerHTML = (scen.evolutions || []).map((e, idx) => `
+          <div class="flex items-center gap-2 p-2 rounded-xl bg-slate-800/60 border border-slate-700/80 text-xs">
+            <span class="text-indigo-400 font-mono text-[11px] font-bold shrink-0">
+              ${e.source} ➔ ${e.target}
+            </span>
+            <input type="text" value="${(e.label || '').replace(/"/g, '&quot;')}" placeholder="Condition / Intitulé de transition..." onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'label', this.value)" class="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white" />
+            <div class="flex items-center gap-1 shrink-0">
+              <input type="number" min="5" max="100" step="5" value="${e.probability || 50}" onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'probability', parseInt(this.value,10))" class="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-center font-bold text-amber-300" />
+              <span class="text-[10px] text-slate-400">%</span>
+            </div>
+            <button type="button" onclick="window.ProtecScenariosManager.removeEvolution(${idx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs">✕</button>
+          </div>
+        `).join('');
+      }
+    },
+
+    updatePhaseData(phaseId, field, value) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p) {
+        p[field] = value;
+        if (field === 'direction') {
+          p.color = value === 'montante' ? '#f43f5e' : (value === 'descendante' ? '#10b981' : '#38bdf8');
+        }
+        this.refreshSankeyView();
+      }
+    },
+
+    updateEvolutionData(index, field, value) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.evolutions || !scen.evolutions[index]) return;
+      scen.evolutions[index][field] = value;
+      this.refreshSankeyView();
+    },
+
+    addNewPhasePrompt() {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen) return;
+      if (!scen.phases) scen.phases = [];
+
+      const newId = `p${scen.phases.length + 1}`;
+      const maxStep = scen.phases.reduce((acc, p) => Math.max(acc, p.step || 1), 1);
+
+      scen.phases.push({
+        id: newId,
+        step: maxStep,
+        name: `Phase ${scen.phases.length + 1} : Action`,
+        direction: 'stable',
+        durationMin: 45,
+        requiredVolunteers: 4,
+        color: '#38bdf8'
+      });
+
+      this.refreshSankeyView();
+    },
+
+    removePhase(phaseId) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      scen.phases = scen.phases.filter(p => p.id !== phaseId);
+      if (scen.evolutions) {
+        scen.evolutions = scen.evolutions.filter(e => e.source !== phaseId && e.target !== phaseId);
+      }
+      this.refreshSankeyView();
+    },
+
+    addNewEvolutionPrompt() {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases || scen.phases.length < 2) {
+        if (window.game?.showToast) {
+          window.game.showToast('Phases insuffisantes', 'Il faut au moins 2 phases pour créer une transition d\'évolution.', 'orange');
+        }
+        return;
+      }
+      if (!scen.evolutions) scen.evolutions = [];
+
+      const src = scen.phases[0].id;
+      const tgt = scen.phases[1].id;
+
+      scen.evolutions.push({
+        source: src,
+        target: tgt,
+        probability: 50,
+        label: 'Évolution de la situation'
+      });
+
+      this.refreshSankeyView();
+    },
+
+    removeEvolution(index) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.evolutions) return;
+      scen.evolutions.splice(index, 1);
+      this.refreshSankeyView();
     },
 
     openEditor(scenarioId) {
       this.editingScenarioId = scenarioId;
+      this._tempNewScenario = null;
       this.refreshAdminUI();
       setTimeout(() => {
         const box = document.getElementById('scenario-editor-box');
@@ -1419,6 +1820,7 @@
 
     closeEditor() {
       this.editingScenarioId = null;
+      this._tempNewScenario = null;
       this.refreshAdminUI();
     },
 
@@ -1437,7 +1839,7 @@
       const authSelect = document.getElementById('scen-edit-authority');
       if (scaleInput) {
         if (newType === 'crise') {
-          scaleInput.value = 'PRÉFECTURE - DISPOSITIF SÉCURISÉ & SOUTIEN SANITAIRE';
+          scaleInput.value = 'PLAN NOVI (PMA & Noria VPSP)';
           if (authSelect) authSelect.value = 'prefecture';
         } else if (newType === 'samu') {
           scaleInput.value = 'Garde Postée SAMU 15 (1 VPSP)';
@@ -1491,14 +1893,6 @@
       }
     },
 
-    onEvolutiveToggle(checked) {
-      const phasesBox = document.getElementById('scen-box-phases');
-      if (phasesBox) {
-        if (checked) phasesBox.classList.remove('hidden');
-        else phasesBox.classList.add('hidden');
-      }
-    },
-
     addPeripetieInput(defaultText = '') {
       const container = document.getElementById('scen-peripeties-container');
       if (!container) return;
@@ -1506,7 +1900,7 @@
       div.className = 'flex items-center gap-2';
       div.innerHTML = `
         <input type="text" name="scen-peripetie" value="${(defaultText || '').replace(/"/g, '&quot;')}" placeholder="Nouvel incident ou péripétie en cours d'intervention..." class="flex-1 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500" />
-        <button type="button" onclick="this.parentElement.remove()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition" title="Supprimer">✕</button>
+        <button type="button" onclick="this.parentElement.remove()" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 transition">✕</button>
       `;
       container.appendChild(div);
       const input = div.querySelector('input');
@@ -1529,9 +1923,9 @@
       const scale = document.getElementById('scen-edit-scale')?.value || '';
 
       const timingNodes = document.querySelectorAll('input[name="scen-edit-timing"]:checked');
-      const timing = timingNodes.length > 0 ? timingNodes[0].value : 'anticipation';
+      const timing = timingNodes.length > 0 ? timingNodes[0].value : 'imprevisible';
 
-      const delay = parseInt(document.getElementById('scen-edit-anticipation-delay')?.value, 10) || 120;
+      const delay = parseInt(document.getElementById('scen-edit-anticipation-delay')?.value, 10) || 60;
       const authority = document.getElementById('scen-edit-authority')?.value || 'prefecture';
 
       const scalingNodes = document.querySelectorAll('input[name="scen-edit-scaling-mode"]:checked');
@@ -1544,9 +1938,8 @@
       const minDuration = parseFloat(document.getElementById('scen-edit-min-duration')?.value) || 4.0;
       const maxDuration = parseFloat(document.getElementById('scen-edit-max-duration')?.value) || 7.0;
 
-      const risk = document.getElementById('scen-edit-risk')?.value || 'critique';
+      const risk = document.getElementById('scen-edit-risk')?.value || 'moyen';
 
-      // En mode manuel / fixe
       const manualVols = parseInt(document.getElementById('scen-edit-volunteers')?.value, 10) || minVols;
       const manualDuration = parseFloat(document.getElementById('scen-edit-duration')?.value) || minDuration;
       const manualReward = parseInt(document.getElementById('scen-edit-reward')?.value, 10) || 850;
@@ -1558,10 +1951,12 @@
       const lotNodes = document.querySelectorAll('input[name="scen-lot"]:checked');
       const lots = Array.from(lotNodes).map(n => n.value);
 
-      const isEvolutive = document.getElementById('scen-edit-evolutive')?.checked || false;
-
       const peripetieNodes = document.querySelectorAll('input[name="scen-peripetie"]');
       const peripeties = Array.from(peripetieNodes).map(n => n.value).filter(v => v && v.trim());
+
+      const activeScen = this.getCurrentEditingScenario();
+      const phases = activeScen?.phases || [];
+      const evolutions = activeScen?.evolutions || [];
 
       const saved = this.saveScenario({
         id,
@@ -1585,13 +1980,15 @@
         vehiclesMode: vehMode,
         requiredVehicles: vehicles,
         requiredLots: lots,
-        isEvolutive,
+        isEvolutive: phases.length > 1,
+        phases,
+        evolutions,
         peripeties
       });
 
       this.closeEditor();
       if (window.game?.showToast) {
-        window.game.showToast('Scénario Enregistré ✓', `« ${saved.title} » (${timing === 'anticipation' ? 'Pré-alerte' : 'Immédiat'}, ${scalingMode === 'adaptive' ? 'Adaptatif' : 'Fixe'}) a été sauvegardé.`, 'green');
+        window.game.showToast('Scénario Enregistré ✓', `« ${saved.title} » (${timing === 'anticipation' ? 'Pré-alerte' : 'Immédiat'}, ${phases.length} phases) sauvegardé.`, 'green');
       }
       return saved;
     },
@@ -1660,7 +2057,6 @@
     }
   };
 
-  // Initialisation au chargement
   document.addEventListener('DOMContentLoaded', () => {
     window.ProtecScenariosManager.init();
   });
