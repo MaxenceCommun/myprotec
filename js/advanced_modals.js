@@ -357,9 +357,34 @@ window.ProtecAdvancedModals = {
     return !['ERS', 'BATEAU', 'VELO', 'MPS', 'MOTO', 'QUAD', 'REM'].includes(t);
   },
 
+  getLedBarCost(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    if (t === 'VTU' || t === 'VPSP') {
+      return 3200;
+    }
+    if (t === 'VTP' || t === 'FLIT' || t === 'PL' || t === 'TRM' || t === 'PCM') {
+      return 600;
+    }
+    if (t === 'ERS' || t === 'BATEAU' || t === 'VL' || t === 'VLHR' || t === 'MPS' || t === 'QUAD') {
+      return 350;
+    }
+    return 600;
+  },
+
+  getLedBarLabel(vehType) {
+    const t = String(vehType || '').toUpperCase();
+    if (t === 'ERS' || t === 'BATEAU') {
+      return 'Feu à éclat / Gyro étanche';
+    }
+    if (t === 'VL' || t === 'VLHR' || t === 'MPS' || t === 'QUAD') {
+      return 'Gyrophare & Avertisseur';
+    }
+    return 'Rampe Gyrophares LED';
+  },
+
   canVehicleHaveLedBar(vehType) {
     const t = String(vehType || '').toUpperCase();
-    return !['ERS', 'BATEAU', 'VELO', 'REM'].includes(t);
+    return !['VELO', 'REM'].includes(t);
   },
 
   getClimateOptionLabel(vehType) {
@@ -382,7 +407,7 @@ window.ProtecAdvancedModals = {
     climatisation: {
       id: 'climatisation',
       label: 'Pack Climatisation Cellule & Chauffage à air',
-      cost: 1850,
+      cost: 300,
       icon: '❄️',
       desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
     },
@@ -396,7 +421,7 @@ window.ProtecAdvancedModals = {
     schiller_t7: {
       id: 'schiller_t7',
       label: 'Moniteur défibrillateur multiparamétrique',
-      cost: 3800,
+      cost: 14000,
       icon: '📟',
       desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
     }
@@ -498,9 +523,10 @@ window.ProtecAdvancedModals = {
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
+    const ledCost = this.getLedBarCost(vehType);
     if (canLed && !isVPSP && selOpts.ledBar) {
-      optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+      optionsExtraCost += ledCost;
+      activeOptionsList.push(`${this.getLedBarLabel(vehType)} (+${ledCost.toLocaleString('fr-FR')} €)`);
     }
     if (canClimate && selOpts.climatisation) {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
@@ -735,8 +761,10 @@ window.ProtecAdvancedModals = {
             if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
+            const ledCost = this.getLedBarCost(vehType);
+            const ledLabel = this.getLedBarLabel(vehType);
             if (canLed && !isVPSP && selOpts.ledBar) {
-              optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+              optionsExtraCost += ledCost;
             }
             if (canClimate && selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
@@ -935,9 +963,9 @@ window.ProtecAdvancedModals = {
                         >
                           <span class="flex items-center gap-1.5">
                             <img src="images/vehicles/icons/gyro.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
-                            <span>Rampe LED & Calandre</span>
+                            <span>${ledLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} €</span>
                         </button>
                       `) : ''}
 
@@ -952,7 +980,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/clim_chau.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
                             <span>${climateLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 €</span>
                         </button>
                       ` : ''}
 
@@ -990,7 +1018,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/t7.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Moniteur défibrillateur" onerror="this.outerHTML='<span>📟</span>'" />
                             <span>Moniteur défibrillateur (ECG)</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+3 800 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+14 000 €</span>
                         </button>
                       ` : ''}
                     </div>
@@ -1588,8 +1616,10 @@ window.ProtecAdvancedModals = {
             if (canTow && !hasNativeTowHitch && selOpts.towHitch) {
               optionsExtraCost += this.VEHICLE_OPTIONS.towHitch.cost;
             }
+            const ledCost = this.getLedBarCost(vehType);
+            const ledLabel = this.getLedBarLabel(vehType);
             if (canLed && !isVPSP && selOpts.ledBar) {
-              optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
+              optionsExtraCost += ledCost;
             }
             if (canClimate && selOpts.climatisation) {
               optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
@@ -1793,7 +1823,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/gyro.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
                             <span>Rampe LED</span>
                           </span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 250 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} €</span>
                         </button>
                       `) : ''}
 
@@ -1807,7 +1837,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/clim_chau.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
                             <span>${climateLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+1 850 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 €</span>
                         </button>
                       ` : ''}
 
@@ -1850,13 +1880,14 @@ window.ProtecAdvancedModals = {
       const selectedSerigKey = this.selectedSerigraphies?.['vtu_master3_serigraphie'] || 'logistique';
       const isSoutienPop = selectedSerigKey === 'soutien_pop';
 
+      const vtuLedCost = this.getLedBarCost('VTU'); // 3 200 €
       if (selOpts.ledBar) {
-        optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
-        activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+        optionsExtraCost += vtuLedCost;
+        activeOptionsList.push(`Rampe Gyrophares LED (+${vtuLedCost.toLocaleString('fr-FR')} €)`);
       }
       if (selOpts.climatisation) {
-        optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;
-        activeOptionsList.push(this.VEHICLE_OPTIONS.climatisation.label);
+        optionsExtraCost += 300;
+        activeOptionsList.push('Pack Climatisation & Chauffage Habitacle');
       }
 
       const variantOptions = {
@@ -2035,9 +2066,10 @@ window.ProtecAdvancedModals = {
       activeOptionsList.push(this.VEHICLE_OPTIONS.towHitch.label);
       finalTowHitch = true;
     }
+    const ledCost = this.getLedBarCost(vehType);
     if (canLed && !isVPSP && selOpts.ledBar) {
-      optionsExtraCost += this.VEHICLE_OPTIONS.ledBar.cost;
-      activeOptionsList.push(this.VEHICLE_OPTIONS.ledBar.label);
+      optionsExtraCost += ledCost;
+      activeOptionsList.push(`${this.getLedBarLabel(vehType)} (+${ledCost.toLocaleString('fr-FR')} €)`);
     }
     if (canClimate && selOpts.climatisation) {
       optionsExtraCost += this.VEHICLE_OPTIONS.climatisation.cost;

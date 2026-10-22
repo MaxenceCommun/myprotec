@@ -29140,8 +29140,8 @@ class ProtecGame {
                           Armer (${station.stock.schiller_t7})
                         </button>
                       ` : `
-                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'schiller_t7', true, true)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-300 transition cursor-pointer" title="Acheter et équiper pour 3 800 €">
-                          Équiper (3 800 €)
+                        <button type="button" onclick="window.game.toggleVehicleMedicalOption('${v.id}', 'schiller_t7', true, true)" class="px-2 py-1 rounded-lg text-[10px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-300 transition cursor-pointer" title="Acheter et équiper pour 14 000 €">
+                          Équiper (14 000 €)
                         </button>
                       `}
                     `}
@@ -29555,7 +29555,7 @@ class ProtecGame {
 
     const optDef = {
       tensiometre_auto: { key: 'hasTensiometreAuto', name: 'Tensiomètre Automatique NIBP', cost: 450, stockKey: 'tensiometre_auto' },
-      schiller_t7: { key: 'hasSchillerT7', name: 'Moniteur défibrillateur', cost: 3800, stockKey: 'schiller_t7' }
+      schiller_t7: { key: 'hasSchillerT7', name: 'Moniteur défibrillateur', cost: 14000, stockKey: 'schiller_t7' }
     }[optionKey];
     if (!optDef) return;
 
