@@ -416,6 +416,11 @@ window.ProtecOnboarding = {
     this.stopVoiceOver();
     if (this.isVoiceOverMuted()) return;
 
+    if (step === 'fin' || step === 5 || step === 'complete' || step === 'inauguration') {
+      this.playCompletionVoiceOver();
+      return;
+    }
+
     const s = Math.max(1, Math.min(4, Number(step) || 1));
     const candidates = [
       'sons/tuto_etape_' + s + '.mp3',
@@ -426,6 +431,56 @@ window.ProtecOnboarding = {
       'sons/etape_' + s + '.mp3',
       'sons/etape' + s + '.mp3',
       'sons/tuto_step_' + s + '.mp3'
+    ];
+
+    const audio = new Audio();
+    this.currentAudio = audio;
+    let index = 0;
+
+    const tryCandidate = () => {
+      if (this.currentAudio !== audio) return;
+      if (index >= candidates.length) {
+        this.currentAudio = null;
+        return;
+      }
+      const p = candidates[index++];
+      audio.src = p;
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          tryCandidate();
+        });
+      }
+    };
+
+    audio.onerror = () => {
+      tryCandidate();
+    };
+
+    // Si le son de l'étape 4 se termine et que l'affiliation a été signée, enchaîner le son de clôture
+    if (s === 4) {
+      audio.onended = () => {
+        if (this.fnpcSigned) {
+          this.playCompletionVoiceOver();
+        }
+      };
+    }
+
+    tryCandidate();
+  },
+
+  // Son joué une fois l'étape 4 terminée (signature affiliation et lancement du jeu)
+  playCompletionVoiceOver() {
+    this.stopVoiceOver();
+    if (this.isVoiceOverMuted()) return;
+
+    const candidates = [
+      'sons/tuto_fin.mp3',
+      'sons/tuto_etape_5.mp3',
+      'sons/tuto_termine.mp3',
+      'sons/tuto_inauguration.mp3',
+      'sons/inauguration.mp3',
+      'sons/start_radio.mp3'
     ];
 
     const audio = new Audio();
@@ -3245,6 +3300,7 @@ window.ProtecOnboarding = {
     this.fnpcSigned = true;
     if (signatureDataUrl) this.fnpcSignatureDataUrl = signatureDataUrl;
     this.renderWizard();
+    this.playCompletionVoiceOver();
   },
 
   // -------------------------------------------------------------
@@ -3493,6 +3549,9 @@ window.ProtecOnboarding = {
         game.map.invalidateSize();
       }, 300);
     }
+
+    // Déclenchement du son final d'inauguration une fois l'étape 4 validée
+    this.playCompletionVoiceOver();
 
     game.showToast(
       '🎉 Antenne Inaugurée !', 

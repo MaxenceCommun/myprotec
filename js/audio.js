@@ -331,7 +331,9 @@ window.ProtecAudio = {
     // RÈGLE PERSONNALISÉE : Respect strict des 3 statuts et du son configuré par le joueur
     if (window.ProtecNotifications && typeof window.ProtecNotifications.getAlertMode === 'function') {
       let matchedCategory = null;
-      if (t.includes('samu') || m.includes('samu') || target?.type === 'samu') {
+      if (t.includes('crise') || m.includes('crise') || t.includes('préfecture') || t.includes('prefecture') || m.includes('préfecture') || m.includes('prefecture') || t.includes('réquisition') || t.includes('requisition') || m.includes('réquisition') || m.includes('requisition') || target?.type === 'crise' || target?.type === 'prefecture' || target?.isCrise) {
+        matchedCategory = 'crise';
+      } else if (t.includes('samu') || m.includes('samu') || target?.type === 'samu') {
         matchedCategory = 'samu';
       } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || target?.type === 'pompiers') {
         matchedCategory = 'sdis';

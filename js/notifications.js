@@ -259,6 +259,7 @@ window.ProtecNotifications = {
     sound: true,
     vibrate: true,
     alertModes: {
+      crise: 'sound_notif',
       samu: 'sound_notif',
       sdis: 'sound_notif',
       dps: 'sound_notif',
@@ -266,6 +267,7 @@ window.ProtecNotifications = {
       weather: 'sound_notif'
     },
     alertVolumes: {
+      crise: 90,
       samu: 85,
       sdis: 80,
       dps: 70,
@@ -273,7 +275,8 @@ window.ProtecNotifications = {
       weather: 80
     },
     alertSounds: {
-      samu: 'alerte_crise.mp3',
+      crise: 'alerte_crise.mp3',
+      samu: 'attention.mp3',
       sdis: 'attention.mp3',
       dps: 'info.mp3',
       rh: 'notif.mp3',
@@ -298,6 +301,12 @@ window.ProtecNotifications = {
   ],
 
   alertCategoriesList: [
+    {
+      id: 'crise',
+      label: 'Alertes de Crise & Préfecture',
+      icon: '🚨',
+      desc: 'Plans d’urgence, réquisitions préfectorales, activation CAI/CHU et crises majeures'
+    },
     {
       id: 'samu',
       label: 'Départs Réflexes SAMU 15',
@@ -331,7 +340,8 @@ window.ProtecNotifications = {
   ],
 
   getAlertMode(category) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     if (this.config.alertModes && this.config.alertModes[cat] !== undefined) {
       return this.config.alertModes[cat];
     }
@@ -343,7 +353,8 @@ window.ProtecNotifications = {
   },
 
   setAlertMode(category, mode) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     if (!this.config.alertModes) this.config.alertModes = {};
     this.config.alertModes[cat] = mode;
     this.config[`${cat}Alerts`] = (mode !== 'off');
@@ -351,9 +362,11 @@ window.ProtecNotifications = {
   },
 
   getAlertSound(category) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     const defaults = {
-      samu: 'alerte_crise.mp3',
+      crise: 'alerte_crise.mp3',
+      samu: 'attention.mp3',
       sdis: 'attention.mp3',
       dps: 'info.mp3',
       rh: 'notif.mp3',
@@ -367,7 +380,8 @@ window.ProtecNotifications = {
   },
 
   setAlertSound(category, soundKey) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     if (!this.config.alertSounds) this.config.alertSounds = {};
     const normKey = (typeof soundKey === 'string' && soundKey.endsWith('.mp3')) ? soundKey : `${soundKey}.mp3`;
     this.config.alertSounds[cat] = normKey;
@@ -375,7 +389,8 @@ window.ProtecNotifications = {
   },
 
   getAlertVolume(category) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     if (this.config.alertVolumes && this.config.alertVolumes[cat] !== undefined) {
       return Number(this.config.alertVolumes[cat]);
     }
@@ -383,7 +398,8 @@ window.ProtecNotifications = {
   },
 
   setAlertVolume(category, vol) {
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     if (!this.config.alertVolumes) this.config.alertVolumes = {};
     const clamped = Math.max(0, Math.min(100, Math.round(Number(vol) || 0)));
     this.config.alertVolumes[cat] = clamped;
@@ -1284,7 +1300,8 @@ window.ProtecNotifications = {
   // Notification d'un événement selon sa catégorie
   notifyCategory(category, title, body, tag = 'alert') {
     if (!this.config.enabled) return;
-    const cat = (category === 'meteo') ? 'weather' : category;
+    let cat = (category === 'meteo') ? 'weather' : category;
+    if (cat === 'alertes' || cat === 'crisis' || cat === 'prefecture' || cat === 'crises') cat = 'crise';
     const mode = this.getAlertMode(cat);
 
     // 1. Statut Désactivé : silence complet
