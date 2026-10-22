@@ -31031,6 +31031,9 @@ class ProtecGame {
       // - Nuit profonde 01h00 à 07h00 : probabilité divisée par 2.
       // - Taux global maintenu à < 1 crise par jour (~40% de chance d'apparition par 24h = 1 crise tous les 2.5 jours).
       if (this.clock.second % 10 === 0) {
+        if (window.ProtecVeille && typeof window.ProtecVeille.checkSlotsLifecycle === 'function') {
+          window.ProtecVeille.checkSlotsLifecycle(this);
+        }
         if (this.canTriggerDailyCrisis()) {
           const hour = (this.clock && this.clock.hour !== undefined) ? this.clock.hour : new Date().getHours();
           const isNight = (hour >= 1 && hour < 7); // Nuit profonde entre 01h et 07h

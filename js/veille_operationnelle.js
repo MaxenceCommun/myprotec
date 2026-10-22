@@ -85,8 +85,13 @@ window.ProtecVeille = {
     }
     this.ensureStateIntegrity(game);
     this.syncFromSharedStorage(game);
-    this.checkAndRewardCompletedSlots(game);
-    this.updateCurrentOfficers(game);
+    this.checkSlotsLifecycle(game);
+
+    if (!this._lifecycleInterval) {
+      this._lifecycleInterval = setInterval(() => {
+        this.checkSlotsLifecycle(window.game);
+      }, 10000);
+    }
   },
 
   // État par défaut
@@ -378,6 +383,16 @@ window.ProtecVeille = {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         text: `Inscription de ${myName} sur le créneau ${slotConfig.label} (${ech.title}) - ${isMeChained ? 'Enchaînement' : 'Titulaire'}.`
       });
+
+      // Si le créneau est déjà en cours au moment de l'inscription, déclencher immédiatement la notification push
+      const nowReg = new Date();
+      const todayRegStr = this.formatDateKey(nowReg);
+      const curHourReg = nowReg.getHours();
+      const curSlotIdxReg = Math.floor(curHourReg / 4);
+      if (dateStr === todayRegStr && slotIndex === curSlotIdxReg && !slot.startNotified) {
+        slot.startNotified = true;
+        this.triggerAstreinteStartPush(game, ech, slotConfig);
+      }
     }
     // Cas 2 : Déjà inscrit
     else if (slot.titular.playerId === myId) {
@@ -408,6 +423,16 @@ window.ProtecVeille = {
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
         text: `Relève prioritaire : ${myName} devient titulaire du créneau ${slotConfig.label} face à ${oldTitular.playerName} (règle anti-enchaînement).`
       });
+
+      // Si le créneau est déjà en cours, déclencher la notification push de prise de poste
+      const nowReg = new Date();
+      const todayRegStr = this.formatDateKey(nowReg);
+      const curHourReg = nowReg.getHours();
+      const curSlotIdxReg = Math.floor(curHourReg / 4);
+      if (dateStr === todayRegStr && slotIndex === curSlotIdxReg && !slot.startNotified) {
+        slot.startNotified = true;
+        this.triggerAstreinteStartPush(game, ech, slotConfig);
+      }
     }
     // Cas 4 : Titulaire existant NON enchaîné -> Premier arrivé premier servi
     else {
@@ -534,6 +559,96 @@ window.ProtecVeille = {
         }
       });
     });
+  },
+
+  // Déclenche une push notification OS / Service Worker / In-App pour le début d'une astreinte
+  triggerAstreinteStartPush(game, ech, slotCfg) {
+    const title = `🚨 Début d'Astreinte : ${ech.title}`;
+    const body = `Votre vacation d'astreinte (${slotCfg.label}) commence maintenant. Vous êtes le Cadre de Permanence officiel. Restez attentif aux alertes !`;
+
+    // 1. Notification Push Système (Service Worker & Notification OS)
+    if (window.ProtecNotifications && typeof window.ProtecNotifications.sendPushNotification === 'function') {
+      window.ProtecNotifications.sendPushNotification(title, body, {
+        tag: `astreinte-start-${ech.id}-${slotCfg.index}`,
+        category: 'crise',
+        customSound: 'alerte_crise.mp3',
+        customVolume: 0.95,
+        requireInteraction: true,
+        data: {
+          type: 'astreinte_start',
+          echelonId: ech.id,
+          slotIndex: slotCfg.index,
+          timestamp: Date.now()
+        }
+      });
+    } else if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, {
+          body: body,
+          icon: 'badge-monochrome.png',
+          badge: 'badge-monochrome.png',
+          tag: `astreinte-start-${ech.id}-${slotCfg.index}`,
+          requireInteraction: true
+        });
+      } catch (e) {}
+    }
+
+    // 2. Journalisation dans le centre de notifications in-app
+    if (window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
+      window.ProtecNotifications.recordNotification({
+        title: title,
+        message: body,
+        color: 'red',
+        category: 'crise',
+        level: 'urgent'
+      });
+    }
+
+    // 3. Alerte toast visuelle in-app
+    if (game && typeof game.showToast === 'function') {
+      game.showToast(
+        `🚨 PRISE D'ASTREINTE EN COURS (${ech.title.toUpperCase()})`,
+        `Votre vacation ${slotCfg.label} commence maintenant. Vous êtes le Cadre de Permanence officiel !`,
+        'red'
+      );
+    }
+  },
+
+  // Cycle de vie complet des créneaux (vérification toutes les 10s : démarrages, fins, officiers)
+  checkSlotsLifecycle(game) {
+    if (!game) game = window.game;
+    if (!game) return;
+    this.ensureStateIntegrity(game);
+
+    const now = new Date();
+    const todayStr = this.formatDateKey(now);
+    const curHour = now.getHours();
+    const curSlotIdx = Math.floor(curHour / 4);
+    const myId = game.player?.id;
+
+    this.ECHELONS.forEach(ech => {
+      const state = game.veilleOperationnelle[ech.id];
+      const slots = state.slots || {};
+
+      // 1. Vérification du créneau actif actuel : envoyer la push notif dès le début
+      const activeKey = this.getSlotKey(todayStr, curSlotIdx);
+      const activeSlot = slots[activeKey];
+
+      if (activeSlot && activeSlot.titular && activeSlot.titular.playerId === myId) {
+        if (!activeSlot.startNotified) {
+          activeSlot.startNotified = true;
+          const slotCfg = this.SLOTS_CONFIG.find(s => s.index === curSlotIdx) || { label: `${curSlotIdx * 4}h - ${(curSlotIdx + 1) * 4}h` };
+          this.triggerAstreinteStartPush(game, ech, slotCfg);
+          this.saveSharedStorage(game, ech.id);
+        }
+      }
+    });
+
+    // 2. Contrôle des créneaux terminés pour verser les indemnités
+    this.checkAndRewardCompletedSlots(game);
+
+    // 3. Mise à jour des cadres d'astreinte actuels
+    this.updateCurrentOfficers(game);
   },
 
   // Rendu de la modale complète
