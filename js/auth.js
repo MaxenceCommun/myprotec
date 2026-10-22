@@ -162,8 +162,20 @@ window.ProtecAuth = {
     } catch (e) {}
 
     if (this.token && game) {
-      this.checkSession(game);
+      this.checkSession(game).catch(err => {
+        console.warn('[Auth] Erreur lors de la vérification de session cloud:', err);
+        if (game) {
+          game.isCloudSyncReady = true;
+          game.hasPendingCloudSync = false;
+        }
+        window.ProtecLoader?.finish();
+      });
     } else if (!this.token) {
+      if (game) {
+        game.isCloudSyncReady = true;
+        game.hasPendingCloudSync = false;
+      }
+      window.ProtecLoader?.finish();
       // Si la landing page est active, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil,
       // SAUF si un lien de parrainage a été suivi : dans ce cas, ouvrir directement le formulaire d'inscription
       const landingEl = document.getElementById('myprotec-landing-page');
@@ -1987,17 +1999,34 @@ window.ProtecAuth = {
   },
 
   async checkCloudSaveOnLogin(game) {
-    if (!this.currentUser) return;
+    if (!this.currentUser) {
+      if (game) {
+        game.isCloudSyncReady = true;
+        game.hasPendingCloudSync = false;
+      }
+      window.ProtecLoader?.finish();
+      return;
+    }
 
     // 1. Chargement prioritaire depuis Supabase Cloud
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       try {
         const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id, this.currentUser.username);
         if (supaSave && supaSave.save_data && supaSave.save_data.stations && supaSave.save_data.stations.length > 0) {
-          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
+          window.ProtecLoader?.setProgress(95, 'Données officielles validées ! Synchronisation...', 'Synchronisation');
           this.applyCloudSave(game, supaSave.save_data);
+          if (typeof game.syncDepartmentCrises === 'function') {
+            await game.syncDepartmentCrises().catch(() => {});
+          }
           this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
           this.updateHeaderUI();
+          if (game) {
+            game.isCloudSyncReady = true;
+            game.hasPendingCloudSync = false;
+            game.updateStatsUI();
+            if (game.renderStations) game.renderStations();
+            if (game.renderMissions) game.renderMissions();
+          }
           setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
           return;
         }
@@ -2015,12 +2044,22 @@ window.ProtecAuth = {
       if (res.ok) {
         const result = await res.json();
         if (result.save && result.save.stations && result.save.stations.length > 0) {
-          // Une sauvegarde officielle avec antenne existe en BDD : l'appliquer à 100%
-          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
+          window.ProtecLoader?.setProgress(95, 'Données officielles validées ! Synchronisation...', 'Synchronisation');
           this.applyCloudSave(game, result.save);
+          if (typeof game.syncDepartmentCrises === 'function') {
+            await game.syncDepartmentCrises().catch(() => {});
+          }
           this.lastSyncTime = new Date(result.savedAt || Date.now());
           this.updateHeaderUI();
+          if (game) {
+            game.isCloudSyncReady = true;
+            game.hasPendingCloudSync = false;
+            game.updateStatsUI();
+            if (game.renderStations) game.renderStations();
+            if (game.renderMissions) game.renderMissions();
+          }
           setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
+          return;
         } else {
           // L'antenne a été supprimée ou n'existe pas en BDD : PURGE TOTALE DE TOUTE PERSISTANCE LOCALE
           game.stations = [];
@@ -2035,12 +2074,15 @@ window.ProtecAuth = {
           if (game.renderStations) game.renderStations();
           if (game.renderMissions) game.renderMissions();
           if (game.updateStatsUI) game.updateStatsUI();
-
-          // Surtout : NE PAS renvoyer d'ancienne sauvegarde locale vers la BDD !
         }
       }
     } catch (e) {
       console.warn('Erreur chargement cloud:', e);
+    }
+
+    if (game) {
+      game.isCloudSyncReady = true;
+      game.hasPendingCloudSync = false;
     }
 
     // Si aucune antenne n'existe en BDD, lancer impérativement le wizard officiel d'implantation
@@ -2053,6 +2095,8 @@ window.ProtecAuth = {
           game.showOnboardingModal();
         }
       }, 500);
+    } else {
+      setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
     }
   },
 
@@ -2336,6 +2380,9 @@ window.ProtecAuth = {
       }
       if (typeof game.loadAllianceStations === 'function') {
         game.loadAllianceStations();
+      }
+      if (typeof game.syncDepartmentCrises === 'function') {
+        game.syncDepartmentCrises().catch(e => console.warn('Erreur syncDepartmentCrises dans applyCloudSave:', e));
       }
       if (window.ProtecSupabase && window.ProtecSupabase.client && Array.isArray(game.stations)) {
         game.stations.forEach(st => window.ProtecSupabase.syncStationToMap(game.player, st));

@@ -240,6 +240,16 @@ class ProtecGame {
     this.initReactiveResources();
     this.initConnectionTimeTracking();
 
+    // Contrôle strict de synchronisation au démarrage :
+    // Si un compte joueur est mémorisé, on verrouille l'affichage et l'enregistrement
+    // jusqu'à ce que Supabase Cloud ait validé la sauvegarde officielle.
+    const hasStoredAuth = !!(localStorage.getItem('protec_auth_token') || localStorage.getItem('protec_user'));
+    this.hasPendingCloudSync = hasStoredAuth;
+    this.isCloudSyncReady = !hasStoredAuth;
+    if (hasStoredAuth) {
+      window.ProtecLoader?.setProgress(35, 'Contrôle et validation de votre session cloud...', 'Sécurité');
+    }
+
     this.loadGame();
     if (window.ProtecSystems) {
       window.ProtecSystems.injectState(this);
@@ -1823,41 +1833,59 @@ class ProtecGame {
       }
     });
 
-    if (this.stations.length === 0) {
-      window.ProtecLoader?.finish();
-      const isAuth = !!(window.ProtecAuth && window.ProtecAuth.currentUser && window.ProtecAuth.token);
-      if (!isAuth) {
-        // La création de l'identifiant et mot de passe se fait impérativement avant les étapes de création de l'antenne
-        if (window.ProtecAuth) {
-          window.ProtecAuth.openAuthModal(true);
+    if (this.hasPendingCloudSync) {
+      // Un compte joueur connecté existe : NE PAS masquer l'écran de chargement ni afficher l'interface prématurément.
+      // On attend que la validation officielle et le téléchargement Supabase soient terminés.
+      window.ProtecLoader?.setProgress(75, 'Validation de la sauvegarde avec Supabase Cloud...', 'Synchronisation');
+
+      // Failsafe de sécurité (4.5s) au cas où la connexion réseau est indisponible
+      setTimeout(() => {
+        if (!this.isCloudSyncReady) {
+          console.warn('[Sync Watchdog] Délai de vérification serveur dépassé, affichage en mode dégradé.');
+          this.isCloudSyncReady = true;
+          this.hasPendingCloudSync = false;
+          this.syncDepartmentFromStation();
+          this.ensureStarterVehicle();
+          this.updateStatsUI();
+          if (this.renderStations) this.renderStations();
+          if (this.renderMissions) this.renderMissions();
+          window.ProtecLoader?.finish('Antenne prête pour le service.');
+        }
+      }, 4500);
+    } else {
+      if (this.stations.length === 0) {
+        window.ProtecLoader?.finish();
+        const isAuth = !!(window.ProtecAuth && window.ProtecAuth.currentUser && window.ProtecAuth.token);
+        if (!isAuth) {
+          if (window.ProtecAuth) {
+            window.ProtecAuth.openAuthModal(true);
+          }
+        } else {
+          if (window.ProtecOnboarding) {
+            window.ProtecOnboarding.showWizard(this, {
+              teamName: this.player?.stationName,
+              deptCode: this.currentDepartmentCode || this.player?.departmentCode
+            });
+          } else {
+            this.showOnboardingModal();
+          }
         }
       } else {
-        if (window.ProtecOnboarding) {
-          window.ProtecOnboarding.showWizard(this, {
-            teamName: this.player?.stationName,
-            deptCode: this.currentDepartmentCode || this.player?.departmentCode
-          });
-        } else {
-          this.showOnboardingModal();
+        this.syncDepartmentFromStation();
+        this.ensureStarterVehicle();
+        if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
+          window.ProtecEvenementsReels.ensureTerritoryEvents(this);
         }
-      }
-    } else {
-      this.syncDepartmentFromStation();
-      this.ensureStarterVehicle();
-      if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.ensureTerritoryEvents === 'function') {
-        window.ProtecEvenementsReels.ensureTerritoryEvents(this);
-      }
-      if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
-        window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(this);
-      }
-      if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {
-        window.ProtecPoles.injectState(this);
-      }
-      setTimeout(() => {
-        if (!window.ProtecAuth || !window.ProtecAuth.isSyncing) {
+        if (window.ProtecPersonnel && typeof window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences === 'function') {
+          window.ProtecPersonnel.auditAndSanitizeAllVolunteersResidences(this);
+        }
+        if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {
+          window.ProtecPoles.injectState(this);
+        }
+        setTimeout(() => {
           window.ProtecLoader?.finish('Antenne prête pour le service !');
-        }
-      }, 500);
+        }, 500);
+      }
     }
   }
 
@@ -2028,6 +2056,12 @@ class ProtecGame {
   }
 
   saveGame(forceInstant = false) {
+    // Si la vérification officielle avec Supabase Cloud est en cours au démarrage,
+    // bloquer tout enregistrement pour ne jamais écraser la BDD avec des données locales partielles ou non vérifiées.
+    if (this.hasPendingCloudSync && !this.isCloudSyncReady) {
+      return;
+    }
+
     try {
       // 0. Limitation automatique et proactive des tableaux d'historique (max 50 éléments)
       if (Array.isArray(this.financesHistory) && this.financesHistory.length > 50) {
@@ -2132,8 +2166,10 @@ class ProtecGame {
       this.departmentInfrastructures = this.departmentInfrastructures || {};
 
       // Pré-restauration instantanée depuis le cache de session si disponible
+      // RÈGLE : Si une synchronisation cloud officielle est en attente pour un compte connecté,
+      // on n'injecte PAS les missions/stations du cache local pour éviter d'afficher des données obsolètes ou supprimées.
       const rawCache = sessionStorage.getItem('myprotec_instant_cache');
-      if (rawCache) {
+      if (rawCache && !this.hasPendingCloudSync) {
         try {
           const c = JSON.parse(rawCache);
           if (c && c.stations && c.stations.length > 0) {
