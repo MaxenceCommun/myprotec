@@ -43,9 +43,53 @@ window.ProtecOnboarding = {
   cachedGeoJSON: null,
   lastValidPosition: null,
 
-  // 3. Mobilier acheté et typage des pièces du bâtiment (initialement VIDE)
+  // 3. Mobilier acheté, plan 2D vivant et typage des pièces du bâtiment
   placedFurniture: [],
   selectedRoomId: 'room_1',
+  camera2D: { panX: 0, panY: 0, zoom: 0 },
+  architectureModel: {
+    parking: {
+      x: 1.0,
+      y: 1.5,
+      w: 4.8,
+      h: 9.0,
+      label: 'Parking Opérationnel Extérieur',
+      spots: [
+        { id: 'spot_1', label: '🅿️ EMPLACEMENT LIBRE 01', x: 1.4, y: 2.2, w: 4.0, d: 2.4 },
+        { id: 'spot_2', label: '🅿️ EMPLACEMENT LIBRE 02', x: 1.4, y: 5.6, w: 4.0, d: 2.4 }
+      ]
+    },
+    rooms: [
+      { id: 'room_1', type: 'libre', name: 'Salle 1', x: 6.2, y: 1.5, w: 4.6, h: 4.2, area: 19.3 },
+      { id: 'room_2', type: 'libre', name: 'Salle 2', x: 10.8, y: 1.5, w: 4.8, h: 4.2, area: 20.2 },
+      { id: 'room_3', type: 'libre', name: 'Salle 3', x: 6.2, y: 5.7, w: 9.4, h: 4.8, area: 45.1 }
+    ],
+    walls: [
+      { x1: 6.2, y1: 1.5, x2: 15.6, y2: 1.5, th: 0.24, outer: true },
+      { x1: 15.6, y1: 1.5, x2: 15.6, y2: 10.5, th: 0.24, outer: true },
+      { x1: 15.6, y1: 10.5, x2: 6.2, y2: 10.5, th: 0.24, outer: true },
+      { x1: 6.2, y1: 10.5, x2: 6.2, y2: 1.5, th: 0.24, outer: true },
+      { x1: 10.8, y1: 1.5, x2: 10.8, y2: 5.7, th: 0.12, outer: false },
+      { x1: 6.2, y1: 5.7, x2: 15.6, y2: 5.7, th: 0.12, outer: false }
+    ],
+    doors: [
+      { id: 'd_entree', x: 6.2, y: 2.2, len: 0.93, wall: 'W', label: 'Porte d’Entrée (93cm)', isMain: true },
+      { id: 'd_form', x: 10.8, y: 3.2, len: 0.83, wall: 'W', label: 'Porte Formation (83cm)', isMain: false },
+      { id: 'd_reserve', x: 8.2, y: 5.7, len: 0.83, wall: 'N', label: 'Porte Réserve (83cm)', isMain: false },
+      { id: 'd_service', x: 6.2, y: 7.6, len: 0.93, wall: 'W', label: 'Accès Matériel (93cm)', isMain: false }
+    ],
+    windows: [
+      { id: 'w_bureau', x: 7.4, y: 1.5, len: 1.60, wall: 'N', label: 'Fenêtre Accueil (1.60m)' },
+      { id: 'w_form_n', x: 12.0, y: 1.5, len: 1.80, wall: 'N', label: 'Baie Formation (1.80m)' },
+      { id: 'w_form_e', x: 15.6, y: 2.8, len: 1.40, wall: 'E', label: 'Fenêtre Est (1.40m)' },
+      { id: 'w_res_s', x: 8.4, y: 10.5, len: 1.60, wall: 'S', label: 'Fenêtre Haute Sud (1.60m)' },
+      { id: 'w_res_e', x: 15.6, y: 7.5, len: 1.60, wall: 'E', label: 'Fenêtre Haute Est (1.60m)' }
+    ],
+    fixtures: [
+      { id: 'extincteur_1', x: 6.3, y: 5.8, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' },
+      { id: 'extincteur_2', x: 10.9, y: 5.3, w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' }
+    ]
+  },
   roomsConfig: [
     { id: 'room_1', name: 'Salle 1', type: 'libre', label: 'Libre', area: 19.3, icon: '🚪', color: '#131b2e' },
     { id: 'room_2', name: 'Salle 2', type: 'libre', label: 'Libre', area: 20.2, icon: '🚪', color: '#131b2e' },
@@ -54,20 +98,24 @@ window.ProtecOnboarding = {
   roomTypesList: [
     { id: 'libre', label: 'Libre (Non affectée)', icon: '🚪', desc: 'Fonction de la pièce non définie', color: '#1e293b' },
     { id: 'bureau', label: 'Bureau & Direction', icon: '💼', desc: 'Gestion administrative & planification', color: '#1e3a8a' },
-    { id: 'formation', label: 'Salle de Formation', icon: '🎓', desc: 'Sessions PSC, SST et recyclages', color: '#1e40af' },
+    { id: 'formation', label: 'Salle de Formation', icon: '🎓', desc: 'Sessions PSC, SST et recyclages (+élèves)', color: '#1e40af' },
     { id: 'stockage', label: 'Stockage & Logistique', icon: '📦', desc: 'Réserve matériel, lots de secours', color: '#334155' },
     { id: 'detente', label: 'Foyer & Repos', icon: '☕', desc: 'Convivialité et récupération secouristes', color: '#065f46' },
-    { id: 'vestiaires', label: 'Vestiaires & Sanitaires', icon: '👕', desc: 'Casiers et tenues d’intervention', color: '#4c1d95' },
+    { id: 'vestiaire', label: 'Vestiaires & Sanitaires', icon: '👕', desc: 'Casiers et tenues d’intervention', color: '#4c1d95' },
     { id: 'pc_radio', label: 'PC Radio & Opérations', icon: '📡', desc: 'Poste de commandement opérationnel', color: '#701a75' }
   ],
   furnitureCatalog: [
-    { id: 'f_bureau', name: 'Bureau & Fauteuil de Direction', cost: 180, icon: '🪑', defaultRoom: 'room_1', desc: 'Gestion administrative & planification des postes' },
-    { id: 'f_pharmacie', name: 'Armoire à Pharmacie Sécurisée', cost: 350, icon: '🗄️', defaultRoom: 'room_3', desc: 'Stockage sécurisé des consommables médicaux' },
-    { id: 'f_formation', name: 'Tables & Chaises de Formation', cost: 250, icon: '🎓', defaultRoom: 'room_2', desc: 'Permet d’accueillir les sessions PSC & SST' },
-    { id: 'f_mannequin', name: 'Mannequin RCP & Matériel Pédagogique', cost: 400, icon: '🫀', defaultRoom: 'room_2', desc: 'Indispensable pour former le grand public' },
-    { id: 'f_foyer', name: 'Canapé & Foyer des Bénévoles', cost: 300, icon: '🛋️', defaultRoom: 'room_1', desc: 'Espace de convivialité et récupération des secouristes' },
-    { id: 'f_lit', name: 'Lit de Repos & Vestiaires', cost: 190, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde et vestiaires d’intervention' },
-    { id: 'f_etagere', name: 'Étagères Industrielles Lots A/B', cost: 160, icon: '📦', defaultRoom: 'room_3', desc: 'Rangement robuste pour caisses de secours et tentes' }
+    { id: 'bureau', type: 'bureau', name: 'Bureau Direction & PC', cost: 250, icon: '🖥️', defaultRoom: 'room_1', desc: 'Gestion administrative & planification des postes', w: 1.8, d: 0.9, color: '#334155', bonus: 'Poste de commandement' },
+    { id: 'table_formation', type: 'table_formation', name: 'Table Formation Pédagogique', cost: 180, icon: '📚', defaultRoom: 'room_2', desc: 'Permet d’accueillir les sessions PSC & SST', w: 2.2, d: 1.1, color: '#ea580c', bonus: '+4 élèves par table' },
+    { id: 'tableau_blanc', type: 'tableau_blanc', name: 'Tableau Blanc Mural', cost: 120, icon: '📋', defaultRoom: 'room_2', desc: 'Support visuel pour les cours de secourisme', w: 2.2, d: 0.2, color: '#f8fafc', bonus: '+10% qualité formation' },
+    { id: 'mannequin_rcp', type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cost: 320, icon: '🫀', defaultRoom: 'room_2', desc: 'Indispensable pour l’apprentissage du massage cardiaque', w: 0.6, d: 1.2, color: '#f59e0b', bonus: '+15% qualité formation' },
+    { id: 'dae_mural', type: 'dae_mural', name: 'Défibrillateur DAE Mural', cost: 450, icon: '⚡', defaultRoom: 'room_1', desc: 'Sécurité d’urgence et démonstration pratique', w: 0.35, d: 0.35, color: '#10b981', bonus: '+5% qualité & sécurité' },
+    { id: 'armoire_pharmacie', type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cost: 190, icon: '🩹', defaultRoom: 'room_3', desc: 'Stockage sécurisé des pansements et compresses', w: 1.2, d: 0.4, color: '#dc2626', bonus: '+20 capacité consommables' },
+    { id: 'etagere_lots', type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cost: 150, icon: '📦', defaultRoom: 'room_3', desc: 'Stockage robuste pour caisses PS et tentes', w: 0.6, d: 2.4, color: '#475569', bonus: '+35 capacité lots A/B' },
+    { id: 'casiers_vestiaire', type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cost: 180, icon: '🦺', defaultRoom: 'room_1', desc: 'Rangement des paquetages d’intervention', w: 0.6, d: 2.5, color: '#0f172a', bonus: '+25 capacité tenues & +2 moral' },
+    { id: 'canape_detente', type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cost: 280, icon: '🛋️', defaultRoom: 'room_1', desc: 'Convivialité et récupération des secouristes', w: 2.0, d: 0.9, color: '#059669', bonus: '+10% régénération énergie & +5 moral' },
+    { id: 'machine_cafe', type: 'machine_cafe', name: 'Machine à Café & Pause', cost: 85, icon: '☕', defaultRoom: 'room_1', desc: 'Point de pause convivial pour les équipes', w: 0.8, d: 0.6, color: '#d97706', bonus: '+5% régénération énergie & +3 moral' },
+    { id: 'lit_garde', type: 'lit_garde', name: 'Lit de Camp / Astreinte', cost: 220, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde pour les permanences SAMU', w: 1.0, d: 2.0, color: '#a855f7', bonus: '+1 lit d’astreinte & +10% énergie' }
   ],
 
   // 4. Affiliation FNPC
@@ -229,7 +277,23 @@ window.ProtecOnboarding = {
     }
 
     if (Array.isArray(savedFurniture)) {
-      this.placedFurniture = savedFurniture;
+      const MIGRATION_MAP = {
+        f_bureau: 'bureau',
+        f_pharmacie: 'armoire_pharmacie',
+        f_formation: 'table_formation',
+        f_mannequin: 'mannequin_rcp',
+        f_foyer: 'canape_detente',
+        f_lit: 'lit_garde',
+        f_etagere: 'etagere_lots'
+      };
+      this.placedFurniture = savedFurniture.map(f => {
+        const mig = MIGRATION_MAP[f.typeId] || MIGRATION_MAP[f.type];
+        if (mig) {
+          f.typeId = mig;
+          f.type = mig;
+        }
+        return f;
+      });
     } else {
       this.placedFurniture = [];
     }
@@ -264,6 +328,10 @@ window.ProtecOnboarding = {
       setTimeout(() => {
         this.initStep2Map();
       }, 150);
+    } else if (this.currentStep === 3) {
+      setTimeout(() => {
+        this.initStep3PlanCanvas();
+      }, 80);
     } else if (this.currentStep === 4) {
       setTimeout(() => {
         this.initStep4Signature();
@@ -284,11 +352,15 @@ window.ProtecOnboarding = {
     this.saveProgress();
     this.renderWizard();
 
-    // Si on arrive à l'étape 2, initialiser la carte Leaflet
+    // Initialisation réactive selon l'étape active
     if (this.currentStep === 2) {
       setTimeout(() => {
         this.initStep2Map();
       }, 150);
+    } else if (this.currentStep === 3) {
+      setTimeout(() => {
+        this.initStep3PlanCanvas();
+      }, 60);
     } else if (this.currentStep === 4) {
       setTimeout(() => {
         this.initStep4Signature();
@@ -362,6 +434,11 @@ window.ProtecOnboarding = {
 
     if (window.lucide) window.lucide.createIcons();
 
+    if (this.currentStep === 3) {
+      setTimeout(() => {
+        this.initStep3PlanCanvas();
+      }, 40);
+    }
     if (this.currentStep === 4 && !this.fnpcSigned) {
       setTimeout(() => {
         this.initStep4Signature();
@@ -1563,10 +1640,10 @@ window.ProtecOnboarding = {
   },
 
   // -------------------------------------------------------------
-  // ÉTAPE 3 : AMÉNAGEMENT DU BÂTIMENT (GESTION DES SALLES & PLACEMENT DU MOBILIER)
+  // ÉTAPE 3 : AMÉNAGEMENT DU BÂTIMENT (PLAN 2D VIVANT & OUTILS D'AGENCEMENT)
   // -------------------------------------------------------------
   renderStep3() {
-    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + (f.cost || 0), 0);
     const activeRoom = this.roomsConfig.find(r => r.id === this.selectedRoomId) || this.roomsConfig[0];
     const activeRoomFurniture = this.placedFurniture.filter(f => f.room === activeRoom.id);
 
@@ -1576,12 +1653,12 @@ window.ProtecOnboarding = {
           <span class="text-2xl">🛋️</span>
           <h2 class="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">3. Aménagement de votre Bâtiment d'Antenne</h2>
           <p class="text-xs text-slate-600 dark:text-slate-300 max-w-lg mx-auto">
-            Le bâtiment est fourni vide. <strong>Définissez le type de chaque pièce</strong> et <strong>placez votre mobilier</strong> selon vos priorités opérationnelles !
+            Votre caserne est livrée vide. <strong>Définissez la fonction de chaque salle</strong> et <strong>installez votre mobilier</strong> selon vos priorités opérationnelles !
           </p>
         </div>
 
-        <!-- Dotation & Compteur d'équipement -->
-        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-cyan-950/40 border border-emerald-300 dark:border-emerald-700 flex items-center justify-between text-xs">
+        <!-- Dotation municipale & Compteur d'équipement -->
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-cyan-50 dark:from-emerald-950/40 dark:via-teal-950/40 dark:to-cyan-950/40 border border-emerald-300 dark:border-emerald-700 flex items-center justify-between text-xs shadow-xs">
           <div>
             <span class="text-[10px] font-black uppercase text-emerald-800 dark:text-emerald-300 tracking-wider block">Dotation Municipale Disponible</span>
             <div class="text-lg font-black text-emerald-950 dark:text-emerald-100 font-mono">${currentMoney.toLocaleString('fr-FR')} €</div>
@@ -1591,11 +1668,11 @@ window.ProtecOnboarding = {
           </span>
         </div>
 
-        <!-- PLAN 2D DU BÂTIMENT INTERACTIF (CLIQUABLE) -->
+        <!-- PLAN 2D DU BÂTIMENT VIVANT (HAUTE DÉFINITION & CLIQUABLE) -->
         ${this.renderStep3Plan2D()}
 
-        <!-- GESTION DE LA SALLE SÉLECTIONNÉE (TYPE ET MEUBLES INSTALLÉS) -->
-        <div class="p-4 rounded-2xl bg-slate-900 border-2 border-amber-400/80 shadow-md text-white space-y-3">
+        <!-- GESTION DE LA SALLE SÉLECTIONNÉE (AFFECTATION & MEUBLES EN PLACE) -->
+        <div class="p-4 rounded-2xl bg-slate-900 border-2 border-amber-400/80 shadow-md text-white space-y-3.5">
           <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-800 pb-2.5">
             <div class="flex items-center gap-2">
               <span class="text-xs font-black uppercase text-amber-400 flex items-center gap-1">
@@ -1615,7 +1692,7 @@ window.ProtecOnboarding = {
             </div>
           </div>
 
-          <!-- Choix du Type de Salle -->
+          <!-- Choix du Type / Affectation de la Salle -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between">
               <label class="text-[11px] font-black uppercase tracking-wider text-slate-400">
@@ -1628,7 +1705,7 @@ window.ProtecOnboarding = {
                 const isSelected = activeRoom.type === t.id;
                 return `
                   <button type="button" onclick="window.ProtecOnboarding.setRoomType('${activeRoom.id}', '${t.id}')" class="p-2 rounded-xl text-left border transition cursor-pointer flex items-center gap-2 ${isSelected ? 'bg-amber-400/20 border-amber-400 text-white ring-1 ring-amber-400' : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800 hover:border-slate-500'}">
-                    <span class="text-lg">${t.icon}</span>
+                    <span class="text-lg flex-shrink-0">${t.icon}</span>
                     <div class="min-w-0 flex-1">
                       <div class="text-xs font-black truncate ${isSelected ? 'text-amber-300' : 'text-white'}">${t.label}</div>
                       <div class="text-[9px] text-slate-400 truncate">${t.desc}</div>
@@ -1653,7 +1730,7 @@ window.ProtecOnboarding = {
                 ${activeRoomFurniture.map(f => `
                   <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-between gap-2 text-xs">
                     <div class="flex items-center gap-2 min-w-0">
-                      <span class="text-lg">${f.icon}</span>
+                      <span class="text-lg flex-shrink-0">${f.icon}</span>
                       <span class="font-bold text-white truncate">${f.name}</span>
                     </div>
                     <div class="flex items-center gap-1.5 flex-shrink-0">
@@ -1678,23 +1755,27 @@ window.ProtecOnboarding = {
         <!-- CATALOGUE D'ACHAT DE MOBILIER OPÉRATIONNEL -->
         <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">3. Catalogue de Mobilier • Ajouter à la ${activeRoom.name}</span>
+            <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">3. Catalogue de Mobilier • Installer dans ${activeRoom.name}</span>
             <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Les meubles s'installent dans la pièce active</span>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             ${this.furnitureCatalog.map(item => {
-              const totalCount = this.placedFurniture.filter(f => f.typeId === item.id).length;
+              const totalCount = this.placedFurniture.filter(f => (f.typeId === item.id || f.type === item.id)).length;
               return `
                 <div class="p-3 rounded-2xl glass-card bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 shadow-2xs flex items-center justify-between gap-2.5 hover:border-amber-300 dark:hover:border-amber-400 transition">
-                  <div class="flex items-center gap-2.5">
-                    <span class="text-2xl">${item.icon}</span>
-                    <div>
-                      <h4 class="text-xs font-black text-slate-900 dark:text-white">${item.name}</h4>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-400">${item.desc}</p>
+                  <div class="flex items-center gap-2.5 min-w-0">
+                    <span class="text-2xl flex-shrink-0">${item.icon}</span>
+                    <div class="min-w-0 flex-1">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <h4 class="text-xs font-black text-slate-900 dark:text-white truncate">${item.name}</h4>
+                        ${item.bonus ? `<span class="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.2 rounded-md">${item.bonus}</span>` : ''}
+                      </div>
+                      <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${item.desc}</p>
                       <div class="flex items-center gap-2 mt-0.5">
                         <span class="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
-                        ${totalCount > 0 ? `<span class="text-[9px] font-bold text-slate-500 dark:text-slate-400">${totalCount} acheté(s)</span>` : ''}
+                        <span class="text-[9.5px] font-mono text-slate-400">${item.w}m × ${item.d}m</span>
+                        ${totalCount > 0 ? `<span class="text-[9px] font-black text-pc-blue dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 rounded">${totalCount} en place</span>` : ''}
                       </div>
                     </div>
                   </div>
@@ -1703,8 +1784,8 @@ window.ProtecOnboarding = {
                     <button 
                       type="button" 
                       onclick="window.ProtecOnboarding.buyAndPlaceFurniture('${item.id}', '${activeRoom.id}')"
-                      class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1">
-                      <span>+ Placer dans ${activeRoom.name}</span>
+                      class="px-3 py-2 rounded-xl bg-pc-blue hover:bg-blue-600 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1">
+                      <span>+ Installer</span>
                     </button>
                   </div>
                 </div>
@@ -1747,30 +1828,52 @@ window.ProtecOnboarding = {
       r.label = t.label;
       r.icon = t.icon;
       r.color = t.color;
+      const modelRoom = (this.architectureModel.rooms || []).find(x => x.id === roomId);
+      if (modelRoom) {
+        modelRoom.type = t.id;
+        modelRoom.name = `${r.name} (${t.label})`;
+      }
       this.saveProgress();
       this.renderWizard();
     }
   },
 
   buyAndPlaceFurniture(typeId, targetRoomId = null) {
-    const item = this.furnitureCatalog.find(x => x.id === typeId);
+    const item = this.furnitureCatalog.find(x => x.id === typeId || x.type === typeId);
     if (!item) return;
 
-    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + f.cost, 0);
+    const currentMoney = 40000 - this.placedFurniture.reduce((sum, f) => sum + (f.cost || 0), 0);
     if (currentMoney < item.cost) {
-      window.ProtecDialog.alert("Dotation municipale insuffisante pour acheter ce meuble !", "Fonds Insuffisants");
+      if (window.ProtecDialog) {
+        window.ProtecDialog.alert("Dotation municipale insuffisante pour acheter ce meuble !", "Fonds Insuffisants");
+      }
       return;
     }
 
     const roomId = targetRoomId || this.selectedRoomId || 'room_1';
+    const room = this.architectureModel.rooms.find(r => r.id === roomId) || this.architectureModel.rooms[0];
+
+    const roomFurniture = this.placedFurniture.filter(f => f.room === roomId);
+    const slotIdx = roomFurniture.length;
+    const cols = Math.max(2, Math.floor((room.w - 0.8) / 1.6));
+    const col = slotIdx % cols;
+    const row = Math.floor(slotIdx / cols);
+    const posX = room.x + 0.6 + col * 1.5;
+    const posY = room.y + 0.7 + row * 1.4;
 
     this.placedFurniture.push({
       id: `furn-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      typeId: item.id,
+      typeId: item.type || item.id,
+      type: item.type || item.id,
       name: item.name,
       cost: item.cost,
       icon: item.icon,
-      room: roomId
+      room: roomId,
+      x: posX,
+      y: posY,
+      w: item.w || 1.2,
+      d: item.d || 0.8,
+      color: item.color || '#475569'
     });
 
     this.saveProgress();
@@ -1781,6 +1884,14 @@ window.ProtecOnboarding = {
     const f = this.placedFurniture.find(x => x.id === furnId);
     if (f) {
       f.room = newRoomId;
+      const room = this.architectureModel.rooms.find(r => r.id === newRoomId) || this.architectureModel.rooms[0];
+      const roomFurniture = this.placedFurniture.filter(x => x.room === newRoomId);
+      const slotIdx = roomFurniture.indexOf(f);
+      const cols = Math.max(2, Math.floor((room.w - 0.8) / 1.6));
+      const col = (slotIdx >= 0 ? slotIdx : 0) % cols;
+      const row = Math.floor((slotIdx >= 0 ? slotIdx : 0) / cols);
+      f.x = room.x + 0.6 + col * 1.5;
+      f.y = room.y + 0.7 + row * 1.4;
       this.saveProgress();
       this.renderWizard();
     }
@@ -1795,107 +1906,677 @@ window.ProtecOnboarding = {
     }
   },
 
+  // -------------------------------------------------------------
+  // RENDU DU PLAN 2D VIVANT (CANVAS HAUTE DÉFINITION TYPE LOCAUX.JS)
+  // -------------------------------------------------------------
   renderStep3Plan2D() {
-    const r1 = this.roomsConfig.find(r => r.id === 'room_1') || this.roomsConfig[0];
-    const r2 = this.roomsConfig.find(r => r.id === 'room_2') || this.roomsConfig[1];
-    const r3 = this.roomsConfig.find(r => r.id === 'room_3') || this.roomsConfig[2];
-
-    const r1Furn = this.placedFurniture.filter(f => f.room === 'room_1');
-    const r2Furn = this.placedFurniture.filter(f => f.room === 'room_2');
-    const r3Furn = this.placedFurniture.filter(f => f.room === 'room_3');
-
-    const isR1Active = this.selectedRoomId === 'room_1';
-    const isR2Active = this.selectedRoomId === 'room_2';
-    const isR3Active = this.selectedRoomId === 'room_3';
-
     return `
-      <div class="relative w-full rounded-2xl bg-[#0a0e17] border-2 border-slate-800 p-2.5 shadow-xl select-none">
-        <div class="flex items-center justify-between pb-1.5 px-1 text-slate-300 text-xs">
-          <span class="font-black text-white uppercase tracking-wider text-[11px]">Plan 2D du Bâtiment • Cliquez sur une salle pour l'aménager</span>
-          <span class="text-[10px] text-amber-400 font-bold">
-            ${this.placedFurniture.length === 0 ? '⚠️ Bâtiment vide (cliquez sur une salle pour la meubler)' : `✓ ${this.placedFurniture.length} meuble(s) en place`}
-          </span>
+      <div class="relative w-full rounded-3xl bg-[#0a0e17] border-2 border-slate-700/80 shadow-2xl overflow-hidden select-none">
+        <!-- Barre d'outils supérieure du Plan 2D -->
+        <div class="flex items-center justify-between px-3.5 py-2.5 bg-slate-900/95 border-b border-slate-800 text-xs">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-500/20 text-blue-400 uppercase tracking-wider flex items-center gap-1">
+              <span>📐</span> Plan 2D Vivant
+            </span>
+            <span class="text-[11px] text-slate-300 font-bold hidden sm:inline">
+              Cliquez sur une salle pour la sélectionner et l'aménager
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="window.ProtecOnboarding.zoomPlan(1.2)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm flex items-center justify-center transition cursor-pointer" title="Zoom avant">+</button>
+            <button type="button" onclick="window.ProtecOnboarding.zoomPlan(0.8)" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-black text-sm flex items-center justify-center transition cursor-pointer" title="Zoom arrière">−</button>
+            <button type="button" onclick="window.ProtecOnboarding.resetPlanView()" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 transition cursor-pointer" title="Recentrer">
+              <span>🎯</span> Recentrer
+            </button>
+          </div>
         </div>
 
-        <svg viewBox="0 0 740 330" class="w-full h-auto max-h-[260px] block rounded-xl font-sans">
-          <rect width="740" height="330" fill="#0a0e17" />
+        <!-- Zone Canvas 2D -->
+        <div class="relative w-full h-[320px] sm:h-[400px]">
+          <canvas id="onboarding-plan-canvas" class="w-full h-full block cursor-grab active:cursor-grabbing" style="touch-action: none;"></canvas>
 
-          <!-- PARKING EXTÉRIEUR -->
-          <rect x="20" y="20" width="220" height="290" fill="#111724" stroke="#334155" stroke-width="1.5" stroke-dasharray="4 4" rx="6" />
-          <text x="130" y="45" fill="#94a3b8" font-size="10" font-weight="900" text-anchor="middle">PARKING COUR EXTÉRIEURE</text>
-          <text x="130" y="60" fill="#64748b" font-size="8" text-anchor="middle">Emplacements pour véhicules (0 véhicule au départ)</text>
-          
-          <rect x="35" y="75" width="190" height="100" fill="rgba(245, 158, 11, 0.04)" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3" rx="5" />
-          <text x="130" y="130" fill="#f59e0b" font-size="10" font-weight="800" text-anchor="middle">🅿️ EMPLACEMENT 01 (LIBRE)</text>
+          <!-- Badge info bas gauche -->
+          <div class="absolute bottom-2.5 left-3 z-10 flex items-center gap-2 px-3 py-1 rounded-xl bg-slate-950/85 backdrop-blur border border-slate-800 text-[10px] font-bold text-slate-300 pointer-events-none">
+            <span class="text-amber-400">💡</span>
+            <span>Cliquer sur une pièce pour l'aménager • Glisser pour naviguer</span>
+          </div>
 
-          <rect x="35" y="190" width="190" height="100" fill="rgba(245, 158, 11, 0.04)" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="5 3" rx="5" />
-          <text x="130" y="245" fill="#f59e0b" font-size="10" font-weight="800" text-anchor="middle">🅿️ EMPLACEMENT 02 (LIBRE)</text>
-
-          <!-- BÂTIMENT DE L'ANTENNE -->
-          <rect x="260" y="20" width="460" height="290" fill="#0f172a" stroke="#1e293b" stroke-width="6" rx="4" />
-
-          <!-- SALLE 1 : 19.3 m² (Cliquable) -->
-          <g onclick="window.ProtecOnboarding.selectRoom('room_1')" style="cursor: pointer;">
-            <rect x="264" y="24" width="222" height="126" 
-              fill="${isR1Active ? '#1e293b' : '#131b2e'}" 
-              stroke="${isR1Active ? '#f59e0b' : '#3b82f6'}" 
-              stroke-width="${isR1Active ? '3.5' : '1.5'}" 
-              rx="4" />
-            <text x="375" y="45" fill="#ffffff" font-size="10.5" font-weight="900" text-anchor="middle">
-              SALLE 1 (${r1.icon} ${r1.label.toUpperCase()}) • ${r1.area} m²
-            </text>
-            <text x="375" y="80" fill="#94a3b8" font-size="18" text-anchor="middle">
-              ${r1Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
-            </text>
-            <text x="375" y="130" fill="${isR1Active ? '#fbbf24' : '#38bdf8'}" font-size="9" font-weight="800" text-anchor="middle">
-              ${isR1Active ? '📍 SALLE ACTIVE • ' : ''}${r1Furn.length} meuble(s) [Cliquez pour configurer]
-            </text>
-          </g>
-
-          <!-- SALLE 2 : 20.2 m² (Cliquable) -->
-          <g onclick="window.ProtecOnboarding.selectRoom('room_2')" style="cursor: pointer;">
-            <rect x="496" y="24" width="220" height="126" 
-              fill="${isR2Active ? '#1e293b' : '#131b2e'}" 
-              stroke="${isR2Active ? '#f59e0b' : '#3b82f6'}" 
-              stroke-width="${isR2Active ? '3.5' : '1.5'}" 
-              rx="4" />
-            <text x="606" y="45" fill="#ffffff" font-size="10.5" font-weight="900" text-anchor="middle">
-              SALLE 2 (${r2.icon} ${r2.label.toUpperCase()}) • ${r2.area} m²
-            </text>
-            <text x="606" y="80" fill="#94a3b8" font-size="18" text-anchor="middle">
-              ${r2Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="10">(Pièce vide)</tspan>'}
-            </text>
-            <text x="606" y="130" fill="${isR2Active ? '#fbbf24' : '#38bdf8'}" font-size="9" font-weight="800" text-anchor="middle">
-              ${isR2Active ? '📍 SALLE ACTIVE • ' : ''}${r2Furn.length} meuble(s) [Cliquez pour configurer]
-            </text>
-          </g>
-
-          <!-- SALLE 3 : 45.1 m² (Cliquable) -->
-          <g onclick="window.ProtecOnboarding.selectRoom('room_3')" style="cursor: pointer;">
-            <rect x="264" y="158" width="452" height="148" 
-              fill="${isR3Active ? '#1e293b' : '#131b2e'}" 
-              stroke="${isR3Active ? '#f59e0b' : '#3b82f6'}" 
-              stroke-width="${isR3Active ? '3.5' : '1.5'}" 
-              rx="4" />
-            <text x="490" y="180" fill="#ffffff" font-size="11" font-weight="900" text-anchor="middle">
-              SALLE 3 (${r3.icon} ${r3.label.toUpperCase()}) • ${r3.area} m²
-            </text>
-            <text x="490" y="230" fill="#94a3b8" font-size="20" text-anchor="middle">
-              ${r3Furn.map(f => f.icon).join(' ') || '<tspan fill="#64748b" font-size="11">(Pièce vide)</tspan>'}
-            </text>
-            <text x="490" y="285" fill="${isR3Active ? '#fbbf24' : '#38bdf8'}" font-size="9.5" font-weight="800" text-anchor="middle">
-              ${isR3Active ? '📍 SALLE ACTIVE • ' : ''}${r3Furn.length} meuble(s) [Cliquez pour configurer]
-            </text>
-          </g>
-
-          <!-- Cloisons -->
-          <line x1="490" y1="20" x2="490" y2="154" stroke="#334155" stroke-width="5" />
-          <line x1="260" y1="154" x2="720" y2="154" stroke="#334155" stroke-width="5" />
-        </svg>
+          <!-- Badge état mobilier bas droite -->
+          <div class="absolute bottom-2.5 right-3 z-10 flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-950/85 backdrop-blur border border-slate-800 text-[10px] font-bold ${this.placedFurniture.length === 0 ? 'text-amber-400' : 'text-emerald-400'} pointer-events-none">
+            <span>${this.placedFurniture.length === 0 ? '⚠️ Bâtiment vide' : `✓ ${this.placedFurniture.length} meuble(s) en place`}</span>
+          </div>
+        </div>
       </div>
     `;
   },
 
+  initStep3PlanCanvas() {
+    const canvas = document.getElementById('onboarding-plan-canvas');
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const parent = canvas.parentElement;
+    const w = (rect.width > 50 ? rect.width : (parent ? parent.clientWidth : 720)) || 720;
+    const h = (rect.height > 50 ? rect.height : (parent ? parent.clientHeight : 380)) || 380;
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+
+    if (this.camera2D.zoom === 0) {
+      this.fitPlanView(canvas.width, canvas.height);
+    }
+
+    this.setupPlanCanvasEvents(canvas);
+    this.renderStep3Scene();
+  },
+
+  setupPlanCanvasEvents(canvas) {
+    if (canvas._eventsBound) return;
+    canvas._eventsBound = true;
+
+    if (window.ResizeObserver && !canvas._resizeObserverBound) {
+      canvas._resizeObserverBound = true;
+      const ro = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          const cr = entry.contentRect;
+          if (cr.width > 50 && cr.height > 50) {
+            const d = window.devicePixelRatio || 1;
+            const newW = Math.round(cr.width * d);
+            const newH = Math.round(cr.height * d);
+            if (canvas.width !== newW || canvas.height !== newH) {
+              canvas.width = newW;
+              canvas.height = newH;
+              if (this.camera2D.zoom === 0) {
+                this.fitPlanView(newW, newH);
+              }
+              this.renderStep3Scene();
+            }
+          }
+        }
+      });
+      ro.observe(canvas.parentElement || canvas);
+    }
+
+    let isPointerDown = false;
+    let startX = 0, startY = 0;
+    let origPanX = 0, origPanY = 0;
+    let hasDragged = false;
+
+    canvas.addEventListener('pointerdown', (e) => {
+      isPointerDown = true;
+      hasDragged = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      origPanX = this.camera2D.panX;
+      origPanY = this.camera2D.panY;
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+
+    canvas.addEventListener('pointermove', (e) => {
+      if (!isPointerDown) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const cx = (canvas.width / 2) + this.camera2D.panX;
+        const cy = (canvas.height / 2) + this.camera2D.panY;
+        const scale = this.camera2D.zoom * dpr;
+        const ox = cx - 8.3 * scale;
+        const oy = cy - 6.0 * scale;
+
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const wx = (mx - ox) / scale;
+        const wy = (my - oy) / scale;
+
+        const hovered = this.architectureModel.rooms.find(r => wx >= r.x && wx <= (r.x + r.w) && wy >= r.y && wy <= (r.y + r.h));
+        canvas.style.cursor = hovered ? 'pointer' : 'grab';
+        return;
+      }
+
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      if (Math.hypot(dx, dy) > 4) {
+        hasDragged = true;
+      }
+
+      const dpr = window.devicePixelRatio || 1;
+      this.camera2D.panX = origPanX + dx * dpr;
+      this.camera2D.panY = origPanY + dy * dpr;
+      this.renderStep3Scene();
+    });
+
+    const onPointerUp = (e) => {
+      if (!isPointerDown) return;
+      isPointerDown = false;
+      try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+
+      if (!hasDragged) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const cx = (canvas.width / 2) + this.camera2D.panX;
+        const cy = (canvas.height / 2) + this.camera2D.panY;
+        const scale = this.camera2D.zoom * dpr;
+        const ox = cx - 8.3 * scale;
+        const oy = cy - 6.0 * scale;
+
+        const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+        const wx = (mx - ox) / scale;
+        const wy = (my - oy) / scale;
+
+        const clickedRoom = this.architectureModel.rooms.find(r => wx >= r.x && wx <= (r.x + r.w) && wy >= r.y && wy <= (r.y + r.h));
+        if (clickedRoom) {
+          this.selectRoom(clickedRoom.id);
+        }
+      }
+    };
+
+    canvas.addEventListener('pointerup', onPointerUp);
+    canvas.addEventListener('pointercancel', onPointerUp);
+
+    canvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? 1.12 : 0.88;
+      this.zoomPlan(factor);
+    }, { passive: false });
+  },
+
+  zoomPlan(factor) {
+    this.camera2D.zoom = Math.max(12, Math.min(55, (this.camera2D.zoom || 24) * factor));
+    this.renderStep3Scene();
+  },
+
+  resetPlanView() {
+    const canvas = document.getElementById('onboarding-plan-canvas');
+    if (canvas) {
+      this.fitPlanView(canvas.width, canvas.height);
+      this.renderStep3Scene();
+    }
+  },
+
+  fitPlanView(w, h) {
+    const dpr = window.devicePixelRatio || 1;
+    const availW = w / dpr;
+    const availH = h / dpr;
+    const modelW = 16.5;
+    const modelH = 11.0;
+    const scaleX = (availW * 0.88) / modelW;
+    const scaleY = (availH * 0.88) / modelH;
+    this.camera2D.zoom = Math.max(14, Math.min(36, Math.min(scaleX, scaleY)));
+    this.camera2D.panX = 0;
+    this.camera2D.panY = 0;
+  },
+
+  _getRoomStyle(type) {
+    const ROOM_STYLES = {
+      libre:       { floor: '#f8fafc', accent: '#cbd5e1', label: '#475569', floorType: 'neutral', name: 'Espace Libre' },
+      bureau:      { floor: '#e2e8f0', accent: '#94a3b8', label: '#1e293b', floorType: 'carpet', name: 'Bureau & Direction' },
+      formation:   { floor: '#e0f2fe', accent: '#7dd3fc', label: '#0369a1', floorType: 'lino', name: 'Salle de Formation' },
+      stockage:    { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Stockage & Logistique' },
+      reserve:     { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Stockage & Logistique' },
+      garage:      { floor: '#94a3b8', accent: '#64748b', label: '#0f172a', floorType: 'epoxy', name: 'Hangar VPSP' },
+      detente:     { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      foyer:       { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      dortoir:     { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Dortoir de Garde' },
+      salle_garde: { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Salle de Garde' },
+      pc_radio:    { floor: '#ccfbf1', accent: '#5eead4', label: '#115e59', floorType: 'tech', name: 'PC Radio & Régulation' },
+      douche:      { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires & Douches' },
+      wc:          { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires' },
+      vestiaire:   { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' },
+      vestiaires:  { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' }
+    };
+    return ROOM_STYLES[type] || ROOM_STYLES.libre;
+  },
+
+  drawRoomFloor(ctx, rx, ry, rw, rh, room, style, scale) {
+    const fType = style.floorType || 'neutral';
+
+    ctx.fillStyle = style.floor || '#f8fafc';
+    ctx.fillRect(rx, ry, rw, rh);
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rx, ry, rw, rh);
+    ctx.clip();
+
+    if (fType === 'wood') {
+      const plankH = Math.max(7, scale * 0.35);
+      const plankW = Math.max(26, scale * 1.3);
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.28)';
+      ctx.lineWidth = 1;
+
+      for (let y = ry; y < ry + rh; y += plankH) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+        const row = Math.floor((y - ry) / plankH);
+        const offset = (row % 2) * (plankW / 2);
+        for (let x = rx - offset; x < rx + rw; x += plankW) {
+          ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, Math.min(y + plankH, ry + rh)); ctx.stroke();
+        }
+      }
+
+      // Tapis de salon chaleureux
+      const rugW = Math.min(rw * 0.65, 80 * (scale / 25));
+      const rugH = Math.min(rh * 0.55, 60 * (scale / 25));
+      const rugX = rx + rw / 2 - rugW / 2;
+      const rugY = ry + rh / 2 - rugH / 2;
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(rugX, rugY, rugW, rugH);
+      ctx.strokeStyle = '#fef08a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4);
+
+    } else if (fType === 'tiles') {
+      const tileSize = Math.max(10, scale * 0.45);
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+      ctx.lineWidth = 1;
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+    } else if (fType === 'epoxy') {
+      ctx.fillStyle = 'rgba(51, 65, 85, 0.15)';
+      ctx.fillRect(rx + rw * 0.2, ry, rw * 0.15, rh);
+      ctx.fillRect(rx + rw * 0.65, ry, rw * 0.15, rh);
+
+      const stripH = Math.min(10, rh * 0.15);
+      const stripY = ry + rh - stripH;
+      for (let x = rx; x < rx + rw; x += 12) {
+        ctx.fillStyle = ((Math.floor(x / 12) % 2 === 0) ? '#facc15' : '#1e293b');
+        ctx.fillRect(x, stripY, Math.min(12, rx + rw - x), stripH);
+      }
+
+    } else if (fType === 'lino') {
+      const tileSize = Math.max(14, scale * 0.6);
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.45)';
+      ctx.lineWidth = 1;
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+
+    } else if (fType === 'concrete') {
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.2)';
+      ctx.lineWidth = 1;
+      const step = Math.max(18, scale * 0.8);
+      for (let x = rx; x < rx + rw; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += step) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      const palW = Math.min(rw * 0.35, 32);
+      const palH = Math.min(rh * 0.35, 24);
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(rx + 6, ry + 6, palW, palH);
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + 6, ry + 6, palW, palH);
+      for (let py = ry + 10; py < ry + 6 + palH; py += 6) {
+        ctx.beginPath(); ctx.moveTo(rx + 6, py); ctx.lineTo(rx + 6 + palW, py); ctx.stroke();
+      }
+
+    } else if (fType === 'carpet' || fType === 'carpet_cozy' || fType === 'tech') {
+      const step = Math.max(8, scale * 0.35);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      for (let x = rx; x < rx + rw; x += step * 2) {
+        for (let y = ry; y < ry + rh; y += step * 2) {
+          ctx.fillRect(x, y, step, step);
+        }
+      }
+    } else {
+      const step = Math.max(16, scale * 0.7);
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.4)';
+      ctx.lineWidth = 1;
+      for (let x = rx; x < rx + rw; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += step) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  },
+
+  renderStep3Scene() {
+    const canvas = document.getElementById('onboarding-plan-canvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const dpr = window.devicePixelRatio || 1;
+
+    ctx.clearRect(0, 0, width, height);
+
+    const cx = (width / 2) + this.camera2D.panX;
+    const cy = (height / 2) + this.camera2D.panY;
+    const scale = (this.camera2D.zoom || 24) * dpr;
+
+    // 1. Fond extérieur : Pelouse verdoyante et cour pavée
+    const grad = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.max(width, height) * 0.7);
+    grad.addColorStop(0, '#22c55e');
+    grad.addColorStop(1, '#15803d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+
+    const ox = cx - 8.3 * scale;
+    const oy = cy - 6.0 * scale;
+
+    // 2. Zone extérieure : Cour enrobée bitumineuse & Parking Opérationnel
+    const pk = this.architectureModel.parking;
+    if (pk) {
+      const px = ox + pk.x * scale;
+      const py = oy + pk.y * scale;
+      const pw = pk.w * scale;
+      const ph = pk.h * scale;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      ctx.fillRect(px + 4, py + 5, pw, ph);
+
+      ctx.fillStyle = '#334155';
+      ctx.fillRect(px, py, pw, ph);
+
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 2 * dpr;
+      ctx.strokeRect(px, py, pw, ph);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.round(9 * dpr)}px "Plus Jakarta Sans", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('🚒 COUR & HANGAR OPÉRATIONNEL', px + pw / 2, py + 8 * dpr);
+
+      (pk.spots || []).forEach((spot, idx) => {
+        const sx = ox + spot.x * scale;
+        const sy = oy + spot.y * scale;
+        const sw = spot.w * scale;
+        const sd = spot.d * scale;
+
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeRect(sx, sy, sw, sd);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+        ctx.fillRect(sx, sy, sw, sd);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.font = `bold ${Math.round(8.5 * dpr)}px "Plus Jakarta Sans", sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(spot.label || `🅿️ EMPLACEMENT 0${idx + 1}`, sx + sw / 2, sy + sd / 2);
+      });
+    }
+
+    // 3. Ombre portée globale du bâtiment
+    const buildX = ox + 6.0 * scale;
+    const buildY = oy + 1.4 * scale;
+    const buildW = 9.8 * scale;
+    const buildH = 9.2 * scale;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(buildX + 6 * dpr, buildY + 8 * dpr, buildW, buildH, 6 * dpr);
+    else ctx.rect(buildX + 6 * dpr, buildY + 8 * dpr, buildW, buildH);
+    ctx.fill();
+
+    // 4. Tracé des sols réalistes des pièces
+    this.architectureModel.rooms.forEach(r => {
+      const rx = ox + r.x * scale;
+      const ry = oy + r.y * scale;
+      const rw = r.w * scale;
+      const rh = r.h * scale;
+      const userRoom = this.roomsConfig.find(ur => ur.id === r.id) || r;
+      const isSelected = this.selectedRoomId === r.id;
+
+      const roomStyle = this._getRoomStyle(userRoom.type);
+      this.drawRoomFloor(ctx, rx, ry, rw, rh, r, roomStyle, scale);
+
+      // Surbrillance orange vive si sélectionnée
+      if (isSelected) {
+        ctx.strokeStyle = '#f97316';
+        ctx.lineWidth = 3.5 * dpr;
+        ctx.strokeRect(rx, ry, rw, rh);
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.15)';
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+    });
+
+    // 5. Tracé du Mobilier meublé (style Les Sims)
+    (this.placedFurniture || []).forEach(item => {
+      const room = this.architectureModel.rooms.find(r => r.id === item.room) || this.architectureModel.rooms[0];
+      let fx = item.x;
+      let fy = item.y;
+      if (!fx || !fy) {
+        const roomFurn = this.placedFurniture.filter(f => f.room === item.room);
+        const idxInRoom = roomFurn.indexOf(item);
+        const cols = Math.max(2, Math.floor((room.w - 0.8) / 1.6));
+        const c = idxInRoom % cols;
+        const row = Math.floor(idxInRoom / cols);
+        fx = room.x + 0.6 + c * 1.5;
+        fy = room.y + 0.7 + row * 1.4;
+      }
+
+      const fw = item.w || 1.2;
+      const fd = item.d || 0.8;
+
+      const ix = ox + fx * scale;
+      const iy = oy + fy * scale;
+      const iw = fw * scale;
+      const ih = fd * scale;
+
+      // Ombre portée du meuble
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      ctx.fillRect(ix + 3, iy + 3, iw, ih);
+
+      // Corps du meuble
+      ctx.fillStyle = item.color || '#475569';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ix, iy, iw, ih, 4 * dpr);
+      else ctx.rect(ix, iy, iw, ih);
+      ctx.fill();
+
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Détails par type
+      const itype = item.type || item.typeId;
+      if (itype === 'mannequin_rcp') {
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (itype === 'dae_mural') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.4, iy + ih * 0.2, iw * 0.2, ih * 0.6);
+        ctx.fillRect(ix + iw * 0.2, iy + ih * 0.4, iw * 0.6, ih * 0.2);
+      } else if (itype === 'armoire_pharmacie') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.45, iy + ih * 0.25, iw * 0.1, ih * 0.5);
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.45, iw * 0.4, ih * 0.1);
+      } else if (itype === 'etagere_lots') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33);
+        ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66);
+        ctx.stroke();
+      } else if (itype === 'casiers_vestiaire') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ix + iw * 0.33, iy); ctx.lineTo(ix + iw * 0.33, iy + ih);
+        ctx.moveTo(ix + iw * 0.66, iy); ctx.lineTo(ix + iw * 0.66, iy + ih);
+        ctx.stroke();
+      } else if (itype === 'lit_garde') {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.28);
+      } else if (itype === 'bureau') {
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.25, iw * 0.4, ih * 0.3);
+      } else if (itype === 'machine_cafe') {
+        ctx.fillStyle = '#fef08a';
+        ctx.fillRect(ix + iw * 0.35, iy + ih * 0.35, iw * 0.3, ih * 0.3);
+      }
+
+      if (item.icon && iw > 18 && ih > 18) {
+        ctx.font = `${Math.round(Math.min(iw, ih) * 0.45)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.icon, ix + iw / 2, iy + ih / 2);
+      }
+    });
+
+    // 6. Murs porteurs solides
+    this.architectureModel.walls.forEach(w => {
+      const x1 = ox + w.x1 * scale;
+      const y1 = oy + w.y1 * scale;
+      const x2 = ox + w.x2 * scale;
+      const y2 = oy + w.y2 * scale;
+      const thBase = Math.max(7 * dpr, w.th * scale);
+
+      // Ombre du mur
+      ctx.strokeStyle = '#1e293b';
+      ctx.lineWidth = thBase + 2 * dpr;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x1 + 1, y1 + 2); ctx.lineTo(x2 + 1, y2 + 2); ctx.stroke();
+
+      // Corps du mur
+      ctx.strokeStyle = '#475569';
+      ctx.lineWidth = thBase;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+      // Arête claire de relief
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    });
+
+    // 7. Portes d'accès réelles
+    this.architectureModel.doors.forEach(d => {
+      const dx = ox + d.x * scale;
+      const dy = oy + d.y * scale;
+      const dlen = d.len * scale;
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = Math.max(7 * dpr, 0.16 * scale);
+      ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.moveTo(dx, dy);
+      if (d.wall === 'W') ctx.lineTo(dx + dlen, dy);
+      else if (d.wall === 'E') ctx.lineTo(dx - dlen, dy);
+      else if (d.wall === 'S') ctx.lineTo(dx, dy - dlen);
+      else ctx.lineTo(dx, dy + dlen);
+      ctx.stroke();
+
+      ctx.strokeStyle = '#b45309';
+      ctx.lineWidth = 3 * dpr;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(dx, dy);
+      if (d.wall === 'W') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+      else if (d.wall === 'E') ctx.lineTo(dx - dlen * 0.7, dy - dlen * 0.7);
+      else if (d.wall === 'S') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+      else ctx.lineTo(dx + dlen * 0.7, dy + dlen * 0.7);
+      ctx.stroke();
+    });
+
+    // 8. Fenêtres lumineuses
+    this.architectureModel.windows.forEach(w => {
+      const wx = ox + w.x * scale;
+      const wy = oy + w.y * scale;
+      const wlen = w.len * scale;
+
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = Math.max(5 * dpr, 0.1 * scale);
+      ctx.beginPath();
+      if (w.wall === 'N' || w.wall === 'S') {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
+      } else {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      if (w.wall === 'N' || w.wall === 'S') {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
+      } else {
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
+      }
+      ctx.stroke();
+    });
+
+    // 9. Équipements de sécurité
+    this.architectureModel.fixtures.forEach(f => {
+      if (f.type === 'extinguisher') {
+        const px = ox + f.x * scale;
+        const py = oy + f.y * scale;
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(px + 4 * dpr, py + 4 * dpr, 4.5 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1 * dpr;
+        ctx.stroke();
+      }
+    });
+
+    // 10. Pastille centrale de chaque pièce
+    this.architectureModel.rooms.forEach(r => {
+      const rx = ox + r.x * scale;
+      const ry = oy + r.y * scale;
+      const rw = r.w * scale;
+      const rh = r.h * scale;
+
+      const userRoom = this.roomsConfig.find(ur => ur.id === r.id) || r;
+      const isSelected = this.selectedRoomId === r.id;
+      const typeInfo = this.roomTypesList.find(t => t.id === userRoom.type) || { label: userRoom.label || 'Libre', icon: userRoom.icon || '🚪' };
+      const roomFurnCount = (this.placedFurniture || []).filter(f => f.room === r.id).length;
+
+      const pillW = Math.min(rw * 0.90, 185 * (scale / 25));
+      const pillH = Math.min(rh * 0.42, 38 * (scale / 25));
+      const pillX = rx + rw / 2 - pillW / 2;
+      const pillY = ry + rh / 2 - pillH / 2;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(pillX + 2, pillY + 2, pillW, pillH, 8 * dpr);
+      else ctx.rect(pillX + 2, pillY + 2, pillW, pillH);
+      ctx.fill();
+
+      ctx.fillStyle = isSelected ? '#ea580c' : 'rgba(15, 23, 42, 0.92)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(pillX, pillY, pillW, pillH, 8 * dpr);
+      else ctx.rect(pillX, pillY, pillW, pillH);
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected ? '#fbbf24' : '#475569';
+      ctx.lineWidth = isSelected ? 2.5 * dpr : 1.5 * dpr;
+      ctx.stroke();
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `bold ${Math.round(10 * (scale / 25))}px "Plus Jakarta Sans", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`${typeInfo.icon} ${userRoom.name} · ${r.area} m²`, pillX + pillW / 2, pillY + 5 * (scale / 25));
+
+      ctx.fillStyle = isSelected ? '#fef08a' : '#cbd5e1';
+      ctx.font = `600 ${Math.round(8.5 * (scale / 25))}px "Plus Jakarta Sans", sans-serif`;
+      ctx.fillText(`${typeInfo.label} · ${roomFurnCount} meuble(s)`, pillX + pillW / 2, pillY + 19 * (scale / 25));
+    });
+  },
   // -------------------------------------------------------------
   // ÉTAPE 4 : SIGNATURE DE L'AFFILIATION FNPC POUR DEVENIR UNE VRAIE AASC
   // -------------------------------------------------------------
@@ -2064,17 +2745,20 @@ window.ProtecOnboarding = {
 
         // Le bâtiment démarre avec les meubles achetés et placés par le joueur
         archModel.furniture = this.placedFurniture.map(f => {
-          let rx = 7.0, ry = 2.5;
-          if (f.room === 'room_2') { rx = 11.5; ry = 2.5; }
-          else if (f.room === 'room_3') { rx = 9.0; ry = 7.0; }
+          const catItem = (window.ProtecLocaux && window.ProtecLocaux.FURNITURE_CATALOG)
+            ? window.ProtecLocaux.FURNITURE_CATALOG.find(c => c.type === (f.type || f.typeId))
+            : null;
+          let rx = f.x || (f.room === 'room_2' ? 11.5 : (f.room === 'room_3' ? 9.0 : 7.0));
+          let ry = f.y || (f.room === 'room_3' ? 7.0 : 2.5);
           return {
             id: f.id,
-            type: f.typeId,
+            type: f.type || f.typeId,
             label: f.name,
             x: rx,
             y: ry,
-            w: 1.2,
-            d: 0.8,
+            w: f.w || (catItem ? catItem.w : 1.2),
+            d: f.d || (catItem ? catItem.d : 0.8),
+            color: f.color || (catItem ? catItem.color : '#475569'),
             roomId: f.room
           };
         });
