@@ -1230,12 +1230,12 @@
         });
       }
 
-      if (data.supplyMetrics.medicalAutonomyDays < 7) {
+      if (data.supplyMetrics.totalStorageSlots < 150) {
         recs.push({
           type: 'SUPPLY',
-          icon: '🩺',
-          title: 'Installer une Armoire Pharmacie Sécurisée',
-          text: 'Votre réserve ne permet que 3 à 5 jours d\'autonomie de soins. L\'ajout d\'une armoire DAE stabilise vos stocks pour les gros DPS.'
+          icon: '📦',
+          title: 'Augmenter la Capacité de Stockage Logistique',
+          text: 'Votre réserve dispose d\'une capacité de rangement limitée. Installez des étagères métalliques pour accueillir vos lots A/B, kits CHU et caisses de réarmement.'
         });
       }
 

@@ -3614,16 +3614,16 @@ window.ProtecLocaux = {
               <p class="text-[10px] text-slate-500">${metrics.capacityMetrics.totalUsableSurfaceM2} m² utiles • <strong>${metrics.capacityMetrics.nightDutyBedsCount} lit(s)</strong> garde 24h • <strong>${metrics.capacityMetrics.studentTrainingCapacity}</strong> places cours</p>
             </div>
 
-            <!-- 3. Autonomie en consommables -->
+            <!-- 3. Capacité Logistique & Stockage du Bâtiment (en kg) -->
             <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
               <div class="flex items-center justify-between text-xs font-black text-slate-800">
-                <span class="flex items-center gap-1">🩺 Autonomie Soins</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${metrics.supplyMetrics.rating === 'AUTONOME' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                  ${metrics.supplyMetrics.rating}
+                <span class="flex items-center gap-1">📦 Capacité Stockage</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${(m.furniture || []).some(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)) ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                  ${(m.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)).length} RANGEMENT${(m.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)).length > 1 ? 'S' : ''}
                 </span>
               </div>
-              <div class="text-base font-black text-slate-900">${metrics.supplyMetrics.medicalAutonomyDays} jours</div>
-              <p class="text-[10px] text-slate-500">Réserve : <strong>${metrics.supplyMetrics.totalStorageSlots} slots</strong> • Capacité : <strong>${metrics.supplyMetrics.consecutiveDpsAutonomy}</strong> DPS simultanés</p>
+              <div class="text-base font-black text-slate-900">${(m.furniture || []).reduce((sum, f) => sum + (f.maxWeightKg || (f.type === 'etagere_lots' ? 300 : f.type === 'armoire_pharmacie' ? 80 : f.type === 'casiers_vestiaire' ? 150 : 0)), 0)} kg utiles</div>
+              <p class="text-[10px] text-slate-500">Charge max admissible pour Lots A/B, kits CHU, tenues F1 et caisses d'intervention.</p>
             </div>
 
             <!-- 4. Coûts d'entretien journalier (OPEX) -->
@@ -3665,25 +3665,41 @@ window.ProtecLocaux = {
 
   renderRoomsListHTML(model) {
     const m = model || this.getArchitectModel();
+    const typeIcons = {
+      libre: '⚪',
+      bureau: '💼',
+      formation: '🎓',
+      stockage: '📦',
+      detente: '☕',
+      pc_radio: '📡',
+      dortoir: '🛏️',
+      vestiaire: '🚿',
+      vestiaires: '🚿'
+    };
+
     return (m.rooms || []).map((rm, idx) => {
       const isSelected = this.selectedRoomId === rm.id;
+      const cleanType = rm.type || 'libre';
+      const icon = typeIcons[cleanType] || '🏛️';
+
       return `
-        <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
+        <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/40 shadow-xs' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
           <div class="flex items-center justify-between text-xs font-black mb-1.5">
             <span class="flex items-center gap-1.5 text-slate-900 truncate">
               <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono flex-shrink-0">${idx + 1}</span>
-              <span class="truncate">Pièce ${idx + 1} (${rm.area.toFixed(1)} m²)</span>
+              <span class="truncate">Pièce ${idx + 1} (${(rm.area || rm.w * rm.h || 20).toFixed(1)} m²)</span>
             </span>
-            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold flex-shrink-0">Active ★</span>' : ''}
+            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-black bg-blue-100/80 px-1.5 py-0.2 rounded flex-shrink-0">Active ★</span>' : ''}
           </div>
-          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
-            <option value="libre" ${rm.type === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
-            <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
-            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC & DPS</option>
-            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B & Vestiaires</option>
-            <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente</option>
-            <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde</option>
-            <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
+          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue cursor-pointer">
+            <option value="libre" ${cleanType === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
+            <option value="bureau" ${cleanType === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
+            <option value="formation" ${cleanType === 'formation' ? 'selected' : ''}>🎓 Salle de Formation (PSC / SST)</option>
+            <option value="stockage" ${cleanType === 'stockage' ? 'selected' : ''}>📦 Stockage & Logistique (Lots A/B)</option>
+            <option value="detente" ${cleanType === 'detente' ? 'selected' : ''}>☕ Foyer & Détente (Bénévoles)</option>
+            <option value="pc_radio" ${cleanType === 'pc_radio' ? 'selected' : ''}>📡 PC Radio & Opérations</option>
+            <option value="dortoir" ${cleanType === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir d'Astreinte (SAMU/SDIS)</option>
+            <option value="vestiaire" ${cleanType === 'vestiaire' || cleanType === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
           </select>
         </div>
       `;
@@ -3693,16 +3709,27 @@ window.ProtecLocaux = {
   selectRoom(roomId) {
     this.selectedRoomId = roomId;
     this.renderArchitectScene();
+
+    const model = this.getArchitectModel();
+    const rm = (model.rooms || []).find(r => r.id === roomId);
+
+    // 1. Mettre à jour la liste des pièces
     const container = document.getElementById('starter-rooms-list');
     if (container) {
-      container.innerHTML = this.renderRoomsListHTML();
+      container.innerHTML = this.renderRoomsListHTML(model);
     }
+
+    // 2. Mettre à jour l'en-tête de la pièce sélectionnée à droite de la barre d'onglets
+    const headerLabel = document.getElementById('selected-room-header-name');
+    if (headerLabel && rm) {
+      headerLabel.textContent = rm.name.split('\n')[0];
+    }
+
+    // 3. Mettre à jour la barre contextuelle sous le canvas
     const contextBar = document.getElementById('canvas-context-bar');
     if (contextBar && !this.selectedFurnitureId) {
-      const model = this.getArchitectModel();
-      const rm = (model.rooms || []).find(r => r.id === roomId);
       if (rm) {
-        const areaLabel = this.isEditing ? ` (${rm.area.toFixed(1)} m²)` : '';
+        const areaLabel = rm.area ? ` (${rm.area.toFixed(1)} m²)` : '';
         contextBar.innerHTML = `
           <span class="flex items-center gap-1.5 font-bold text-blue-300">
             <span>🏛️</span>
@@ -3723,10 +3750,12 @@ window.ProtecLocaux = {
     const titles = {
       libre: `Salle ${roomIdx || 1} (Libre)\n(Non affectée)`,
       bureau: 'Accueil & Direction\n(Poste de Commandement)',
-      formation: 'Salle de Formation & DPS\n(Pédagogie Citoyenne)',
-      stockage: 'Réserve Lots A/B & Vestiaires\n(Pharmacie & Casiers F1)',
+      formation: 'Salle de Formation\n(Pédagogie & PSC/SST)',
+      stockage: 'Stockage & Logistique\n(Réserve Matériel & Lots)',
       detente: 'Foyer & Détente\n(Espace Convivial Bénévoles)',
-      dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / CUMP)',
+      pc_radio: 'PC Radio & Opérations\n(Poste de Commandement)',
+      dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / SDIS)',
+      vestiaire: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)',
       vestiaires: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)'
     };
     const colors = {
@@ -3735,7 +3764,9 @@ window.ProtecLocaux = {
       formation: '#141a26',
       stockage: '#181b2a',
       detente: '#14241e',
+      pc_radio: '#281328',
       dortoir: '#22182c',
+      vestiaire: '#131e28',
       vestiaires: '#131e28'
     };
 
@@ -4242,7 +4273,7 @@ window.ProtecLocaux = {
             </div>
 
             <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold">
-              <span>Pièce sélectionnée : <strong class="text-slate-800">${selectedRoom?.name?.split('\n')[0] || 'Salle 1'}</strong></span>
+              <span>Pièce sélectionnée : <strong id="selected-room-header-name" class="text-slate-800">${selectedRoom?.name?.split('\n')[0] || 'Salle 1'}</strong></span>
             </div>
           </div>
 
@@ -4729,16 +4760,7 @@ window.ProtecLocaux = {
         st.premises.architecture = JSON.parse(JSON.stringify(this.getDefaultModel()));
       }
       const arch = st.premises.architecture;
-      // Migration douce : si l'antenne a encore les anciens noms par défaut de démonstration, les passer en "Libre"
-      if (arch.rooms) {
-        arch.rooms.forEach((r, idx) => {
-          if (r.name && (r.name.includes('Accueil Public & Direction') || r.name.includes('Salle de Formation & DPS') || r.name.includes('Réserve Lots A/B & Vestiaires'))) {
-            r.type = 'libre';
-            r.name = `Salle ${idx + 1} (Libre)\n(Non affectée)`;
-            r.color = '#121722';
-          }
-        });
-      }
+      // Les vocations et types de pièces configurés par le joueur sont strictement préservés
       if (arch.parking && arch.parking.spots) {
         arch.parking.spots.forEach((sp, idx) => {
           if (sp.label && (sp.label.includes('VPSP 01') || sp.label.includes('VTU 01'))) {
@@ -6732,11 +6754,18 @@ window.ProtecLocaux = {
   saveCurrentArchitecture(game) {
     if (!game) game = window.game;
     if (!game) return;
-    const station = (game.stations && game.stations[0]) ? game.stations[0] : null;
-    if (station && station.premises && station.premises.architecture) {
-      if (typeof game.saveGame === 'function') {
-        game.saveGame();
-      }
+    const stId = this.currentStationId;
+    const station = (game.stations && game.stations.find(s => s.id === stId)) || (game.stations && game.stations[0]);
+    if (!station) return;
+    if (!station.premises) {
+      station.premises = { tenure: 'rented', level: 1, monthlyRent: 350, securityEquipment: [] };
+    }
+    const model = this.getArchitectModel(station.id);
+    if (model) {
+      station.premises.architecture = JSON.parse(JSON.stringify(model));
+    }
+    if (typeof game.saveGame === 'function') {
+      game.saveGame();
     }
   },
 
