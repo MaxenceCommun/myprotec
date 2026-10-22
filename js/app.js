@@ -8484,7 +8484,7 @@ class ProtecGame {
   // Peut devenir 100% automatique si l'antenne dispose d'un Responsable Logistique en poste.
   // =========================================================================
 
-  createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null) {
+  createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null, forcePendingDelivery = false) {
     const veh = (this.vehicles || []).find(v => v.id === vehicleId);
     if (!veh) return null;
 
@@ -8497,7 +8497,7 @@ class ProtecGame {
 
     if (existing) {
       if (!autoCreated) {
-        this.showToast('Atelier Déjà Planifié 🛠️', `Un atelier logistique de réarmement est déjà programmé pour ${veh.name}.`, 'blue');
+        this.showToast('Atelier Déjà Planifié 🛠️', `Une mission logistique de réarmement est déjà programmée pour ${veh.name}.`, 'blue');
         if (typeof this.openMissionDetails === 'function') {
           this.openMissionDetails(existing.id);
         }
@@ -8509,16 +8509,66 @@ class ProtecGame {
     const now = Date.now();
     const missionId = `m-log-rearm-${veh.id}-${now}`;
 
+    // Contrôle du stock disponible et des commandes en transit
+    if (!st.stock) st.stock = {};
+    const localStock = st.stock.caisse_rearmement || 0;
+    const pendingDeliveries = (this.deliveries || []).filter(d => 
+      d.status === 'in_transit' && 
+      (d.stationId === st.id || !d.stationId) && 
+      ((d.items && d.items.caisse_rearmement > 0) || (d.items && d.items.stock_materiels_ps > 0))
+    );
+
+    let usePending = forcePendingDelivery || (localStock <= 0 && pendingDeliveries.length > 0);
+    let targetDelivery = null;
+
+    if (usePending) {
+      if (pendingDeliveries.length === 0) {
+        this.showToast('Matériel Indisponible ⚠️', `Aucune caisse de réarmement en stock ni commande en cours pour approvisionner ${veh.name}. Commandez du matériel à la Centrale d’Achats.`, 'orange');
+        return null;
+      }
+      targetDelivery = pendingDeliveries[0];
+      let deducted = false;
+      if (targetDelivery.items && targetDelivery.items.caisse_rearmement > 0) {
+        targetDelivery.items.caisse_rearmement -= 1;
+        deducted = true;
+      } else if (targetDelivery.items && targetDelivery.items.stock_materiels_ps >= 100) {
+        targetDelivery.items.stock_materiels_ps -= 100;
+        deducted = true;
+      }
+      if (deducted && Array.isArray(targetDelivery.itemsSummary)) {
+        const itemSummary = targetDelivery.itemsSummary.find(it => it.id === 'caisse_rearmement' || it.id === 'stock_materiels_ps');
+        if (itemSummary) {
+          itemSummary.qty = Math.max(0, (itemSummary.qty || 1) - 1);
+        }
+      }
+      const totalRemaining = Object.values(targetDelivery.items || {}).reduce((a, b) => a + Number(b || 0), 0);
+      if (totalRemaining <= 0) {
+        targetDelivery.status = 'delivered';
+        targetDelivery.deliveredAt = now;
+      }
+    } else {
+      if (localStock > 0) {
+        st.stock.caisse_rearmement = Math.max(0, localStock - 1);
+      }
+    }
+
+    const deliveryRefBadge = targetDelivery ? `(Prélèvement Commande #${targetDelivery.orderNumber})` : '';
+    const missionDesc = targetDelivery
+      ? `Mission Logistique : Récupération du matériel de réarmement prélevé sur la commande en transit #${targetDelivery.orderNumber} (${targetDelivery.supplierName || 'Centrale Fédérale'}) et réarmement complet de ${veh.name} (${veh.model || veh.type}) sans attendre la fin du délai de livraison standard.`
+      : `Mission Logistique de réarmement, désinfection et remise à niveau complète de la dotation (pansements, compresses, désinfectant, O2) pour ${veh.name} (${veh.model || veh.type}) au garage de l'antenne. Inscription des bénévoles ouverte.`;
+
     const mission = {
       id: missionId,
       type: 'logistique',
       category: 'logistique',
       categoryLabel: '📦 Mission Logistique - Réarmement',
-      title: `Mission Logistique : Réarmement ${veh.name}`,
-      desc: `Mission Logistique de réarmement, désinfection et remise à niveau complète de la dotation (pansements, compresses, désinfectant, O2) pour ${veh.name} (${veh.model || veh.type}) au garage de l'antenne. Inscription des bénévoles ouverte.`,
+      title: `Mission Logistique : Réarmement ${veh.name} ${deliveryRefBadge}`.trim(),
+      desc: missionDesc,
       targetVehicleId: veh.id,
       targetVehicleIds: [veh.id],
       isRearmamentWorkshop: true,
+      isPendingDeliveryPickup: Boolean(targetDelivery),
+      deliveryOrderNumber: targetDelivery?.orderNumber || null,
       status: 'planifie',
       progress: 0,
       requiredVolunteers: 1,
@@ -8561,7 +8611,10 @@ class ProtecGame {
     this.saveGame();
 
     if (!autoCreated) {
-      this.showToast('Mission Logistique Créée ! 📦', `La Mission Logistique de réarmement pour ${veh.name} est au planning. Vos bénévoles peuvent s'y inscrire !`, 'green');
+      const toastMsg = targetDelivery
+        ? `Matériel prélevé sur la commande #${targetDelivery.orderNumber} ! Vos bénévoles peuvent s'inscrire pour réarmer ${veh.name} sans attendre la livraison.`
+        : `La Mission Logistique de réarmement pour ${veh.name} est au planning. Vos bénévoles peuvent s'y inscrire !`;
+      this.showToast('Mission Logistique Créée ! 📦', toastMsg, 'green');
       if (window.ProtecAudio && typeof window.ProtecAudio.playClickSound === 'function') {
         window.ProtecAudio.playClickSound();
       }
@@ -12516,17 +12569,21 @@ class ProtecGame {
         const targetVeh = (this.vehicles || []).find(v => v.id === tId);
         if (targetVeh) {
           targetVeh.armementLevel = 100;
+          targetVeh.consumables = 100;
           targetVeh.consumablesPercent = 100;
           targetVeh.isRearmed = true;
           targetVeh.needsRearming = false;
           targetVeh.a_rearme = false;
+          targetVeh.warnedLowConsumables = false;
+          targetVeh.breachedConsumables = false;
           targetVeh.lastRearmedAt = Date.now();
           if (targetVeh.status === 'a_rearme' || targetVeh.status === 'transit') {
             targetVeh.status = 'dispo';
           }
         }
       });
-      this.showToast('Atelier Logistique Achevé 📦', `Le réarmement et la désinfection sont terminés. Le véhicule est 100% opérationnel !`, 'green');
+      const orderRef = mission.deliveryOrderNumber ? ` (matériel prélevé sur la commande #${mission.deliveryOrderNumber})` : '';
+      this.showToast('Atelier Logistique Achevé 📦', `Le réarmement et la désinfection sont terminés${orderRef}. Le véhicule est 100% opérationnel !`, 'green');
     }
     mission.status = 'completed';
     // Synchronisation du statut "terminee" avec le backend dédié OVH
@@ -28991,11 +29048,21 @@ class ProtecGame {
                     ${armPct < 100 ? `
                       ${hasPendingRearm ? `
                         <span class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">🛠️ Atelier Prévu</span>
-                      ` : `
-                        <button type="button" onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" class="text-amber-700 hover:text-amber-900 font-black underline cursor-pointer" title="Créer un atelier logistique pour réarmer ce véhicule">
-                          + Réarmer (Mission Logistique)
-                        </button>
-                      `}
+                      ` : (() => {
+                        const caissesEnStock = st?.stock?.caisse_rearmement || 0;
+                        const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+                        const label = (caissesEnStock === 0 && caissesEnRoute > 0)
+                          ? `+ Réarmer (Mission Log • ${caissesEnRoute} en commande 📦)`
+                          : `+ Réarmer (Mission Logistique)`;
+                        const tooltip = (caissesEnStock === 0 && caissesEnRoute > 0)
+                          ? `Créer une mission logistique pour prélever du matériel sur votre commande en transit et réarmer sans attendre la livraison`
+                          : `Créer un atelier logistique pour réarmer ce véhicule`;
+                        return `
+                          <button type="button" onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" class="text-amber-700 hover:text-amber-900 font-black underline cursor-pointer" title="${tooltip}">
+                            ${label}
+                          </button>
+                        `;
+                      })()}
                     ` : `
                       <span class="text-emerald-700 font-bold">Complet ✓</span>
                     `}
@@ -29492,17 +29559,23 @@ class ProtecGame {
             </button>
           ` : ''}
 
-          ${((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false || v.consumablesPercent < 100) ? `
-            <button 
-              type="button" 
-              onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" 
-              class="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-              title="Créer une mission logistique d'atelier au garage pour réarmer ce véhicule"
-            >
-              <i data-lucide="wrench" class="w-3.5 h-3.5"></i>
-              <span>Planifier Réarmement (Mission Logistique)</span>
-            </button>
-          ` : ''}
+          ${((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false || v.consumablesPercent < 100) ? (() => {
+            const caissesEnStock = st?.stock?.caisse_rearmement || 0;
+            const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+            const isUsingTransit = (caissesEnStock === 0 && caissesEnRoute > 0);
+            const badgeExtra = isUsingTransit ? ` • ${caissesEnRoute} en commande 📦` : '';
+            return `
+              <button 
+                type="button" 
+                onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" 
+                class="px-3 py-1.5 rounded-xl ${isUsingTransit ? 'bg-gradient-to-r from-amber-500 to-teal-600 hover:brightness-110' : 'bg-amber-500 hover:bg-amber-600'} text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                title="Créer une mission logistique pour réarmer ce véhicule${isUsingTransit ? ' en utilisant le matériel déjà commandé' : ''}"
+              >
+                <i data-lucide="wrench" class="w-3.5 h-3.5"></i>
+                <span>Planifier Réarmement (Mission Logistique${badgeExtra})</span>
+              </button>
+            `;
+          })() : ''}
 
           <button 
             type="button" 

@@ -1395,9 +1395,31 @@ window.ProtecCriseLogistique = {
 
     // CAS 2 : Le véhicule est à la base
     const currentStockPS = this.getStationStockPS(game, veh.stationId);
-    if (currentStockPS <= 0) {
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations?.[0];
+    const caissesEnStock = station?.stock?.caisse_rearmement || 0;
+
+    if (currentStockPS <= 0 && caissesEnStock <= 0) {
+      const pendingDeliveries = (game.deliveries || []).filter(d => 
+        d.status === 'in_transit' && 
+        (d.stationId === veh.stationId || !d.stationId) && 
+        ((d.items && d.items.caisse_rearmement > 0) || (d.items && d.items.stock_materiels_ps > 0))
+      );
+
+      if (pendingDeliveries.length > 0) {
+        const totalOrderedCaisses = pendingDeliveries.reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+        return {
+          can: false,
+          canPlanLogMission: true,
+          mode: 'base',
+          reason: `Stock au local épuisé, mais vous avez ${totalOrderedCaisses} caisse(s) déjà commandée(s) en transit. Lancez une Mission Logistique pour prélever sur votre commande et réarmer sans attendre !`,
+          missingPct: missingPct,
+          currentStockPS: 0
+        };
+      }
+
       return {
         can: false,
+        canPlanLogMission: false,
         mode: 'base',
         reason: 'Stock "Matériels PS" épuisé au local (0%). Achetez du stock à la Centrale d\'Achats pour pouvoir réarmer vos véhicules.',
         missingPct: missingPct,
@@ -1424,6 +1446,12 @@ window.ProtecCriseLogistique = {
     const check = this.canRearmVehicle(game, veh, mission);
 
     if (!check.can) {
+      if (check.canPlanLogMission && typeof game.createRearmamentLogisticsMission === 'function') {
+        if (confirm(`${check.reason}\n\nSouhaitez-vous planifier une Mission Logistique dès maintenant pour réarmer ${veh.name} avec le matériel commandé ?`)) {
+          game.createRearmamentLogisticsMission(veh.id, false, null, true);
+          return;
+        }
+      }
       game.showToast('Réarmement Impossible ⚠️', check.reason, 'orange');
       return;
     }

@@ -2908,8 +2908,26 @@ window.ProtecLogistique = {
       veh.breachedConsumables = false;
       game.showToast('Véhicule Réarmé ✓', `${veh.name} a été réarmé à 100% (-${missing}% matériels PS).`, 'green');
     } else {
+      // Stock local en rayon épuisé : vérifier si du matériel est déjà commandé et en cours d'acheminement
+      const pendingDeliveries = (game.deliveries || []).filter(d => 
+        d.status === 'in_transit' && 
+        (d.stationId === station.id || !d.stationId) && 
+        ((d.items && d.items.caisse_rearmement > 0) || (d.items && d.items.stock_materiels_ps > 0))
+      );
+
+      if (pendingDeliveries.length > 0) {
+        const totalOrderedCaisses = pendingDeliveries.reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+        const confirmMsg = `Stock local épuisé, mais vous avez ${totalOrderedCaisses} caisse(s) de réarmement déjà commandée(s) en transit.\n\nSouhaitez-vous planifier une Mission Logistique pour aller prélever 1 caisse sur la commande en cours et réarmer ${veh.name} sans attendre la livraison ?`;
+        if (confirm(confirmMsg)) {
+          if (typeof game.createRearmamentLogisticsMission === 'function') {
+            game.createRearmamentLogisticsMission(veh.id, false, null, true);
+          }
+          return;
+        }
+      }
+
       if (game.resources.money >= 60) {
-        if (confirm(`Stock épuisé. Acheter 1 Caisse de réarmement pour 60 € et réarmer ${veh.name} ?`)) {
+        if (confirm(`Stock épuisé et aucune commande en transit. Acheter 1 Caisse de réarmement pour 60 € et réarmer ${veh.name} ?`)) {
           game.resources.money -= 60;
           veh.consumables = 100;
           veh.armementLevel = 100;
@@ -2922,7 +2940,7 @@ window.ProtecLogistique = {
           return;
         }
       } else {
-        game.showToast('Stock épuisé', 'Aucune caisse de réarmement disponible et trésorerie insuffisante (60 €).', 'orange');
+        game.showToast('Stock épuisé', 'Aucune caisse de réarmement en stock ni en commande, et trésorerie insuffisante (60 €).', 'orange');
         return;
       }
     }
