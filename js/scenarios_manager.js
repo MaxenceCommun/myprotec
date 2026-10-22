@@ -461,6 +461,7 @@
     // =========================================================================
     {
       id: 'sdis_couverture_operationnelle',
+
       type: 'sdis',
       category: 'renfort_sdis',
       timing: 'anticipation',
@@ -554,6 +555,223 @@
         'Départ réflexe pour un arrêt cardiaque (ACR) à 2 minutes du centre de secours (RCP + DAE)',
         'Accident de circulation urbain avec 2 blessés légers nécessitant transport aux urgences',
         'Ravitaillement des pompiers rentrant épuisés du sinistre majeur'
+      ],
+      isDefault: true,
+      enabled: true
+    }    ,
+    // =========================================================================
+    // E. CRASH D'AÉRONEF (PLAN NOVI, CUMP, CAI, NORIAS, RENFORT PMA & CHU)
+    // =========================================================================
+    {
+      id: 'crise_crash_aeronef',
+      type: 'crise',
+      category: 'accident_collectif',
+      timing: 'anticipation',
+      anticipationDelays: [15, 30],
+      anticipationDelay: 15,
+      scalingMode: 'adaptive',
+      scaleIntensity: 'forte',
+      minVolunteers: 6,
+      maxVolunteers: 20,
+      minDurationHours: 6.0,
+      maxDurationHours: 24.0,
+      minRewardMoney: 1600,
+      maxRewardMoney: 3200,
+      authority: 'prefecture',
+      scale: 'PLAN NOVI CRASH (CAI + CUMP + Noria VPSP + CHU)',
+      title: 'Crash d\'Aéronef : Plan NOVI, CUMP & Soutien Populations',
+      desc: 'Crash d\'un aéronef en zone périurbaine avec nombreux blessés et impliqués choqués. Déclenchement échelonné de la Protection Civile : pré-alerte reconnaissance, ouverture CAI/CUMP, renfort norias d\'évacuation et CHU de nuit pour les familles.',
+      requiredVolunteers: 12,
+      requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VPSP', 'VPSP', 'VTP', 'VTU'],
+      vehiclesMode: 'auto',
+      requiredLots: ['lot_secours_a', 'lot_secours_b', 'lot_cai', 'lot_cump', 'lot_chu'],
+      durationHours: 14.0,
+      rewardMoney: 2400,
+      rewardReputation: 90,
+      riskLevel: 'critique',
+      urgency: 'haute',
+      environment: 'ouvert_urbain',
+      isEvolutive: true,
+      phases: [
+        {
+          id: 'p1',
+          step: 1,
+          name: 'Phase 1 : Veille & Reconnaissance SP (5-20 min)',
+          direction: 'stable',
+          durationMin: 20,
+          alertStatus: 'prealerte',
+          instructions: 'Pré-alerte de l\'antenne pendant la reconnaissance des sapeurs-pompiers. Rassemblement des personnels et vérification des lots.',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VTU'],
+          requiredLots: ['lot_secours_b'],
+          color: '#38bdf8',
+          tasks: [
+            {
+              id: 't1_1',
+              name: 'Reconnaissance des accès et veille radio',
+              action: 'add',
+              duration: '20 min',
+              requiredVolunteers: 4,
+              requiredVehicles: ['VTU'],
+              requiredLots: ['lot_secours_b'],
+              description: 'Attente du bilan initial du COS pompiers.'
+            }
+          ]
+        },
+        {
+          id: 'p2a',
+          step: 2,
+          name: 'Phase 2A : Confirmation Engagement : Mise en place CUMP + CAI',
+          direction: 'montante',
+          durationMin: 120,
+          alertStatus: 'alerte',
+          instructions: 'Ordre de la Préfecture : armer immédiatement le Centre d\'Accueil des Impliqués (CAI) et la CUMP pour les témoins et familles.',
+          requiredVolunteers: 6,
+          requiredVehicles: ['VTU', 'VL'],
+          requiredLots: ['lot_cai', 'lot_cump', 'lot_secours_b'],
+          color: '#f59e0b',
+          tasks: [
+            {
+              id: 't2a_1',
+              name: 'Mise en place & Tenue du CAI + CUMP',
+              action: 'add',
+              duration: '3h',
+              requiredVolunteers: 6,
+              requiredVehicles: ['VTU'],
+              requiredLots: ['lot_cai', 'lot_cump'],
+              description: 'Enregistrement SINUS des impliqués et soutien médico-psychologique.'
+            }
+          ]
+        },
+        {
+          id: 'p2b',
+          step: 2,
+          name: 'Phase 2B (+20 min) : Afflux Victimes : Norias VPSP & Renfort PMA',
+          direction: 'montante',
+          durationMin: 180,
+          alertStatus: 'alerte',
+          instructions: 'Nombreuses victimes constatées : engager la noria d\'évacuation sanitaire vers les hôpitaux et acheminer des secouristes en VTP pour soutenir le PMA.',
+          requiredVolunteers: 14,
+          requiredVehicles: ['VPSP', 'VPSP', 'VTP', 'VTU'],
+          requiredLots: ['lot_secours_a', 'lot_secours_b', 'lot_cai', 'lot_cump'],
+          color: '#f43f5e',
+          tasks: [
+            {
+              id: 't2b_1',
+              name: 'Maintien de l\'Accueil CAI & CUMP',
+              action: 'maintain',
+              duration: '3h',
+              requiredVolunteers: 4,
+              requiredVehicles: ['VTU'],
+              requiredLots: ['lot_cai', 'lot_cump'],
+              description: 'Poursuite de la prise en charge des familles au CAI.'
+            },
+            {
+              id: 't2b_2',
+              name: 'Noria d\'évacuation sanitaire VPSP vers les CHU',
+              action: 'add',
+              duration: '2h30',
+              requiredVolunteers: 8,
+              requiredVehicles: ['VPSP', 'VPSP'],
+              requiredLots: ['lot_secours_b'],
+              description: 'Transports d\'urgence vers les centres hospitaliers.'
+            },
+            {
+              id: 't2b_3',
+              name: 'Renfort secouristes PMA / PSA (Acheminement VTP)',
+              action: 'add',
+              duration: '3h',
+              requiredVolunteers: 6,
+              requiredVehicles: ['VTP'],
+              requiredLots: ['lot_secours_a'],
+              description: 'Soutien aux médecins et brancardage au PMA.'
+            }
+          ]
+        },
+        {
+          id: 'p3',
+          step: 3,
+          name: 'Phase 3 : Garde de Nuit CHU & Libération Norias/CAI',
+          direction: 'descendante',
+          durationMin: 720,
+          alertStatus: 'alerte',
+          instructions: 'Fin des prises en charge médicales et évacuations. Fermeture du CAI/CUMP (libération des effectifs). Montage du Centre d\'Hébergement d\'Urgence (CHU) pour héberger les familles pour la nuit (12h).',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VTU'],
+          requiredLots: ['lot_chu'],
+          color: '#8b5cf6',
+          tasks: [
+            {
+              id: 't3_1',
+              name: 'Fermeture CAI & CUMP (Libération des effectifs)',
+              action: 'remove',
+              duration: '0',
+              requiredVolunteers: 0,
+              requiredVehicles: [],
+              requiredLots: [],
+              description: 'Clôture de l\'accueil, les secouristes et le VTU sont libérés.'
+            },
+            {
+              id: 't3_2',
+              name: 'Fin des Norias VPSP (Libération des 2 VPSP)',
+              action: 'remove',
+              duration: '0',
+              requiredVolunteers: 0,
+              requiredVehicles: [],
+              requiredLots: [],
+              description: 'Toutes les victimes sont hospitalisées. Libération des 8 secouristes et des 2 VPSP.'
+            },
+            {
+              id: 't3_3',
+              name: 'Mise en place & Garde de nuit du CHU (Hébergement)',
+              action: 'add',
+              duration: '12h (nuit)',
+              requiredVolunteers: 4,
+              requiredVehicles: ['VTU'],
+              requiredLots: ['lot_chu'],
+              description: 'Montage des lits picots en gymnase et garde nocturne des familles sinistrées.'
+            }
+          ]
+        },
+        {
+          id: 'p4',
+          step: 4,
+          name: 'Phase 4 (J+1) : Fermeture du CHU & Clôture du Dispositif',
+          direction: 'descendante',
+          durationMin: 60,
+          alertStatus: 'repli',
+          instructions: 'Le lendemain matin : relogement des familles, repli des lits du CHU, nettoyage du gymnase et retour base.',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VTU'],
+          requiredLots: ['lot_chu'],
+          color: '#10b981',
+          tasks: [
+            {
+              id: 't4_1',
+              name: 'Fermeture du CHU & Désarmement',
+              action: 'remove',
+              duration: '1h',
+              requiredVolunteers: 4,
+              requiredVehicles: ['VTU'],
+              requiredLots: ['lot_chu'],
+              description: 'Repli des lits picots, réarmement et fin de mission.'
+            }
+          ]
+        }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 40, label: 'Bilan modéré : Engagement CAI + CUMP', instructions: 'Confirmation du COD : ouvrir le CAI', addedResources: '+Lot CAI, +Lot CUMP' },
+        { source: 'p1', target: 'p2b', probability: 60, label: 'Afflux massif confirmé : Norias VPSP + Renfort PMA', instructions: 'Plan NOVI actif : engager 2 VPSP et le VTP', addedResources: '+2 VPSP, +VTP' },
+        { source: 'p2a', target: 'p3', probability: 100, label: 'Fin des évacuations : Basculement en CHU de nuit', instructions: 'Fermeture CAI et montage CHU 12h', addedResources: '+Lot CHU' },
+        { source: 'p2b', target: 'p3', probability: 100, label: 'Fin des norias : Libération effectifs & Nuit CHU', instructions: 'Libération des 2 VPSP et garde nocturne CHU', addedResources: '+Lot CHU' },
+        { source: 'p3', target: 'p4', probability: 100, label: 'Lendemain matin : Fermeture CHU & Clôture', instructions: 'Relèvement des familles et clôture', addedResources: '' }
+      ],
+      peripeties: [
+        'Prise en charge d\'une détresse respiratoire aiguë sous oxygène à haut débit',
+        'Crise de panique sévère d\'un proche nécessitant intervention CUMP prioritaire',
+        'Livraison urgente de 10 lits picots supplémentaires pour le CHU',
+        'Bilan radio avec le COD : point de situation intermédiaire à minuit'
       ],
       isDefault: true,
       enabled: true
@@ -745,6 +963,7 @@
         'lot_secours_b': 'Lot B (Urgence)',
         'lot_secours_a': 'Lot A (PMA)',
         'lot_secours_c': 'Lot C (Brancard)',
+        'lot_cump': 'Lot CUMP (Psy)',
         'caisse_rearmement': 'Réarmement',
         'lot_cai': 'Lot CAI',
         'lot_chu': 'Lot CHU',
@@ -794,6 +1013,101 @@
       const p = scen.phases.find(x => x.id === phaseId);
       if (p && Array.isArray(p.requiredLots)) {
         p.requiredLots.splice(index, 1);
+        this.refreshSankeyView();
+      }
+    },
+
+    
+    // =========================================================================
+    // GESTIONNAIRE DYNAMIQUE DES TÂCHES PAR PHASE
+    // =========================================================================
+    addTaskToPhase(phaseId) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p) {
+        if (!Array.isArray(p.tasks)) p.tasks = [];
+        const tId = 'task_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4);
+        p.tasks.push({
+          id: tId,
+          name: 'Nouvelle tâche opérationnelle',
+          action: 'add', // 'add', 'maintain', 'remove'
+          duration: '2h',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VPSP'],
+          requiredLots: ['lot_secours_b'],
+          description: ''
+        });
+        this.refreshSankeyView();
+      }
+    },
+
+    removeTaskFromPhase(phaseId, taskIndex) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks)) {
+        p.tasks.splice(taskIndex, 1);
+        this.refreshSankeyView();
+      }
+    },
+
+    updateTaskField(phaseId, taskIndex, field, value) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks) && p.tasks[taskIndex]) {
+        p.tasks[taskIndex][field] = value;
+        // Si on met à jour l'action ou la durée, rafraîchir le Sankey
+        const container = document.getElementById('sankey-diagram-container');
+        if (container) {
+          container.innerHTML = this.renderSankeyDiagram(scen.phases, scen.evolutions);
+        }
+      }
+    },
+
+    addTaskVehicle(phaseId, taskIndex, vType) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks) && p.tasks[taskIndex]) {
+        const t = p.tasks[taskIndex];
+        if (!Array.isArray(t.requiredVehicles)) t.requiredVehicles = [];
+        t.requiredVehicles.push(vType);
+        this.refreshSankeyView();
+      }
+    },
+
+    removeTaskVehicle(phaseId, taskIndex, vIdx) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks) && p.tasks[taskIndex] && Array.isArray(p.tasks[taskIndex].requiredVehicles)) {
+        p.tasks[taskIndex].requiredVehicles.splice(vIdx, 1);
+        this.refreshSankeyView();
+      }
+    },
+
+    addTaskLot(phaseId, taskIndex, lotId) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks) && p.tasks[taskIndex]) {
+        const t = p.tasks[taskIndex];
+        if (!Array.isArray(t.requiredLots)) t.requiredLots = [];
+        if (!t.requiredLots.includes(lotId)) {
+          t.requiredLots.push(lotId);
+          this.refreshSankeyView();
+        }
+      }
+    },
+
+    removeTaskLot(phaseId, taskIndex, lIdx) {
+      const scen = this.getCurrentEditingScenario();
+      if (!scen || !scen.phases) return;
+      const p = scen.phases.find(x => x.id === phaseId);
+      if (p && Array.isArray(p.tasks) && p.tasks[taskIndex] && Array.isArray(p.tasks[taskIndex].requiredLots)) {
+        p.tasks[taskIndex].requiredLots.splice(lIdx, 1);
         this.refreshSankeyView();
       }
     },
@@ -1057,14 +1371,14 @@
       const maxColNodes = Math.max(...stepKeys.map(k => steps[k].length), 1);
 
       // Dimensions adaptatives et généreuses pour les cartes
-      const nodeW = 235;
-      const nodeH = 82;
+      const nodeW = 245;
+      const nodeH = 92;
       const gapY = 16;
       const paddingX = 35;
       const paddingY = 32;
 
-      const svgW = Math.max(940, colCount * 310);
-      const svgH = Math.max(270, paddingY * 2 + maxColNodes * nodeH + (maxColNodes - 1) * gapY);
+      const svgW = Math.max(960, colCount * 320);
+      const svgH = Math.max(280, paddingY * 2 + maxColNodes * nodeH + (maxColNodes - 1) * gapY);
       const availW = svgW - (paddingX * 2) - nodeW;
 
       // Calculer la géométrie exacte des nœuds
@@ -1087,7 +1401,8 @@
             w: nodeW,
             h: nodeH,
             color: n.color || (n.direction === 'montante' ? '#f43f5e' : (n.direction === 'descendante' ? '#10b981' : '#38bdf8')),
-            alertStatus: n.alertStatus || (n.step === 1 ? 'prealerte' : 'alerte')
+            alertStatus: n.alertStatus || (n.step === 1 ? 'prealerte' : 'alerte'),
+            tasks: Array.isArray(n.tasks) ? n.tasks : []
           };
         });
       });
@@ -1106,11 +1421,11 @@
         if (!src || !tgt) return;
 
         const prob = Math.max(5, Math.min(100, parseInt(evo.probability, 10) || 50));
-        const ribbonH = Math.max(8, Math.min(26, (prob / 100) * src.h * 0.7));
+        const ribbonH = Math.max(8, Math.min(28, (prob / 100) * src.h * 0.7));
 
-        const y1_top = src.y + 12 + (outOffsets[evo.source] || 0);
+        const y1_top = src.y + 14 + (outOffsets[evo.source] || 0);
         const y1_bot = y1_top + ribbonH;
-        const y2_top = tgt.y + 12 + (inOffsets[evo.target] || 0);
+        const y2_top = tgt.y + 14 + (inOffsets[evo.target] || 0);
         const y2_bot = y2_top + ribbonH;
 
         outOffsets[evo.source] = (outOffsets[evo.source] || 0) + ribbonH + 4;
@@ -1147,7 +1462,7 @@
 
       return `
         <div class="relative w-full rounded-2xl bg-slate-950/95 border border-slate-800 p-3 overflow-x-auto shadow-inner">
-          <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-auto min-w-[760px] select-none font-sans">
+          <svg viewBox="0 0 ${svgW} ${svgH}" class="w-full h-auto min-w-[800px] select-none font-sans">
             <defs>
               ${defsGradients.join('')}
               <filter id="node-glow" x="-20%" y="-20%" width="140%" height="140%">
@@ -1160,7 +1475,7 @@
               ${stepKeys.map((sKey, colIdx) => {
                 const colX = paddingX + (colCount > 1 ? (colIdx / (colCount - 1)) * availW : (availW / 2)) + (nodeW / 2);
                 return `
-                  <rect x="${colX - 45}" y="8" width="90" height="17" rx="8.5" fill="#1e293b" opacity="0.7"/>
+                  <rect x="${colX - 48}" y="8" width="96" height="17" rx="8.5" fill="#1e293b" opacity="0.75"/>
                   <text x="${colX}" y="20" text-anchor="middle" fill="#cbd5e1" font-size="9" font-weight="900" letter-spacing="1">
                     ÉTAPE ${sKey}
                   </text>
@@ -1183,7 +1498,7 @@
               }).join('')}
             </g>
 
-            <!-- Nœuds de phases (Cartes adaptées & informatives) -->
+            <!-- Nœuds de phases (Cartes riches avec Tâches & Moyens) -->
             <g class="sankey-nodes">
               ${Object.values(nodeMap).map(n => {
                 const isPre = n.alertStatus === 'prealerte';
@@ -1195,7 +1510,7 @@
                 const icon = n.direction === 'montante' ? '🔺' : (n.direction === 'descendante' ? '🔻' : '🔹');
                 const dirLabel = n.direction === 'montante' ? 'Escalade' : (n.direction === 'descendante' ? 'Repli' : 'Stable');
 
-                // Synthèse dynamique des moyens
+                // Synthèse dynamique des moyens globaux ou cumul des tâches
                 const vols = n.requiredVolunteers || 4;
                 const vehsCount = (n.requiredVehicles || []).length;
                 const lotsCount = (n.requiredLots || []).length;
@@ -1203,11 +1518,19 @@
                 const vehsText = vehsCount > 0 ? (n.requiredVehicles.slice(0, 2).join('+') + (vehsCount > 2 ? '…' : '')) : 'VPSP';
                 const lotsText = lotsCount > 0 ? (n.requiredLots.map(l => this.getLotShortLabel(l).replace('Lot ', '')).slice(0, 2).join(',') + (lotsCount > 2 ? '…' : '')) : 'Lot B';
 
+                // Tâches
+                const taskCount = (n.tasks || []).length;
+                const activeTasks = (n.tasks || []).filter(t => t.action !== 'remove');
+                const tasksSummary = taskCount > 0 
+                  ? (activeTasks.map(t => `${t.name.slice(0, 15)} (${t.duration || '2h'})`).slice(0, 2).join(', ') + (activeTasks.length > 2 ? '…' : ''))
+                  : 'Mission globale';
+
                 const tooltipTitle = `${n.name}
-Statut: ${statusLabel}
-Durée: ${n.durationMin || 45} min
-Moyens: ${vols} secouristes, ${n.requiredVehicles?.join(', ') || '1 VPSP'}, ${n.requiredLots?.map(l => this.getLotShortLabel(l)).join(', ') || 'Lot B'}
-Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
+Statut: ${statusLabel} • Durée: ${n.durationMin || 45} min
+Moyens: ${vols} secouristes, ${n.requiredVehicles?.join(', ') || 'VPSP'}, ${n.requiredLots?.map(l => this.getLotShortLabel(l)).join(', ') || 'Lot B'}
+Consigne: ${n.instructions || 'Aucune consigne spécifique'}
+Tâches (${taskCount}) :${n.tasks?.map(t => `
+ - [${t.action === 'add' ? '➕ Ajoutée' : (t.action === 'maintain' ? '🔄 Maintenue' : '⏹️ Terminée')}] ${t.name} (Durée: ${t.duration || '2h'}, ${t.requiredVolunteers || 0} sec, ${t.requiredVehicles?.join('+') || 'aucun veh'})`).join('') || ' Aucune'}`;
 
                 return `
                   <g transform="translate(${n.x}, ${n.y})" filter="url(#node-glow)" class="cursor-pointer group">
@@ -1227,18 +1550,21 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                     </text>
 
                     <!-- LIGNE 2 : Titre complet de la Phase -->
-                    <text x="12" y="42" fill="#ffffff" font-size="10.5" font-weight="900">
-                      ${n.name.length > 27 ? n.name.slice(0, 25) + '…' : n.name}
+                    <text x="12" y="41" fill="#ffffff" font-size="10.5" font-weight="900">
+                      ${n.name.length > 28 ? n.name.slice(0, 26) + '…' : n.name}
                     </text>
 
-                    <!-- LIGNE 3 : Consigne opérationnelle (résumé) -->
-                    <text x="12" y="58" fill="#fbbf24" font-size="8" font-style="italic" font-weight="600">
-                      📢 ${n.instructions ? (n.instructions.length > 30 ? n.instructions.slice(0, 28) + '…' : n.instructions) : 'Consignes opérationnelles standard'}
-                    </text>
+                    <!-- LIGNE 3 : Tâches d'étape (Ajouts / Retraits / Durée) -->
+                    <g transform="translate(12, 57)">
+                      <rect width="${n.w - 24}" height="14" rx="4" fill="#1e1b4b" opacity="0.8"/>
+                      <text x="6" y="10.5" fill="#a5b4fc" font-size="7.5" font-weight="800">
+                        📋 ${taskCount > 0 ? `${taskCount} tâche(s) : ${tasksSummary}` : 'Chantier opérationnel unique'}
+                      </text>
+                    </g>
 
                     <!-- LIGNE 4 : Demandes Dynamiques (Secouristes, Véhicules, Lots) -->
-                    <g transform="translate(12, 72)">
-                      <text fill="#94a3b8" font-size="8.5" font-weight="700">
+                    <g transform="translate(12, 81)">
+                      <text fill="#94a3b8" font-size="8" font-weight="700">
                         👥 <tspan fill="#38bdf8" font-weight="900">${vols}</tspan> sec.  •  🚑 <tspan fill="#f1f5f9">${vehsText}</tspan>  •  📦 <tspan fill="#f59e0b">${lotsText}</tspan>
                       </text>
                     </g>
@@ -1257,7 +1583,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
               <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> 🔴 Alerte Active</span>
               <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> 🟢 Repli</span>
             </div>
-            <span class="font-bold text-slate-300">Épaisseur du flux = Probabilité (%) • Cliquez ou survolez une carte pour les détails complets</span>
+            <span class="font-bold text-slate-300">📋 = Tâches et ateliers d'étape (ajoutés/retirés) • Survolez une carte pour le détail complet</span>
           </div>
         </div>
       `;
@@ -1609,7 +1935,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                     </div>
 
                     <div id="scen-veh-checkboxes" class="grid grid-cols-3 gap-1.5 text-[11px] font-bold">
-                      ${['VPSP', 'VTU', 'VL', 'Minibus', 'Quad', 'Vélo'].map(vType => {
+                      ${['VPSP', 'VTP', 'VTU', 'VL', 'Minibus', 'Quad'].map(vType => {
                         const checked = (editingScenario.requiredVehicles || ['VPSP']).includes(vType);
                         return `
                           <label class="p-2 rounded-xl border flex items-center gap-1.5 cursor-pointer ${checked ? 'bg-indigo-950/60 border-indigo-500 text-indigo-200' : 'bg-slate-800/60 border-slate-700 text-slate-400'}">
@@ -1630,6 +1956,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                         { id: 'lot_secours_c', label: 'Lot C (Brancardage)' },
                         { id: 'caisse_rearmement', label: 'Kit Réarmement (3x)' },
                         { id: 'lot_cai', label: 'Lot CAI (Accueil Impliqués & SINUS)' },
+                        { id: 'lot_cump', label: 'Lot CUMP (Soutien Médico-Psychologique)' },
                         { id: 'lot_chu', label: 'Lot CHU (Lits Picots & Hébergement)' },
                         { id: 'lot_ravitaillement', label: 'Lot Ravitaillement (Vivres & Eau)' },
                         { id: 'lot_epuisement', label: 'Lot Épuisement (Motopompes)' }
@@ -1845,17 +2172,18 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
 
         const currentVehicles = Array.isArray(p.requiredVehicles) ? p.requiredVehicles : ['VPSP'];
         const currentLots = Array.isArray(p.requiredLots) ? p.requiredLots : ['lot_secours_b'];
+        const currentTasks = Array.isArray(p.tasks) ? p.tasks : [];
 
         return `
-          <div class="p-3.5 rounded-3xl bg-slate-900/95 border-2 ${isPre ? 'border-amber-500/70' : (isRepli ? 'border-emerald-500/70' : 'border-rose-500/70')} space-y-3 relative group shadow-lg">
+          <div class="p-4 rounded-3xl bg-slate-900/95 border-2 ${isPre ? 'border-amber-500/70' : (isRepli ? 'border-emerald-500/70' : 'border-rose-500/70')} space-y-3.5 relative group shadow-xl">
             
             <!-- EN-TÊTE DE LA CARTE DE PHASE -->
-            <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div class="flex items-center gap-1.5">
                 <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-lg bg-indigo-950 text-indigo-300 border border-indigo-800">
                   Étape ${p.step || 1}
                 </span>
-                <select onchange="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'step', parseInt(this.value,10))" class="px-1.5 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300" title="Modifier l'étape chronologique (colonne dans le Sankey)">
+                <select onchange="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'step', parseInt(this.value,10))" class="px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-amber-300" title="Changer l'étape chronologique">
                   ${[1, 2, 3, 4, 5].map(sNum => `
                     <option value="${sNum}" ${(parseInt(p.step,10) || 1) === sNum ? 'selected' : ''}>Changer en Étape ${sNum}</option>
                   `).join('')}
@@ -1863,7 +2191,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
               </div>
 
               <!-- Suppression de la phase -->
-              <button type="button" onclick="window.ProtecScenariosManager.deletePhase('${p.id}')" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 text-xs font-bold transition cursor-pointer" title="Supprimer définitivement cette phase">✕</button>
+              <button type="button" onclick="window.ProtecScenariosManager.deletePhase('${p.id}')" class="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 text-xs font-bold transition cursor-pointer" title="Supprimer cette phase">✕</button>
             </div>
 
             <!-- CHOIX STATUT OPÉRATIONNEL : PRÉALERTE vs ALERTE vs REPLI -->
@@ -1885,7 +2213,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
             <!-- NOM & TENDANCE -->
             <div>
               <label class="block text-[8.5px] uppercase font-bold text-slate-300 mb-0.5">Nom de la Phase :</label>
-              <input type="text" value="${p.name.replace(/"/g, '&quot;')}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'name', this.value)" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500" placeholder="Ex: Phase 2A : Afflux massif de blessés..." />
+              <input type="text" value="${p.name.replace(/"/g, '&quot;')}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'name', this.value)" class="w-full px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500" placeholder="Ex: Phase 2A : Afflux massif & Triage..." />
             </div>
 
             <div class="grid grid-cols-2 gap-2 text-[10px]">
@@ -1899,7 +2227,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
               </div>
 
               <div>
-                <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">Durée (min) :</label>
+                <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">Durée Étape :</label>
                 <input type="number" min="5" step="5" value="${p.durationMin || 45}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="w-full px-2 py-1 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-center text-white" />
               </div>
             </div>
@@ -1907,78 +2235,139 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
             <!-- CONSIGNE OPÉRATIONNELLE SPÉCIFIQUE -->
             <div>
               <label class="block text-[8.5px] uppercase font-bold text-amber-300 mb-0.5 flex items-center justify-between">
-                <span>📢 Consigne & Message de cette Phase :</span>
-                <span class="text-[8px] font-normal text-slate-400">Transmise aux équipes</span>
+                <span>📢 Consigne Générale de l'Étape :</span>
+                <span class="text-[8px] font-normal text-slate-400">Message d'ordre</span>
               </label>
-              <textarea rows="1" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'instructions', this.value)" class="w-full px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[10.5px] text-amber-100 placeholder-slate-500 focus:ring-1 focus:ring-amber-500" placeholder="Ex: Déploiement du PMA sous la tente, écoute tactique canal 3...">${p.instructions || ''}</textarea>
+              <textarea rows="1" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'instructions', this.value)" class="w-full px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[10.5px] text-amber-100 placeholder-slate-500 focus:ring-1 focus:ring-amber-500" placeholder="Ex: Ordre COD : passage en NOVI, armer PMA et CUMP...">${p.instructions || ''}</textarea>
             </div>
 
-            <!-- DEMANDES DYNAMIQUES : SECOURISTES -->
-            <div>
-              <label class="block text-[8.5px] uppercase font-bold text-sky-400 mb-0.5">👥 Effectif Requis (Secouristes) :</label>
-              <div class="flex items-center gap-1.5">
-                <input type="number" min="1" max="50" value="${p.requiredVolunteers || 4}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'requiredVolunteers', parseInt(this.value,10))" class="w-full px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-xs text-center font-black text-sky-300" />
-                <span class="text-[10px] text-slate-400 font-bold shrink-0">bénévoles</span>
-              </div>
-            </div>
-
-            <!-- DEMANDES DYNAMIQUES : VÉHICULES REQUIS -->
-            <div class="p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-1.5">
+            <!-- SECTION CRUCIALE : TÂCHES & ATELIERS DE L'ÉTAPE (MISSIONS À AJOUTER / RETIRER / DURÉE) -->
+            <div class="p-3 rounded-2xl bg-slate-950/90 border border-indigo-500/40 space-y-2.5">
               <div class="flex items-center justify-between">
-                <span class="text-[8.5px] font-black uppercase text-indigo-300">🚑 Véhicules Demandés (${currentVehicles.length}) :</span>
-                <span class="text-[8px] text-slate-500">Ajout dynamique</span>
-              </div>
-              
-              <!-- Liste des badges de véhicules actuels -->
-              <div class="flex flex-wrap gap-1 min-h-[26px]">
-                ${currentVehicles.map((vName, vIdx) => `
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-indigo-950 text-indigo-200 border border-indigo-700/80 text-[10px] font-black shadow-xs">
-                    ${vName}
-                    <button type="button" onclick="window.ProtecScenariosManager.removeVehicleFromPhase('${p.id}', ${vIdx})" class="text-indigo-400 hover:text-rose-400 font-black ml-0.5 cursor-pointer" title="Retirer ce véhicule">✕</button>
-                  </span>
-                `).join('')}
-                ${currentVehicles.length === 0 ? '<span class="text-[9px] text-slate-500 italic">Aucun véhicule imposé</span>' : ''}
+                <span class="text-[9px] font-black uppercase tracking-wider text-indigo-300 flex items-center gap-1">
+                  <span>📋</span>
+                  <span>Tâches Opérationnelles (${currentTasks.length}) :</span>
+                </span>
+                <button type="button" onclick="window.ProtecScenariosManager.addTaskToPhase('${p.id}')" class="px-2.5 py-1 rounded-xl bg-indigo-600/40 hover:bg-indigo-600 text-indigo-200 hover:text-white border border-indigo-500/50 text-[9px] font-black transition cursor-pointer flex items-center gap-1 shadow-sm">
+                  <span>+ Ajouter une Tâche</span>
+                </button>
               </div>
 
-              <!-- Boutons rapides d\'ajout de véhicules -->
-              <div class="flex items-center gap-1 flex-wrap pt-1 border-t border-slate-800/80">
-                <span class="text-[8px] font-bold text-slate-400 mr-0.5">+ Ajouter :</span>
-                <button type="button" onclick="window.ProtecScenariosManager.addVehicleToPhase('${p.id}', 'VPSP')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ VPSP</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addVehicleToPhase('${p.id}', 'VTU')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ VTU</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addVehicleToPhase('${p.id}', 'VL')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ VL</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addVehicleToPhase('${p.id}', 'Minibus')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Minibus</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addVehicleToPhase('${p.id}', 'Quad')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Quad</button>
+              <div class="space-y-2">
+                ${currentTasks.map((t, tIdx) => {
+                  const isAdd = t.action === 'add' || !t.action;
+                  const isMaintain = t.action === 'maintain';
+                  const isRemove = t.action === 'remove';
+
+                  const actionBg = isAdd ? 'bg-emerald-950 text-emerald-300 border-emerald-500' : (isMaintain ? 'bg-sky-950 text-sky-300 border-sky-500' : 'bg-rose-950 text-rose-300 border-rose-500');
+
+                  const tVehs = Array.isArray(t.requiredVehicles) ? t.requiredVehicles : [];
+                  const tLots = Array.isArray(t.requiredLots) ? t.requiredLots : [];
+
+                  return `
+                    <div class="p-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-2 shadow-sm">
+                      <!-- Ligne 1 : Type d'action + Durée + Suppression -->
+                      <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                        <div class="flex items-center gap-1">
+                          <span class="text-[8px] uppercase font-bold text-slate-400">Action :</span>
+                          <select onchange="window.ProtecScenariosManager.updateTaskField('${p.id}', ${tIdx}, 'action', this.value)" class="px-2 py-0.5 rounded-lg text-[9.5px] font-black border ${actionBg}">
+                            <option value="add" ${isAdd ? 'selected' : ''}>➕ Ajoutée / Nouveau chantier</option>
+                            <option value="maintain" ${isMaintain ? 'selected' : ''}>🔄 Maintenue / En cours</option>
+                            <option value="remove" ${isRemove ? 'selected' : ''}>⏹️ Terminée / Libération moyens</option>
+                          </select>
+                        </div>
+
+                        <div class="flex items-center gap-1">
+                          <span class="text-[8px] uppercase font-bold text-amber-400">⏱️ Durée :</span>
+                          <input type="text" value="${t.duration || '2h'}" placeholder="ex: 2h, 12h nuit" oninput="window.ProtecScenariosManager.updateTaskField('${p.id}', ${tIdx}, 'duration', this.value)" class="w-20 px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 text-[9.5px] text-center font-black text-amber-300" />
+                          <button type="button" onclick="window.ProtecScenariosManager.removeTaskFromPhase('${p.id}', ${tIdx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs font-bold transition" title="Supprimer cette tâche">✕</button>
+                        </div>
+                      </div>
+
+                      <!-- Ligne 2 : Intitulé de la tâche -->
+                      <div>
+                        <input type="text" value="${(t.name || '').replace(/"/g, '&quot;')}" placeholder="Ex: Mise en place CUMP + CAI, Noria VPSP, Garde CHU nuit..." oninput="window.ProtecScenariosManager.updateTaskField('${p.id}', ${tIdx}, 'name', this.value)" class="w-full px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10.5px] font-bold text-white placeholder-slate-500" />
+                      </div>
+
+                      <!-- Ligne 3 : Moyens nécessaires pour la tâche (si ajoutée ou maintenue) -->
+                      ${!isRemove ? `
+                        <div class="space-y-1.5 pt-1 border-t border-slate-800 text-[9px]">
+                          <!-- Secouristes requis -->
+                          <div class="flex items-center gap-2">
+                            <span class="text-[8px] uppercase font-bold text-sky-400 shrink-0">👥 Effectif requis :</span>
+                            <input type="number" min="0" max="30" value="${t.requiredVolunteers || 2}" oninput="window.ProtecScenariosManager.updateTaskField('${p.id}', ${tIdx}, 'requiredVolunteers', parseInt(this.value,10))" class="w-14 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[9.5px] text-center font-black text-sky-300" />
+                            <span class="text-[8.5px] text-slate-400">bénévoles</span>
+                          </div>
+
+                          <!-- Véhicules requis pour la tâche -->
+                          <div class="space-y-0.5">
+                            <div class="flex items-center justify-between">
+                              <span class="text-[8px] uppercase font-bold text-indigo-300">🚑 Véhicules requis (${tVehs.length}) :</span>
+                              <div class="flex items-center gap-1">
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskVehicle('${p.id}', ${tIdx}, 'VPSP')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700">+ VPSP</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskVehicle('${p.id}', ${tIdx}, 'VTP')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700">+ VTP</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskVehicle('${p.id}', ${tIdx}, 'VTU')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700">+ VTU</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskVehicle('${p.id}', ${tIdx}, 'VL')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-indigo-600 text-slate-300 border border-slate-700">+ VL</button>
+                              </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1 min-h-[20px]">
+                              ${tVehs.map((v, vI) => `
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-200 border border-indigo-700 text-[8.5px] font-bold">
+                                  ${v}
+                                  <button type="button" onclick="window.ProtecScenariosManager.removeTaskVehicle('${p.id}', ${tIdx}, ${vI})" class="text-indigo-400 hover:text-rose-400 font-bold">✕</button>
+                                </span>
+                              `).join('')}
+                              ${tVehs.length === 0 ? '<span class="text-[8px] text-slate-500 italic">Aucun véhicule requis</span>' : ''}
+                            </div>
+                          </div>
+
+                          <!-- Lots requis pour la tâche -->
+                          <div class="space-y-0.5">
+                            <div class="flex items-center justify-between">
+                              <span class="text-[8px] uppercase font-bold text-orange-400">📦 Matériels & Lots requis (${tLots.length}) :</span>
+                              <div class="flex items-center gap-1 flex-wrap">
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskLot('${p.id}', ${tIdx}, 'lot_cai')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700">+ CAI</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskLot('${p.id}', ${tIdx}, 'lot_cump')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700">+ CUMP</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskLot('${p.id}', ${tIdx}, 'lot_chu')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700">+ CHU</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskLot('${p.id}', ${tIdx}, 'lot_secours_a')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700">+ Lot A PMA</button>
+                                <button type="button" onclick="window.ProtecScenariosManager.addTaskLot('${p.id}', ${tIdx}, 'lot_secours_b')" class="text-[7.5px] px-1 py-0.5 rounded bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700">+ Lot B</button>
+                              </div>
+                            </div>
+                            <div class="flex flex-wrap gap-1 min-h-[20px]">
+                              ${tLots.map((l, lI) => `
+                                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-orange-950 text-orange-200 border border-orange-700 text-[8.5px] font-bold">
+                                  ${this.getLotShortLabel(l)}
+                                  <button type="button" onclick="window.ProtecScenariosManager.removeTaskLot('${p.id}', ${tIdx}, ${lI})" class="text-orange-400 hover:text-rose-400 font-bold">✕</button>
+                                </span>
+                              `).join('')}
+                              ${tLots.length === 0 ? '<span class="text-[8px] text-slate-500 italic">Aucun lot requis</span>' : ''}
+                            </div>
+                          </div>
+                        </div>
+                      ` : `
+                        <div class="p-1 rounded bg-rose-950/40 border border-rose-900/60 text-[8.5px] text-rose-300">
+                          ⏹️ <strong>Chantier terminé :</strong> Libération des personnels et des véhicules affectés à cette mission.
+                        </div>
+                      `}
+                    </div>
+                  `;
+                }).join('')}
+
+                ${currentTasks.length === 0 ? '<p class="text-[9.5px] text-slate-500 italic py-0.5">Aucune tâche spécifique configurée pour cette étape. Cliquez sur « + Ajouter une Tâche » ci-dessus.</p>' : ''}
               </div>
             </div>
 
-            <!-- DEMANDES DYNAMIQUES : LOTS & MATÉRIELS REQUIS -->
-            <div class="p-2.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-1.5">
-              <div class="flex items-center justify-between">
-                <span class="text-[8.5px] font-black uppercase text-orange-400">📦 Matériels & Lots Demandés (${currentLots.length}) :</span>
-                <span class="text-[8px] text-slate-500">Ajout dynamique</span>
+            <!-- DEMANDES GLOBALES DE MOYENS (RÉSUMÉ) -->
+            <div class="grid grid-cols-2 gap-2 text-[9px] pt-1 border-t border-slate-800">
+              <div>
+                <span class="block uppercase font-bold text-sky-400 mb-0.5">👥 Effectif Global Étape :</span>
+                <input type="number" min="1" max="50" value="${p.requiredVolunteers || 4}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'requiredVolunteers', parseInt(this.value,10))" class="w-full px-2 py-1 rounded bg-slate-800 border border-slate-700 text-[10px] text-center font-bold text-sky-300" />
               </div>
-              
-              <!-- Liste des badges de lots actuels -->
-              <div class="flex flex-wrap gap-1 min-h-[26px]">
-                ${currentLots.map((lotId, lIdx) => `
-                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-orange-950 text-orange-200 border border-orange-700/80 text-[10px] font-black shadow-xs">
-                    ${this.getLotShortLabel(lotId)}
-                    <button type="button" onclick="window.ProtecScenariosManager.removeLotFromPhase('${p.id}', ${lIdx})" class="text-orange-400 hover:text-rose-400 font-black ml-0.5 cursor-pointer" title="Retirer ce lot">✕</button>
-                  </span>
-                `).join('')}
-                ${currentLots.length === 0 ? '<span class="text-[9px] text-slate-500 italic">Aucun lot spécifique</span>' : ''}
-              </div>
-
-              <!-- Boutons rapides d\'ajout de lots -->
-              <div class="flex items-center gap-1 flex-wrap pt-1 border-t border-slate-800/80">
-                <span class="text-[8px] font-bold text-slate-400 mr-0.5">+ Ajouter :</span>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_secours_b')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Lot B (Urgence)</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_secours_a')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Lot A (PMA)</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_secours_c')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Lot C</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_cai')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ CAI</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_chu')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ CHU</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_ravitaillement')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Ravitaillement</button>
-                <button type="button" onclick="window.ProtecScenariosManager.addLotToPhase('${p.id}', 'lot_epuisement')" class="text-[8.5px] px-1.5 py-0.5 rounded-md bg-slate-800 hover:bg-orange-600 text-slate-300 border border-slate-700 cursor-pointer transition">+ Pompage</button>
+              <div>
+                <span class="block uppercase font-bold text-indigo-300 mb-0.5">🚑 Véhicules Étape :</span>
+                <div class="text-[9.5px] font-bold text-white truncate p-1 rounded bg-slate-800 border border-slate-700">
+                  ${currentVehicles.join(', ') || '1x VPSP'}
+                </div>
               </div>
             </div>
 
@@ -1987,7 +2376,6 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
       }).join('');
     },
 
-    // HTML des transitions dans l'éditeur (avec consignes et renforts spécifiques)
     renderEvolutionsEditorHTML(phases = [], evolutions = []) {
       if (!evolutions || evolutions.length === 0) {
         return '<p class="text-[11px] text-slate-500 py-1.5">Aucune transition configurée. Cliquez sur « + Ajouter une Transition » pour créer un embranchement.</p>';
