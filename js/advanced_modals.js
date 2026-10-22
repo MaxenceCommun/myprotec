@@ -342,6 +342,36 @@ window.ProtecAdvancedModals = {
       icon: '🔗',
       desc: 'Permet de tracter remorques lourdes, tentes PMA, lots d’éclairage et bateaux ERS.'
     },
+    ledBar: {
+      id: 'ledBar',
+      label: 'Rampe LED Haute Puissance & Feux Calandre',
+      cost: 3200,
+      icon: '🚨',
+      desc: 'Visibilité optimale de nuit et vitesse d’urgence sur interventions (obligatoire sur VPSP).'
+    },
+    climatisation: {
+      id: 'climatisation',
+      label: 'Pack Climatisation Cellule & Chauffage à air',
+      cost: 300,
+      icon: '❄️',
+      desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
+    },
+    tensiometre_auto: {
+      id: 'tensiometre_auto',
+      label: 'Tensiomètre Automatique NIBP Brassard',
+      cost: 450,
+      icon: '🩺',
+      desc: 'Mesure automatique et rapide de la tension artérielle (+5 réputation SAMU 15).'
+    },
+    schiller_t7: {
+      id: 'schiller_t7',
+      label: 'Moniteur défibrillateur multiparamétrique',
+      cost: 14000,
+      icon: '📟',
+      desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
+    }
+  },
+
   canVehicleHaveTowHitch(vehType) {
     const t = String(vehType || '').toUpperCase();
     return !['ERS', 'BATEAU', 'VELO', 'MPS', 'MOTO', 'QUAD', 'REM'].includes(t);
@@ -397,36 +427,6 @@ window.ProtecAdvancedModals = {
     return t === 'VPSP' ? 'Pack Climatisation Cellule & Chauffage à air' : 'Pack Climatisation & Chauffage Habitacle';
   },
 
-    ledBar: {
-      id: 'ledBar',
-      label: 'Rampe LED Haute Puissance & Feux Calandre',
-      cost: 1250,
-      icon: '🚨',
-      desc: 'Visibilité optimale de nuit et vitesse d’urgence sur interventions (obligatoire sur VPSP).'
-    },
-    climatisation: {
-      id: 'climatisation',
-      label: 'Pack Climatisation Cellule & Chauffage à air',
-      cost: 300,
-      icon: '❄️',
-      desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
-    },
-    tensiometre_auto: {
-      id: 'tensiometre_auto',
-      label: 'Tensiomètre Automatique NIBP Brassard',
-      cost: 450,
-      icon: '🩺',
-      desc: 'Mesure automatique et rapide de la tension artérielle (+5 réputation SAMU 15).'
-    },
-    schiller_t7: {
-      id: 'schiller_t7',
-      label: 'Moniteur défibrillateur multiparamétrique',
-      cost: 14000,
-      icon: '📟',
-      desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
-    }
-  },
-
   refreshVehicleShop(stationId, shouldFocusSearch = false) {
     if (!window.game) return;
     const showroom = document.getElementById('concessionnaire-showroom-container');
@@ -446,7 +446,7 @@ window.ProtecAdvancedModals = {
     if (window.lucide) window.lucide.createIcons();
   },
 
-  toggleVehicleOption(targetKey, optionKey, stationId) {
+    toggleVehicleOption(targetKey, optionKey, stationId) {
     if (!this.selectedVehicleOptions) this.selectedVehicleOptions = {};
     if (!this.selectedVehicleOptions[targetKey]) this.selectedVehicleOptions[targetKey] = {};
     this.selectedVehicleOptions[targetKey][optionKey] = !this.selectedVehicleOptions[targetKey][optionKey];
