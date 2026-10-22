@@ -1,4 +1,4 @@
-// js/auth.js - Authentification Multijoueur Obligatoire & Synchronisation Serveur
+﻿// js/auth.js - Authentification Multijoueur Obligatoire & Synchronisation Serveur
 window.ProtecAuth = {
   token: null,
   currentUser: null,
@@ -82,10 +82,48 @@ window.ProtecAuth = {
             }
           }
 
+          if (action === 'login') {
+            await this.checkCloudSaveOnLogin(targetGame);
+            if (targetGame && typeof targetGame.returnToMyAntenna === 'function' && Array.isArray(targetGame.stations) && targetGame.stations.length > 0) {
+              setTimeout(() => targetGame.returnToMyAntenna(15, true), 300);
+            }
+            if (window.ProtecSupabase) {
+              window.ProtecSupabase.startAccountWatchdog(targetGame);
+              window.ProtecSupabase.initMultiplayerRealtime(targetGame);
+            }
+          }
+
           const modal = document.getElementById('auth-modal');
           if (modal && !modal.classList.contains('hidden')) {
             this.renderModalContent('profile');
           }
+        }
+      } else if (event.data && event.data.type === 'DISCORD_REGISTER_PENDING') {
+        const { discord } = event.data;
+        if (discord) {
+          this.pendingDiscordProfile = discord;
+          sessionStorage.setItem('protec_pending_discord', JSON.stringify(discord));
+          const targetGame = game || window.game;
+          if (targetGame && typeof targetGame.showToast === 'function') {
+            targetGame.showToast(
+              'Compte Discord Lié !',
+              `@${discord.username} est associé. Complétez vos informations pour implanter votre antenne.`,
+              'indigo'
+            );
+          }
+          this.renderModalContent('register', true);
+        }
+      } else if (event.data && event.data.type === 'DISCORD_AUTH_ERROR') {
+        const errorMsg = event.data.message || 'Ce compte Discord n’est associé à aucun compte joueur.';
+        const targetGame = game || window.game;
+        if (targetGame && typeof targetGame.showToast === 'function') {
+          targetGame.showToast('Compte Discord non lié', errorMsg, 'amber');
+        }
+        const errorEl = document.getElementById('auth-error-msg');
+        if (errorEl) {
+          errorEl.innerHTML = `<div class="font-bold flex items-center gap-1.5"><i data-lucide="alert-circle" class="w-4 h-4"></i> Compte non associé</div><div class="mt-1 text-[11px] leading-tight">${errorMsg}</div>`;
+          errorEl.classList.remove('hidden');
+          if (window.lucide) window.lucide.createIcons();
         }
       }
     });
@@ -124,8 +162,20 @@ window.ProtecAuth = {
     } catch (e) {}
 
     if (this.token && game) {
-      this.checkSession(game);
+      this.checkSession(game).catch(err => {
+        console.warn('[Auth] Erreur lors de la vérification de session cloud:', err);
+        if (game) {
+          game.isCloudSyncReady = true;
+          game.hasPendingCloudSync = false;
+        }
+        window.ProtecLoader?.finish();
+      });
     } else if (!this.token) {
+      if (game) {
+        game.isCloudSyncReady = true;
+        game.hasPendingCloudSync = false;
+      }
+      window.ProtecLoader?.finish();
       // Si la landing page est active, ne pas afficher la modale au chargement pour laisser le joueur découvrir l'accueil,
       // SAUF si un lien de parrainage a été suivi : dans ce cas, ouvrir directement le formulaire d'inscription
       const landingEl = document.getElementById('myprotec-landing-page');
@@ -340,8 +390,8 @@ window.ProtecAuth = {
     }
 
     // Sécurité stricte d'accès aux boutons Panel Admin et Gestionnaire (Desktop et Mobile)
-    const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin'));
-    const isActualGestionnaire = !isActualAdmin && !!(this.currentUser && (this.currentUser.isGestionnaire || this.currentUser.role === 'gestionnaire'));
+    const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin')) || !!(window.game?.player?.isAdmin) || localStorage.getItem('protec_admin_auth') === 'true';
+    const isActualGestionnaire = !isActualAdmin && (!!(this.currentUser && (this.currentUser.isGestionnaire || this.currentUser.role === 'gestionnaire')) || !!(window.game?.player?.isGestionnaire));
     const isAuthorized = isActualAdmin || isActualGestionnaire;
 
     const adminBtn = document.getElementById('admin-header-btn');
@@ -549,41 +599,41 @@ window.ProtecAuth = {
     const url = this.getReferralLink(code);
 
     modalEl.innerHTML = `
-      <div class="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-5 sm:p-6 shadow-2xl relative text-left space-y-4 max-h-[95vh] overflow-y-auto">
+      <div class="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-2xl relative text-left space-y-4 max-h-[95vh] overflow-y-auto text-slate-900 dark:text-white">
         
         <!-- En-tête -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md text-base">
               🎁
             </div>
             <div>
-              <h3 class="text-sm font-black text-slate-900 leading-tight">Fiche Officielle de Parrainage</h3>
-              <p class="text-[11px] text-pc-blue font-bold">Affiliation Directe & Téléchargement du Jeu</p>
+              <h3 class="text-sm font-black text-slate-900 dark:text-white leading-tight">Fiche Officielle de Parrainage</h3>
+              <p class="text-[11px] text-pc-blue dark:text-sky-400 font-bold">Affiliation Directe & Téléchargement du Jeu</p>
             </div>
           </div>
-          <button onclick="window.ProtecAuth.closeReferralShareModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
+          <button onclick="window.ProtecAuth.closeReferralShareModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-black text-xs cursor-pointer transition">
             ✕
           </button>
         </div>
 
         <!-- Instructions pour le parrain -->
-        <div class="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-950 space-y-1">
-          <p class="font-bold flex items-center gap-1.5 text-pc-blue">
+        <div class="p-3 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 text-xs text-blue-950 dark:text-blue-200 space-y-1">
+          <p class="font-bold flex items-center gap-1.5 text-pc-blue dark:text-sky-400">
             <span>📲</span> Faites scanner ce QR Code à votre futur filleul
           </p>
-          <p class="text-[11px] text-slate-600 leading-relaxed">
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
             Son smartphone ouvrira automatiquement MyProtec avec votre affiliation enregistrée. Dès qu'il crée son antenne, il reçoit immédiatement son bonus de <strong>1 500 €</strong> !
           </p>
         </div>
 
         <!-- Grand QR Code centré avec style officiel -->
-        <div class="flex flex-col items-center justify-center p-4 rounded-3xl bg-gradient-to-b from-slate-50 to-white border-2 border-slate-200 shadow-inner">
+        <div class="flex flex-col items-center justify-center p-4 rounded-3xl bg-gradient-to-b from-slate-50 to-white dark:from-slate-800 dark:to-slate-800/90 border-2 border-slate-200 dark:border-slate-700 shadow-inner">
           <div id="auth-modal-large-qrcode" class="p-3 bg-white rounded-2xl border border-slate-200 shadow-md flex items-center justify-center min-w-[200px] min-h-[200px]"></div>
           
           <div class="mt-3 text-center space-y-0.5">
             <span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Votre Code Parrain</span>
-            <div class="font-mono font-black text-lg text-pc-blue tracking-widest">
+            <div class="font-mono font-black text-lg text-pc-blue dark:text-sky-400 tracking-widest">
               ${code}
             </div>
           </div>
@@ -591,9 +641,9 @@ window.ProtecAuth = {
 
         <!-- Champ du lien complet copiable -->
         <div class="space-y-1.5">
-          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500">Lien d'invitation direct pour vos filleuls :</label>
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Lien d'invitation direct pour vos filleuls :</label>
           <div class="flex items-center gap-1.5">
-            <input type="text" readonly value="${url}" id="auth-modal-ref-link-input" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-mono text-xs text-slate-800 font-semibold focus:outline-none select-all" />
+            <input type="text" readonly value="${url}" id="auth-modal-ref-link-input" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 font-semibold focus:outline-none select-all" />
             <button id="auth-modal-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${code}')" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1 shrink-0">
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               <span>Copier</span>
@@ -603,12 +653,12 @@ window.ProtecAuth = {
 
         <!-- Rappel des bonus -->
         <div class="grid grid-cols-2 gap-2 text-center text-xs">
-          <div class="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+          <div class="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200">
             <span class="text-[10px] font-black uppercase block text-emerald-700">Bonus Filleul</span>
             <strong class="text-sm font-black">+1 500 €</strong>
             <span class="text-[9px] block text-emerald-600 mt-0.5">Dès l'inscription</span>
           </div>
-          <div class="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+          <div class="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200">
             <span class="text-[10px] font-black uppercase block text-amber-700">Prime Parrain</span>
             <strong class="text-sm font-black">+2 500 €</strong>
             <span class="text-[9px] block text-amber-600 mt-0.5">Au 1er DPS terminé</span>
@@ -617,7 +667,7 @@ window.ProtecAuth = {
 
         <!-- Boutons d'action -->
         <div class="grid grid-cols-2 gap-2 pt-1">
-          <button onclick="window.ProtecAuth.downloadReferralQRCode('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
+          <button onclick="window.ProtecAuth.downloadReferralQRCode('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
             <i data-lucide="download" class="w-3.5 h-3.5"></i>
             <span>Télécharger PNG</span>
           </button>
@@ -650,6 +700,12 @@ window.ProtecAuth = {
   },
 
   // Calcul dynamique de l'URI de redirection Discord OAuth2
+  clearPendingDiscord() {
+    this.pendingDiscordProfile = null;
+    sessionStorage.removeItem('protec_pending_discord');
+    this.renderModalContent('register', true);
+  },
+
   getDiscordRedirectUri() {
     if (window.location.protocol === 'file:') {
       return 'http://localhost:8080/discord_callback.html';
@@ -902,7 +958,7 @@ window.ProtecAuth = {
 
         this.updateHeaderUI();
         this.renderModalContent('profile');
-        const roleLabel = userData.role === 'admin' ? '👑 Administrateur' : (userData.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Directeur Standard');
+        const roleLabel = userData.role === 'admin' ? '👑 Administrateur' : (userData.role === 'gestionnaire' ? '🛡️ Gestionnaire Fédéral' : 'Joueur Standard');
         if (targetGame?.showToast) {
           targetGame.showToast('Rôles Discord Synchronisés', `Votre compte est configuré avec le statut : ${roleLabel}.`, 'green');
         }
@@ -929,7 +985,7 @@ window.ProtecAuth = {
     }
   },
 
-  openAuthModal(isMandatory = false) {
+  openAuthModal(isMandatory = false, defaultTab = 'login') {
     window.ProtecLoader?.finish();
     const modal = document.getElementById('auth-modal');
     const closeBtn = document.getElementById('auth-modal-close-btn');
@@ -949,7 +1005,7 @@ window.ProtecAuth = {
       }
     }
 
-    this.renderModalContent('login', mandatory);
+    this.renderModalContent(defaultTab, mandatory);
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     if (window.lucide) window.lucide.createIcons();
@@ -982,7 +1038,7 @@ window.ProtecAuth = {
 
     // Si déjà connecté et qu'on ne demande pas explicitement l'inscription, afficher le profil du Directeur
     if (this.currentUser && this.token && activeTab !== 'register') {
-      if (titleEl) titleEl.textContent = 'Profil Directeur';
+      if (titleEl) titleEl.textContent = 'Profil Joueur';
       if (subTitleEl) subTitleEl.textContent = 'Réseau Opérationnel Multijoueur';
 
       const syncDate = this.lastSyncTime ? this.lastSyncTime.toLocaleString('fr-FR') : 'Synchronisé';
@@ -1025,7 +1081,7 @@ window.ProtecAuth = {
           <!-- CONTENU ONGLET 1 : IDENTITÉ & ANTENNE -->
           ${activeTabKey === 'identite' ? `
             <div class="space-y-3 animate-in fade-in duration-150">
-              <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
+              <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center gap-3.5">
                 <div class="w-12 h-12 rounded-2xl ${this.currentUser.discord?.avatarUrl ? 'p-0.5 bg-[#5865F2]' : 'bg-emerald-500'} text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 flex-shrink-0 overflow-hidden">
                   ${this.currentUser.discord?.avatarUrl ? `
                     <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-full h-full object-cover rounded-xl" onerror="this.parentElement.innerHTML='<i data-lucide=\'radio\' class=\'w-6 h-6\'></i>';" />
@@ -1035,13 +1091,13 @@ window.ProtecAuth = {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="font-extrabold text-slate-900 text-base truncate">${this.currentUser.username}</span>
+                    <span class="font-extrabold text-slate-900 dark:text-white text-base truncate">${this.currentUser.username}</span>
                     <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full flex-shrink-0">Connecté</span>
                     ${this.currentUser.discord ? `
                       <span class="text-[9px] font-black uppercase tracking-wider bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30 px-1.5 py-0.2 rounded-full flex-shrink-0" title="Compte Discord lié : @${this.currentUser.discord.username}">Discord</span>
                     ` : ''}
                   </div>
-                  <div class="text-xs text-slate-600 mt-0.5 truncate">
+                  <div class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate">
                     ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
                   </div>
                 </div>
@@ -1118,7 +1174,7 @@ window.ProtecAuth = {
                     </div>
                   </div>
                   <p class="text-[11px] text-slate-300 leading-relaxed">
-                    En tant que Directeur d'Antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile).
+                    En tant que Responsable d'antenne, vous pouvez proposer un événement exceptionnel (type DPS à forte affluence, gestion de crise, grand rassemblement ou exercice de sécurité civile).
                   </p>
                   <button onclick="window.ProtecAuth.closeAuthModal(); window.ProtecMultiplayer.openCreateCommunityEventModal(window.game);" class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 shadow-md transition flex items-center justify-center gap-2 cursor-pointer active:scale-95">
                     <i data-lucide="sparkles" class="w-4 h-4 text-slate-950"></i>
@@ -1128,7 +1184,7 @@ window.ProtecAuth = {
               `}
 
               <div class="pt-1">
-                <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60 cursor-pointer">
+                <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 transition flex items-center justify-center gap-1.5 border border-rose-200/60 dark:border-rose-800/60 cursor-pointer">
                   <i data-lucide="log-out" class="w-4 h-4"></i>
                   Se déconnecter du serveur
                 </button>
@@ -1138,31 +1194,31 @@ window.ProtecAuth = {
 
           <!-- CONTENU ONGLET 2 : PARRAINAGE & QR CODE -->
           ${activeTabKey === 'parrainage' ? `
-            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3 animate-in fade-in duration-150">
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 dark:from-slate-800/90 dark:via-slate-800/70 dark:to-slate-900 border border-blue-200/80 dark:border-slate-700/80 shadow-xs space-y-3 animate-in fade-in duration-150">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded-xl bg-pc-blue text-white flex items-center justify-center font-black shadow-xs">
                     <i data-lucide="gift" class="w-4 h-4"></i>
                   </div>
                   <div>
-                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Programme de Parrainage</h5>
-                    <p class="text-[10px] text-slate-500">Recrutez de nouveaux directeurs d'antennes</p>
+                    <h5 class="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Programme de Parrainage</h5>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Invitez de nouveaux joueurs</p>
                   </div>
                 </div>
                 ${this.currentUser.referral_suspended ? `
-                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
                     Suspendu (Admin)
                   </span>
                 ` : `
-                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                     Actif
                   </span>
                 `}
               </div>
 
               ${(this.currentUser.pendingAlerts && this.currentUser.pendingAlerts.length > 0) || (this.currentUser.pending_referral_alerts && this.currentUser.pending_referral_alerts.length > 0) ? `
-                <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-300 text-rose-800 text-[11px] leading-relaxed flex items-start gap-2">
-                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5"></i>
+                <div class="p-3 rounded-xl bg-rose-500/10 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-[11px] leading-relaxed flex items-start gap-2">
+                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5"></i>
                   <div>
                     <strong>Avertissement :</strong> Une tentative de parrainage non conforme a été détectée sur votre compte (adresse IP ou appareil doublon). La liaison a été rejetée et l'incident consigné.
                   </div>
@@ -1170,45 +1226,45 @@ window.ProtecAuth = {
               ` : ''}
 
               <!-- Code Parrain Unique -->
-              <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+              <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shadow-2xs">
                 <div class="min-w-0">
-                  <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
-                  <div class="font-mono font-black text-sm text-pc-blue tracking-wider truncate" id="auth-my-ref-code">
+                  <div class="text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
+                  <div class="font-mono font-black text-sm text-pc-blue dark:text-sky-400 tracking-wider truncate" id="auth-my-ref-code">
                     ${myRefCode}
                   </div>
                 </div>
-                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${myRefCode}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${myRefCode}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer">
                   <i data-lucide="copy" class="w-3 h-3"></i> Copier
                 </button>
               </div>
 
               <!-- Lien de Parrainage Direct -->
               <div class="space-y-1">
-                <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
+                <div class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
                 <div class="flex items-center gap-1.5">
-                  <input type="text" readonly value="${this.getReferralLink(myRefCode)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-[11px] text-slate-800 font-semibold focus:outline-none select-all" />
-                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0">
+                  <input type="text" readonly value="${this.getReferralLink(myRefCode)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 font-mono text-[11px] text-slate-800 dark:text-slate-200 font-semibold focus:outline-none select-all" />
+                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0 shadow-xs">
                     <i data-lucide="copy" class="w-3 h-3"></i> Copier
                   </button>
-                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
+                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
                     <i data-lucide="share-2" class="w-3 h-3"></i> Partager
                   </button>
                 </div>
               </div>
 
               <!-- Bloc QR Code & Téléchargement -->
-              <div class="p-3 rounded-xl bg-white border border-slate-200 flex items-center gap-3 shadow-2xs">
-                <div id="auth-profile-qrcode" class="w-[84px] h-[84px] bg-slate-50 border border-slate-200 rounded-xl p-1 flex items-center justify-center shrink-0 min-w-[84px] min-h-[84px]"></div>
+              <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-2xs">
+                <div id="auth-profile-qrcode" class="w-[84px] h-[84px] bg-white border border-slate-200 dark:border-slate-700 rounded-xl p-1 flex items-center justify-center shrink-0 min-w-[84px] min-h-[84px]"></div>
                 <div class="space-y-1.5 min-w-0 flex-1 text-xs">
-                  <h6 class="font-black text-slate-900 leading-tight">QR Code d'Affiliation & Téléchargement</h6>
-                  <p class="text-[10px] text-slate-500 leading-snug">
+                  <h6 class="font-black text-slate-900 dark:text-slate-100 leading-tight">QR Code d'Affiliation & Téléchargement</h6>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
                     Faites scanner ce code pour que votre filleul télécharge le jeu et soit affilié directement.
                   </p>
                   <div class="flex items-center gap-1.5 pt-0.5">
-                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="maximize" class="w-3 h-3"></i> Agrandir
                     </button>
-                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="download" class="w-3 h-3"></i> PNG
                     </button>
                   </div>
@@ -1216,9 +1272,9 @@ window.ProtecAuth = {
               </div>
 
               <!-- Barème des gains -->
-              <div class="text-[10px] text-slate-600 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 border border-blue-100">
-                <span>🎁 Filleul : <strong>+1 500 €</strong> à l'inscription</span>
-                <span>👑 Parrain : <strong>+2 500 €</strong> au 1er DPS</span>
+              <div class="text-[10px] text-slate-600 dark:text-slate-300 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60">
+                <span>🎁 Filleul : <strong class="text-slate-900 dark:text-white">+1 500 €</strong> à l'inscription</span>
+                <span>👑 Parrain : <strong class="text-slate-900 dark:text-white">+2 500 €</strong> au 1er DPS</span>
               </div>
             </div>
           ` : ''}
@@ -1264,124 +1320,139 @@ window.ProtecAuth = {
       return;
     }
 
-    // Écran de Connexion Obligatoire
-    if (titleEl) titleEl.textContent = 'Connexion Multijoueur Requise';
-    if (subTitleEl) subTitleEl.textContent = 'Accès au Réseau Opérationnel';
+    // Écran de Connexion / Inscription
+    const isRegister = (activeTab === 'register');
+    if (titleEl) {
+      titleEl.textContent = isRegister ? 'Créer un compte' : 'Connexion Joueur';
+    }
+    if (subTitleEl) {
+      subTitleEl.textContent = isRegister 
+        ? 'Rejoindre le Réseau Opérationnel MyProtec' 
+        : 'Accès au Réseau Opérationnel MyProtec';
+    }
 
     container.innerHTML = `
       <div class="space-y-4">
         <!-- Message informatif multijoueur -->
-        <div class="p-3 rounded-2xl bg-pc-blue/5 border border-pc-blue/15 text-xs text-slate-600 leading-relaxed">
-          🚨 <strong>Le jeu fonctionne exclusivement en multijoueur connecté.</strong> Connectez-vous ou créez votre compte directeur pour implanter votre antenne et interagir en temps réel avec les autres joueurs.
+        <div class="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed text-center flex items-center justify-center gap-2 font-medium">
+          <i data-lucide="${isRegister ? 'sparkles' : 'radio'}" class="w-4 h-4 ${isRegister ? 'text-amber-500' : 'text-pc-blue'} shrink-0"></i>
+          <span>${isRegister ? 'Inscrivez votre antenne pour démarrer l\'aventure et le tutoriel.' : 'Connectez-vous pour retrouver votre antenne et vos effectifs.'}</span>
         </div>
 
-        <!-- Onglets -->
-        <div class="flex rounded-xl bg-slate-100/90 p-1 gap-1 border border-slate-200/50">
-          <button onclick="window.ProtecAuth.renderModalContent('login', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'login' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            Connexion Joueur
+        <!-- Onglets interactifs type Segmented Control -->
+        <div class="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs font-black">
+          <button type="button" onclick="window.ProtecAuth.renderModalContent('login', true)" class="py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${activeTab === 'login' ? 'bg-white dark:bg-slate-900 text-pc-blue shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <span>Connexion Joueur</span>
           </button>
-          <button onclick="window.ProtecAuth.renderModalContent('register', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'register' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            Nouveau Directeur
+          <button type="button" onclick="window.ProtecAuth.renderModalContent('register', true)" class="py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${activeTab === 'register' ? 'bg-white dark:bg-slate-900 text-[#ff6600] shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span>Nouveau Joueur</span>
           </button>
         </div>
 
         <!-- Bouton Connexion avec Discord -->
-        <div class="pt-1">
-          <button type="button" onclick="window.ProtecAuth.loginWithDiscord('login')" class="w-full py-2.5 px-3 rounded-2xl bg-[#5865F2] hover:bg-[#4752C4] active:scale-98 text-white text-xs font-black shadow-md shadow-[#5865F2]/25 transition flex items-center justify-center gap-2 cursor-pointer">
+        <div class="pt-0.5">
+          <button type="button" onclick="window.ProtecAuth.loginWithDiscord('${activeTab}')" class="w-full py-2.5 px-4 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] active:scale-98 text-white text-xs font-black shadow-md shadow-[#5865F2]/20 transition flex items-center justify-center gap-2.5 cursor-pointer">
             <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 127.14 96.36">
               <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.91,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.91,96.12,53,91.08,65.69,84.69,65.69Z"/>
             </svg>
-            <span>Continuer avec Discord</span>
+            <span>${isRegister ? 'S\'inscrire avec Discord' : 'Continuer avec Discord'}</span>
           </button>
         </div>
 
-        <div class="relative flex items-center justify-center my-1.5">
-          <div class="border-t border-slate-200/80 w-full"></div>
-          <span class="bg-white px-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest absolute">ou identifiants classiques</span>
+        <!-- Séparateur moderne -->
+        <div class="flex items-center my-3">
+          <div class="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ou avec identifiants</span>
+          <div class="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
         </div>
 
         <!-- Formulaire de Connexion -->
         ${activeTab === 'login' ? `
-          <form onsubmit="window.ProtecAuth.handleLoginForm(event, window.game)" class="space-y-3">
+          <form onsubmit="window.ProtecAuth.handleLoginForm(event, window.game)" class="space-y-3.5">
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant Directeur</label>
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Identifiant Joueur</label>
               <div class="relative">
                 <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Mot de passe</label>
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Mot de passe</label>
               <div class="relative">
                 <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="password" id="auth-login-password" required value="${localStorage.getItem('protec_last_login_password') || ''}" placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="password" id="auth-login-password" required value="${localStorage.getItem('protec_last_login_password') || ''}" placeholder="••••••••" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
-            <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
+            <div id="auth-error-msg" class="hidden p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-pc-blue text-white hover:bg-pc-blue-light transition shadow-lg shadow-pc-blue/20 flex items-center justify-center gap-2">
+            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light active:scale-98 text-white transition shadow-lg shadow-pc-blue/25 flex items-center justify-center gap-2 cursor-pointer">
               <i data-lucide="log-in" class="w-4 h-4"></i>
-              Entrer dans la Partie Multijoueur
+              <span>Se connecter</span>
             </button>
           </form>
         ` : `
-          <!-- Formulaire d'Inscription Officiel : Pseudo, Mot de Passe, Département, Nom de l'Antenne, Code Parrain -->
-          <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <!-- Formulaire d'Inscription : Pseudo, Mot de Passe, Nom de l'Antenne, Code Parrain, Département -->
+          <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo du Directeur</label>
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Pseudo Joueur</label>
                 <div class="relative">
                   <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="text" id="auth-reg-username" required minlength="3" placeholder="Ex: Cdt_Thomas" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
               </div>
 
               <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Mot de passe</label>
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Mot de passe</label>
                 <div class="relative">
                   <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="password" id="auth-reg-password" required minlength="4" placeholder="••••••••" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="password" id="auth-reg-password" required minlength="4" placeholder="••••••••" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
-              </div>
-            </div>
-
-            <!-- Code de Parrainage (Optionnel) -->
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between mb-0.5">
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">Code Parrain (Facultatif)</label>
-                <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <i data-lucide="sparkles" class="w-3 h-3"></i> +1 500 € offerts
-                </span>
-              </div>
-              ${this.pendingReferralCode ? `
-                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2 shadow-2xs">
-                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-                  <div class="text-[11px] leading-snug">
-                    <strong>Parrainage actif :</strong> Affilié au parrain <span class="font-mono font-black text-emerald-800">${this.pendingReferralCode}</span>. Vous recevrez <strong>+1 500 €</strong> de dotation de bienvenue !
-                  </div>
-                </div>
-              ` : ''}
-              <div class="relative">
-                <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo de votre parrain" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue placeholder:normal-case placeholder:font-normal" />
               </div>
             </div>
 
             <!-- Nom de l'antenne -->
             <div>
-              <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wider mb-1">NOM DE L'ANTENNE</label>
-              <input type="text" id="auth-reg-station" required placeholder="Ex: Antenne de Bordeaux, Antenne Paris 15..." class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Nom de l'antenne</label>
+              <div class="relative">
+                <i data-lucide="home" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="auth-reg-station" required placeholder="Ex: Antenne de Bordeaux, Antenne Paris 15..." class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              </div>
             </div>
 
-            <!-- Département avec recherche rapide -->
-            <div class="space-y-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-              <div class="flex items-center justify-between">
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+            <!-- Code de Parrainage (Optionnel) -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Code Parrain (Optionnel)</label>
+                <span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <i data-lucide="sparkles" class="w-3 h-3 text-emerald-600"></i> +1 500 € offerts
+                </span>
+              </div>
+              ${this.pendingReferralCode ? `
+                <div class="mb-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                  <div class="text-[11px] leading-snug">
+                    <strong>Parrainage actif :</strong> Affilié au parrain <span class="font-mono font-black text-emerald-800 dark:text-emerald-300">${this.pendingReferralCode}</span> (+1 500 € offerts).
+                  </div>
+                </div>
+              ` : ''}
+              <div class="relative">
+                <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo du parrain" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold uppercase text-slate-800 dark:text-white placeholder:text-slate-400 placeholder:normal-case placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              </div>
+            </div>
+
+            <!-- Département d'Implantation épuré & élégant -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Département d'Implantation
                 </label>
-                <span id="auth-reg-dept-badge" class="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                <span id="auth-reg-dept-badge" class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md flex items-center gap-1">
                   ${(() => {
                     const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
                       ? window.ProtecAuth.getDepartementsList() 
@@ -1392,35 +1463,39 @@ window.ProtecAuth = {
                 </span>
               </div>
 
+              <!-- Sélecteur Principal Stylé -->
               <div class="relative">
-                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                <i data-lucide="map-pin" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                <select 
+                  id="auth-reg-dept-select"
+                  onchange="window.ProtecAuth.selectRegDept(this.value)"
+                  class="w-full pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue cursor-pointer">
+                  ${(() => {
+                    const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
+                      ? window.ProtecAuth.getDepartementsList() 
+                      : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
+                    const curCode = window.ProtecAuth.regDeptCode || '75';
+                    return depts.map(d => `<option value="${d.code}" ${d.code === curCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
+                  })()}
+                </select>
+              </div>
+
+              <!-- Champ de filtrage instantané -->
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                 <input 
                   type="search" 
                   id="auth-reg-dept-search"
-                  placeholder="Rechercher par numéro ou nom (ex: 54, 33, Meurthe-et-Moselle, Paris...)"
+                  placeholder="Filtrer la liste (ex: 54, 33, Meurthe, Paris...)"
                   oninput="window.ProtecAuth.onRegDeptSearch(this.value)"
-                  class="w-full pl-7 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/30"
+                  class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-medium text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-pc-blue/20"
                 />
               </div>
-
-              <!-- Liste déroulante des départements filtrés -->
-              <select 
-                id="auth-reg-dept-select"
-                onchange="window.ProtecAuth.selectRegDept(this.value)"
-                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white shadow-xs focus:ring-2 focus:ring-pc-blue/30">
-                ${(() => {
-                  const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
-                    ? window.ProtecAuth.getDepartementsList() 
-                    : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
-                  const curCode = window.ProtecAuth.regDeptCode || '75';
-                  return depts.map(d => `<option value="${d.code}" ${d.code === curCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
-                })()}
-              </select>
             </div>
 
-            <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
+            <div id="auth-error-msg" class="hidden p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3.5 px-4 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white transition shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+            <button type="submit" id="auth-submit-btn" class="w-full py-3.5 px-4 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white transition shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
               <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
               <span>Créer mon compte & Démarrer le Tutoriel</span>
             </button>
@@ -1428,10 +1503,11 @@ window.ProtecAuth = {
         `}
 
         <!-- Mentions légales & Confidentialité (Obligatoire AdSense & RGPD) -->
-        <div class="pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-400">
+        <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
           <span>Simulation bénévole & indépendante</span>
-          <button type="button" onclick="window.ProtecPrivacy.openModal()" class="text-pc-blue font-semibold hover:underline flex items-center gap-1">
-            <i data-lucide="shield-check" class="w-3 h-3"></i> Confidentialité & RGPD
+          <button type="button" onclick="window.ProtecPrivacy.openModal()" class="text-pc-blue dark:text-sky-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span>Confidentialité & RGPD</span>
           </button>
         </div>
       </div>
@@ -1506,7 +1582,7 @@ window.ProtecAuth = {
         errorEl.textContent = (data && data.error) || 'Erreur lors de la connexion BDD.';
         errorEl.classList.remove('hidden');
         submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Entrer dans la Partie Multijoueur';
+        submitBtn.innerHTML = '<i data-lucide="log-in" class="w-4 h-4"></i> Se connecter';
         if (window.lucide) window.lucide.createIcons();
         return;
       }
@@ -1758,7 +1834,15 @@ window.ProtecAuth = {
 
       // 1. Enregistrement dans Supabase Cloud en priorité
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
-        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, { stationName, departmentCode, city, referralCode });
+        const extraData = { 
+          stationName, 
+          departmentCode, 
+          city, 
+          referralCode,
+          discord: this.pendingDiscordProfile || null,
+          discordId: this.pendingDiscordProfile?.id || null
+        };
+        const supaRes = await window.ProtecSupabase.registerPlayer(username, password, extraData);
         if (supaRes && supaRes.user) {
           data = {
             success: true,
@@ -1769,6 +1853,8 @@ window.ProtecAuth = {
               id: supaRes.user.id,
               username: supaRes.user.username,
               role: supaRes.user.role || 'directeur',
+              isAdmin: (supaRes.user.is_admin === true || supaRes.user.role === 'admin'),
+              is_admin: (supaRes.user.is_admin === true || supaRes.user.role === 'admin'),
               stationName: supaRes.user.station_name,
               city: supaRes.user.city || city,
               departmentCode: supaRes.user.department_code || departmentCode,
@@ -1848,6 +1934,7 @@ window.ProtecAuth = {
       game.player.id = data.user.id;
       game.player.name = data.user.username;
       game.player.role = data.user.role || 'user';
+      game.player.isAdmin = !!(data.user.isAdmin || data.user.is_admin || data.user.role === 'admin');
       game.player.deptRole = data.user.deptRole || 'antenne_principale';
       game.player.departmentCode = data.user.departmentCode || departmentCode;
       game.currentDepartmentCode = game.player.departmentCode;
@@ -1932,17 +2019,34 @@ window.ProtecAuth = {
   },
 
   async checkCloudSaveOnLogin(game) {
-    if (!this.currentUser) return;
+    if (!this.currentUser) {
+      if (game) {
+        game.isCloudSyncReady = true;
+        game.hasPendingCloudSync = false;
+      }
+      window.ProtecLoader?.finish();
+      return;
+    }
 
     // 1. Chargement prioritaire depuis Supabase Cloud
     if (window.ProtecSupabase && window.ProtecSupabase.client) {
       try {
         const supaSave = await window.ProtecSupabase.loadGameState(this.currentUser.id, this.currentUser.username);
         if (supaSave && supaSave.save_data && supaSave.save_data.stations && supaSave.save_data.stations.length > 0) {
-          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
+          window.ProtecLoader?.setProgress(95, 'Données officielles validées ! Synchronisation...', 'Synchronisation');
           this.applyCloudSave(game, supaSave.save_data);
+          if (typeof game.syncDepartmentCrises === 'function') {
+            await game.syncDepartmentCrises().catch(() => {});
+          }
           this.lastSyncTime = new Date(supaSave.updated_at || Date.now());
           this.updateHeaderUI();
+          if (game) {
+            game.isCloudSyncReady = true;
+            game.hasPendingCloudSync = false;
+            game.updateStatsUI();
+            if (game.renderStations) game.renderStations();
+            if (game.renderMissions) game.renderMissions();
+          }
           setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
           return;
         }
@@ -1960,12 +2064,22 @@ window.ProtecAuth = {
       if (res.ok) {
         const result = await res.json();
         if (result.save && result.save.stations && result.save.stations.length > 0) {
-          // Une sauvegarde officielle avec antenne existe en BDD : l'appliquer à 100%
-          window.ProtecLoader?.setProgress(95, 'Synchronisation de votre antenne...', 'Synchronisation');
+          window.ProtecLoader?.setProgress(95, 'Données officielles validées ! Synchronisation...', 'Synchronisation');
           this.applyCloudSave(game, result.save);
+          if (typeof game.syncDepartmentCrises === 'function') {
+            await game.syncDepartmentCrises().catch(() => {});
+          }
           this.lastSyncTime = new Date(result.savedAt || Date.now());
           this.updateHeaderUI();
+          if (game) {
+            game.isCloudSyncReady = true;
+            game.hasPendingCloudSync = false;
+            game.updateStatsUI();
+            if (game.renderStations) game.renderStations();
+            if (game.renderMissions) game.renderMissions();
+          }
           setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
+          return;
         } else {
           // L'antenne a été supprimée ou n'existe pas en BDD : PURGE TOTALE DE TOUTE PERSISTANCE LOCALE
           game.stations = [];
@@ -1980,12 +2094,15 @@ window.ProtecAuth = {
           if (game.renderStations) game.renderStations();
           if (game.renderMissions) game.renderMissions();
           if (game.updateStatsUI) game.updateStatsUI();
-
-          // Surtout : NE PAS renvoyer d'ancienne sauvegarde locale vers la BDD !
         }
       }
     } catch (e) {
       console.warn('Erreur chargement cloud:', e);
+    }
+
+    if (game) {
+      game.isCloudSyncReady = true;
+      game.hasPendingCloudSync = false;
     }
 
     // Si aucune antenne n'existe en BDD, lancer impérativement le wizard officiel d'implantation
@@ -1998,6 +2115,8 @@ window.ProtecAuth = {
           game.showOnboardingModal();
         }
       }, 500);
+    } else {
+      setTimeout(() => window.ProtecLoader?.finish('Antenne synchronisée ! Bon service.'), 300);
     }
   },
 
@@ -2219,6 +2338,15 @@ window.ProtecAuth = {
       if (savedData.poles) game.poles = savedData.poles;
       if (savedData.roleRequests) game.roleRequests = savedData.roleRequests;
       if (savedData.rolesAccessMode) game.rolesAccessMode = savedData.rolesAccessMode;
+      if (savedData.starterGuide) {
+        game.starterGuide = savedData.starterGuide;
+        try {
+          localStorage.setItem('protec_starter_guide_save', JSON.stringify({
+            starterGuide: game.starterGuide,
+            savedAt: Date.now()
+          }));
+        } catch (e) {}
+      }
       if (savedData.autoFormationActive !== undefined) game.autoFormationActive = savedData.autoFormationActive;
       if (savedData.autoLogisticsActive !== undefined) game.autoLogisticsActive = savedData.autoLogisticsActive;
       if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {
@@ -2281,6 +2409,9 @@ window.ProtecAuth = {
       }
       if (typeof game.loadAllianceStations === 'function') {
         game.loadAllianceStations();
+      }
+      if (typeof game.syncDepartmentCrises === 'function') {
+        game.syncDepartmentCrises().catch(e => console.warn('Erreur syncDepartmentCrises dans applyCloudSave:', e));
       }
       if (window.ProtecSupabase && window.ProtecSupabase.client && Array.isArray(game.stations)) {
         game.stations.forEach(st => window.ProtecSupabase.syncStationToMap(game.player, st));

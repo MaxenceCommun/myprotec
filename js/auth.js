@@ -985,7 +985,7 @@ window.ProtecAuth = {
     }
   },
 
-  openAuthModal(isMandatory = false) {
+  openAuthModal(isMandatory = false, defaultTab = 'login') {
     window.ProtecLoader?.finish();
     const modal = document.getElementById('auth-modal');
     const closeBtn = document.getElementById('auth-modal-close-btn');
@@ -1005,7 +1005,7 @@ window.ProtecAuth = {
       }
     }
 
-    this.renderModalContent('login', mandatory);
+    this.renderModalContent(defaultTab, mandatory);
     modal.classList.remove('hidden');
     modal.classList.add('flex');
     if (window.lucide) window.lucide.createIcons();
@@ -1320,124 +1320,139 @@ window.ProtecAuth = {
       return;
     }
 
-    // Écran de Connexion Obligatoire
-    if (titleEl) titleEl.textContent = 'Connexion';
-    if (subTitleEl) subTitleEl.textContent = 'Accès au Réseau Opérationnel';
+    // Écran de Connexion / Inscription
+    const isRegister = (activeTab === 'register');
+    if (titleEl) {
+      titleEl.textContent = isRegister ? 'Créer un compte' : 'Connexion Joueur';
+    }
+    if (subTitleEl) {
+      subTitleEl.textContent = isRegister 
+        ? 'Rejoindre le Réseau Opérationnel MyProtec' 
+        : 'Accès au Réseau Opérationnel MyProtec';
+    }
 
     container.innerHTML = `
       <div class="space-y-4">
         <!-- Message informatif multijoueur -->
-        <div class="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs text-slate-600 leading-relaxed text-center font-medium">
-          Veuillez vous connecter ou créer un compte pour continuer.
+        <div class="p-3 rounded-2xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40 text-xs text-slate-700 dark:text-slate-300 leading-relaxed text-center flex items-center justify-center gap-2 font-medium">
+          <i data-lucide="${isRegister ? 'sparkles' : 'radio'}" class="w-4 h-4 ${isRegister ? 'text-amber-500' : 'text-pc-blue'} shrink-0"></i>
+          <span>${isRegister ? 'Inscrivez votre antenne pour démarrer l\'aventure et le tutoriel.' : 'Connectez-vous pour retrouver votre antenne et vos effectifs.'}</span>
         </div>
 
-        <!-- Onglets -->
-        <div class="flex rounded-xl bg-slate-100/90 p-1 gap-1 border border-slate-200/50">
-          <button onclick="window.ProtecAuth.renderModalContent('login', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'login' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            Connexion Joueur
+        <!-- Onglets interactifs type Segmented Control -->
+        <div class="grid grid-cols-2 p-1 rounded-2xl bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700 text-xs font-black">
+          <button type="button" onclick="window.ProtecAuth.renderModalContent('login', true)" class="py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${activeTab === 'login' ? 'bg-white dark:bg-slate-900 text-pc-blue shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            <span>Connexion Joueur</span>
           </button>
-          <button onclick="window.ProtecAuth.renderModalContent('register', true)" class="flex-1 py-1.5 rounded-lg text-xs font-bold transition ${activeTab === 'register' ? 'bg-white text-pc-blue shadow-sm' : 'text-slate-500 hover:text-slate-800'}">
-            Nouveau Joueur
+          <button type="button" onclick="window.ProtecAuth.renderModalContent('register', true)" class="py-2.5 px-3 rounded-xl transition cursor-pointer flex items-center justify-center gap-2 ${activeTab === 'register' ? 'bg-white dark:bg-slate-900 text-[#ff6600] shadow-xs' : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white'}">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span>Nouveau Joueur</span>
           </button>
         </div>
 
         <!-- Bouton Connexion avec Discord -->
-        <div class="pt-1">
-          <button type="button" onclick="window.ProtecAuth.loginWithDiscord('login')" class="w-full py-2.5 px-3 rounded-2xl bg-[#5865F2] hover:bg-[#4752C4] active:scale-98 text-white text-xs font-black shadow-md shadow-[#5865F2]/25 transition flex items-center justify-center gap-2 cursor-pointer">
+        <div class="pt-0.5">
+          <button type="button" onclick="window.ProtecAuth.loginWithDiscord('${activeTab}')" class="w-full py-2.5 px-4 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] active:scale-98 text-white text-xs font-black shadow-md shadow-[#5865F2]/20 transition flex items-center justify-center gap-2.5 cursor-pointer">
             <svg class="w-4 h-4 fill-current shrink-0" viewBox="0 0 127.14 96.36">
               <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.91,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.91,96.12,53,91.08,65.69,84.69,65.69Z"/>
             </svg>
-            <span>Continuer avec Discord</span>
+            <span>${isRegister ? 'S\'inscrire avec Discord' : 'Continuer avec Discord'}</span>
           </button>
         </div>
 
-        <div class="relative flex items-center justify-center my-1.5">
-          <div class="border-t border-slate-200/80 w-full"></div>
-          <span class="bg-white px-2.5 text-[9px] font-black text-slate-400 uppercase tracking-widest absolute">Identifiants MyProtec</span>
+        <!-- Séparateur moderne -->
+        <div class="flex items-center my-3">
+          <div class="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
+          <span class="px-3 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">ou avec identifiants</span>
+          <div class="flex-1 border-t border-slate-200 dark:border-slate-700"></div>
         </div>
 
         <!-- Formulaire de Connexion -->
         ${activeTab === 'login' ? `
-          <form onsubmit="window.ProtecAuth.handleLoginForm(event, window.game)" class="space-y-3">
+          <form onsubmit="window.ProtecAuth.handleLoginForm(event, window.game)" class="space-y-3.5">
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Identifiant Joueur</label>
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Identifiant Joueur</label>
               <div class="relative">
                 <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="text" id="auth-login-username" required value="${localStorage.getItem('protec_last_login_username') || this.currentUser?.username || ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
             <div>
-              <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Mot de passe</label>
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Mot de passe</label>
               <div class="relative">
                 <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="password" id="auth-login-password" required value="${localStorage.getItem('protec_last_login_password') || ''}" placeholder="••••••••" class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-200 bg-white/80 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                <input type="password" id="auth-login-password" required value="${localStorage.getItem('protec_last_login_password') || ''}" placeholder="••••••••" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
               </div>
             </div>
 
-            <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
+            <div id="auth-error-msg" class="hidden p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-extrabold bg-pc-blue text-white hover:bg-pc-blue-light transition shadow-lg shadow-pc-blue/20 flex items-center justify-center gap-2">
+            <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl text-xs font-black bg-pc-blue hover:bg-pc-blue-light active:scale-98 text-white transition shadow-lg shadow-pc-blue/25 flex items-center justify-center gap-2 cursor-pointer">
               <i data-lucide="log-in" class="w-4 h-4"></i>
-              Se connecter
+              <span>Se connecter</span>
             </button>
           </form>
         ` : `
-          <!-- Formulaire d'Inscription Officiel : Pseudo, Mot de Passe, Département, Nom de l'Antenne, Code Parrain -->
-          <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <!-- Formulaire d'Inscription : Pseudo, Mot de Passe, Nom de l'Antenne, Code Parrain, Département -->
+          <form onsubmit="window.ProtecAuth.handleRegisterForm(event, window.game)" class="space-y-3.5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Pseudo Joueur</label>
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Pseudo Joueur</label>
                 <div class="relative">
                   <i data-lucide="user-plus" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="text" id="auth-reg-username" required minlength="3" value="${this.pendingDiscordProfile ? (this.pendingDiscordProfile.global_name || this.pendingDiscordProfile.username) : ''}" placeholder="Ex: Cdt_Dupont" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
               </div>
 
               <div>
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Mot de passe</label>
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Mot de passe</label>
                 <div class="relative">
                   <i data-lucide="lock" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                  <input type="password" id="auth-reg-password" required minlength="4" placeholder="••••••••" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+                  <input type="password" id="auth-reg-password" required minlength="4" placeholder="••••••••" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
                 </div>
-              </div>
-            </div>
-
-            <!-- Code de Parrainage (Optionnel) -->
-            <div class="space-y-1.5">
-              <div class="flex items-center justify-between mb-0.5">
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">Code Parrain (Facultatif)</label>
-                <span class="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full flex items-center gap-1">
-                  <i data-lucide="sparkles" class="w-3 h-3"></i> +1 500 € offerts
-                </span>
-              </div>
-              ${this.pendingReferralCode ? `
-                <div class="p-2.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs flex items-center gap-2 shadow-2xs">
-                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 flex-shrink-0"></i>
-                  <div class="text-[11px] leading-snug">
-                    <strong>Parrainage actif :</strong> Affilié au parrain <span class="font-mono font-black text-emerald-800">${this.pendingReferralCode}</span>. Vous recevrez <strong>+1 500 €</strong> de dotation de bienvenue !
-                  </div>
-                </div>
-              ` : ''}
-              <div class="relative">
-                <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo de votre parrain" class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white/90 text-xs font-bold uppercase focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue placeholder:normal-case placeholder:font-normal" />
               </div>
             </div>
 
             <!-- Nom de l'antenne -->
             <div>
-              <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wider mb-1">NOM DE L'ANTENNE</label>
-              <input type="text" id="auth-reg-station" required placeholder="Ex: Antenne de Bordeaux, Antenne Paris 15..." class="w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">Nom de l'antenne</label>
+              <div class="relative">
+                <i data-lucide="home" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="auth-reg-station" required placeholder="Ex: Antenne de Bordeaux, Antenne Paris 15..." class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              </div>
             </div>
 
-            <!-- Département avec recherche rapide -->
-            <div class="space-y-1.5 p-2.5 rounded-xl bg-slate-50 border border-slate-200">
-              <div class="flex items-center justify-between">
-                <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider">
+            <!-- Code de Parrainage (Optionnel) -->
+            <div>
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">Code Parrain (Optionnel)</label>
+                <span class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <i data-lucide="sparkles" class="w-3 h-3 text-emerald-600"></i> +1 500 € offerts
+                </span>
+              </div>
+              ${this.pendingReferralCode ? `
+                <div class="mb-2 p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/70 text-emerald-900 dark:text-emerald-200 text-xs flex items-center gap-2">
+                  <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                  <div class="text-[11px] leading-snug">
+                    <strong>Parrainage actif :</strong> Affilié au parrain <span class="font-mono font-black text-emerald-800 dark:text-emerald-300">${this.pendingReferralCode}</span> (+1 500 € offerts).
+                  </div>
+                </div>
+              ` : ''}
+              <div class="relative">
+                <i data-lucide="gift" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" id="auth-reg-referral" value="${this.pendingReferralCode || ''}" placeholder="Ex: PROT-A1B2 ou Pseudo du parrain" class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold uppercase text-slate-800 dark:text-white placeholder:text-slate-400 placeholder:normal-case placeholder:font-normal focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue" />
+              </div>
+            </div>
+
+            <!-- Département d'Implantation épuré & élégant -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between mb-1.5">
+                <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
                   Département d'Implantation
                 </label>
-                <span id="auth-reg-dept-badge" class="text-[10px] font-black text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md">
+                <span id="auth-reg-dept-badge" class="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-2 py-0.5 rounded-md flex items-center gap-1">
                   ${(() => {
                     const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
                       ? window.ProtecAuth.getDepartementsList() 
@@ -1448,35 +1463,39 @@ window.ProtecAuth = {
                 </span>
               </div>
 
+              <!-- Sélecteur Principal Stylé -->
               <div class="relative">
-                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs">🔍</span>
+                <i data-lucide="map-pin" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                <select 
+                  id="auth-reg-dept-select"
+                  onchange="window.ProtecAuth.selectRegDept(this.value)"
+                  class="w-full pl-9 pr-8 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-800 dark:text-white shadow-2xs focus:outline-none focus:ring-2 focus:ring-pc-blue/30 focus:border-pc-blue cursor-pointer">
+                  ${(() => {
+                    const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
+                      ? window.ProtecAuth.getDepartementsList() 
+                      : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
+                    const curCode = window.ProtecAuth.regDeptCode || '75';
+                    return depts.map(d => `<option value="${d.code}" ${d.code === curCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
+                  })()}
+                </select>
+              </div>
+
+              <!-- Champ de filtrage instantané -->
+              <div class="relative">
+                <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
                 <input 
                   type="search" 
                   id="auth-reg-dept-search"
-                  placeholder="Rechercher par numéro ou nom (ex: 54, 33, Meurthe-et-Moselle, Paris...)"
+                  placeholder="Filtrer la liste (ex: 54, 33, Meurthe, Paris...)"
                   oninput="window.ProtecAuth.onRegDeptSearch(this.value)"
-                  class="w-full pl-7 pr-3 py-1.5 rounded-lg border border-slate-300 text-xs font-medium text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-pc-blue/30"
+                  class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/80 bg-slate-50 dark:bg-slate-800/50 text-[11px] font-medium text-slate-700 dark:text-slate-300 placeholder:text-slate-400 focus:outline-none focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-pc-blue/20"
                 />
               </div>
-
-              <!-- Liste déroulante des départements filtrés -->
-              <select 
-                id="auth-reg-dept-select"
-                onchange="window.ProtecAuth.selectRegDept(this.value)"
-                class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold text-slate-900 bg-white shadow-xs focus:ring-2 focus:ring-pc-blue/30">
-                ${(() => {
-                  const depts = (typeof window.ProtecAuth.getDepartementsList === 'function') 
-                    ? window.ProtecAuth.getDepartementsList() 
-                    : ((window.ProtecDepartements && window.ProtecDepartements.list) || []);
-                  const curCode = window.ProtecAuth.regDeptCode || '75';
-                  return depts.map(d => `<option value="${d.code}" ${d.code === curCode ? 'selected' : ''}>${d.code} - ${d.name} (${d.region})</option>`).join('');
-                })()}
-              </select>
             </div>
 
-            <div id="auth-error-msg" class="hidden p-2.5 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold"></div>
+            <div id="auth-error-msg" class="hidden p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800 text-xs font-semibold"></div>
 
-            <button type="submit" id="auth-submit-btn" class="w-full py-3.5 px-4 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white transition shadow-md shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
+            <button type="submit" id="auth-submit-btn" class="w-full py-3.5 px-4 rounded-xl text-xs font-black bg-[#ff6600] hover:bg-[#e65c00] active:scale-98 text-white transition shadow-lg shadow-orange-500/25 flex items-center justify-center gap-2 cursor-pointer border-0 outline-none">
               <i data-lucide="shield-check" class="w-4 h-4 text-white"></i>
               <span>Créer mon compte & Démarrer le Tutoriel</span>
             </button>
@@ -1484,10 +1503,11 @@ window.ProtecAuth = {
         `}
 
         <!-- Mentions légales & Confidentialité (Obligatoire AdSense & RGPD) -->
-        <div class="pt-3 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-400">
+        <div class="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400 dark:text-slate-500">
           <span>Simulation bénévole & indépendante</span>
-          <button type="button" onclick="window.ProtecPrivacy.openModal()" class="text-pc-blue font-semibold hover:underline flex items-center gap-1">
-            <i data-lucide="shield-check" class="w-3 h-3"></i> Confidentialité & RGPD
+          <button type="button" onclick="window.ProtecPrivacy.openModal()" class="text-pc-blue dark:text-sky-400 font-semibold hover:underline flex items-center gap-1 cursor-pointer">
+            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i>
+            <span>Confidentialité & RGPD</span>
           </button>
         </div>
       </div>
