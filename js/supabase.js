@@ -1528,6 +1528,7 @@ window.ProtecSupabase = {
         poles: game.poles || null,
         roleRequests: game.roleRequests || [],
         rolesAccessMode: game.rolesAccessMode || 'validation',
+        starterGuide: game.starterGuide || null,
         autoFormationActive: game.autoFormationActive !== undefined ? game.autoFormationActive : true,
         autoLogisticsActive: game.autoLogisticsActive !== undefined ? game.autoLogisticsActive : true,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,

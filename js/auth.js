@@ -2318,6 +2318,15 @@ window.ProtecAuth = {
       if (savedData.poles) game.poles = savedData.poles;
       if (savedData.roleRequests) game.roleRequests = savedData.roleRequests;
       if (savedData.rolesAccessMode) game.rolesAccessMode = savedData.rolesAccessMode;
+      if (savedData.starterGuide) {
+        game.starterGuide = savedData.starterGuide;
+        try {
+          localStorage.setItem('protec_starter_guide_save', JSON.stringify({
+            starterGuide: game.starterGuide,
+            savedAt: Date.now()
+          }));
+        } catch (e) {}
+      }
       if (savedData.autoFormationActive !== undefined) game.autoFormationActive = savedData.autoFormationActive;
       if (savedData.autoLogisticsActive !== undefined) game.autoLogisticsActive = savedData.autoLogisticsActive;
       if (window.ProtecPoles && typeof window.ProtecPoles.injectState === 'function') {

@@ -2121,6 +2121,7 @@ class ProtecGame {
           autoFormationActive: this.autoFormationActive !== undefined ? this.autoFormationActive : true,
           autoLogisticsActive: this.autoLogisticsActive !== undefined ? this.autoLogisticsActive : true,
           tutorialState: this.tutorialState || null,
+          starterGuide: this.starterGuide || null,
           lastCrisisCalendarDay: this.lastCrisisCalendarDay || null,
           lastCrisisTimestamp: this.lastCrisisTimestamp || null,
           savedAt: Date.now()
@@ -2203,6 +2204,7 @@ class ProtecGame {
             if (c.autoFormationActive !== undefined) this.autoFormationActive = c.autoFormationActive;
             if (c.autoLogisticsActive !== undefined) this.autoLogisticsActive = c.autoLogisticsActive;
             if (c.tutorialState) this.tutorialState = c.tutorialState;
+            if (c.starterGuide) this.starterGuide = c.starterGuide;
             if (c.lastCrisisCalendarDay) this.lastCrisisCalendarDay = c.lastCrisisCalendarDay;
             if (c.lastCrisisTimestamp) this.lastCrisisTimestamp = c.lastCrisisTimestamp;
           }
@@ -11991,6 +11993,9 @@ class ProtecGame {
         );
       }
       this.resources.campaigns[campaignType] = true;
+      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.markStarterStepCompleted === 'function') {
+        window.ProtecAdvanced.markStarterStepCompleted(this, 'step_pub');
+      }
       this.showToast('Campagne lancée', `Campagne de communication activée.`, 'green');
     } else {
       this.resources.campaigns[campaignType] = false;
@@ -27990,6 +27995,9 @@ class ProtecGame {
     }
 
     this.resources.money -= cost;
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.markStarterStepCompleted === 'function') {
+      window.ProtecAdvanced.markStarterStepCompleted(this, 'step_vehicule');
+    }
     const vehId = `${type.toLowerCase()}-${Date.now()}`;
     const callsign = this.generateVehicleCallsign(type, stationId, station);
 

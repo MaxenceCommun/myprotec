@@ -2136,6 +2136,62 @@ window.ProtecAdvanced = {
     return true;
   },
 
+  markStarterStepCompleted(game, stepId) {
+    if (!game) game = window.game;
+    if (!game) return;
+    if (!game.starterGuide) {
+      game.starterGuide = { completed: false, skipped: false, stepsClaimed: [], stepsCompleted: [] };
+    }
+    if (!Array.isArray(game.starterGuide.stepsCompleted)) {
+      game.starterGuide.stepsCompleted = [];
+    }
+    if (!game.starterGuide.stepsCompleted.includes(stepId)) {
+      game.starterGuide.stepsCompleted.push(stepId);
+    }
+    game.starterGuide[stepId] = true;
+    try {
+      localStorage.setItem('protec_starter_guide_save', JSON.stringify({
+        starterGuide: game.starterGuide,
+        savedAt: Date.now()
+      }));
+    } catch (e) {}
+    if (typeof game.saveGame === 'function') game.saveGame();
+    if (game.currentModalKey === 'recompenses' && window.ProtecAdvancedModals) {
+      const body = document.getElementById('modal-body');
+      if (body) {
+        body.innerHTML = window.ProtecAdvancedModals.renderRewards(game);
+        if (window.lucide) window.lucide.createIcons();
+      }
+    }
+  },
+
+  openStarterStepAction(game, stepId) {
+    if (!game) game = window.game;
+    if (!game) return;
+
+    // Marquer l'étape comme engagée / consultée
+    this.markStarterStepCompleted(game, stepId);
+
+    if (stepId === 'step_pub') {
+      if (typeof game.openModule === 'function') game.openModule('communication');
+    } else if (stepId === 'step_rearm') {
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+        window.ProtecCriseLogistique.openCreateRearmamentModal(game);
+      } else if (typeof game.openModule === 'function') {
+        game.openModule('logistique');
+      }
+    } else if (stepId === 'step_params') {
+      game.antennaSettingsVisited = true;
+      if (typeof game.openModule === 'function') game.openModule('poles');
+    } else if (stepId === 'step_vehicule') {
+      if (typeof game.openModule === 'function') game.openModule('boutique_vehicules');
+    } else if (stepId === 'step_mission') {
+      if (typeof game.openModule === 'function') game.openModule('planning');
+    } else if (stepId === 'step_formation') {
+      if (typeof game.openModule === 'function') game.openModule('formation');
+    }
+  },
+
   getStarterGuideSteps(game) {
     if (!game) return [];
     if (!game.starterGuide) {
@@ -2147,52 +2203,76 @@ window.ProtecAdvanced = {
         }
       } catch (e) {}
       if (!game.starterGuide) {
-        game.starterGuide = { completed: false, skipped: false, stepsClaimed: [] };
+        game.starterGuide = { completed: false, skipped: false, stepsClaimed: [], stepsCompleted: [] };
       }
     }
     const claimedList = game.starterGuide.stepsClaimed || [];
+    const completedList = game.starterGuide.stepsCompleted || [];
 
-    // Détection en temps réel de chaque étape
+    // Détection en temps réel de chaque étape avec conditions exhaustives
     const donePub = Boolean(
-      (game.communication?.postsHistory && game.communication.postsHistory.length > 0) ||
-      (game.communication?.activeCampaigns && game.communication.activeCampaigns.length > 0) ||
+      (game.resources?.campaigns?.social || game.resources?.campaigns?.posters) ||
+      (game.socialMedia?.feed && game.socialMedia.feed.some(p => p.id !== 'post-init-1' && p.id !== 'post-init-2')) ||
+      (game.photoFolders && game.photoFolders.some(f => f.published)) ||
       (game.socialPostsCount > 0) ||
       (game.stats?.adsWatched > 0) ||
+      completedList.includes('step_pub') ||
+      game.starterGuide.step_pub ||
       claimedList.includes('step_pub')
     );
 
     const doneRearm = Boolean(
-      (game.rearmWorkshops && game.rearmWorkshops.length > 0) ||
-      (game.vehicles && game.vehicles.some(v => (v.armementLevel || 0) >= 95 && v.isRearmed)) ||
+      (game.vehicles && game.vehicles.some(v => v.needsRearming === false || (v.armementLevel || 0) >= 80 || v.isRearmed === true)) ||
+      (game.missions && game.missions.some(m => m.isRearmamentWorkshop || m.type === 'rearmement' || m.type === 'logistique')) ||
+      (game.stations && game.stations.some(s => (s.stock?.caisse_rearmement || 0) > 0)) ||
+      (game.history && game.history.some(h => h.type === 'rearmement')) ||
       (game.stats?.rearmCount > 0) ||
-      (game.logistics?.rearmKits?.dps > 0) ||
-      (game.logistics?.stockKits > 0) ||
+      completedList.includes('step_rearm') ||
+      game.starterGuide.step_rearm ||
       claimedList.includes('step_rearm')
     );
 
     const doneParams = Boolean(
       (game.poles && game.poles.length > 0) ||
       game.antennaSettingsConfigured ||
+      game.antennaSettingsVisited ||
       (game.stationSettings && Object.keys(game.stationSettings).length > 0) ||
+      (game.rolesAccessMode && game.rolesAccessMode !== 'validation') ||
+      (game.mealAllowancePerVolunteer !== undefined && game.mealAllowancePerVolunteer !== 15) ||
+      completedList.includes('step_params') ||
+      game.starterGuide.step_params ||
       claimedList.includes('step_params')
     );
 
     const doneVehicule = Boolean(
       (game.vehicles && game.vehicles.length >= 2) ||
+      (game.deliveries && game.deliveries.some(d => d.type === 'vehicle')) ||
       (game.stats?.boughtVehiclesCount > 0) ||
+      completedList.includes('step_vehicule') ||
+      game.starterGuide.step_vehicule ||
       claimedList.includes('step_vehicule')
     );
 
     const doneMission = Boolean(
+      (game.missions && game.missions.some(m => ['planifie', 'accepted', 'declenche', 'en_cours', 'sur_les_lieux', 'completed', 'termine', 'ongoing', 'active'].includes(m.status))) ||
+      (game.devis && game.devis.some(d => ['accepted', 'validated', 'signed'].includes(d.status))) ||
+      (game.vehicles && game.vehicles.some(v => v.status === 'mission')) ||
+      (game.history && game.history.some(h => h.type === 'mission' || h.type === 'dps')) ||
       (game.stats?.completedMissionsCount > 0) ||
-      (game.missions && game.missions.some(m => m.status === 'completed' || m.status === 'termine' || m.status === 'ongoing')) ||
+      completedList.includes('step_mission') ||
+      game.starterGuide.step_mission ||
       claimedList.includes('step_mission')
     );
 
     const doneFormation = Boolean(
       (game.sessionsFormation && game.sessionsFormation.length > 0) ||
+      (game.formationB2BProposals && game.formationB2BProposals.some(p => ['accepted', 'in_progress', 'completed'].includes(p.status))) ||
+      (game.formations && game.formations.length > 0) ||
       (game.trainingSessions && game.trainingSessions.length > 0) ||
+      (game.volunteers && game.volunteers.some(v => (v.skills || []).length > 2 || (v.formations && v.formations.length > 0))) ||
       (game.stats?.formationsCount > 0) ||
+      completedList.includes('step_formation') ||
+      game.starterGuide.step_formation ||
       claimedList.includes('step_formation')
     );
 
@@ -2209,7 +2289,7 @@ window.ProtecAdvanced = {
         isCompleted: donePub,
         isClaimed: claimedList.includes('step_pub'),
         actionLabel: 'Ouvrir Communication',
-        actionFn: "window.game.openModule('communication')"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_pub')"
       },
       {
         id: 'step_rearm',
@@ -2223,7 +2303,7 @@ window.ProtecAdvanced = {
         isCompleted: doneRearm,
         isClaimed: claimedList.includes('step_rearm'),
         actionLabel: 'Atelier de Réarmement',
-        actionFn: "window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_rearm')"
       },
       {
         id: 'step_params',
@@ -2237,7 +2317,7 @@ window.ProtecAdvanced = {
         isCompleted: doneParams,
         isClaimed: claimedList.includes('step_params'),
         actionLabel: 'Pôles & Paramètres',
-        actionFn: "window.game.openModule('poles')"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_params')"
       },
       {
         id: 'step_vehicule',
@@ -2251,7 +2331,7 @@ window.ProtecAdvanced = {
         isCompleted: doneVehicule,
         isClaimed: claimedList.includes('step_vehicule'),
         actionLabel: 'Boutique Véhicules',
-        actionFn: "window.game.openModule('boutique_vehicules')"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_vehicule')"
       },
       {
         id: 'step_mission',
@@ -2265,7 +2345,7 @@ window.ProtecAdvanced = {
         isCompleted: doneMission,
         isClaimed: claimedList.includes('step_mission'),
         actionLabel: 'Planning des Missions',
-        actionFn: "window.game.openModule('planning')"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_mission')"
       },
       {
         id: 'step_formation',
@@ -2279,7 +2359,7 @@ window.ProtecAdvanced = {
         isCompleted: doneFormation,
         isClaimed: claimedList.includes('step_formation'),
         actionLabel: 'Pôle Formations',
-        actionFn: "window.game.openModule('formation')"
+        actionFn: "window.ProtecAdvanced.openStarterStepAction(window.game, 'step_formation')"
       }
     ];
   },
@@ -2486,8 +2566,8 @@ window.ProtecAdvanced = {
                     ` : canClaim ? `
                       <button type="button" 
                         onclick="window.ProtecAdvanced.claimStarterStepReward(window.game, '${s.id}')"
-                        class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[11px] shadow-sm animate-bounce cursor-pointer flex items-center gap-1">
-                        <span>🎁 Réclamer</span>
+                        class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-black text-[11px] shadow-md animate-pulse cursor-pointer flex items-center gap-1 active:scale-95">
+                        <span>🎁 Valider (+ ${s.reward} €)</span>
                       </button>
                     ` : `
                       <span class="px-2.5 py-1.5 rounded-xl bg-slate-100 text-slate-500 text-[10.5px] font-semibold">
