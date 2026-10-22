@@ -1877,6 +1877,118 @@ window.ProtecAdvanced = {
     return lvl === 1 ? 2 : (lvl === 2 ? 4 : 8);
   },
 
+  /**
+   * Calcul du délai de livraison réaliste d'un véhicule neuf en fonction de son châssis/catégorie
+   * et des options d'aménagement/carrossage sélectionnées.
+   * 
+   * Barème de base (heures réelles) :
+   * - Poids Lourds & Logistique Lourde (FLIT, VALOG, PCM, VST ou permis C) : 72h
+   * - Ambulances de Secours (VPSP) : 48h (carrossage sanitaire, brancard, installation O2)
+   * - Fourgons & Utilitaires Spécialisés (VTU, VTP, VLHR, CYNO) : 24h
+   * - Véhicules Légers Standards & Embarcations (VL, VLM, BLS Canot, Quad) : 12h
+   * 
+   * Suppléments carrosserie & équipements :
+   * - Rampe LED / Gyrophares homologués (hors VPSP où c'est déjà inclus en base) : +4h
+   * - Moniteur défibrillateur (ECG multiparamétrique) : +6h
+   * - Climatisation & Chauffage à air habitacle/cellule : +4h
+   * - Attelage remorque d'atelier (s'il n'est pas de série) : +2h
+   * - Tensiomètre automatique médicalisé : +2h
+   */
+  calculateVehicleDeliveryTime(vehicleType, variantOrOptions = null) {
+    const type = (vehicleType || variantOrOptions?.type || '').toUpperCase();
+    const isHeavy = ['FLIT', 'VALOG', 'PCM', 'VST', 'FPTL', 'FPTSR'].includes(type) || variantOrOptions?.licenseRequired === 'C';
+    const isAmbulance = type === 'VPSP' || variantOrOptions?.type === 'VPSP';
+    const isLightUtil = ['VTU', 'VTP', 'VLHR', 'VCYN', 'CYNO', 'VAHU', 'VTL', 'VTD'].includes(type);
+
+    let baseHours = 12; // Base VL / canot / liaison standard
+    let categoryLabel = 'Véhicule Léger Standard (Stock Concession)';
+
+    if (isHeavy) {
+      baseHours = 72;
+      categoryLabel = 'Châssis Poids Lourd Spécialisé';
+    } else if (isAmbulance) {
+      baseHours = 48;
+      categoryLabel = 'Ambulance VPSP Cellule Sanitaire';
+    } else if (isLightUtil) {
+      baseHours = 24;
+      categoryLabel = 'Fourgon / Utilitaire Aménagé';
+    }
+
+    let extraHours = 0;
+    const breakdown = [
+      { name: `Préparation & convoyage châssis (${categoryLabel})`, hours: baseHours }
+    ];
+
+    const opts = variantOrOptions || {};
+    const selOpts = opts.selectedOptions || opts.installedOptionsMap || {};
+    const installedList = Array.isArray(opts.installedOptions) ? opts.installedOptions : [];
+
+    const hasOption = (key, regex) => {
+      if (selOpts[key]) return true;
+      if (opts[key]) return true;
+      if (installedList.some(item => typeof item === 'string' && regex.test(item))) return true;
+      return false;
+    };
+
+    // 1. Rampe gyrophares LED / barre prioritaire
+    // Note: Pour VPSP, la rampe de série fait déjà partie du carrossage sanitaire de base de 48h
+    const hasLed = hasOption('ledBar', /rampe|gyrophare|led/i) || opts.hasLedBar;
+    if (hasLed && !isAmbulance) {
+      extraHours += 4;
+      breakdown.push({ name: 'Carrossage Rampe Gyrophares LED & Faisceau prioritaire', hours: 4 });
+    }
+
+    // 2. Moniteur défibrillateur (ECG multiparamétrique)
+    const hasSchiller = hasOption('schiller_t7', /moniteur|défibrillateur|schiller/i) || opts.hasSchillerT7;
+    if (hasSchiller) {
+      extraHours += 6;
+      breakdown.push({ name: 'Installation Support Crash-Test 10G & Étalonnage Moniteur ECG', hours: 6 });
+    }
+
+    // 3. Climatisation & Chauffage à air habitacle / cellule
+    const hasClim = hasOption('climatisation', /climatisation|chauffage/i);
+    if (hasClim) {
+      extraHours += 4;
+      breakdown.push({ name: 'Montage Groupe Climatisation & Chauffage à air pulsé', hours: 4 });
+    }
+
+    // 4. Attelage remorque d'atelier (s'il n'est pas déjà de série)
+    const hasTow = (hasOption('towHitch', /attelage/i) || opts.hasTowHitch) && !opts.hasNativeTowHitch;
+    if (hasTow && type !== 'VTU') { // VTU l'a nativement de série dans le catalogue
+      extraHours += 2;
+      breakdown.push({ name: 'Pose Ferrure d’Attelage Homologuée & Prise 13 broches', hours: 2 });
+    }
+
+    // 5. Tensiomètre automatique médicalisé
+    const hasTensio = hasOption('tensiometre_auto', /tensiomètre/i) || opts.hasTensiometreAuto;
+    if (hasTensio) {
+      extraHours += 2;
+      breakdown.push({ name: 'Pose Support Antichoc Tensiomètre Médicalisé', hours: 2 });
+    }
+
+    const totalHours = baseHours + extraHours;
+    const durationSeconds = totalHours * 3600;
+
+    let formattedLabel = '';
+    if (totalHours >= 24) {
+      const days = Math.floor(totalHours / 24);
+      const remHours = totalHours % 24;
+      formattedLabel = remHours > 0 ? `${totalHours}h (${days}j ${remHours}h)` : `${totalHours}h (${days} jour${days > 1 ? 's' : ''})`;
+    } else {
+      formattedLabel = `${totalHours}h`;
+    }
+
+    return {
+      baseHours,
+      extraHours,
+      totalHours,
+      durationSeconds,
+      label: formattedLabel,
+      shortLabel: `${totalHours}h`,
+      breakdown
+    };
+  },
+
   // 4. Commande d'un nouveau véhicule spécialisé avec configuration / variante
   buySpecializedVehicle(game, stationId, vehicleType, variantOptions = null) {
     const cat = this.vehicleCatalog.find(v => v.type === vehicleType) || {};
@@ -1955,12 +2067,11 @@ window.ProtecAdvanced = {
       window.ProtecLogistique.normalizeVehicle(newVeh);
     }
 
-    // Délai de livraison basé sur le calendrier du jeu (24h à 72h selon le type)
+    // Délai de livraison réaliste basé sur le châssis et les options de carrossage
     if (!Array.isArray(game.deliveries)) game.deliveries = [];
-    const isHeavy = ['FLIT', 'VALOG', 'PCM', 'VST'].includes(vehicleType) || variantOptions?.licenseRequired === 'C';
-    const isAmbulance = vehicleType === 'VPSP' || variantOptions?.type === 'VPSP';
-    const delayDays = isHeavy ? 3 : (isAmbulance ? 2 : 1);
-    const durationSec = delayDays * 86400; // 24h, 48h ou 72h selon le type
+    const deliveryCalc = this.calculateVehicleDeliveryTime(vehicleType, variantOptions);
+    const durationSec = deliveryCalc.durationSeconds;
+    const delayDays = Math.ceil(durationSec / 86400);
 
     const delivery = {
       id: `deliv-veh-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -1974,11 +2085,12 @@ window.ProtecAdvanced = {
       stationId: station.id,
       stationName: station.name,
       stationCity: station.city,
-      carrier: `Concessionnaire Flotte & Carrossier Agréé (${delayDays}j calendrier)`,
+      carrier: `Concessionnaire & Carrossier Agréé (${deliveryCalc.label})`,
       supplierName: 'Concessionnaire Flotte Sécurité Civile',
       totalCost: finalCost,
       shippingFee: 0,
       itemsSummary: `1x ${newVeh.label} (${newVeh.model})`,
+      deliveryDetails: deliveryCalc,
       status: 'in_transit',
       createdAt: Date.now()
     };
@@ -2001,7 +2113,7 @@ window.ProtecAdvanced = {
     game.renderStations();
     game.saveGame();
     game.syncPlayerToServer();
-    game.showToast('Véhicule Commandé ! 🚚', `${cat.icon || '🚑'} ${newVeh.name} (${newVeh.model}) est en commande d’usine (${delayDays}j calendrier). Suivez son convoi dans le Suivi des Livraisons !`, 'green');
+    game.showToast('Véhicule Commandé ! 🚚', `${cat.icon || '🚑'} ${newVeh.name} (${newVeh.model}) est en commande d’usine (délai : ${deliveryCalc.label}). Suivez son convoi dans le Suivi des Livraisons !`, 'green');
     if (typeof game.openStationDetails === 'function') {
       game.openStationDetails(station.id);
     }

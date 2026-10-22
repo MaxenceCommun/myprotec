@@ -28074,12 +28074,14 @@ class ProtecGame {
       window.ProtecLogistique.normalizeVehicle(newVeh);
     }
 
-    // Délai de livraison basé sur le calendrier du jeu (24h à 72h selon le type)
+    // Délai de livraison réaliste basé sur le châssis et les options de carrossage
     if (!Array.isArray(this.deliveries)) this.deliveries = [];
-    const isHeavy = ['FLIT', 'VALOG', 'PCM', 'VST'].includes(type) || catalogItem?.licenseRequired === 'C';
-    const isAmbulance = type === 'VPSP' || catalogItem?.type === 'VPSP';
-    const delayDays = isHeavy ? 3 : (isAmbulance ? 2 : 1);
-    const durationSec = delayDays * 86400; // 24h/48h/72h en temps de jeu
+    let deliveryCalc = { durationSeconds: 86400, label: '24h', shortLabel: '24h' };
+    if (window.ProtecAdvanced && typeof window.ProtecAdvanced.calculateVehicleDeliveryTime === 'function') {
+      deliveryCalc = window.ProtecAdvanced.calculateVehicleDeliveryTime(type, catalogItem);
+    }
+    const durationSec = deliveryCalc.durationSeconds;
+    const delayDays = Math.ceil(durationSec / 86400);
 
     const delivery = {
       id: `deliv-veh-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -28093,11 +28095,12 @@ class ProtecGame {
       stationId: station.id,
       stationName: station.name,
       stationCity: station.city,
-      carrier: `Concessionnaire Flotte & Carrossier Agréé (${delayDays}j calendrier)`,
+      carrier: `Concessionnaire & Carrossier Agréé (${deliveryCalc.label})`,
       supplierName: 'Concessionnaire Flotte Sécurité Civile',
       totalCost: cost,
       shippingFee: 0,
       itemsSummary: `1x ${newVeh.label} (${newVeh.model})`,
+      deliveryDetails: deliveryCalc,
       status: 'in_transit',
       createdAt: Date.now()
     };

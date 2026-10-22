@@ -544,10 +544,12 @@ window.ProtecAdvancedModals = {
     const customOptions = Object.assign({}, foundVariant, {
       cost: (foundVariant?.cost || 20000) + optionsExtraCost,
       hasTowHitch: canTow && finalTowHitch,
+      hasNativeTowHitch: hasNativeTowHitch,
       hasLedBar: isVPSP || (canLed && Boolean(selOpts.ledBar)) || Boolean(foundVariant?.hasLedBar),
       hasConverter230v: canConvert,
       hasTensiometreAuto: isVPSP && Boolean(selOpts.tensiometre_auto),
       hasSchillerT7: isVPSP && Boolean(selOpts.schiller_t7),
+      selectedOptions: selOpts,
       installedOptions: activeOptionsList,
       capacity_log: foundVariant?.capacity_log || this.getVehicleLogCapacity(foundVariant)
     });
@@ -777,6 +779,18 @@ window.ProtecAdvancedModals = {
             }
 
             const totalConfigCost = currentVariant.cost + optionsExtraCost;
+            const deliveryEstimate = window.ProtecAdvanced?.calculateVehicleDeliveryTime(
+              currentVariant.type,
+              {
+                ...currentVariant,
+                selectedOptions: selOpts,
+                hasNativeTowHitch: hasNativeTowHitch,
+                hasSchillerT7: Boolean(selOpts.schiller_t7),
+                hasTensiometreAuto: Boolean(selOpts.tensiometre_auto),
+                hasLedBar: Boolean(selOpts.ledBar),
+                climatisation: Boolean(selOpts.climatisation)
+              }
+            ) || { label: '24h', shortLabel: '24h', totalHours: 24, durationSeconds: 86400 };
 
             return `
               <div class="p-4 rounded-2xl space-y-3.5 flex flex-col justify-between hover:shadow-xl transition border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs vehicle-showroom-card">
@@ -942,7 +956,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/attelage.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
                             <span>Boule d’attelage</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 € • +2h</span>
                         </button>
                       `) : ''}
 
@@ -953,7 +967,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/gyro.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
                             <span>Rampe Gyrophares LED</span>
                           </span>
-                          <span class="text-[9px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
+                          <span class="text-[9px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Inclus)</span>
                         </div>
                       ` : `
                         <button 
@@ -965,7 +979,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/gyro.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
                             <span>${ledLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} € • +4h</span>
                         </button>
                       `) : ''}
 
@@ -980,7 +994,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/clim_chau.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
                             <span>${climateLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 € • +4h</span>
                         </button>
                       ` : ''}
 
@@ -1006,7 +1020,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/tensio.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="NIBP" onerror="this.outerHTML='<span>🩺</span>'" />
                             <span>Tensiomètre Auto NIBP</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.tensiometre_auto ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+450 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.tensiometre_auto ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+450 € • +2h</span>
                         </button>
 
                         <button 
@@ -1018,20 +1032,31 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/t7.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Moniteur défibrillateur" onerror="this.outerHTML='<span>📟</span>'" />
                             <span>Moniteur défibrillateur (ECG)</span>
                           </span>
-                          <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+14 000 €</span>
+                          <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+14 000 € • +6h</span>
                         </button>
                       ` : ''}
                     </div>
                   </div>
                 </div>
 
+                <!-- Estimation du Délai de Carrossage & Livraison -->
+                <div class="flex items-center justify-between p-2.5 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs mt-1">
+                  <div class="flex items-center gap-1.5 text-amber-900 dark:text-amber-200 font-bold">
+                    <i data-lucide="clock" class="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400"></i>
+                    <span>Délai carrosserie & livraison :</span>
+                  </div>
+                  <span class="font-mono font-black text-[11px] text-amber-950 dark:text-amber-100 bg-amber-100/90 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700/80 shadow-2xs">
+                    🚚 ${deliveryEstimate.label}
+                  </span>
+                </div>
+
                 <!-- Bouton d'achat de la configuration choisie -->
                 <button 
                   type="button" 
                   onclick="window.ProtecAdvancedModals.buyConfiguredVariant('${st?.id}', '${currentVariant.type}', '${model.id}', '${currentVariant.id}')" 
-                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer mt-2"
+                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer mt-1"
                 >
-                  <span>Commander cette Configuration (${totalConfigCost.toLocaleString('fr-FR')} €)</span>
+                  <span>Commander cette Configuration (${totalConfigCost.toLocaleString('fr-FR')} €) • 🚚 ${deliveryEstimate.shortLabel}</span>
                   <span>➜</span>
                 </button>
               </div>
@@ -1626,6 +1651,16 @@ window.ProtecAdvancedModals = {
             }
 
             const totalCardCost = card.cost + optionsExtraCost;
+            const deliveryEstimate = window.ProtecAdvanced?.calculateVehicleDeliveryTime(
+              card.type,
+              {
+                ...card,
+                selectedOptions: selOpts,
+                hasNativeTowHitch: hasNativeTowHitch,
+                hasLedBar: Boolean(selOpts.ledBar),
+                climatisation: Boolean(selOpts.climatisation)
+              }
+            ) || { label: '24h', shortLabel: '24h', totalHours: 24, durationSeconds: 86400 };
 
             return `
               <div class="p-4 rounded-2xl space-y-3 flex flex-col justify-between hover:shadow-lg transition border border-slate-200/90 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 shadow-xs vehicle-showroom-card">
@@ -1776,7 +1811,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/attelage.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Attelage" onerror="this.outerHTML='<span>🔗</span>'" />
                             <span>Attelage</span>
                           </span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.towHitch ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+950 € • +2h</span>
                         </button>
                       `) : (card.type === 'ERS' ? `
                         <div class="p-1.5 rounded-lg bg-sky-50/80 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800 text-sky-800 dark:text-sky-200 font-bold flex items-center justify-between col-span-1 sm:col-span-2 text-[9.5px]">
@@ -1811,7 +1846,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/gyro.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
                             <span>Rampe LED</span>
                           </span>
-                          <span class="text-[8.5px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Obligatoire)</span>
+                          <span class="text-[8.5px] font-black uppercase bg-blue-200/80 dark:bg-blue-800/60 px-1.5 py-0.5 rounded text-blue-950 dark:text-blue-100">De Série (Inclus)</span>
                         </div>
                       ` : `
                         <button 
@@ -1823,7 +1858,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/gyro.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Gyros" onerror="this.outerHTML='<span>🚨</span>'" />
                             <span>Rampe LED</span>
                           </span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.ledBar ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+${ledCost.toLocaleString('fr-FR')} € • +4h</span>
                         </button>
                       `) : ''}
 
@@ -1837,7 +1872,7 @@ window.ProtecAdvancedModals = {
                             <img src="images/vehicles/icons/clim_chau.png" class="w-3.5 h-3.5 object-contain inline-block shrink-0" alt="Clim" onerror="this.outerHTML='<span>❄️</span>'" />
                             <span>${climateLabel}</span>
                           </span>
-                          <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 €</span>
+                          <span class="font-mono font-black text-[9.5px] ${selOpts.climatisation ? 'text-pc-blue dark:text-blue-300' : 'text-slate-500 dark:text-slate-400'}">+300 € • +4h</span>
                         </button>
                       ` : ''}
 
@@ -1855,13 +1890,24 @@ window.ProtecAdvancedModals = {
                   </div>
                 </div>
 
+                <!-- Estimation du Délai de Carrossage & Livraison -->
+                <div class="flex items-center justify-between p-2 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-xs mt-1">
+                  <div class="flex items-center gap-1 text-amber-900 dark:text-amber-200 font-bold">
+                    <i data-lucide="clock" class="w-3.5 h-3.5 shrink-0 text-amber-600 dark:text-amber-400"></i>
+                    <span class="text-[11px]">Délai livraison :</span>
+                  </div>
+                  <span class="font-mono font-black text-[10.5px] text-amber-950 dark:text-amber-100 bg-amber-100/90 dark:bg-amber-900/60 px-2 py-0.5 rounded-lg border border-amber-300 dark:border-amber-700/80 shadow-2xs">
+                    🚚 ${deliveryEstimate.label}
+                  </span>
+                </div>
+
                 <!-- Bouton de Commande -->
                 <button 
                   type="button" 
                   onclick="window.ProtecAdvancedModals.buyFromTypeCard('${st?.id}', '${card.type}', '${card.id}')" 
-                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+                  class="w-full py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light text-white shadow-md hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 cursor-pointer mt-1"
                 >
-                  <span>Commander (${totalCardCost.toLocaleString('fr-FR')} €)</span>
+                  <span>Commander (${totalCardCost.toLocaleString('fr-FR')} €) • 🚚 ${deliveryEstimate.shortLabel}</span>
                 </button>
               </div>
             `;
@@ -1898,8 +1944,10 @@ window.ProtecAdvancedModals = {
         capacity: 3,
         licenseRequired: 'B',
         hasTowHitch: true, // De série sur VTU Master 3
+        hasNativeTowHitch: true,
         hasLedBar: Boolean(selOpts.ledBar),
         hasConverter230v: true,
+        selectedOptions: selOpts,
         serigraphieLabel: isSoutienPop ? 'Soutien aux Populations' : 'Logistique',
         image: isSoutienPop ? 'images/vehicles/master3_vtu_pop.png' : 'images/vehicles/master3_vtu_log.png',
         specialty: isSoutienPop ? 'Assistance Sinistrés' : 'Transport Lots PMA & Tentes',
@@ -2078,8 +2126,10 @@ window.ProtecAdvancedModals = {
 
     targetOpt.cost = (targetOpt.cost || 20000) + optionsExtraCost;
     targetOpt.hasTowHitch = canTow && finalTowHitch;
+    targetOpt.hasNativeTowHitch = hasNativeTowHitch;
     targetOpt.hasLedBar = isVPSP || (canLed && Boolean(selOpts.ledBar)) || Boolean(targetOpt.hasLedBar);
     targetOpt.hasConverter230v = canConvert;
+    targetOpt.selectedOptions = selOpts;
     targetOpt.installedOptions = activeOptionsList;
 
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.buySpecializedVehicle === 'function') {

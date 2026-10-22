@@ -1295,11 +1295,13 @@ window.ProtecLogistique = {
     if (remainingSec >= 86400) {
       const d = Math.floor(remainingSec / 86400);
       const h = Math.floor((remainingSec % 86400) / 3600);
-      return `${d}j ${String(h).padStart(2, '0')}h`;
+      const m = Math.floor((remainingSec % 3600) / 60);
+      return `${d}j ${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
     } else if (remainingSec >= 3600) {
       const h = Math.floor(remainingSec / 3600);
       const m = Math.floor((remainingSec % 3600) / 60);
-      return `${h}h ${String(m).padStart(2, '0')}m`;
+      const s = remainingSec % 60;
+      return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
     } else {
       const m = Math.floor(remainingSec / 60);
       const s = remainingSec % 60;
@@ -1818,6 +1820,12 @@ window.ProtecLogistique = {
                   const s = remainingSec % 60;
                   const timeFormatted = this.formatDeliveryTime(remainingSec);
                   const orderDate = new Date(d.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+                  const isVeh = d.type === 'vehicle';
+                  const step1Done = !isVeh || d.isUsed || progress >= 50;
+                  const step1Active = isVeh && !d.isUsed && progress < 50;
+                  const step2Done = progress >= 98;
+                  const step2Active = !step1Active && progress < 98;
+                  const step3Active = progress >= 98;
 
                   return `
                     <div class="p-4 rounded-2xl bg-white border border-amber-200/80 shadow-xs hover:shadow-md transition space-y-3.5">
@@ -1853,20 +1861,20 @@ window.ProtecLogistique = {
 
                       <!-- Stepper visuel 3 étapes -->
                       <div class="grid grid-cols-3 gap-2 text-center text-[10px] font-bold">
-                        <div class="p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 flex flex-col items-center gap-1">
-                          <i data-lucide="package-check" class="w-4 h-4 text-emerald-600"></i>
-                          <span>${d.type === 'vehicle' ? (d.isUsed ? '1. Cession & Clés' : '1. Aménagement Usine') : '1. Préparation FNPC'}</span>
-                          <span class="text-[9px] text-emerald-600 font-mono">Terminée</span>
+                        <div class="p-2 rounded-xl ${step1Done ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-amber-50 border border-amber-300 text-amber-800'} flex flex-col items-center gap-1">
+                          <i data-lucide="${step1Done ? 'package-check' : 'wrench'}" class="w-4 h-4 ${step1Done ? 'text-emerald-600' : 'text-amber-600 animate-spin'}"></i>
+                          <span>${isVeh ? (d.isUsed ? '1. Cession & Clés' : '1. Aménagement Usine') : '1. Préparation FNPC'}</span>
+                          <span class="text-[9px] ${step1Done ? 'text-emerald-600' : 'text-amber-700 font-black'} font-mono">${step1Done ? 'Terminée' : `En cours (${Math.min(99, Math.round(progress * 2))}%)`}</span>
                         </div>
-                        <div class="p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-800 flex flex-col items-center gap-1">
-                          <i data-lucide="${d.type === 'vehicle' ? (d.isUsed ? 'car' : 'truck') : 'truck'}" class="w-4 h-4 text-amber-600 animate-bounce"></i>
-                          <span>${d.type === 'vehicle' ? (d.isUsed ? '2. Convoyage Routier' : '2. Convoi Porte-Engins') : '2. Convoi Routier'}</span>
-                          <span id="delivery-percent-${d.id}" class="text-[9px] text-amber-700 font-mono font-black">${progress}%</span>
+                        <div class="p-2 rounded-xl ${step2Done ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : (step2Active ? 'bg-amber-50 border border-amber-300 text-amber-800' : 'bg-slate-50 border border-slate-200 text-slate-400')} flex flex-col items-center gap-1">
+                          <i data-lucide="${isVeh ? (d.isUsed ? 'car' : 'truck') : 'truck'}" class="w-4 h-4 ${step2Done ? 'text-emerald-600' : (step2Active ? 'text-amber-600 animate-bounce' : 'text-slate-400')}"></i>
+                          <span>${isVeh ? (d.isUsed ? '2. Convoyage Routier' : '2. Convoi Porte-Engins') : '2. Convoi Routier'}</span>
+                          <span id="delivery-percent-${d.id}" class="text-[9px] ${step2Done ? 'text-emerald-600 font-mono font-black' : (step2Active ? 'text-amber-700 font-mono font-black' : 'text-slate-400 font-mono')}">${step2Done ? 'Arrivé' : (step2Active ? `${progress}%` : 'En attente')}</span>
                         </div>
-                        <div class="p-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-400 flex flex-col items-center gap-1">
-                          <i data-lucide="warehouse" class="w-4 h-4 text-slate-400"></i>
-                          <span>${d.type === 'vehicle' ? '3. Remisage Hangar' : '3. Stockage Réserve'}</span>
-                          <span class="text-[9px] text-slate-400 font-mono">En attente</span>
+                        <div class="p-2 rounded-xl ${step3Active ? 'bg-emerald-50 border border-emerald-300 text-emerald-800 animate-pulse' : 'bg-slate-50 border border-slate-200 text-slate-400'} flex flex-col items-center gap-1">
+                          <i data-lucide="warehouse" class="w-4 h-4 ${step3Active ? 'text-emerald-600' : 'text-slate-400'}"></i>
+                          <span>${isVeh ? '3. Remisage Hangar' : '3. Stockage Réserve'}</span>
+                          <span class="text-[9px] ${step3Active ? 'text-emerald-700 font-mono font-black' : 'text-slate-400 font-mono'}">${step3Active ? 'Réception imminente' : 'En attente'}</span>
                         </div>
                       </div>
 
@@ -1890,13 +1898,18 @@ window.ProtecLogistique = {
                           <div>
                             <span class="text-[11px] font-bold text-slate-500">${d.type === 'vehicle' ? 'Véhicule :' : 'Contenu :'}</span>
                             <span class="text-[11px] text-slate-800 font-extrabold ml-1">${d.type === 'vehicle' ? `${d.vehicleData?.name || d.itemsSummary} (${d.vehicleData?.model || ''})` : (d.itemsSummary || 'Matériels divers')}</span>
+                            ${d.type === 'vehicle' && d.vehicleData?.installedOptions && d.vehicleData.installedOptions.length > 0 ? `
+                              <div class="flex flex-wrap gap-1 mt-1">
+                                ${d.vehicleData.installedOptions.map(opt => `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-slate-100 text-slate-600 border border-slate-200/80">🛠️ ${opt}</span>`).join('')}
+                              </div>
+                            ` : ''}
                           </div>
                         </div>
                         <div class="text-right text-[11px] font-mono">
                           <span class="text-slate-400">Valeur : </span>
                           <strong class="text-slate-900 font-black">${d.totalCost.toLocaleString('fr-FR')} €</strong>
                           ${d.type === 'vehicle' ? `
-                            <span class="text-[10px] text-emerald-600 font-bold block">${d.isUsed ? `Convoyage routier (${d.distKm} km)` : `Délai calendrier (${d.delayDays || 1}j)`}</span>
+                            <span class="text-[10px] text-emerald-600 font-bold block">${d.isUsed ? `Convoyage routier (${d.distKm} km)` : (d.deliveryDetails?.label ? `Délai usine : ${d.deliveryDetails.label}` : `Délai usine (${d.delayDays || 1}j)`)}</span>
                           ` : `
                             <span class="text-[10px] text-slate-400">(${d.shippingFee === 0 ? 'Port offert' : `Frais port : ${d.shippingFee} €`})</span>
                           `}
