@@ -2060,17 +2060,24 @@ window.ProtecSupabase = {
       }
     }
 
-    // 2. Fallback serveur local
-    try {
-      const resp = await fetch(`/api/crises/department/${departmentCode}`);
-      if (resp.ok) {
-        const json = await resp.json();
-        if (json && json.crisis && json.crisis.status !== 'deleted' && json.crisis.status !== 'resolved') {
-          return [json.crisis];
+    // 2. Fallback serveur local (uniquement en dev local localhost / 127.0.0.1 si actif)
+    const isLocalHost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalHost && !this._localCrisisApiDisabled) {
+      try {
+        const resp = await fetch(`/api/crises/department/${departmentCode}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.crisis && json.crisis.status !== 'deleted' && json.crisis.status !== 'resolved') {
+            return [json.crisis];
+          }
+        } else {
+          this._localCrisisApiDisabled = true;
         }
+      } catch (e) {
+        this._localCrisisApiDisabled = true;
       }
-    } catch (e) {
-      // Ignorer si serveur local indisponible
     }
 
     return [];
@@ -2106,15 +2113,20 @@ window.ProtecSupabase = {
     if (!crisisId) return;
     const dept = departmentCode || window.game?.currentDepartmentCode || '54';
 
-    // 1. Appel serveur local si disponible
-    try {
-      await fetch('/api/crises/department/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
-      });
-    } catch (err) {
-      // Local server non joignable
+    // 1. Appel serveur local si disponible (uniquement en dev local localhost / 127.0.0.1)
+    const isLocalHost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalHost && !this._localCrisisApiDisabled) {
+      try {
+        await fetch('/api/crises/department/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
+        });
+      } catch (err) {
+        this._localCrisisApiDisabled = true;
+      }
     }
 
     // 2. Supabase si configuré

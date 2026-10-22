@@ -2620,14 +2620,16 @@ window.ProtecAdmin = {
     if (window.ProtecSupabase && typeof window.ProtecSupabase.deleteDepartmentCrisis === 'function') {
       await window.ProtecSupabase.deleteDepartmentCrisis(crisisId, dept);
     } else {
-      try {
-        await fetch('/api/crises/department/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
-        });
-      } catch (err) {
-        console.warn('Erreur appel /api/crises/department/delete:', err);
+      const isLocalHost = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (isLocalHost) {
+        try {
+          await fetch('/api/crises/department/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
+          });
+        } catch (err) {}
       }
     }
 

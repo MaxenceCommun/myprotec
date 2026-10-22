@@ -490,7 +490,7 @@ window.ProtecSupabase = {
 
             const realMission = {
               id: mId,
-              type: isSamuType ? 'samu' : (isPompierType ? 'pompiers' : 'dps'),
+              type: isSamuType ? 'samu' : (isPompierType ? 'pompiers' : 'crise'),
               category: 'urgences',
               title: notifData.title?.replace(/^[🚨🔔🚑🚒⚠️🏆📢\s]+/, '') || (isSamuType ? 'Détresse Respiratoire à Domicile' : 'Intervention Prioritaire'),
               desc: notifData.message || notifData.body || 'Mission d’urgence régulée. VPSP demandé immédiatement sur les lieux.',
@@ -1528,6 +1528,7 @@ window.ProtecSupabase = {
         poles: game.poles || null,
         roleRequests: game.roleRequests || [],
         rolesAccessMode: game.rolesAccessMode || 'validation',
+        starterGuide: game.starterGuide || null,
         autoFormationActive: game.autoFormationActive !== undefined ? game.autoFormationActive : true,
         autoLogisticsActive: game.autoLogisticsActive !== undefined ? game.autoLogisticsActive : true,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
@@ -2023,57 +2024,130 @@ window.ProtecSupabase = {
 
   // Récupération des crises actives d'un département (pour les joueurs en ligne et ceux qui se reconnectent)
   async fetchActiveDepartmentCrises(departmentCode) {
-    if (!this.client || !departmentCode) return [];
-    try {
-      const nowIso = new Date().toISOString();
-      const { data, error } = await this.client
-        .from('active_missions')
-        .select('*')
-        .eq('player_id', `DEPT_${departmentCode}`)
-        .eq('mission_type', 'crise')
-        .gt('ends_at', nowIso)
-        .neq('status', 'resolved');
+    if (!departmentCode) return [];
+    // 1. Si Supabase est actif
+    if (this.client) {
+      try {
+        const nowIso = new Date().toISOString();
+        const { data, error } = await this.client
+          .from('active_missions')
+          .select('*')
+          .eq('player_id', `DEPT_${departmentCode}`)
+          .eq('mission_type', 'crise')
+          .gt('ends_at', nowIso)
+          .neq('status', 'resolved')
+          .neq('status', 'deleted')
+          .neq('status', 'cancelled')
+          .neq('status', 'terminee');
 
-      if (error || !data) return [];
-
-      return data.map(row => {
-        const details = row.details || {};
-        return {
-          ...details,
-          id: row.id,
-          title: row.title || details.title,
-          status: row.status || details.status,
-          departmentCode: departmentCode,
-          spawnedAt: row.starts_at ? new Date(row.starts_at).getTime() : details.spawnedAt,
-          durationSeconds: row.duration_seconds || details.durationSeconds || 7200,
-          endsAt: row.ends_at
-        };
-      });
-    } catch (e) {
-      console.warn('Erreur récupération crises départementales:', e);
-      return [];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map(row => {
+            const details = row.details || {};
+            return {
+              ...details,
+              id: row.id,
+              title: row.title || details.title,
+              status: row.status || details.status,
+              departmentCode: departmentCode,
+              spawnedAt: row.starts_at ? new Date(row.starts_at).getTime() : details.spawnedAt,
+              durationSeconds: row.duration_seconds || details.durationSeconds || 7200,
+              endsAt: row.ends_at
+            };
+          });
+        }
+      } catch (e) {
+        console.warn('Erreur récupération crises départementales Supabase:', e);
+      }
     }
+
+    // 2. Fallback serveur local (uniquement en dev local localhost / 127.0.0.1 si actif)
+    const isLocalHost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalHost && !this._localCrisisApiDisabled) {
+      try {
+        const resp = await fetch(`/api/crises/department/${departmentCode}`);
+        if (resp.ok) {
+          const json = await resp.json();
+          if (json && json.crisis && json.crisis.status !== 'deleted' && json.crisis.status !== 'resolved') {
+            return [json.crisis];
+          }
+        } else {
+          this._localCrisisApiDisabled = true;
+        }
+      } catch (e) {
+        this._localCrisisApiDisabled = true;
+      }
+    }
+
+    return [];
   },
 
   // Clôture d'une crise départementale dans la base
   async closeDepartmentCrisis(crisisId, departmentCode) {
-    if (!this.client || !crisisId) return;
+    if (!crisisId) return;
+    const dept = departmentCode || window.game?.currentDepartmentCode || '54';
     try {
-      await this.client
-        .from('active_missions')
-        .update({
-          status: 'resolved',
-          resolved_at: new Date().toISOString()
-        })
-        .eq('id', String(crisisId));
+      if (this.client) {
+        await this.client
+          .from('active_missions')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('id', String(crisisId));
 
-      this.broadcastDepartmentCrisisUpdate({
-        id: String(crisisId),
-        departmentCode: departmentCode,
-        status: 'resolved'
-      });
+        this.broadcastDepartmentCrisisUpdate({
+          id: String(crisisId),
+          departmentCode: dept,
+          status: 'resolved'
+        });
+      }
     } catch (e) {
       console.warn('Erreur clôture crise départementale:', e);
+    }
+  },
+
+  // Suppression administrative d'une crise départementale pour tous les joueurs
+  async deleteDepartmentCrisis(crisisId, departmentCode) {
+    if (!crisisId) return;
+    const dept = departmentCode || window.game?.currentDepartmentCode || '54';
+
+    // 1. Appel serveur local si disponible (uniquement en dev local localhost / 127.0.0.1)
+    const isLocalHost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalHost && !this._localCrisisApiDisabled) {
+      try {
+        await fetch('/api/crises/department/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
+        });
+      } catch (err) {
+        this._localCrisisApiDisabled = true;
+      }
+    }
+
+    // 2. Supabase si configuré
+    if (this.client) {
+      try {
+        await this.client
+          .from('active_missions')
+          .update({
+            status: 'deleted',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('id', String(crisisId));
+
+        this.broadcastDepartmentCrisisUpdate({
+          id: String(crisisId),
+          departmentCode: String(dept),
+          status: 'deleted'
+        });
+      } catch (e) {
+        console.warn('Erreur suppression Supabase crise départementale:', e);
+      }
     }
   },
 

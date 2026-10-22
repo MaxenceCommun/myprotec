@@ -11336,20 +11336,29 @@ class ProtecGame {
       } catch (e) {}
     }
 
-    // 2. Vérification auprès du serveur local Node si actif
-    try {
-      const resp = await fetch(`/api/crises/department/${deptCode}`);
-      if (resp.ok) {
-        const resData = await resp.json();
-        if (resData && resData.crisis) {
-          const existing = (this.missions || []).find(m => m.id === resData.crisis.id);
-          if (!existing) {
-            this.handleDepartmentCrisisAlert({ departmentCode: deptCode, crisisData: resData.crisis, senderId: 'SERVER_SYNC' });
-            return;
+    // 2. Vérification auprès du serveur local Node si actif (uniquement en dev local localhost / 127.0.0.1)
+    const isLocalHost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+    if (isLocalHost && !this._localCrisisApiDisabled) {
+      try {
+        const resp = await fetch(`/api/crises/department/${deptCode}`);
+        if (resp.ok) {
+          const resData = await resp.json();
+          if (resData && resData.crisis) {
+            const existing = (this.missions || []).find(m => m.id === resData.crisis.id);
+            if (!existing) {
+              this.handleDepartmentCrisisAlert({ departmentCode: deptCode, crisisData: resData.crisis, senderId: 'SERVER_SYNC' });
+              return;
+            }
           }
+        } else {
+          this._localCrisisApiDisabled = true;
         }
+      } catch (e) {
+        this._localCrisisApiDisabled = true;
       }
-    } catch (e) {}
+    }
 
     // Double vérification après les checks asynchrones
     const stillActive = (this.missions || []).find(m => 
@@ -15953,14 +15962,18 @@ class ProtecGame {
     if (window.ProtecSupabase && typeof window.ProtecSupabase.deleteDepartmentCrisis === 'function') {
       await window.ProtecSupabase.deleteDepartmentCrisis(missionId, deptCode);
     } else {
-      try {
-        await fetch('/api/crises/department/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ crisisId: String(missionId), departmentCode: deptCode })
-        });
-      } catch (err) {
-        console.warn('Erreur appel /api/crises/department/delete:', err);
+      const isLocalHost = typeof window !== 'undefined' && 
+        (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+      if (isLocalHost && !this._localCrisisApiDisabled) {
+        try {
+          await fetch('/api/crises/department/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ crisisId: String(missionId), departmentCode: deptCode })
+          });
+        } catch (err) {
+          this._localCrisisApiDisabled = true;
+        }
       }
     }
 
