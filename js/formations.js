@@ -1012,6 +1012,12 @@ window.ProtecFormations = {
     proposal.completedAt = Date.now();
     proposal.completed_at = new Date().toISOString();
 
+    // Rangement automatique du matériel pédagogique dans le meuble du Pôle Formation (puis libre, puis antenne)
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.autoStoreItem === 'function') {
+      const kitToStore = proposal.kitRequired || 'kit_pedago_sst';
+      window.ProtecLocaux.autoStoreItem(kitToStore, 1);
+    }
+
     if (window.ProtecCommunication) {
       window.ProtecCommunication.createPhotoFolder(game, {
         sourceType: 'formation',
@@ -2531,6 +2537,12 @@ window.ProtecFormations = {
     }
 
     session.status = 'completed';
+
+    // Rangement automatique du matériel pédagogique dans le meuble du Pôle Formation (puis libre, puis antenne)
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.autoStoreItem === 'function') {
+      const kitToStore = session.kitRequired || 'mannequin_rcp_adulte';
+      window.ProtecLocaux.autoStoreItem(kitToStore, 1);
+    }
 
     if (window.ProtecCommunication) {
       window.ProtecCommunication.createPhotoFolder(game, {

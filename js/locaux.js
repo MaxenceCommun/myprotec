@@ -4638,6 +4638,18 @@ window.ProtecLocaux = {
     window.addEventListener('mouseup', () => onPointerUp());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // Double-clic direct sur un meuble pour ouvrir son interface de gestion (Stock, Confort...)
+    canvas.addEventListener('dblclick', (e) => {
+      const { wx, wy } = getMouseWorldPos(e.clientX, e.clientY);
+      const model = this.getArchitectModel();
+      const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
+        return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+      });
+      if (clickedFurniture) {
+        this.openFurnitureInteractionModal(clickedFurniture.id);
+      }
+    });
+
     // Molette Zoom
     canvas.addEventListener('wheel', (e) => {
       e.preventDefault();
@@ -4883,6 +4895,50 @@ window.ProtecLocaux = {
   // GESTION FONCTIONNELLE DU MOBILIER (STOCKAGE, FOYER, DIVERTISSEMENT)
   // =========================================================================
 
+  // Pôles logistiques pour affectation des zones de stock / étagères / armoires
+  STORAGE_POLES: {
+    pole_libre: { id: 'pole_libre', label: 'Général / Libre (Sans restriction)', icon: '⚪', color: '#64748b', desc: 'Accepte tout matériel sans filtrage' },
+    pole_formation: { id: 'pole_formation', label: 'Pôle Formation', icon: '🎓', color: '#2563eb', desc: 'Mannequins RCP, DAE formation, tapis, pédagogie' },
+    pole_secours: { id: 'pole_secours', label: 'Pôle Secours / DPS', icon: '🩹', color: '#ea580c', desc: 'Lots A/B/C, caisses réarmement VPSP, réassort pharmacie' },
+    pole_crise: { id: 'pole_crise', label: 'Pôle Crise & Soutien aux Populations', icon: '🚨', color: '#dc2626', desc: 'Lots pompage, tronçonnage, bâchage, kits CHU hébergement, CAI' },
+    pole_vestiaire: { id: 'pole_vestiaire', label: 'Pôle Habillement & Vestiaires', icon: '👕', color: '#7c3aed', desc: 'Tenues F1, rangers, paquetages et équipements individuels' }
+  },
+
+  getItemPole(itemId) {
+    const id = (itemId || '').toLowerCase();
+    if (id.includes('mannequin') || id.includes('formation') || id.includes('dsa') || id.includes('tapis') || id.includes('pedagogique') || id.includes('schiller')) {
+      return 'pole_formation';
+    }
+    if (id.includes('tenue') || id.includes('rangers') || id.includes('casque') || id.includes('gilet') || id.includes('f1')) {
+      return 'pole_vestiaire';
+    }
+    if (id.includes('tronconnage') || id.includes('pompage') || id.includes('bachage') || id.includes('eclairage') || id.includes('hebergement') || id.includes('ravitaillement') || id.includes('psy') || id.includes('drone') || id.includes('poste_commandement')) {
+      return 'pole_crise';
+    }
+    if (id.includes('secours') || id.includes('rearmement') || id.includes('reassort') || id.includes('dae') || id.includes('brancard') || id.includes('pansement') || id.includes('caisse')) {
+      return 'pole_secours';
+    }
+    return 'pole_libre';
+  },
+
+  setStoragePole(furnitureId, poleId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    item.pole = poleId || 'pole_libre';
+    const game = window.game;
+    this.saveCurrentArchitecture(game);
+    if (game && game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+
+    const poleInfo = this.STORAGE_POLES[item.pole] || this.STORAGE_POLES.pole_libre;
+    if (game && game.showToast) {
+      game.showToast('Pôle Assigné', `« ${item.label || item.name} » est désormais assigné au ${poleInfo.label}.`, 'blue');
+    }
+  },
+
   getItemWeightKg(itemId) {
     const WEIGHTS = {
       lot_secours_a: 45,
@@ -4999,13 +5055,14 @@ window.ProtecLocaux = {
     }
   },
 
-  // 1. INVENTAIRE DÉDIÉ ET GESTION DU POIDS (ÉTAGÈRES & ARMOIRES)
+  // 1. INVENTAIRE DÉDIÉ ET GESTION DU POIDS EN 2 COLONNES (ÉTAGÈRES & ARMOIRES)
   openStorageInventory(furnitureId) {
     const model = this.getArchitectModel();
     const item = (model.furniture || []).find(f => f.id === furnitureId);
     if (!item) return;
 
     item.storedInventory = item.storedInventory || {};
+    item.pole = item.pole || 'pole_libre';
     const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
 
     let currentWeight = 0;
@@ -5018,141 +5075,214 @@ window.ProtecLocaux = {
     const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
     const stationStock = (station && station.stock) ? station.stock : {};
 
-    // Liste du matériel actuellement stocké
+    // Liste du matériel actuellement stocké dans ce meuble
     const storedList = Object.entries(item.storedInventory).filter(([_, c]) => c > 0);
 
-    // Liste du matériel disponible dans l'antenne pouvant être déposé
+    // Liste du matériel disponible dans l'antenne
     const availableItems = Object.entries(stationStock).filter(([_, c]) => c > 0);
+
+    // Filtrage et tri selon le pôle pour guider le joueur
+    const currentPole = item.pole || 'pole_libre';
+    const poleInfo = this.STORAGE_POLES[currentPole] || this.STORAGE_POLES.pole_libre;
 
     const oldModal = document.getElementById('furniture-storage-modal');
     if (oldModal) oldModal.remove();
 
     const modal = document.createElement('div');
     modal.id = 'furniture-storage-modal';
-    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 modal-fade-in';
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl w-full max-w-2xl bg-slate-900 border-2 border-amber-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
-        <!-- En-tête -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div class="flex items-center gap-2.5">
-            <span class="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-xl flex items-center justify-center">
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-4xl bg-slate-900 border-2 border-amber-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[94vh] overflow-y-auto custom-scrollbar">
+        
+        <!-- En-tête : Nom, Type et Sélecteur de Pôle Interactif -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 border-b border-slate-800 gap-3">
+          <div class="flex items-center gap-3">
+            <span class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-2xl flex items-center justify-center shadow-inner flex-shrink-0">
               ${item.icon || '📦'}
             </span>
-            <div>
-              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Rayonnage'}</h3>
-              <p class="text-xs text-slate-400">Rangement logistique avec calcul de charge utile (kg)</p>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base sm:text-lg font-black text-white leading-tight">${item.label || item.name || 'Rayonnage de Stockage'}</h3>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black border" style="background-color: ${poleInfo.color}20; color: ${poleInfo.color}; border-color: ${poleInfo.color}40">
+                  ${poleInfo.icon} ${poleInfo.label}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400">Capacité de charge : ${maxWeight} kg • Affectez ce stockage pour le rangement automatique</p>
             </div>
           </div>
-          <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+
+          <div class="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+            <!-- Sélecteur de Pôle / Tâche -->
+            <div class="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/90 border border-slate-700 text-xs">
+              <span class="text-[11px] font-bold text-slate-400 pl-1">🎯 Pôle :</span>
+              <select onchange="window.ProtecLocaux.setStoragePole('${item.id}', this.value)" class="text-xs font-black py-1 px-2 rounded-lg bg-slate-800 border border-slate-600 text-amber-300 focus:ring-2 focus:ring-amber-400 cursor-pointer">
+                <option value="pole_libre" ${currentPole === 'pole_libre' ? 'selected' : ''}>⚪ Général / Libre (Tout Matériel)</option>
+                <option value="pole_formation" ${currentPole === 'pole_formation' ? 'selected' : ''}>🎓 Pôle Formation (Pédagogie, DAE...)</option>
+                <option value="pole_secours" ${currentPole === 'pole_secours' ? 'selected' : ''}>🩹 Pôle Secours / DPS (Lots A/B/C...)</option>
+                <option value="pole_crise" ${currentPole === 'pole_crise' ? 'selected' : ''}>🚨 Pôle Crise & Soutien Pops (Pompage...)</option>
+                <option value="pole_vestiaire" ${currentPole === 'pole_vestiaire' ? 'selected' : ''}>👕 Pôle Habillement & Vestiaires (F1...)</option>
+              </select>
+            </div>
+
+            <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+          </div>
         </div>
 
-        <!-- Jauge de charge utile / Poids -->
+        <!-- Jauge Visuelle de Charge Utile (kg) -->
         <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
           <div class="flex items-center justify-between text-xs font-bold">
-            <span class="text-slate-400 flex items-center gap-1.5">
-              <span>⚖️</span> Charge Utile Utilisée :
+            <span class="text-slate-300 flex items-center gap-1.5">
+              <span>⚖️</span> Charge Utile Actuelle :
             </span>
-            <span class="${percent >= 90 ? 'text-rose-400' : (percent >= 70 ? 'text-amber-400' : 'text-emerald-400')} font-mono font-black">
+            <span class="${percent >= 95 ? 'text-rose-400' : (percent >= 75 ? 'text-amber-400' : 'text-emerald-400')} font-mono font-black text-sm">
               ${currentWeight} kg / ${maxWeight} kg (${percent}%)
             </span>
           </div>
-          <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden">
-            <div class="h-full transition-all duration-300 ${percent >= 90 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : (percent >= 70 ? 'bg-amber-400' : 'bg-emerald-500')}" style="width: ${percent}%"></div>
+          <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden p-0.5 border border-slate-700/60">
+            <div class="h-full rounded-full transition-all duration-300 ${percent >= 95 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : (percent >= 75 ? 'bg-amber-400' : 'bg-emerald-500')}" style="width: ${percent}%"></div>
           </div>
-          <div class="flex items-center justify-between text-[10px] text-slate-500">
-            <span>Reste disponible : ${Math.max(0, maxWeight - currentWeight)} kg</span>
-            <span>Supporte Lots A/B, Caisses réarmement, Tenues, CAI...</span>
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Reste disponible : <strong class="text-white font-mono">${Math.max(0, maxWeight - currentWeight)} kg</strong></span>
+            <span>Rangement automatique prioritaire actif sur ce meuble</span>
           </div>
         </div>
 
-        <!-- SECTION 1 : Matériel Actuellement Rangé -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-amber-400 tracking-wider">
-              1. Matériel en rayon (${storedList.reduce((s, [_, c]) => s + c, 0)}) :
-            </span>
-            <span class="text-[11px] text-slate-400">Dans ce meuble</span>
+        <!-- TABLEAU CLAIR EN 2 COLONNES : STOCK ANTENNE (GAUCHE) / CONTENU DU MEUBLE (DROITE) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- COLONNE GAUCHE : RÉSERVE GÉNÉRALE DE L'ANTENNE -->
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 flex flex-col">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div class="flex items-center gap-1.5 text-xs font-black text-emerald-400 uppercase tracking-wider">
+                <span>🏢</span>
+                <span>Réserve de l'Antenne (${availableItems.length})</span>
+              </div>
+              ${currentPole !== 'pole_libre' ? `
+                <button type="button" onclick="window.ProtecLocaux.depositAllMatchingPole('${furnitureId}')" class="px-2 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer" title="Ranger tout le matériel correspondant au pôle d'un coup">
+                  📥 Tout Ranger (${poleInfo.icon})
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="space-y-1.5 flex-1 max-h-[38vh] overflow-y-auto custom-scrollbar pr-1">
+              ${availableItems.length === 0 ? `
+                <div class="p-6 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-center text-xs text-slate-500 italic">
+                  Aucun matériel non rangé en stock dans l'antenne. Commandez des lots ou des caisses dans l'onglet Équipements !
+                </div>
+              ` : availableItems.map(([sId, count]) => {
+                const uW = this.getItemWeightKg(sId);
+                const dName = this.getItemDisplayName(sId);
+                const dIcon = this.getItemIcon(sId);
+                const itemP = this.getItemPole(sId);
+                const isMatchingPole = currentPole === 'pole_libre' || itemP === currentPole;
+                const canFit1 = (currentWeight + uW) <= maxWeight;
+                const canFit5 = (currentWeight + uW * Math.min(5, count)) <= maxWeight && count >= 5;
+                const maxPossible = Math.min(count, Math.floor((maxWeight - currentWeight) / uW));
+
+                return `
+                  <div class="p-2.5 rounded-xl ${isMatchingPole ? 'bg-slate-800/80 border-slate-700 ring-1 ring-emerald-500/30' : 'bg-slate-900/70 border-slate-800/80 opacity-80'} border flex items-center justify-between gap-2 text-xs hover:border-slate-600 transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xl flex-shrink-0">${dIcon}</span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                          <strong class="text-white font-bold truncate block">${dName}</strong>
+                          ${isMatchingPole && currentPole !== 'pole_libre' ? '<span class="text-[9px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded">Pôle ✓</span>' : ''}
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-mono">Dispo : <strong>${count}</strong> · ${uW} kg/u</span>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" ${canFit1 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg ${canFit1 ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger 1 exemplaire">
+                        +1
+                      </button>
+                      ${count >= 5 ? `
+                        <button type="button" ${canFit5 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 5)" class="px-2 py-1 rounded-lg ${canFit5 ? 'bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger 5 exemplaires">
+                          +5
+                        </button>
+                      ` : ''}
+                      <button type="button" ${maxPossible > 0 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', ${maxPossible})" class="px-2 py-1 rounded-lg ${maxPossible > 0 ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100 cursor-pointer active:scale-95 border border-emerald-600/50' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger le maximum possible (${maxPossible})">
+                        Tout (${maxPossible})
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
           </div>
 
-          ${storedList.length === 0 ? `
-            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
-              Cette étagère est actuellement vide. Rangez-y du matériel ci-dessous pour organiser vos réserves !
+          <!-- COLONNE DROITE : CONTENU ACTUEL DE CE RANGEMENT -->
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 flex flex-col">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div class="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider">
+                <span>📦</span>
+                <span>Contenu du Meuble (${storedList.length})</span>
+              </div>
+              ${storedList.length > 0 ? `
+                <button type="button" onclick="window.ProtecLocaux.emptyStorage('${furnitureId}')" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 border border-rose-700/50 text-[10px] font-bold transition cursor-pointer" title="Vider tout le meuble vers la réserve de l'antenne">
+                  📤 Tout Vider
+                </button>
+              ` : ''}
             </div>
-          ` : `
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              ${storedList.map(([sId, count]) => {
+
+            <div class="space-y-1.5 flex-1 max-h-[38vh] overflow-y-auto custom-scrollbar pr-1">
+              ${storedList.length === 0 ? `
+                <div class="p-8 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-center space-y-2">
+                  <span class="text-3xl block">📭</span>
+                  <div class="text-xs font-bold text-slate-300">Ce rangement est actuellement vide</div>
+                  <p class="text-[11px] text-slate-500">Utilisez la colonne de gauche pour y ranger vos lots, caisses ou tenues.</p>
+                </div>
+              ` : storedList.map(([sId, count]) => {
                 const uW = this.getItemWeightKg(sId);
                 const totalW = uW * count;
                 const dName = this.getItemDisplayName(sId);
                 const dIcon = this.getItemIcon(sId);
+
                 return `
-                  <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2 text-xs">
+                  <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-between gap-2 text-xs hover:border-slate-600 transition">
                     <div class="flex items-center gap-2 min-w-0">
                       <span class="text-xl flex-shrink-0">${dIcon}</span>
                       <div class="min-w-0 flex-1">
-                        <strong class="block text-white font-bold truncate">${dName}</strong>
-                        <span class="text-[10px] text-slate-400 font-mono">${count}x · ${totalW} kg (${uW}kg/u)</span>
+                        <strong class="text-white font-bold truncate block">${dName}</strong>
+                        <span class="text-[10px] text-amber-400/90 font-mono">Stocké : <strong>${count}</strong> · ${totalW} kg total</span>
                       </div>
                     </div>
+
                     <div class="flex items-center gap-1 flex-shrink-0">
-                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 text-[10px] font-bold border border-rose-700/50 transition cursor-pointer" title="Retirer 1 exemplaire vers la réserve">
-                        - 1
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-black transition cursor-pointer" title="Retirer 1 exemplaire vers la réserve">
+                        -1
                       </button>
-                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', ${count})" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold transition cursor-pointer" title="Tout retirer vers la réserve">
-                        Tout
+                      ${count >= 5 ? `
+                        <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 5)" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-black transition cursor-pointer" title="Retirer 5 exemplaires">
+                          -5
+                        </button>
+                      ` : ''}
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', ${count})" class="px-2 py-1 rounded-lg bg-rose-900/50 hover:bg-rose-900 text-rose-200 text-[10px] font-black border border-rose-700/50 transition cursor-pointer" title="Tout retirer vers la réserve">
+                        Tout (${count})
                       </button>
                     </div>
                   </div>
                 `;
               }).join('')}
             </div>
-          `}
-        </div>
-
-        <!-- SECTION 2 : Déposer du Matériel depuis l'Antenne -->
-        <div class="space-y-2 pt-2 border-t border-slate-800">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-emerald-400 tracking-wider">
-              2. Ranger du matériel de l'antenne :
-            </span>
-            <span class="text-[11px] text-slate-400">Stock libre disponible</span>
           </div>
-
-          ${availableItems.length === 0 ? `
-            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
-              Aucun matériel non rangé en stock dans l'antenne. Commandez des lots ou des caisses dans l'onglet Équipements !
-            </div>
-          ` : `
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-1">
-              ${availableItems.map(([sId, count]) => {
-                const uW = this.getItemWeightKg(sId);
-                const dName = this.getItemDisplayName(sId);
-                const dIcon = this.getItemIcon(sId);
-                const canFit = (currentWeight + uW) <= maxWeight;
-                return `
-                  <div class="p-2.5 rounded-xl bg-slate-800/60 border border-slate-700/60 flex items-center justify-between gap-2 text-xs">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <span class="text-xl flex-shrink-0">${dIcon}</span>
-                      <div class="min-w-0 flex-1">
-                        <strong class="block text-white font-bold truncate">${dName}</strong>
-                        <span class="text-[10px] text-slate-400 font-mono">Dispo: ${count} · ${uW} kg/u</span>
-                      </div>
-                    </div>
-                    <button type="button" ${canFit ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 1)" class="px-2.5 py-1.5 rounded-lg ${canFit ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-bold text-[10px] transition flex items-center gap-1">
-                      <span>+ Ranger</span>
-                    </button>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `}
         </div>
+
+        <!-- Pied de page avec aide contextuelle -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-2">
+          <span>💡 <strong>Astuce</strong> : Les sessions de formation replacent automatiquement le matériel dans les rangements du Pôle Formation.</span>
+          <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer">
+            Fermer
+          </button>
+        </div>
+
       </div>
     `;
     document.body.appendChild(modal);
   },
 
   depositToStorage(furnitureId, itemId, qty = 1) {
+    if (qty <= 0) return;
     const model = this.getArchitectModel();
     const item = (model.furniture || []).find(f => f.id === furnitureId);
     if (!item) return;
@@ -5163,7 +5293,8 @@ window.ProtecLocaux = {
 
     station.stock = station.stock || {};
     const avail = station.stock[itemId] || 0;
-    if (avail < qty) {
+    const actualQty = Math.min(avail, qty);
+    if (actualQty <= 0) {
       if (game.showToast) game.showToast('Stock Insuffisant', 'Quantité insuffisante en réserve.', 'orange');
       return;
     }
@@ -5176,25 +5307,29 @@ window.ProtecLocaux = {
       if (count > 0) currentWeight += count * this.getItemWeightKg(id);
     }
 
-    const itemW = this.getItemWeightKg(itemId) * qty;
-    if (currentWeight + itemW > maxWeight) {
+    const itemW = this.getItemWeightKg(itemId);
+    const maxCanFit = Math.floor((maxWeight - currentWeight) / itemW);
+    const toDeposit = Math.min(actualQty, maxCanFit);
+
+    if (toDeposit <= 0) {
       if (game.showToast) game.showToast('Charge Maximale Atteinte', `Cette étagère ne peut supporter que ${maxWeight} kg.`, 'orange');
       return;
     }
 
-    station.stock[itemId] -= qty;
+    station.stock[itemId] -= toDeposit;
     if (station.stock[itemId] <= 0) delete station.stock[itemId];
 
-    item.storedInventory[itemId] = (item.storedInventory[itemId] || 0) + qty;
+    item.storedInventory[itemId] = (item.storedInventory[itemId] || 0) + toDeposit;
 
     this.saveCurrentArchitecture(game);
     if (game.saveGame) game.saveGame();
     this.renderArchitectScene();
     this.openStorageInventory(furnitureId);
-    if (game.showToast) game.showToast('Matériel Rangé', `${qty}x ${this.getItemDisplayName(itemId)} rangé(s) sur le meuble.`, 'green');
+    if (game.showToast) game.showToast('Matériel Rangé', `+${toDeposit}x ${this.getItemDisplayName(itemId)} rangé(s) dans le meuble.`, 'green');
   },
 
   withdrawFromStorage(furnitureId, itemId, qty = 1) {
+    if (qty <= 0) return;
     const model = this.getArchitectModel();
     const item = (model.furniture || []).find(f => f.id === furnitureId);
     if (!item || !item.storedInventory) return;
@@ -5220,7 +5355,174 @@ window.ProtecLocaux = {
     if (game.showToast) game.showToast('Matériel Déchargé', `${toWithdraw}x ${this.getItemDisplayName(itemId)} remis en réserve libre.`, 'blue');
   },
 
-  // 2. MODAL CONFORT & ESPACE REPOS (CANAPÉ, FOYER, LIT DE GARDE)
+  depositAllMatchingPole(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station || !station.stock) return;
+
+    const targetPole = item.pole || 'pole_libre';
+    let totalMoved = 0;
+
+    for (const [sId, count] of Object.entries(station.stock)) {
+      if (count <= 0) continue;
+      const itemP = this.getItemPole(sId);
+      if (targetPole === 'pole_libre' || itemP === targetPole) {
+        const itemW = this.getItemWeightKg(sId);
+        const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+        let curW = 0;
+        for (const [id, c] of Object.entries(item.storedInventory || {})) {
+          if (c > 0) curW += c * this.getItemWeightKg(id);
+        }
+        const maxCanFit = Math.floor((maxWeight - curW) / itemW);
+        const toTake = Math.min(count, maxCanFit);
+        if (toTake > 0) {
+          station.stock[sId] -= toTake;
+          if (station.stock[sId] <= 0) delete station.stock[sId];
+          item.storedInventory = item.storedInventory || {};
+          item.storedInventory[sId] = (item.storedInventory[sId] || 0) + toTake;
+          totalMoved += toTake;
+        }
+      }
+    }
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) {
+      if (totalMoved > 0) game.showToast('Rangement Effectué', `${totalMoved} article(s) rangé(s) selon le pôle.`, 'green');
+      else game.showToast('Rangement Impossible', 'Aucun matériel correspondant ou capacité max atteinte.', 'orange');
+    }
+  },
+
+  emptyStorage(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item || !item.storedInventory) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    let totalMoved = 0;
+
+    for (const [sId, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) {
+        station.stock[sId] = (station.stock[sId] || 0) + count;
+        totalMoved += count;
+      }
+    }
+    item.storedInventory = {};
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Rangement Vidé', `${totalMoved} article(s) remis en réserve de l'antenne.`, 'blue');
+  },
+
+  // Rangement automatique intelligent selon les pôles et priorités
+  // 1. Meuble d'origine si spécifié
+  // 2. Meuble affecté au même pôle ayant de la place (kg)
+  // 3. Meuble sans affectation (libre) ayant de la place
+  // 4. Si tous pleins : laisser dans le véhicule (ou à l'endroit)
+  autoStoreItem(itemId, qty = 1, options = {}) {
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return { stored: false, remaining: qty };
+
+    const model = this.getArchitectModel(station.id);
+    const furnitureList = (model.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type));
+    if (furnitureList.length === 0) {
+      station.stock = station.stock || {};
+      station.stock[itemId] = (station.stock[itemId] || 0) + qty;
+      return { stored: false, remaining: qty };
+    }
+
+    const itemPole = this.getItemPole(itemId);
+    const itemWeight = this.getItemWeightKg(itemId);
+
+    const getFreeWeight = (f) => {
+      const maxW = f.maxWeightKg || this.getStorageMaxWeight(f.type);
+      let curW = 0;
+      for (const [id, count] of Object.entries(f.storedInventory || {})) {
+        if (count > 0) curW += count * this.getItemWeightKg(id);
+      }
+      return Math.max(0, maxW - curW);
+    };
+
+    let remaining = qty;
+    const targetFurnitures = [];
+
+    // Priorité 1 : Meuble d'origine
+    if (options.preferredFurnitureId) {
+      const orig = furnitureList.find(f => f.id === options.preferredFurnitureId);
+      if (orig) targetFurnitures.push(orig);
+    }
+
+    // Priorité 2 : Meubles affectés au même pôle
+    furnitureList.forEach(f => {
+      if (f.pole === itemPole && !targetFurnitures.includes(f)) {
+        targetFurnitures.push(f);
+      }
+    });
+
+    // Priorité 3 : Meubles libres / sans affectation
+    furnitureList.forEach(f => {
+      if ((!f.pole || f.pole === 'pole_libre') && !targetFurnitures.includes(f)) {
+        targetFurnitures.push(f);
+      }
+    });
+
+    let storedTotal = 0;
+    for (const furn of targetFurnitures) {
+      if (remaining <= 0) break;
+      const freeW = getFreeWeight(furn);
+      const canFit = Math.min(remaining, Math.floor(freeW / itemWeight));
+      if (canFit > 0) {
+        furn.storedInventory = furn.storedInventory || {};
+        furn.storedInventory[itemId] = (furn.storedInventory[itemId] || 0) + canFit;
+        remaining -= canFit;
+        storedTotal += canFit;
+      }
+    }
+
+    if (storedTotal > 0) {
+      this.saveCurrentArchitecture(game);
+      if (game.saveGame) game.saveGame();
+      this.renderArchitectScene();
+    }
+
+    // S'il n'y a plus de place dans les stockages :
+    if (remaining > 0) {
+      if (options.vehicle && Array.isArray(options.vehicle.loadedItems)) {
+        // Laisser dans le véhicule comme demandé !
+        options.vehicle.loadedItems.push({
+          id: itemId,
+          name: this.getItemDisplayName(itemId),
+          qty: remaining
+        });
+        if (game.showToast) {
+          game.showToast('Stockage Plein', `${remaining}x ${this.getItemDisplayName(itemId)} reste(nt) à bord de ${options.vehicle.name} faute de place dans les étagères.`, 'amber');
+        }
+      } else {
+        station.stock = station.stock || {};
+        station.stock[itemId] = (station.stock[itemId] || 0) + remaining;
+        if (game.showToast) {
+          game.showToast('Stockages Caserne Pleins', `Stockages pleins : ${remaining}x ${this.getItemDisplayName(itemId)} déposé(s) au sol en réserve.`, 'amber');
+        }
+      }
+    }
+
+    return { stored: storedTotal > 0, storedQty: storedTotal, remaining: remaining };
+  },
+
+    // 2. MODAL CONFORT & ESPACE REPOS (CANAPÉ, FOYER, LIT DE GARDE)
   openComfortModal(furnitureId) {
     const model = this.getArchitectModel();
     const item = (model.furniture || []).find(f => f.id === furnitureId);
@@ -6317,6 +6619,23 @@ window.ProtecLocaux = {
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.lineWidth = 1;
       ctx.stroke();
+
+      // Badge visuel du Pôle assigné (Formation, Secours, Crise, Vestiaires)
+      if (item.pole && item.pole !== 'pole_libre') {
+        const poleIcons = {
+          pole_formation: '🎓',
+          pole_secours: '🩹',
+          pole_crise: '🚨',
+          pole_vestiaire: '👕'
+        };
+        const pIcon = poleIcons[item.pole];
+        if (pIcon && iw >= 16 && ih >= 16) {
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'top';
+          ctx.fillText(pIcon, ix + iw - 2, iy + 2);
+        }
+      }
 
       // Détails graphiques selon le type
       if (item.type === 'mannequin_rcp') {
