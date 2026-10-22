@@ -4751,10 +4751,10 @@ window.ProtecAdmin = {
                 <span class="text-[9px] text-slate-500">8 places • +840 €</span>
               </button>
 
-              <button onclick="window.ProtecAdmin.triggerNationalRenfort('maraude')" class="p-2.5 rounded-2xl bg-white border border-sky-200 hover:border-sky-400 hover:bg-sky-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
+              <button onclick="window.ProtecAdmin.triggerNationalRenfort('chu_grand_froid')" class="p-2.5 rounded-2xl bg-white border border-sky-200 hover:border-sky-400 hover:bg-sky-50/50 shadow-xs transition flex flex-col items-center text-center gap-1 group cursor-pointer">
                 <span class="text-lg">❄️</span>
-                <span class="text-[11px] font-black text-sky-900 leading-tight">Grand Froid (59)</span>
-                <span class="text-[9px] text-slate-500">6 places • +580 €</span>
+                <span class="text-[11px] font-black text-sky-900 leading-tight">ORSEC CHU Froid (59)</span>
+                <span class="text-[9px] text-slate-500">6 places • +650 €</span>
               </button>
             </div>
           </div>
@@ -4848,13 +4848,13 @@ window.ProtecAdmin = {
             <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
               <div>
                 <div class="flex items-center justify-between">
-                  <span class="font-bold text-slate-800 text-xs">Alerte CUMP & CAI</span>
-                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Soutien Psy</span>
+                  <span class="font-bold text-slate-800 text-xs">Préfecture : CAI & CUMP</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Crise / CAI</span>
                 </div>
-                <p class="text-[11px] text-slate-500 mt-1">Convention CUMP : montage sous 2h d'un Centre d'Accueil des Impliqués.</p>
+                <p class="text-[11px] text-slate-500 mt-1">Évacuation et armement d'un Centre d'Accueil des Impliqués sous réquisition préfectorale.</p>
               </div>
               <button onclick="window.ProtecAdmin.triggerTestMission('cump_cai')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-700 text-white hover:bg-purple-800 transition">
-                Déclencher CAI CUMP
+                Déclencher CAI Préfecture
               </button>
             </div>
 
@@ -4872,17 +4872,17 @@ window.ProtecAdmin = {
               </button>
             </div>
 
-            <!-- 9. Maraude Sociale -->
+            <!-- 9. Crise Préfecture : Plan Grand Froid & CHU -->
             <div class="p-3.5 rounded-2xl glass-card border border-slate-200 flex flex-col justify-between space-y-2">
               <div>
                 <div class="flex items-center justify-between">
-                  <span class="font-bold text-slate-800 text-xs">Maraude Sociale 115</span>
-                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-purple-100 text-purple-700">Pôle Social</span>
+                  <span class="font-bold text-slate-800 text-xs">Préfecture : CHU Grand Froid</span>
+                  <span class="px-2 py-0.5 rounded text-[9px] font-black bg-sky-100 text-sky-800">ORSEC CHU</span>
                 </div>
-                <p class="text-[11px] text-slate-500 mt-1">Tournée de nuit avec boissons chaudes et duvets.</p>
+                <p class="text-[11px] text-slate-500 mt-1">Plan ORSEC Préfecture : ouverture d'un CHU, 30 lits de camp, couvertures et ravitaillement chaud.</p>
               </div>
-              <button onclick="window.ProtecAdmin.triggerTestMission('social')" class="w-full py-2 rounded-xl text-xs font-black bg-purple-600 text-white hover:bg-purple-700 transition">
-                Lancer Maraude
+              <button onclick="window.ProtecAdmin.triggerTestMission('grand_froid_chu')" class="w-full py-2 rounded-xl text-xs font-black bg-sky-700 text-white hover:bg-sky-800 transition">
+                Déclencher CHU Préfecture
               </button>
             </div>
 
@@ -5490,37 +5490,62 @@ window.ProtecAdmin = {
         assignedRoles: {},
         assignedCrew: { volunteers: [], vehicles: [] }
       };
-    } else if (type === 'cump_cai') {
-      if (typeof game.generateCumpCaiMission === 'function') {
-        game.generateCumpCaiMission();
-        game.showToast('Test CUMP Déclenché', 'Mission Cellule d’Accueil des Impliqués générée avec succès.', 'green');
-        return;
-      }
+    } else if (type === 'cump_cai' || type === 'evacuation_cai') {
+      const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const dept = base?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
+      m = {
+        id: `test-cai-${now}`,
+        title: 'ALERTE PRÉFECTURE : Évacuation d’Immeuble & Montage CAI',
+        desc: 'Déclenchement Préfecture (COD) : incendie majeur d’immeuble. Montage d’urgence d’un Centre d’Accueil des Impliqués (CAI), secrétariat SINUS, accueil psychologique CUMP et réconfort.',
+        type: 'crise',
+        isCrisis: true,
+        departmentCode: dept,
+        scale: 'ALERTE PRÉFECTURE CAI (8 secouristes + VTU + VPSP)',
+        urgency: 'critique',
+        lat: loc.lat,
+        lng: loc.lng,
+        requiredVolunteers: 8,
+        requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+        requiredVehicles: ['VTU', 'VPSP'],
+        rewardMoney: 1750,
+        rewardReputation: 65,
+        durationSeconds: 300,
+        durationHours: '4.5',
+        eventDate: { ...game.clock },
+        status: 'declenche',
+        registeredVolunteers: [],
+        assignedRoles: {},
+        assignedCrew: { volunteers: [], vehicles: [] }
+      };
     } else if (type === 'sncf') {
       if (typeof game.triggerSncfRailCrisis === 'function') {
         game.triggerSncfRailCrisis();
         game.showToast('Test SNCF Déclenché', 'Préalerte rupture caténaire générée avec succès.', 'green');
         return;
       }
-    } else if (type === 'social') {
-      const loc = game.calculateRealisticMissionLocation(base, 'social');
+    } else if (type === 'social' || type === 'grand_froid_chu') {
+      const loc = game.calculateRealisticMissionLocation(base, 'crise');
+      const dept = base?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
       m = {
-        id: `test-social-${now}`,
-        title: 'Social : Maraude Nocturne & Urgence 115',
-        desc: 'Distribution de duvets, repas chauds et écoute des personnes sans-abri en centre-ville.',
-        type: 'social',
-        urgency: 'normale',
+        id: `test-chu-${now}`,
+        title: 'PLAN ORSEC PRÉFECTURE : Ouverture CHU & Ravitaillement Sinistrés',
+        desc: 'Réquisition Préfecture (Plan Grand Froid) : déploiement d’un Centre d’Hébergement d’Urgence (CHU 30 lits de camp), distribution de ravitaillement chaud et couvertures thermiques.',
+        type: 'crise',
+        isCrisis: true,
+        departmentCode: dept,
+        scale: 'PLAN ORSEC CHU (6 secouristes + VTU Logistique)',
+        urgency: 'haute',
         lat: loc.lat,
         lng: loc.lng,
-        requiredVolunteers: 3,
-        requiredRanks: ['PSE1', 'Secouriste'],
+        requiredVolunteers: 6,
+        requiredRanks: ['CE', 'PSE2', 'PSE1'],
         requiredVehicles: ['VTU'],
-        rewardMoney: 210,
-        rewardReputation: 35,
-        durationSeconds: 150,
-        durationHours: '3.0',
+        rewardMoney: 1400,
+        rewardReputation: 55,
+        durationSeconds: 240,
+        durationHours: '4.0',
         eventDate: { ...game.clock },
-        status: 'planifie',
+        status: 'declenche',
         registeredVolunteers: [],
         assignedRoles: {},
         assignedCrew: { volunteers: [], vehicles: [] }
@@ -5773,30 +5798,56 @@ window.ProtecAdmin = {
         description: 'Grand rassemblement musical national. Renfort interdépartemental pour armer les postes de secours de nuit.',
         createdAt: new Date().toISOString()
       },
-      maraude: {
-        id: `renf-nat-froid-${Date.now()}`,
+      chu_grand_froid: {
+        id: `renf-nat-chu-${Date.now()}`,
         isExtraDept: true,
         zone: 'national',
         isNationalAdmin: true,
-        typeCategory: 'maraude',
-        typeTitle: 'PLAN GRAND FROID & URGENCE SOCIALE',
+        typeCategory: 'crise',
+        typeTitle: 'PLAN ORSEC GRAND FROID / CHU & RAVITAILLEMENT',
         iconEmoji: '❄️',
         colorClass: 'text-sky-600',
         address: '59000 Lille, Nord (59)',
-        addressDisplay: '59000 Lille, Secteur Flandres',
+        addressDisplay: '59000 Lille, Complexe Sportif Flandres',
         deptCode: '59',
         lat: 50.629,
         lng: 3.057,
-        needLabel: '1 VTU Maraude Sociale + 6 Équipiers',
-        demandeur: 'SIAO 115 & DDETS',
+        needLabel: '1 VTU Logistique CHU + 6 Secouristes',
+        demandeur: 'Préfecture du Nord (SIDPC)',
         requiredVehType: 'VTU',
         requiredVolsCount: 6,
         slotsCommitted: 0,
         contributions: [],
-        indemnite: 580,
-        alliancePoints: 70,
+        indemnite: 650,
+        alliancePoints: 85,
         status: 'open',
-        description: 'Plan Grand Froid niveau 2 activé. Maraude sociale de nuit et orientation d’urgence vers les centres d’hébergement temporaires.',
+        description: 'Plan ORSEC Grand Froid activé par le Préfet. Montage en urgence d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et distribution de ravitaillement chaud aux sinistrés.',
+        createdAt: new Date().toISOString()
+      },
+      maraude: {
+        id: `renf-nat-chu-m-${Date.now()}`,
+        isExtraDept: true,
+        zone: 'national',
+        isNationalAdmin: true,
+        typeCategory: 'crise',
+        typeTitle: 'PLAN ORSEC GRAND FROID / CHU & RAVITAILLEMENT',
+        iconEmoji: '❄️',
+        colorClass: 'text-sky-600',
+        address: '59000 Lille, Nord (59)',
+        addressDisplay: '59000 Lille, Complexe Sportif Flandres',
+        deptCode: '59',
+        lat: 50.629,
+        lng: 3.057,
+        needLabel: '1 VTU Logistique CHU + 6 Secouristes',
+        demandeur: 'Préfecture du Nord (SIDPC)',
+        requiredVehType: 'VTU',
+        requiredVolsCount: 6,
+        slotsCommitted: 0,
+        contributions: [],
+        indemnite: 650,
+        alliancePoints: 85,
+        status: 'open',
+        description: 'Plan ORSEC Grand Froid activé par le Préfet. Montage en urgence d’un Centre d’Hébergement d’Urgence (CHU 50 lits) et distribution de ravitaillement chaud aux sinistrés.',
         createdAt: new Date().toISOString()
       }
     };

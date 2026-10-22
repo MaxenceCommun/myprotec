@@ -207,12 +207,12 @@ window.ProtecSocial = {
     contract.currentKits = 0;
     contract.claimed = false;
 
-    // Générer immédiatement 1 ou 2 missions de maraude correspondantes
-    this.generateMaraudeMission(game, contract);
+    // Les missions d'action sociale / soutien aux populations (CAI, CHU, ravitaillement)
+    // sont désormais accomplies lors des crises déclenchées par la Préfecture.
 
     game.showToast(
       'Subvention Acceptée !',
-      `Engagement pris auprès de ${contract.funder} : ${contract.targetMaraudes} maraudes et ${contract.targetKits} kits à réaliser sous ${contract.durationDays} jours.`,
+      `Engagement pris auprès de ${contract.funder} : objectif de soutien aux sinistrés, CAI, CHU et ravitaillement à honorer sous ${contract.durationDays} jours lors des crises préfectorales.`,
       'green'
     );
 
@@ -221,58 +221,17 @@ window.ProtecSocial = {
     this.renderModal(game);
   },
 
-  // Générer une mission de maraude rattachée à une subvention
+  // Les missions logistiques et sociales autonomes sont désormais supprimées :
+  // Le soutien aux sinistrés, CAI, CHU et ravitaillement sont intégrés dans les crises Préfecture
   generateMaraudeMission(game, contract) {
-    const base = game.stations[0] || { lat: 48.6921, lng: 6.1844, name: 'Antenne', city: 'Nancy' };
-    const locCoords = (typeof game.calculateRealisticMissionLocation === 'function')
-      ? game.calculateRealisticMissionLocation(base, 'social')
-      : { lat: base.lat + (Math.random() - 0.5) * 0.015, lng: base.lng + (Math.random() - 0.5) * 0.015 };
-
-    const cityName = locCoords.commune || base.city || 'Nancy';
-    const missionId = `maraude-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const newMission = {
-      id: missionId,
-      title: `Maraude Sociale : ${contract.title}`,
-      type: 'social',
-      category: 'Social',
-      categoryLabel: 'Action Sociale',
-      urgency: 'normale',
-      subventionId: contract.id,
-      funderName: contract.funder,
-      desc: `Maraude de contact, réconfort et distribution solidaire sous convention ${contract.funder}. Objectif : distribuer des kits repas et hygiène, évaluer la situation des personnes isolées.`,
-      lat: locCoords.lat,
-      lng: locCoords.lng,
-      commune: cityName,
-      postcode: locCoords.postcode || '',
-      scale: 'Maraude Solidaire (2-4 secouristes)',
-      eventDate: (() => {
-        let m = Math.round((game.clock?.minute || 0) / 5) * 5;
-        let h = (game.clock?.hour || 0);
-        if (m >= 60) { h = (h + Math.floor(m / 60)) % 24; m = m % 60; }
-        return { ...game.clock, hour: h, minute: m };
-      })(),
-      durationSeconds: 90 * 60, // 1h30 de maraude
-      durationHours: 2.0,
-      requiredVolunteers: 3,
-      requiredRanks: ['Stagiaire', 'PSE1', 'PSE2'],
-      requiredVehicles: ['VTU', 'VTP', 'VL', 'VPSP'],
-      rewardMoney: 150, // Frais de défraiement immédiat
-      rewardReputation: 12,
-      progress: 0,
-      status: 'planifie',
-      registeredVolunteers: [],
-      assignedCrew: { volunteers: [], vehicles: [] },
-      isSector: true,
-      sector: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`,
-      address: `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${cityName})`
-    };
-
-    if (typeof game.enrichMissionLocationWithCity === 'function') {
-      game.enrichMissionLocationWithCity(newMission);
+    if (game && typeof game.showToast === 'function') {
+      game.showToast(
+        'Action Sociale & Crise',
+        'La mise en place de CAI, CHU et ravitaillement s’effectue lors des missions de crise déclenchées par la Préfecture (Plans ORSEC / NOVI).',
+        'blue'
+      );
     }
-
-    game.missions.push(newMission);
-    game.renderMissions();
+    return null;
   },
 
   // Prise en compte de la fin d'une maraude
@@ -812,9 +771,9 @@ window.ProtecSocial = {
                         Accepter la Convention
                       </button>
                     ` : c.status === 'active' ? `
-                      <button onclick="window.ProtecSocial.generateMaraudeMission(window.game, window.game.socialData.contracts.find(x => x.id === '${c.id}')); window.game.openModule('planning', true);" class="px-3 py-1.5 rounded-xl bg-purple-50 text-purple-700 font-black text-xs hover:bg-purple-100 transition">
-                        + Planifier Maraude
-                      </button>
+                      <span class="px-2.5 py-1.5 rounded-xl bg-purple-50 text-purple-700 font-bold text-[11px]">
+                        Objectifs à honorer lors des Crises Préfecture (CAI / CHU / Vivres)
+                      </span>
                       <span class="px-2.5 py-1 rounded-xl bg-amber-100 text-amber-800 text-[10px] font-extrabold">En Cours (${daysLeft} j)</span>
                     ` : c.status === 'completed' && !c.claimed ? `
                       <span class="text-[11px] text-emerald-600 font-bold">Objectifs atteints à 100% !</span>

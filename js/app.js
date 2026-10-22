@@ -2343,6 +2343,16 @@ class ProtecGame {
         return true;
       });
 
+      // 3.quater Suppression stricte des anciennes missions autonomes logistiques et sociales (CAI, CHU, ravitaillement isolés, maraudes)
+      // La mise en place de CAI, CHU, ravitaillement s'effectue exclusivement lors des crises déclenchées par la Préfecture.
+      this.missions = this.missions.filter(m => {
+        if (!m) return false;
+        if (m.type === 'social') return false;
+        if (m.isSector && String(m.id || '').startsWith('maraude-')) return false;
+        if (m.type === 'cump_cai' && !m.isCrisis) return false;
+        return true;
+      });
+
       // 3.ter Purge stricte DPS : AUCUN DPS NE DOIT SE LANCER EN ALERTE DIRECTE SANS DEVIS VALIDÉ
       // Les seules alertes immédiates autorisées sont les crises (NOVI, inondations, recherches de personnes, violences urbaines, tempêtes...)
       const invalidAlertDps = this.missions.filter(m => m && m.type === 'dps' && (m.status === 'declenche' || m.status === 'prealerte' || m.isBackendIntervention || String(m.id).startsWith('interv-')));
@@ -13198,8 +13208,8 @@ class ProtecGame {
       });
     }
 
-    // 2. PRISE EN CHARGE DU PÔLE SOCIAL LORS D'UNE MARAUDE
-    if (mission.type === 'social' && window.ProtecSocial) {
+    // 2. PRISE EN CHARGE DU PÔLE SOUTIEN POPULATIONS / CHU / CAI LORS DES CRISES OU ACTIONS SOCIALES
+    if ((mission.type === 'social' || mission.type === 'crise' || mission.isCrisis) && window.ProtecSocial && typeof window.ProtecSocial.onMaraudeCompleted === 'function') {
       window.ProtecSocial.onMaraudeCompleted(this, 4);
     }
 
@@ -24710,10 +24720,6 @@ class ProtecGame {
                 <i data-lucide="graduation-cap" class="w-4 h-4 text-emerald-600"></i>
                 Formations (${poleCounts.formations})
               </button>
-              <button onclick="window.game.openModule('social')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 cursor-pointer" title="Module Action Sociale">
-                <i data-lucide="heart-handshake" class="w-4 h-4 text-purple-600"></i>
-                Social (${poleCounts.social})
-              </button>
               ${poleCounts.crise > 0 ? `
                 <button onclick="window.game.openPlanningFiltered('crise')" class="px-3 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-rose-600 text-white hover:bg-rose-700 cursor-pointer animate-pulse shadow-sm" title="Crises et Réquisitions NOVI en cours">
                   <i data-lucide="siren" class="w-4 h-4"></i>
@@ -24777,15 +24783,6 @@ class ProtecGame {
                 <span>🎓 Formation (${poleCounts.formations})</span>
               </button>
 
-              <!-- Filtre Pôle Action Sociale (Violet) -->
-              <button 
-                onclick="window.game.togglePlanningPoleFilter('social')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.social ? 'bg-purple-600 text-white border-purple-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-purple-700 dark:text-purple-300 border-purple-400 dark:border-slate-600 hover:bg-purple-50/50'}"
-                title="${filters.social ? 'Cliquer pour masquer Action Sociale' : 'Cliquer pour afficher Action Sociale'}"
-              >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.social ? 'bg-white' : 'bg-purple-600'}"></span>
-                <span>🥫 Maraude (${poleCounts.social})</span>
-              </button>
 
               <!-- Filtre Pôle Gestion de Crise & NOVI (Rouge / Rose d'urgence) -->
               <button 

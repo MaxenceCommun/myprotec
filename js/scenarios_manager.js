@@ -381,6 +381,58 @@
       ],
       isDefault: true,
       enabled: true
+    },
+    {
+      id: 'crise_orsec_grand_froid',
+      type: 'crise',
+      category: 'orsec',
+      scale: 'PLAN ORSEC GRAND FROID (6 secouristes + CHU & Ravitaillement)',
+      title: 'Plan ORSEC Grand Froid : Ouverture CHU & Ravitaillement Sinistrés',
+      desc: 'Déclenchement du plan ORSEC Grand Froid par la Préfecture. Réquisition d’un gymnase municipal pour ouverture d’un Centre d’Hébergement d’Urgence (CHU 30 lits de camp), distribution de couvertures thermiques, kits hygiène et repas chauds.',
+      requiredVolunteers: 6,
+      requiredRanks: ['CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VTU', 'VL'],
+      requiredLots: ['lot_secours_b'],
+      durationHours: 6.0,
+      rewardMoney: 1400,
+      rewardReputation: 60,
+      riskLevel: 'eleve',
+      urgency: 'haute',
+      environment: 'ouvert_urbain',
+      peripeties: [
+        'Armement de 30 lits picot avec kits draps et duvets grands froids',
+        'Distribution de soupes chaudes et ravitaillement calorique d’urgence',
+        'Orientation sociale coordonnée avec le SIAO 115 et la Préfecture',
+        'Prise en charge de 2 hypothermies modérées réchauffées au CHU'
+      ],
+      isDefault: true,
+      enabled: true
+    },
+    {
+      id: 'crise_evacuation_cai',
+      type: 'crise',
+      category: 'cai',
+      scale: 'PLAN D’URGENCE CAI (8 secouristes + Sas SINUS & CUMP)',
+      title: 'Alerte Préfecture : Évacuation d’Immeuble & Centre d’Accueil des Impliqués (CAI)',
+      desc: 'Incendie d’un ensemble d’habitations collectives. Déclenchement par la Préfecture et le COD d’un Centre d’Accueil des Impliqués (CAI) en salle polyvalente pour 45 résidents sinistrés avec soutien médico-psychologique CUMP.',
+      requiredVolunteers: 8,
+      requiredRanks: ['CD', 'CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VTU', 'VPSP'],
+      requiredLots: ['lot_secours_a', 'lot_secours_b'],
+      durationHours: 5.0,
+      rewardMoney: 1750,
+      rewardReputation: 70,
+      riskLevel: 'critique',
+      urgency: 'critique',
+      environment: 'ouvert_urbain',
+      peripeties: [
+        'Montage du sas d’accueil et secrétariat d’enregistrement des impliqués (fiches SINUS)',
+        'Soutien médico-psychologique conjoint avec les psychologues de la CUMP',
+        'Distribution de collations, café chaud et vêtements de première urgence',
+        'Orientation et relogement temporaire en lien avec les services municipaux'
+      ],
+      isDefault: true,
+      enabled: true
     }
   ];
 
