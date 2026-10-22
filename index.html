@@ -683,11 +683,12 @@
   <script src="js/theme.js"></script>
   <script src="js/privacy.js"></script>
   <script src="js/help.js"></script>
-  <script src="js/landing.js?v=2.0.9"></script>
+  <script src="js/ecussons.js?v=2.7.6"></script>
+  <script src="js/landing.js?v=2.1.0"></script>
 
   <script>
     // Initialisation immédiate des icônes Lucide, de la landing page et des notifications
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
       if (window.lucide) window.lucide.createIcons();
       if (window.ProtecPWA && typeof window.ProtecPWA.init === 'function') {
         window.ProtecPWA.init();
@@ -698,11 +699,11 @@
       if (window.ProtecNotifications && typeof window.ProtecNotifications.init === 'function') {
         window.ProtecNotifications.init();
       }
-      if (window.MyProtecLanding && typeof window.MyProtecLanding.init === 'function') {
-        window.MyProtecLanding.init();
-      }
       if (window.ProtecSupabase && typeof window.ProtecSupabase.init === 'function') {
         window.ProtecSupabase.init();
+      }
+      if (window.MyProtecLanding && typeof window.MyProtecLanding.init === 'function') {
+        window.MyProtecLanding.init();
       }
     });
   </script>

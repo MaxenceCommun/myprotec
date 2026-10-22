@@ -430,16 +430,21 @@ window.MyProtecLanding = {
 
       if (window.ProtecSupabase && window.ProtecSupabase.client) {
         const [
-          { data: supaAntennes },
-          { data: supaStations },
-          { data: supaPlayers },
-          { data: supaSaves }
+          antennesRes,
+          stationsRes,
+          playersRes,
+          savesRes
         ] = await Promise.all([
-          window.ProtecSupabase.client.from('antenne_ecussons').select('antenne_id, quantite, ecusson:ecussons(*)').catch(() => ({ data: [] })),
-          window.ProtecSupabase.client.from('alliance_stations').select('id, player_id, player_name, station_name, city').catch(() => ({ data: [] })),
-          window.ProtecSupabase.client.from('players').select('id, username, station_name, city, department_code').catch(() => ({ data: [] })),
-          window.ProtecSupabase.client.from('game_saves').select('user_id, username, save_data').catch(() => ({ data: [] }))
+          window.ProtecSupabase.client.from('antenne_ecussons').select('antenne_id, quantite, ecusson:ecussons(*)'),
+          window.ProtecSupabase.client.from('alliance_stations').select('id, player_id, player_name, station_name, city'),
+          window.ProtecSupabase.client.from('players').select('id, username, station_name, city, department_code'),
+          window.ProtecSupabase.client.from('game_saves').select('user_id, username, save_data')
         ]);
+
+        const supaAntennes = (antennesRes && antennesRes.data) ? antennesRes.data : [];
+        const supaStations = (stationsRes && stationsRes.data) ? stationsRes.data : [];
+        const supaPlayers = (playersRes && playersRes.data) ? playersRes.data : [];
+        const supaSaves = (savesRes && savesRes.data) ? savesRes.data : [];
 
         const stationsMap = new Map();
         (supaStations || []).forEach(s => {
