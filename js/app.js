@@ -25400,17 +25400,7 @@ class ProtecGame {
       }
 
       // Rattrapage de cohérence : si le joueur a reçu une notification de candidature (ex: push inactif) mais a 0 candidature,
-      // générer immédiatement le candidat annoncé et dérouler la liste !
-      const hasCandidatureNotification = (window.ProtecNotifications?.history || []).some(n => 
-        (n.title && n.title.includes('Candidature')) || (n.message && n.message.includes('candidature'))
-      );
-      const hasVisForCatchup = Boolean(this.resources.campaigns?.social || this.resources.campaigns?.posters || (this.socialMedia?.visibilityScore || 0) >= 30);
-      if (hasCandidatureNotification && hasVisForCatchup && (!this.candidatures || this.candidatures.filter(c => c.type !== 'salarie').length === 0)) {
-        if (typeof this.generateRandomCandidature === 'function') {
-          this.generateRandomCandidature();
-          this.showCandidaturesView = true;
-        }
-      }
+            // Affichage du module recrutement : respect strict du flux naturel de candidatures
 
       body.innerHTML = `
         <div class="space-y-6">
@@ -25476,36 +25466,43 @@ class ProtecGame {
                 </div>
               </div>
 
-              <!-- Jauge et indicateur de Visibilité Recrutement -->
+              <!-- Jauge et indicateur de Visibilité Recrutement & Plafond Journalier -->
               ${(() => {
-                const sVis = this.socialMedia?.visibilityScore || 0;
-                const sFresh = this.antenneWebsite?.freshness || 0;
-                const hasCamp = Boolean(this.resources.campaigns?.social || this.resources.campaigns?.posters || this.commData?.activeCampaign?.subjectId === 'recrutement');
+                const cap = typeof this.getDailyRecruitmentCap === 'function' ? this.getDailyRecruitmentCap() : { tier: 'new', label: 'Antenne naissante', maxPerDay: 2 };
+                const todayKey = new Date().toISOString().slice(0, 10);
+                const todayCount = (this.dailyCandidatureStats && this.dailyCandidatureStats.date === todayKey) ? (this.dailyCandidatureStats.count || 0) : 0;
                 const compDps = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
-                const isVisible = hasCamp || sVis >= 30 || sFresh >= 40 || compDps >= 2;
+                const repScore = this.resources?.reputationScore || 0;
 
-                if (!isVisible) {
-                  return `
-                    <div class="p-3 rounded-xl border border-amber-300/80 bg-amber-50/60 dark:bg-amber-950/30 text-amber-900 dark:text-amber-200 text-xs flex items-center gap-2.5">
-                      <i data-lucide="eye-off" class="w-4 h-4 text-amber-600 shrink-0"></i>
-                      <div class="flex-1">
-                        <strong>Visibilité insuffisante (Réseaux : ${sVis}%) :</strong>
-                        Votre antenne n'est pas encore assez connue du public pour attirer des candidatures spontanées. 
-                        Publiez sur les réseaux sociaux, actualisez votre site ou lancez une campagne dans le module <em>Communication</em>.
-                      </div>
-                    </div>
-                  `;
-                } else {
-                  return `
-                    <div class="p-2.5 rounded-xl border border-emerald-300/80 bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 text-xs flex items-center justify-between gap-2">
+                const isTierNew = cap.tier === 'new';
+                const isTierLarge = cap.tier === 'large';
+
+                const badgeBg = isTierLarge 
+                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/60 dark:text-purple-200 border-purple-300'
+                  : (isTierNew 
+                    ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200 border-amber-300'
+                    : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 border-emerald-300');
+
+                const progressMsg = isTierNew
+                  ? `Palier Actuel : <strong>0 à 2 candidats / jour</strong> (Antenne naissante, ${compDps} DPS réalisés). Réalisez 5 DPS et faites monter votre réputation pour passer à 2-3 / jour.`
+                  : (isTierLarge
+                    ? `Palier Actuel : <strong>4 à 5 candidats / jour</strong> (Grosse antenne réputée, ${compDps} DPS réalisés, Réputation ${repScore}). Afflux maximal de candidatures territoriales.`
+                    : `Palier Actuel : <strong>2 à 3 candidats / jour</strong> (Antenne en développement, ${compDps} DPS réalisés). Atteignez 20 DPS et 80+ de réputation pour devenir une grande antenne réputée (4-5 / jour).`);
+
+                return `
+                  <div class="p-3 rounded-2xl border ${badgeBg} text-xs space-y-1.5 shadow-xs">
+                    <div class="flex items-center justify-between gap-2">
                       <div class="flex items-center gap-2">
-                        <i data-lucide="sparkles" class="w-4 h-4 text-emerald-600 shrink-0"></i>
-                        <span><strong>Notoriété active (${sVis}%) :</strong> Votre antenne est visible des citoyens locaux, des candidatures peuvent arriver régulièrement.</span>
+                        <i data-lucide="${isTierLarge ? 'crown' : (isTierNew ? 'sprout' : 'trending-up')}" class="w-4 h-4 shrink-0"></i>
+                        <span class="font-black uppercase tracking-wider">${cap.label} • ${todayCount} / ${cap.maxPerDay} reçu(s) aujourd'hui</span>
                       </div>
-                      <span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-600 text-white shrink-0">Visible</span>
+                      <span class="px-2 py-0.5 rounded-lg text-[10px] font-black ${todayCount >= cap.maxPerDay ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-100'}">
+                        ${todayCount >= cap.maxPerDay ? 'Plafond journalier atteint' : `Encore ${cap.maxPerDay - todayCount} possible(s)`}
+                      </span>
                     </div>
-                  `;
-                }
+                    <p class="text-[11px] opacity-90 leading-relaxed">${progressMsg}</p>
+                  </div>
+                `;
               })()}
 
               <!-- Indicateur de portée et bassin de recrutement évolutif -->
@@ -30932,77 +30929,39 @@ class ProtecGame {
       }
 
       // 5. Arrivée de nouvelles candidatures spontanées & Cycle horaire
-      // RÈGLE RÉALISTE : Arrivée mesurée (1 fois par heure in-game maximum si campagne active ou bonne visibilité)
+      // RÈGLE MÉTIER RÉALISTE :
+      // - Antenne naissante (peu de pub, peu de DPS) : 0 à 2 candidats / jour
+      // - Grosse antenne réputée (beaucoup de DPS, haute réputation) : 4 à 5 candidats / jour max
       if (this.clock.second === 0 && this.clock.minute === 0) {
         // Maintenance et fraîcheur du Site Internet de l'Antenne
         if (!this.antenneWebsite) {
-          this.antenneWebsite = { freshness: 90, lastUpdatedTimestamp: Date.now(), totalVisits: 1420, quotesRequestedOnline: 12 };
+          this.antenneWebsite = { freshness: 20, lastUpdatedTimestamp: Date.now(), totalVisits: 12, quotesRequestedOnline: 0 };
         }
         if (this.antenneWebsite.autoPilotSalarieId) {
-          // Un salarié permanent maintient le site à jour en continu
           this.antenneWebsite.freshness = 100;
         } else {
-          // Baisse naturelle progressive si le site n'est pas actualisé
-          this.antenneWebsite.freshness = Math.max(15, (this.antenneWebsite.freshness || 90) - 0.7);
+          this.antenneWebsite.freshness = Math.max(5, (this.antenneWebsite.freshness || 20) - 0.7);
         }
 
-        // Surveillance des délibérations B2B, places grand public et inscriptions spontanées bénévoles en formation
+        // Surveillance des délibérations B2B et formations
         if (window.ProtecFormations && typeof window.ProtecFormations.processClockTick === 'function') {
           window.ProtecFormations.processClockTick(this);
         }
 
-        if (this.stations.length > 0) {
-          const hasActiveCampaign = !!(
-            this.resources.campaigns?.social ||
-            this.resources.campaigns?.posters ||
-            this.commData?.activeCampaign?.subjectId === 'recrutement'
-          );
-          const repScore = this.resources.reputationScore || 0;
-          const pendingCount = (this.candidatures || []).filter(c => c.status !== 'rejected').length;
+        if (this.stations.length > 0 && typeof this.canSpawnSpontaneousCandidate === 'function' && this.canSpawnSpontaneousCandidate()) {
+          const cap = this.getDailyRecruitmentCap();
+          let candChance = cap.hourlyBaseChance || 0.04;
 
-          const maxPendingCand = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidaturesMaxPending', 3) : 3;
-          if (pendingCount < maxPendingCand) {
-            let candChance = 0;
+          // Bonus d'une campagne de communication ciblée
+          if (this.commData?.activeCampaign?.subjectId === 'recrutement') candChance += 0.06;
+          if (this.resources.campaigns?.social) candChance += 0.03;
+          if (this.resources.campaigns?.posters) candChance += 0.02;
 
-            const socialVis = this.socialMedia?.visibilityScore || 0;
-            const siteFreshness = this.antenneWebsite?.freshness || 0;
-            const completedDps = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+          const candMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidatureChanceMultiplier', 1.0) : 1.0;
+          candChance *= candMult;
 
-            // RÈGLE MÉTIER STRICTE : ALIGNEMENT SUR LE SYSTÈME DE DPS !
-            // Tant que l'antenne n'a pas de visibilité démontrée, AUCUNE candidature spontanée n'arrive !
-            // Nécessite soit une campagne de recrutement active, soit une visibilité réseaux >= 30%,
-            // soit un site internet officiel à jour >= 40%, soit au moins 2 DPS réalisés avec réputation >= 40.
-            const hasVisibility = hasActiveCampaign || socialVis >= 30 || siteFreshness >= 40 || (completedDps >= 2 && repScore >= 40);
-
-            if (!hasVisibility) {
-              // Antenne sans visibilité publique : zéro candidature citoyenne
-              candChance = 0;
-            } else {
-              // 1. Campagnes ciblées de recrutement (impact maximal direct)
-              if (this.commData?.activeCampaign?.subjectId === 'recrutement') candChance += 0.35;
-              if (this.resources.campaigns?.social) candChance += 0.22;
-              if (this.resources.campaigns?.posters) candChance += 0.15;
-
-              // 2. Visibilité numérique (Réseaux Sociaux)
-              if (socialVis >= 80) candChance += 0.16;
-              else if (socialVis >= 50) candChance += 0.08;
-              else if (socialVis >= 30) candChance += 0.04;
-
-              // 3. Fraîcheur du Site Internet Officiel
-              if (siteFreshness >= 75) candChance += 0.10;
-              else if (siteFreshness >= 40) candChance += 0.05;
-
-              // 4. Notoriété terrain (bouche-à-oreille suite aux dispositifs assurés)
-              if (completedDps >= 10 && repScore >= 70) candChance += 0.07;
-              else if (completedDps >= 3 && repScore >= 45) candChance += 0.03;
-            }
-
-            const candMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('candidatureChanceMultiplier', 1.0) : 1.0;
-            candChance *= candMult;
-
-            if (candChance > 0 && Math.random() < candChance) {
-              this.generateRandomCandidature();
-            }
+          if (candChance > 0 && Math.random() < candChance) {
+            this.generateRandomCandidature();
           }
         }
       }
@@ -32449,8 +32408,109 @@ class ProtecGame {
     this.updateStatsUI();
   }
 
-  // Candidature spontanée de bénévole
-  generateRandomCandidature() {
+  // =========================================================================
+  // GESTION RÉALISTE DU RECRUTEMENT : RYTHME, PLAFONDS JOURNALIERS & ANTI-SPAM
+  // =========================================================================
+
+  /**
+   * Détermine le palier d'attractivité de l'antenne et ses plafonds journaliers :
+   * - Antenne naissante (peu de missions, peu/pas de pub) : 0 à 2 candidats / jour max
+   * - Antenne en développement (5 à 20 DPS, réputation 50-80, campagnes locales) : 2 à 3 candidats / jour max
+   * - Grosse antenne réputée (> 20 DPS, réputation > 80, grosse notoriété) : 4 à 5 candidats / jour max
+   */
+  getDailyRecruitmentCap() {
+    const completedDps = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
+    const repScore = this.resources?.reputationScore || 0;
+    const stationCount = (this.stations || []).length;
+    const volunteersCount = (this.volunteers || []).length;
+    const hasActiveCampaign = Boolean(
+      this.resources?.campaigns?.social ||
+      this.resources?.campaigns?.posters ||
+      this.commData?.activeCampaign?.subjectId === 'recrutement'
+    );
+    const socialVis = this.socialMedia?.visibilityScore || 0;
+
+    // Stade 3 : Grosse antenne bien connue et réputée (4 à 5 candidats / jour max)
+    const isLargeReputedStation = (completedDps >= 20 && repScore >= 80) || (stationCount >= 2 && volunteersCount >= 25 && repScore >= 75);
+    if (isLargeReputedStation) {
+      return {
+        tier: 'large',
+        label: 'Grosse antenne réputée',
+        desc: 'Forte notoriété territoriale, présence continue sur le terrain',
+        maxPerDay: 5,
+        minIntervalHours: 2.5,
+        hourlyBaseChance: 0.16
+      };
+    }
+
+    // Stade 2 : Antenne en développement (2 à 3 candidats / jour max)
+    const isGrowingStation = (completedDps >= 5 && repScore >= 50) || hasActiveCampaign || socialVis >= 40;
+    if (isGrowingStation) {
+      return {
+        tier: 'growing',
+        label: 'Antenne en développement',
+        desc: 'Premiers dispositifs assurés et communication active',
+        maxPerDay: 3,
+        minIntervalHours: 4.5,
+        hourlyBaseChance: 0.08
+      };
+    }
+
+    // Stade 1 : Antenne naissante / débutante (0 à 2 candidats / jour max)
+    return {
+      tier: 'new',
+      label: 'Antenne naissante',
+      desc: 'Début d’activité, peu ou pas de publicité ni de DPS',
+      maxPerDay: 2,
+      minIntervalHours: 8.0,
+      hourlyBaseChance: completedDps >= 1 ? 0.04 : 0.02
+    };
+  }
+
+  /**
+   * Vérifie si une nouvelle candidature spontanée a le droit d'arriver (anti-spam et plafond journalier)
+   */
+  canSpawnSpontaneousCandidate(isForced = false) {
+    if (isForced) return true;
+    const cap = this.getDailyRecruitmentCap();
+    const now = Date.now();
+    const todayKey = new Date().toISOString().slice(0, 10);
+
+    if (!this.dailyCandidatureStats || this.dailyCandidatureStats.date !== todayKey) {
+      this.dailyCandidatureStats = {
+        date: todayKey,
+        count: 0,
+        lastSpawnTimestamp: this.dailyCandidatureStats?.lastSpawnTimestamp || 0
+      };
+    }
+
+    // 1. Plafond journalier strict
+    if (this.dailyCandidatureStats.count >= cap.maxPerDay) {
+      return false;
+    }
+
+    // 2. Délai minimum anti-spam en heures réelles entre 2 candidatures
+    const lastSpawn = this.dailyCandidatureStats.lastSpawnTimestamp || 0;
+    const hoursSinceLast = (now - lastSpawn) / (3600 * 1000);
+    if (lastSpawn > 0 && hoursSinceLast < cap.minIntervalHours) {
+      return false;
+    }
+
+    // 3. Nombre maximum de candidatures non traitées simultanément dans l'antenne
+    const pendingCount = (this.candidatures || []).filter(c => c.status !== 'rejected').length;
+    const maxPending = cap.tier === 'large' ? 4 : (cap.tier === 'growing' ? 3 : 2);
+    if (pendingCount >= maxPending) {
+      return false;
+    }
+
+    return true;
+  }
+
+  // Candidature spontanée de bénévole (calibrée selon le palier journalier de l'antenne)
+  generateRandomCandidature(force = false) {
+    if (!this.canSpawnSpontaneousCandidate(force)) {
+      return null;
+    }
     if (!Array.isArray(this.candidatures)) this.candidatures = [];
     if (!Array.isArray(this.volunteers)) this.volunteers = [];
 
@@ -32615,6 +32675,14 @@ class ProtecGame {
       window.ProtecPersonnel.resolveVolunteerRealAddress(newCand, this);
     }
     this.candidatures.push(newCand);
+
+    // Enregistrement de la candidature dans les statistiques journalières (plafond et anti-spam)
+    const todayKey = new Date().toISOString().slice(0, 10);
+    if (!this.dailyCandidatureStats || this.dailyCandidatureStats.date !== todayKey) {
+      this.dailyCandidatureStats = { date: todayKey, count: 0, lastSpawnTimestamp: 0 };
+    }
+    this.dailyCandidatureStats.count++;
+    this.dailyCandidatureStats.lastSpawnTimestamp = Date.now();
 
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(

@@ -250,7 +250,7 @@
     candidatureChanceMultiplier: {
       category: 'recrutement',
       label: 'Flux de Candidatures Spontanées',
-      desc: 'Multiplicateur général d\'arrivée de nouveaux postulants bénévoles à l\'antenne.',
+      desc: 'Multiplicateur général des candidatures bénévoles (calibré sur les paliers réalistes : 0-2/jour au lancement d\'antenne, 4-5/jour maximum pour une grosse antenne réputée).',
       type: 'number',
       min: 0,
       max: 10,

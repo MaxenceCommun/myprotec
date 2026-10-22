@@ -819,8 +819,12 @@ window.ProtecCommunication = {
         }
         impactDetail = ` 🪙 +${donation} € de dons citoyens en ligne récoltés !`;
       } else if (subRoll < 0.70 && typeof game.generateRandomCandidature === 'function') {
-        game.generateRandomCandidature();
-        impactDetail = ' 🤝 Un citoyen inspiré a postulé pour devenir bénévole !';
+        const spawned = game.generateRandomCandidature();
+        if (spawned) {
+          impactDetail = ' 🤝 Un citoyen inspiré a postulé pour devenir bénévole !';
+        } else {
+          impactDetail = ' 📢 Votre publication a suscité l’intérêt de citoyens locaux pour l’antenne.';
+        }
       } else if (typeof game.generateRandomDevisOpportunity === 'function') {
         game.generateRandomDevisOpportunity();
         impactDetail = ' 📋 Un organisateur local a vu le post et dépose un devis de DPS !';
@@ -1047,9 +1051,11 @@ window.ProtecCommunication = {
       }
       case 'recrutement': {
         if (Math.random() < 0.65 && typeof game.generateRandomCandidature === 'function') {
-          game.generateRandomCandidature();
-          camp.totalGains.candidatures += 1;
-          game.commData.totalRecruitsGenerated += 1;
+          const spawned = game.generateRandomCandidature();
+          if (spawned) {
+            camp.totalGains.candidatures += 1;
+            game.commData.totalRecruitsGenerated += 1;
+          }
         }
         break;
       }

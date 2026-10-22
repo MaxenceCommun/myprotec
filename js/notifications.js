@@ -418,22 +418,12 @@ window.ProtecNotifications = {
       condition: (game) => Boolean(game && Array.isArray(game.candidatures) && game.candidatures.filter(c => c.type !== 'salarie').length > 0)
     },
     {
-      title: 'Recrutement : Nouvelle Candidature Reçue',
-      body: 'Un bénévole qualifié vient de déposer sa candidature à l’antenne. Faites-lui passer son entretien pour renforcer vos équipes !',
-      tag: 'reengage-rh-new',
+      title: 'Recrutement : Candidature en Attente',
+      body: 'Un bénévole attend son entretien de recrutement à l’antenne. Prenez contact avec lui !',
+      tag: 'reengage-rh-pending',
       condition: (game) => {
         if (!game) return false;
-        const socialVis = game.socialMedia?.visibilityScore || 0;
-        const hasCampaign = !!(game.resources?.campaigns?.social || game.resources?.campaigns?.posters || game.commData?.activeCampaign?.subjectId === 'recrutement');
-        const hasVisibility = hasCampaign || socialVis >= 30 || ((game.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length >= 2);
-        const candCount = (game.candidatures || []).filter(c => c.type !== 'salarie').length;
-        return hasVisibility && candCount < 4;
-      },
-      action: (game) => {
-        if (game && typeof game.generateRandomCandidature === 'function') {
-          game.generateRandomCandidature();
-          if (typeof game.saveGame === 'function') game.saveGame();
-        }
+        return Array.isArray(game.candidatures) && game.candidatures.some(c => c.type !== 'salarie' && c.status !== 'rejected');
       }
     },
     {
@@ -1128,12 +1118,8 @@ window.ProtecNotifications = {
       if (target.id === 'recrutement') {
         game.showCandidaturesView = true;
         // Si aucune candidature bénévole n'est présente alors qu'une notification de candidature est cliquée,
-        // on honore la notification en générant immédiatement un candidat qualifié !
-        if (!game.candidatures || game.candidatures.filter(c => c.type !== 'salarie').length === 0) {
-          if (typeof game.generateRandomCandidature === 'function') {
-            game.generateRandomCandidature();
-          }
-        }
+        // Affichage direct du module recrutement
+
       }
       game.openModule(target.id);
     } else if (target.type === 'station' && target.id) {
