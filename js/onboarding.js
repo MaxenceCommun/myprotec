@@ -104,32 +104,54 @@ window.ProtecOnboarding = {
     { id: 'vestiaire', label: 'Vestiaires & Sanitaires', icon: '👕', desc: 'Casiers et tenues d’intervention', color: '#4c1d95' },
     { id: 'pc_radio', label: 'PC Radio & Opérations', icon: '📡', desc: 'Poste de commandement opérationnel', color: '#701a75' }
   ],
+  furnitureCategories: [
+    { id: 'all', label: 'Tout le Mobilier', icon: '🗂️' },
+    { id: 'recommended', label: '⭐ Recommandé pour cette salle', icon: '⭐' },
+    { id: 'bureau', label: 'Direction & PC', icon: '💼' },
+    { id: 'formation', label: 'Formation', icon: '🎓' },
+    { id: 'stockage', label: 'Stockage & Secours', icon: '📦' },
+    { id: 'vestiaire', label: 'Vestiaires', icon: '👕' },
+    { id: 'detente', label: 'Foyer & Repos', icon: '☕' }
+  ],
+  activeFurnitureCategory: 'all',
+  furnitureSearchQuery: '',
+
+  setFurnitureCategory(catId) {
+    this.activeFurnitureCategory = catId;
+    this.renderWizard();
+  },
+
+  setFurnitureSearch(query) {
+    this.furnitureSearchQuery = (query || '').toLowerCase().trim();
+    this.renderWizard();
+  },
+
   furnitureCatalog: [
-    { id: 'bureau', type: 'bureau', name: 'Bureau Direction & PC', cost: 250, icon: '🖥️', defaultRoom: 'room_1', desc: 'Gestion administrative & planification des postes', w: 1.8, d: 0.9, color: '#334155', bonus: 'Poste de commandement' },
-    { id: 'table_formation', type: 'table_formation', name: 'Table Formation Pédagogique', cost: 180, icon: '📚', defaultRoom: 'room_2', desc: 'Permet d’accueillir les sessions PSC & SST', w: 2.2, d: 1.1, color: '#ea580c', bonus: '+4 élèves par table' },
-    { id: 'tableau_blanc', type: 'tableau_blanc', name: 'Tableau Blanc Mural', cost: 120, icon: '📋', defaultRoom: 'room_2', desc: 'Support visuel pour les cours de secourisme', w: 2.2, d: 0.2, color: '#f8fafc', bonus: '+10% qualité formation' },
-    { id: 'mannequin_rcp', type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cost: 320, icon: '🫀', defaultRoom: 'room_2', desc: 'Indispensable pour l’apprentissage du massage cardiaque', w: 0.6, d: 1.2, color: '#f59e0b', bonus: '+15% qualité formation' },
-    { id: 'dae_mural', type: 'dae_mural', name: 'Défibrillateur DAE Mural', cost: 450, icon: '⚡', defaultRoom: 'room_1', desc: 'Sécurité d’urgence et démonstration pratique', w: 0.35, d: 0.35, color: '#10b981', bonus: '+5% qualité & sécurité' },
-    { id: 'armoire_pharmacie', type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cost: 190, icon: '🩹', defaultRoom: 'room_3', desc: 'Stockage sécurisé des pansements et compresses', w: 1.2, d: 0.4, color: '#dc2626', bonus: '+20 capacité consommables', maxWeightKg: 80 },
-    { id: 'etagere_lots', type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cost: 150, icon: '📦', defaultRoom: 'room_3', desc: 'Stockage robuste pour caisses PS et tentes', w: 0.6, d: 2.4, color: '#475569', bonus: '+35 capacité lots A/B', maxWeightKg: 300 },
-    { id: 'casiers_vestiaire', type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cost: 180, icon: '🦺', defaultRoom: 'room_1', desc: 'Rangement des paquetages d’intervention', w: 0.6, d: 2.5, color: '#0f172a', bonus: '+25 capacité tenues & +2 moral', maxWeightKg: 150 },
-    { id: 'canape_detente', type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cost: 280, icon: '🛋️', defaultRoom: 'room_1', desc: 'Convivialité et récupération des secouristes', w: 2.0, d: 0.9, color: '#059669', bonus: '+10% régénération énergie & +5 moral' },
-    { id: 'machine_cafe', type: 'machine_cafe', name: 'Machine à Café & Pause', cost: 85, icon: '☕', defaultRoom: 'room_1', desc: 'Point de pause convivial pour les équipes', w: 0.8, d: 0.6, color: '#d97706', bonus: '+5% régénération énergie & +3 moral' },
-    { id: 'lit_garde', type: 'lit_garde', name: 'Lit de Camp / Astreinte', cost: 220, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde pour les permanences SAMU', w: 1.0, d: 2.0, color: '#a855f7', bonus: '+1 lit d’astreinte & +10% énergie' },
-    { id: 'babyfoot', type: 'babyfoot', name: 'Baby-foot de Foyer (Bonzini)', cost: 450, icon: '⚽', defaultRoom: 'room_1', desc: 'Le classique Bonzini de l’antenne pour la cohésion et le moral', w: 1.5, d: 1.0, color: '#16a34a', bonus: '+15 Moral & Décompression' },
-    { id: 'tv_foyer', type: 'tv_foyer', name: 'Écran TV & Débriefing', cost: 350, icon: '📺', defaultRoom: 'room_1', desc: 'Télévision murale pour les veilles météo, infos et séries en astreinte', w: 1.4, d: 0.25, color: '#0f172a', bonus: '+10 Moral & +8% repos astreinte' },
-    { id: 'console_jeux', type: 'console_jeux', name: 'Console de Jeux Vidéo', cost: 390, icon: '🎮', defaultRoom: 'room_1', desc: 'Tournois de jeux vidéo entre secouristes avant le départ en garde', w: 0.8, d: 0.5, color: '#4338ca', bonus: '+12 Moral & Réduit le stress' },
-    { id: 'ping_pong', type: 'ping_pong', name: 'Table de Tennis de Table', cost: 290, icon: '🏓', defaultRoom: 'room_1', desc: 'Parties dynamiques entre les interventions pour garder la forme', w: 2.7, d: 1.5, color: '#0284c7', bonus: '+8% Énergie & +10 Moral' },
-    { id: 'distributeur_snacks', type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cost: 520, icon: '🥤', defaultRoom: 'room_1', desc: 'En-cas et ravitaillement rapide 24h/24 pour les équipages', w: 0.9, d: 0.8, color: '#dc2626', bonus: '+15% Vitesse de régénération' },
-    { id: 'armoire_forte_securisee', type: 'armoire_forte_securisee', name: 'Armoire Forte Sécurisée DAE/Sensible', cost: 420, icon: '🔐', defaultRoom: 'room_3', desc: 'Armoire blindée avec serrure de sécurité pour DAE, radios et pharmacie', w: 1.0, d: 0.5, color: '#334155', bonus: 'Matériel sensible & sécurisé', maxWeightKg: 120, pole: 'pole_secours' },
-    { id: 'rack_palettes_lourd', type: 'rack_palettes_lourd', name: 'Rack à Palettes Lourd (650kg)', cost: 380, icon: '🏗️', defaultRoom: 'room_3', desc: 'Rack industriel grande charge pour lits picots, groupes électrogènes et tentes', w: 2.6, d: 1.0, color: '#1e293b', bonus: '+650kg stockage lourd', maxWeightKg: 650, pole: 'pole_crise' },
-    { id: 'casiers_tenues_xl', type: 'casiers_tenues_xl', name: 'Bloc Casiers Vestiaires Tenues XL (250kg)', cost: 260, icon: '🦺', defaultRoom: 'room_1', desc: 'Vestiaire grande capacité pour tenues d’intervention et casques', w: 1.2, d: 0.6, color: '#0f172a', bonus: '+250kg tenues & +3 moral', maxWeightKg: 250, pole: 'pole_vestiaire' },
-    { id: 'lits_superposes', type: 'lits_superposes', name: 'Lits Superposés d’Astreinte (2 places)', cost: 340, icon: '🛏️', defaultRoom: 'room_1', desc: 'Optimise l’espace dortoir pour les permanences SAMU et gardes 24h', w: 1.0, d: 2.0, color: '#6d28d9', bonus: '+2 lits de garde & +18% repos' },
-    { id: 'kitchenette_foyer', type: 'kitchenette_foyer', name: 'Kitchenette Foyer Équipée', cost: 580, icon: '🍳', defaultRoom: 'room_1', desc: 'Évier inox, micro-ondes et plaques pour les repas d’astreinte', w: 1.8, d: 0.7, color: '#0f766e', bonus: '+15% régénération & +6 Moral' },
-    { id: 'table_repas_equipe', type: 'table_repas_equipe', name: 'Grande Table Repas & Cohésion (8p)', cost: 240, icon: '🍽️', defaultRoom: 'room_1', desc: 'Table conviviale pour les repas d’antenne et briefings collectifs', w: 2.4, d: 1.1, color: '#b45309', bonus: '+8 Moral & Cohésion' },
-    { id: 'ecran_tactique_interactif', type: 'ecran_tactique_interactif', name: 'Écran Tactile Interactif 75"', cost: 750, icon: '🖥️', defaultRoom: 'room_2', desc: 'Écran tactile 75 pouces pour cas concrets et cartographie', w: 2.0, d: 0.25, color: '#0284c7', bonus: '+20% qualité formation & débriefing' },
-    { id: 'mannequin_pediatrique', type: 'mannequin_pediatrique', name: 'Mannequin Pédiatrique (Nourrisson)', cost: 290, icon: '👶', defaultRoom: 'room_2', desc: 'Entraînement RCP nourrisson et désobstruction pédiatrique', w: 0.8, d: 0.6, color: '#ea580c', bonus: '+15% apprentissage pédiatrique' },
-    { id: 'dsa_demonstration', type: 'dsa_demonstration', name: 'DAE / DSA de Démonstration Vocale', cost: 220, icon: '⚡', defaultRoom: 'room_2', desc: 'DAE d’entraînement réaliste avec invites vocales et scénarios', w: 0.45, d: 0.45, color: '#10b981', bonus: '+10% pratique gestes d’urgence' }
+    { id: 'bureau', type: 'bureau', category: 'bureau', name: 'Bureau Direction & PC', cost: 250, icon: '🖥️', defaultRoom: 'room_1', desc: 'Gestion administrative & planification des postes', w: 1.8, d: 0.9, color: '#334155', bonus: 'Poste de commandement' },
+    { id: 'table_formation', type: 'table_formation', category: 'formation', name: 'Table Formation Pédagogique', cost: 180, icon: '📚', defaultRoom: 'room_2', desc: 'Permet d’accueillir les sessions PSC & SST', w: 2.2, d: 1.1, color: '#ea580c', bonus: '+4 élèves par table' },
+    { id: 'tableau_blanc', type: 'tableau_blanc', category: 'formation', name: 'Tableau Blanc Mural', cost: 120, icon: '📋', defaultRoom: 'room_2', desc: 'Support visuel pour les cours de secourisme', w: 2.2, d: 0.2, color: '#f8fafc', bonus: '+10% qualité formation' },
+    { id: 'mannequin_rcp', type: 'mannequin_rcp', category: 'formation', name: 'Mannequin Secourisme RCP', cost: 320, icon: '🫀', defaultRoom: 'room_2', desc: 'Indispensable pour l’apprentissage du massage cardiaque', w: 0.6, d: 1.2, color: '#f59e0b', bonus: '+15% qualité formation' },
+    { id: 'dae_mural', type: 'dae_mural', category: 'stockage', name: 'Défibrillateur DAE Mural', cost: 450, icon: '⚡', defaultRoom: 'room_1', desc: 'Sécurité d’urgence et démonstration pratique', w: 0.35, d: 0.35, color: '#10b981', bonus: '+5% qualité & sécurité' },
+    { id: 'armoire_pharmacie', type: 'armoire_pharmacie', category: 'stockage', name: 'Armoire Pharmacie d’Urgence', cost: 190, icon: '🩹', defaultRoom: 'room_3', desc: 'Stockage sécurisé des pansements et compresses', w: 1.2, d: 0.4, color: '#dc2626', bonus: '+20 capacité consommables', maxWeightKg: 80 },
+    { id: 'etagere_lots', type: 'etagere_lots', category: 'stockage', name: 'Étagère Métallique Lots A/B', cost: 150, icon: '📦', defaultRoom: 'room_3', desc: 'Stockage robuste pour caisses PS et tentes', w: 0.6, d: 2.4, color: '#475569', bonus: '+35 capacité lots A/B', maxWeightKg: 300 },
+    { id: 'casiers_vestiaire', type: 'casiers_vestiaire', category: 'vestiaire', name: 'Casiers Tenues F1 Protec', cost: 180, icon: '🦺', defaultRoom: 'room_1', desc: 'Rangement des paquetages d’intervention', w: 0.6, d: 2.5, color: '#0f172a', bonus: '+25 capacité tenues & +2 moral', maxWeightKg: 150 },
+    { id: 'canape_detente', type: 'canape_detente', category: 'detente', name: 'Canapé Foyer Bénévoles', cost: 280, icon: '🛋️', defaultRoom: 'room_1', desc: 'Convivialité et récupération des secouristes', w: 2.0, d: 0.9, color: '#059669', bonus: '+10% régénération énergie & +5 moral' },
+    { id: 'machine_cafe', type: 'machine_cafe', category: 'detente', name: 'Machine à Café & Pause', cost: 85, icon: '☕', defaultRoom: 'room_1', desc: 'Point de pause convivial pour les équipes', w: 0.8, d: 0.6, color: '#d97706', bonus: '+5% régénération énergie & +3 moral' },
+    { id: 'lit_garde', type: 'lit_garde', category: 'detente', name: 'Lit de Camp / Astreinte', cost: 220, icon: '🛏️', defaultRoom: 'room_1', desc: 'Dortoir de garde pour les permanences SAMU', w: 1.0, d: 2.0, color: '#a855f7', bonus: '+1 lit d’astreinte & +10% énergie' },
+    { id: 'babyfoot', type: 'babyfoot', category: 'detente', name: 'Baby-foot de Foyer (Bonzini)', cost: 450, icon: '⚽', defaultRoom: 'room_1', desc: 'Le classique Bonzini de l’antenne pour la cohésion et le moral', w: 1.5, d: 1.0, color: '#16a34a', bonus: '+15 Moral & Décompression' },
+    { id: 'tv_foyer', type: 'tv_foyer', category: 'detente', name: 'Écran TV & Débriefing', cost: 350, icon: '📺', defaultRoom: 'room_1', desc: 'Télévision murale pour les veilles météo, infos et séries en astreinte', w: 1.4, d: 0.25, color: '#0f172a', bonus: '+10 Moral & +8% repos astreinte' },
+    { id: 'console_jeux', type: 'console_jeux', category: 'detente', name: 'Console de Jeux Vidéo', cost: 390, icon: '🎮', defaultRoom: 'room_1', desc: 'Tournois de jeux vidéo entre secouristes avant le départ en garde', w: 0.8, d: 0.5, color: '#4338ca', bonus: '+12 Moral & Réduit le stress' },
+    { id: 'ping_pong', type: 'ping_pong', category: 'detente', name: 'Table de Tennis de Table', cost: 290, icon: '🏓', defaultRoom: 'room_1', desc: 'Parties dynamiques entre les interventions pour garder la forme', w: 2.7, d: 1.5, color: '#0284c7', bonus: '+8% Énergie & +10 Moral' },
+    { id: 'distributeur_snacks', type: 'distributeur_snacks', category: 'detente', name: 'Distributeur Boissons & Snacks', cost: 520, icon: '🥤', defaultRoom: 'room_1', desc: 'En-cas et ravitaillement rapide 24h/24 pour les équipages', w: 0.9, d: 0.8, color: '#dc2626', bonus: '+15% Vitesse de régénération' },
+    { id: 'armoire_forte_securisee', type: 'armoire_forte_securisee', category: 'stockage', name: 'Armoire Forte Sécurisée DAE/Sensible', cost: 420, icon: '🔐', defaultRoom: 'room_3', desc: 'Armoire blindée avec serrure de sécurité pour DAE, radios et pharmacie', w: 1.0, d: 0.5, color: '#334155', bonus: 'Matériel sensible & sécurisé', maxWeightKg: 120, pole: 'pole_secours' },
+    { id: 'rack_palettes_lourd', type: 'rack_palettes_lourd', category: 'stockage', name: 'Rack à Palettes Lourd (650kg)', cost: 380, icon: '🏗️', defaultRoom: 'room_3', desc: 'Rack industriel grande charge pour lits picots, groupes électrogènes et tentes', w: 2.6, d: 1.0, color: '#1e293b', bonus: '+650kg stockage lourd', maxWeightKg: 650, pole: 'pole_crise' },
+    { id: 'casiers_tenues_xl', type: 'casiers_tenues_xl', category: 'vestiaire', name: 'Bloc Casiers Vestiaires Tenues XL (250kg)', cost: 260, icon: '🦺', defaultRoom: 'room_1', desc: 'Vestiaire grande capacité pour tenues d’intervention et casques', w: 1.2, d: 0.6, color: '#0f172a', bonus: '+250kg tenues & +3 moral', maxWeightKg: 250, pole: 'pole_vestiaire' },
+    { id: 'lits_superposes', type: 'lits_superposes', category: 'detente', name: 'Lits Superposés d’Astreinte (2 places)', cost: 340, icon: '🛏️', defaultRoom: 'room_1', desc: 'Optimise l’espace dortoir pour les permanences SAMU et gardes 24h', w: 1.0, d: 2.0, color: '#6d28d9', bonus: '+2 lits de garde & +18% repos' },
+    { id: 'kitchenette_foyer', type: 'kitchenette_foyer', category: 'detente', name: 'Kitchenette Foyer Équipée', cost: 580, icon: '🍳', defaultRoom: 'room_1', desc: 'Évier inox, micro-ondes et plaques pour les repas d’astreinte', w: 1.8, d: 0.7, color: '#0f766e', bonus: '+15% régénération & +6 Moral' },
+    { id: 'table_repas_equipe', type: 'table_repas_equipe', category: 'detente', name: 'Grande Table Repas & Cohésion (8p)', cost: 240, icon: '🍽️', defaultRoom: 'room_1', desc: 'Table conviviale pour les repas d’antenne et briefings collectifs', w: 2.4, d: 1.1, color: '#b45309', bonus: '+8 Moral & Cohésion' },
+    { id: 'ecran_tactique_interactif', type: 'ecran_tactique_interactif', category: 'formation', name: 'Écran Tactile Interactif 75"', cost: 750, icon: '🖥️', defaultRoom: 'room_2', desc: 'Écran tactile 75 pouces pour cas concrets et cartographie', w: 2.0, d: 0.25, color: '#0284c7', bonus: '+20% qualité formation & débriefing' },
+    { id: 'mannequin_pediatrique', type: 'mannequin_pediatrique', category: 'formation', name: 'Mannequin Pédiatrique (Nourrisson)', cost: 290, icon: '👶', defaultRoom: 'room_2', desc: 'Entraînement RCP nourrisson et désobstruction pédiatrique', w: 0.8, d: 0.6, color: '#ea580c', bonus: '+15% apprentissage pédiatrique' },
+    { id: 'dsa_demonstration', type: 'dsa_demonstration', category: 'formation', name: 'DAE / DSA de Démonstration Vocale', cost: 220, icon: '⚡', defaultRoom: 'room_2', desc: 'DAE d’entraînement réaliste avec invites vocales et scénarios', w: 0.45, d: 0.45, color: '#10b981', bonus: '+10% pratique gestes d’urgence' }
   ],
 
   // 4. Affiliation FNPC
@@ -1891,47 +1913,237 @@ window.ProtecOnboarding = {
           </div>
         </div>
 
-        <!-- CATALOGUE D'ACHAT DE MOBILIER OPÉRATIONNEL -->
-        <div class="space-y-2">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">3. Catalogue de Mobilier • Installer dans ${activeRoom.name}</span>
-            <span class="text-[11px] text-slate-500 dark:text-slate-400 font-semibold">Les meubles s'installent dans la pièce active</span>
-          </div>
+        <!-- CATALOGUE D'ACHAT DE MOBILIER OPÉRATIONNEL CLASSÉ PAR CATÉGORIE -->
+        ${(() => {
+          const activeCat = this.activeFurnitureCategory || 'all';
+          const sq = (this.furnitureSearchQuery || '').toLowerCase();
+          const activeRoomType = activeRoom.type || 'libre';
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            ${this.furnitureCatalog.map(item => {
-              const totalCount = this.placedFurniture.filter(f => (f.typeId === item.id || f.type === item.id)).length;
-              return `
-                <div class="p-3 rounded-2xl glass-card bg-white dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700 shadow-2xs flex items-center justify-between gap-2.5 hover:border-amber-300 dark:hover:border-amber-400 transition">
-                  <div class="flex items-center gap-2.5 min-w-0">
-                    <span class="text-2xl flex-shrink-0">${item.icon}</span>
-                    <div class="min-w-0 flex-1">
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <h4 class="text-xs font-black text-slate-900 dark:text-white truncate">${item.name}</h4>
-                        ${item.bonus ? `<span class="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/60 px-1.5 py-0.2 rounded-md">${item.bonus}</span>` : ''}
-                      </div>
-                      <p class="text-[10px] text-slate-500 dark:text-slate-400 truncate">${item.desc}</p>
-                      <div class="flex items-center gap-2 mt-0.5">
-                        <span class="text-[10px] font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/70 px-1.5 py-0.2 rounded">${item.cost} €</span>
-                        <span class="text-[9.5px] font-mono text-slate-400">${item.w}m × ${item.d}m</span>
-                        ${totalCount > 0 ? `<span class="text-[9px] font-black text-pc-blue dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1 rounded">${totalCount} en place</span>` : ''}
-                      </div>
+          // Fonction de recommandation selon l'affectation de la pièce
+          const isRecommended = (item) => {
+            if (activeRoomType === 'bureau' || activeRoomType === 'pc_radio') return item.category === 'bureau' || item.id === 'bureau' || item.id === 'tv_foyer';
+            if (activeRoomType === 'formation') return item.category === 'formation';
+            if (activeRoomType === 'stockage') return item.category === 'stockage';
+            if (activeRoomType === 'vestiaire') return item.category === 'vestiaire';
+            if (activeRoomType === 'detente') return item.category === 'detente';
+            return item.defaultRoom === activeRoom.id;
+          };
+
+          // Catégories avec libellé et icône
+          const categoryMeta = {
+            bureau: { label: 'Direction & PC Radio', icon: '💼', desc: 'Gestion administrative, briefings et commandement' },
+            formation: { label: 'Formation & Pédagogie', icon: '🎓', desc: 'Sessions PSC1, SST, mannequins et matériel pédagogique' },
+            stockage: { label: 'Stockage & Matériel de Secours', icon: '📦', desc: 'Réserves opérationnelles, lots d\'intervention et caisses' },
+            vestiaire: { label: 'Vestiaires & Paquetages', icon: '👕', desc: 'Armoires et casiers pour paquetages secouristes F1' },
+            detente: { label: 'Foyer, Convivialité & Repos', icon: '☕', desc: 'Détente, repas d\'équipe, dortoir de garde et décompression' }
+          };
+
+          // Filtrage global
+          let visibleItems = this.furnitureCatalog.filter(item => {
+            if (sq) {
+              const fullText = (item.name + ' ' + (item.desc || '') + ' ' + (item.bonus || '')).toLowerCase();
+              if (!fullText.includes(sq)) return false;
+            }
+            if (activeCat === 'recommended') return isRecommended(item);
+            if (activeCat !== 'all') return item.category === activeCat;
+            return true;
+          });
+
+          // Compteurs par catégorie
+          const counts = {
+            all: this.furnitureCatalog.length,
+            recommended: this.furnitureCatalog.filter(isRecommended).length,
+            bureau: this.furnitureCatalog.filter(i => i.category === 'bureau').length,
+            formation: this.furnitureCatalog.filter(i => i.category === 'formation').length,
+            stockage: this.furnitureCatalog.filter(i => i.category === 'stockage').length,
+            vestiaire: this.furnitureCatalog.filter(i => i.category === 'vestiaire').length,
+            detente: this.furnitureCatalog.filter(i => i.category === 'detente').length
+          };
+
+          const renderItemCard = (item) => {
+            const totalCount = this.placedFurniture.filter(f => (f.typeId === item.id || f.type === item.id)).length;
+            const inThisRoom = this.placedFurniture.filter(f => (f.typeId === item.id || f.type === item.id) && f.room === activeRoom.id).length;
+            const recommended = isRecommended(item);
+
+            return `
+              <div class="p-3.5 rounded-2xl glass-card bg-white dark:bg-slate-800/90 border ${recommended ? 'border-amber-300 dark:border-amber-500/70 shadow-sm' : 'border-slate-200/90 dark:border-slate-700'} shadow-2xs flex flex-col justify-between gap-2.5 hover:border-pc-blue dark:hover:border-blue-400 transition group">
+                <div class="flex items-start gap-2.5 min-w-0">
+                  <span class="text-3xl flex-shrink-0 group-hover:scale-110 transition p-1 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-700/60">${item.icon}</span>
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <h4 class="text-xs font-black text-slate-900 dark:text-white leading-snug">${item.name}</h4>
+                      ${recommended ? `<span class="text-[8.5px] font-black uppercase text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/80 border border-amber-300 dark:border-amber-700 px-1.5 py-0.2 rounded-full">⭐ Conseillé</span>` : ''}
+                      ${item.bonus ? `<span class="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/60 px-1.5 py-0.2 rounded-md">${item.bonus}</span>` : ''}
+                    </div>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 leading-tight">${item.desc}</p>
+                    <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span class="text-[10.5px] font-mono font-black text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/80 px-2 py-0.5 rounded-md">${item.cost} €</span>
+                      <span class="text-[9.5px] font-mono text-slate-400 font-semibold">${item.w}m × ${item.d}m</span>
+                      ${inThisRoom > 0 ? `<span class="text-[9px] font-black text-pc-blue dark:text-sky-400 bg-blue-50 dark:bg-blue-950/70 border border-blue-200 dark:border-blue-800 px-1.5 py-0.2 rounded-md">✓ ${inThisRoom} dans cette pièce</span>` : ''}
+                      ${totalCount > inThisRoom ? `<span class="text-[9px] font-medium text-slate-400 dark:text-slate-400">(${totalCount} au total)</span>` : ''}
                     </div>
                   </div>
-
-                  <div class="flex items-center gap-1.5 flex-shrink-0">
-                    <button 
-                      type="button" 
-                      onclick="window.ProtecOnboarding.buyAndPlaceFurniture('${item.id}', '${activeRoom.id}')"
-                      class="px-3 py-2 rounded-xl bg-pc-blue hover:bg-blue-600 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1">
-                      <span>+ Installer</span>
-                    </button>
-                  </div>
                 </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-700/60">
+                  <span class="text-[9.5px] font-bold text-slate-400 capitalize">${categoryMeta[item.category]?.label || 'Mobilier'}</span>
+                  <button 
+                    type="button" 
+                    onclick="window.ProtecOnboarding.buyAndPlaceFurniture('${item.id}', '${activeRoom.id}')"
+                    class="px-3.5 py-1.5 rounded-xl bg-pc-blue hover:bg-blue-600 text-white font-black text-xs transition cursor-pointer shadow-xs active:scale-95 flex items-center gap-1.5">
+                    <span>+ Installer</span>
+                  </button>
+                </div>
+              </div>
+            `;
+          };
+
+          return `
+            <div class="space-y-3 pt-1">
+              <!-- En-tête du catalogue & Barre de recherche -->
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-black uppercase text-slate-800 dark:text-slate-200 tracking-wider">3. Catalogue de Mobilier • Installer dans ${activeRoom.name}</span>
+                    <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-pc-blue/10 dark:bg-blue-950/60 text-pc-blue dark:text-blue-400 border border-blue-200 dark:border-blue-800">${visibleItems.length} article(s)</span>
+                  </div>
+                  <p class="text-[11px] text-slate-500 dark:text-slate-400">Choisissez et organisez les éléments par pôle d'activité pour aménager votre antenne.</p>
+                </div>
+
+                <!-- Recherche rapide -->
+                <div class="relative w-full sm:w-56">
+                  <i data-lucide="search" class="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                  <input 
+                    type="text" 
+                    value="${this.furnitureSearchQuery || ''}" 
+                    oninput="window.ProtecOnboarding.setFurnitureSearch(this.value)" 
+                    placeholder="Filtrer (ex: bureau, lit, DAE...)"
+                    class="w-full pl-8 pr-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-800 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-pc-blue/30"
+                  />
+                  ${this.furnitureSearchQuery ? `
+                    <button type="button" onclick="window.ProtecOnboarding.setFurnitureSearch('')" class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer">✕</button>
+                  ` : ''}
+                </div>
+              </div>
+
+              <!-- BARRE D'ONGLETS DE CATÉGORIES -->
+              <div class="flex items-center gap-1.5 overflow-x-auto pb-1 custom-scrollbar text-xs">
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('all')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'all' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>🗂️</span>
+                  <span>Tout le catalogue</span>
+                  <span class="text-[10px] opacity-80">(${counts.all})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('recommended')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'recommended' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 hover:bg-amber-100 font-bold'}">
+                  <span>⭐</span>
+                  <span>Recommandé pour ${activeRoom.name}</span>
+                  <span class="text-[10px] font-black">(${counts.recommended})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('bureau')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'bureau' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>💼</span>
+                  <span>Direction & PC</span>
+                  <span class="text-[10px] opacity-80">(${counts.bureau})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('formation')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'formation' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>🎓</span>
+                  <span>Formation</span>
+                  <span class="text-[10px] opacity-80">(${counts.formation})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('stockage')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'stockage' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>📦</span>
+                  <span>Stockage & Secours</span>
+                  <span class="text-[10px] opacity-80">(${counts.stockage})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('vestiaire')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'vestiaire' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>👕</span>
+                  <span>Vestiaires</span>
+                  <span class="text-[10px] opacity-80">(${counts.vestiaire})</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onclick="window.ProtecOnboarding.setFurnitureCategory('detente')" 
+                  class="px-3 py-1.5 rounded-xl transition cursor-pointer flex items-center gap-1.5 shrink-0 ${activeCat === 'detente' ? 'bg-pc-blue text-white font-black shadow-xs' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}">
+                  <span>☕</span>
+                  <span>Foyer & Repos</span>
+                  <span class="text-[10px] opacity-80">(${counts.detente})</span>
+                </button>
+              </div>
+
+              <!-- CONTENU DU CATALOGUE (SOIT GROUPÉ PAR SECTION SI 'ALL', SOIT FILTRÉ) -->
+              ${(() => {
+                if (visibleItems.length === 0) {
+                  return `
+                    <div class="p-8 text-center bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+                      <p class="text-sm font-bold text-slate-500">Aucun meuble ne correspond à ce filtre.</p>
+                      <button type="button" onclick="window.ProtecOnboarding.setFurnitureCategory('all'); window.ProtecOnboarding.setFurnitureSearch('');" class="mt-2 text-xs font-black text-pc-blue hover:underline">
+                        Réinitialiser les filtres
+                      </button>
+                    </div>
+                  `;
+                }
+
+                // Si 'all' et sans recherche textuelle : afficher par sections de catégories bien séparées
+                if (activeCat === 'all' && !sq) {
+                  const catKeys = ['bureau', 'formation', 'stockage', 'vestiaire', 'detente'];
+                  return `
+                    <div class="space-y-5">
+                      ${catKeys.map(catKey => {
+                        const itemsInCat = this.furnitureCatalog.filter(i => i.category === catKey);
+                        if (itemsInCat.length === 0) return '';
+                        const meta = categoryMeta[catKey];
+                        return `
+                          <div class="space-y-2">
+                            <div class="flex items-center justify-between pb-1 border-b border-slate-200/80 dark:border-slate-700/80">
+                              <div class="flex items-center gap-2">
+                                <span class="text-base">${meta.icon}</span>
+                                <h4 class="text-xs font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">${meta.label}</h4>
+                                <span class="text-[10px] font-bold text-slate-400">(${itemsInCat.length})</span>
+                              </div>
+                              <span class="text-[10px] text-slate-400 hidden sm:inline">${meta.desc}</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                              ${itemsInCat.map(renderItemCard).join('')}
+                            </div>
+                          </div>
+                        `;
+                      }).join('')}
+                    </div>
+                  `;
+                }
+
+                // Sinon, affichage direct de la grille filtrée
+                return `
+                  <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    ${visibleItems.map(renderItemCard).join('')}
+                  </div>
+                `;
+              })()}
+            </div>
+          `;
+        })()}
 
         <!-- Boutons de navigation -->
         <div class="pt-2 flex items-center justify-between gap-3">

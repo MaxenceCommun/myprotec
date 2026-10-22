@@ -23,6 +23,34 @@
  */
 
 window.ProtecLocaux = {
+
+  // Barème réaliste des travaux : Durée réelle Artisans (heures réelles) vs Heures-Bénévoles
+  ROOM_WORK_SPECS: {
+    garage_remisage: {
+      lvl2: { artisanHours: 6, volunteerHours: 50 },
+      lvl3: { artisanHours: 12, volunteerHours: 100 }
+    },
+    sas_desinfection_pharmacie: {
+      lvl2: { artisanHours: 4, volunteerHours: 30 },
+      lvl3: { artisanHours: 8, volunteerHours: 60 }
+    },
+    salle_formation_psc1: {
+      lvl2: { artisanHours: 4, volunteerHours: 40 },
+      lvl3: { artisanHours: 8, volunteerHours: 80 }
+    },
+    foyer_vie_associative: {
+      lvl2: { artisanHours: 3, volunteerHours: 25 },
+      lvl3: { artisanHours: 6, volunteerHours: 50 }
+    },
+    bureau_pc_radio: {
+      lvl2: { artisanHours: 4, volunteerHours: 35 },
+      lvl3: { artisanHours: 8, volunteerHours: 70 }
+    },
+    isolation: {
+      lvl3: { artisanHours: 8, volunteerHours: 60 }
+    }
+  },
+
   dimensionMode: '2d', // '2d' (Plan d'architecte CAD) | '3d' (Vue isométrique 3D)
   editorTab: 'furniture', // 'furniture' | 'doors' | 'rooms' | 'expand'
   snapToGrid: true, // Aimant / Magnétisme à la grille (0.2m)
@@ -503,14 +531,26 @@ window.ProtecLocaux = {
       const rw = r.w * scale;
       const rh = r.h * scale;
 
+      // Couleurs chaleureuses selon le type de pièce
+      const colors = {
+        garage: '#64748b',
+        formation: '#0284c7',
+        stockage: '#b45309',
+        detente: '#ea580c',
+        dortoir: '#4338ca',
+        bureau: '#334155'
+      };
+      const roomBg = colors[r.type] || '#1e293b';
+
       return `
         <g>
-          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="#111827" stroke="#334155" stroke-width="1.5" rx="3" />
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9" font-weight="900" text-anchor="middle">
-            Salle ${i + 1} (🚪 Libre)
+          <!-- Sol de la salle meublable -->
+          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${roomBg}" stroke="#475569" stroke-width="2" rx="4" />
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9.5" font-weight="900" text-anchor="middle">
+            Salle ${i + 1}
           </text>
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#38bdf8" font-size="8" font-weight="700" text-anchor="middle">
-            ${r.area} m²
+          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#cbd5e1" font-size="8" font-weight="700" text-anchor="middle">
+            ${r.area} m² · Prête à aménager
           </text>
         </g>
       `;
@@ -529,8 +569,8 @@ window.ProtecLocaux = {
       const sh = s.d * scale;
       return `
         <g>
-          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(245, 158, 11, 0.08)" stroke="#f59e0b" stroke-width="1" stroke-dasharray="3 2" rx="2" />
-          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#fbbf24" font-size="7.5" font-weight="800" text-anchor="middle">
+          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(255, 255, 255, 0.08)" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 3" rx="3" />
+          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#ffffff" font-size="8" font-weight="800" text-anchor="middle">
             🅿️ Place 0${idx + 1}
           </text>
         </g>
@@ -538,30 +578,23 @@ window.ProtecLocaux = {
     }).join('');
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-xl font-sans select-none shadow-inner border border-slate-800">
-        <!-- Fond sombre CAD -->
-        <rect width="${width}" height="${height}" fill="#0a0e17" />
+      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-2xl font-sans select-none shadow-lg border border-slate-700/60 overflow-hidden">
+        <!-- Décor extérieur : Pelouse verte et allée goudronnée -->
+        <rect width="${width}" height="${height}" fill="#166534" />
+        <rect x="15" y="15" width="${width - 30}" height="${height - 30}" fill="#0f172a" rx="12" />
         
-        <!-- Grille millimétrée -->
-        <defs>
-          <pattern id="gridCAD_${b.id}" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#131c2e" stroke-width="0.8" />
-          </pattern>
-        </defs>
-        <rect width="${width}" height="${height}" fill="url(#gridCAD_${b.id})" />
-
-        <!-- Cour & Parking extérieur -->
-        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#0d1424" stroke="#d97706" stroke-width="1.5" stroke-dasharray="4 3" rx="4" />
-        <text x="${px + pw / 2}" y="${py + 12}" fill="#fbbf24" font-size="8" font-weight="900" text-anchor="middle">COUR OPÉRATIONNELLE</text>
+        <!-- Cour de stationnement opérationnelle -->
+        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#1e293b" stroke="#f59e0b" stroke-width="2" rx="6" />
+        <text x="${px + pw / 2}" y="${py + 13}" fill="#fbbf24" font-size="8.5" font-weight="900" text-anchor="middle">COUR & HANGAR OPÉRATIONNEL</text>
         ${spotsSvg}
 
         <!-- Pièces du Bâtiment -->
         ${roomsSvg}
 
-        <!-- Cartouche technique d'Architecte -->
-        <rect x="${width - 240}" y="${height - 24}" width="230" height="20" fill="#0f172a" stroke="#1e293b" rx="4" />
-        <text x="${width - 125}" y="${height - 10}" fill="#94a3b8" font-size="8" font-weight="800" text-anchor="middle">
-          PLAN CAD D'ARCHITECTE • ${b.surfaceM2} m² • ${b.roomsCount} PIÈCES LIBRES
+        <!-- Bandeau supérieur descriptif -->
+        <rect x="25" y="18" width="${width - 50}" height="18" fill="rgba(15, 23, 42, 0.85)" rx="4" />
+        <text x="${width / 2}" y="30" fill="#f8fafc" font-size="8.5" font-weight="800" text-anchor="middle">
+          🏛️ Caserne & Locaux d'Antenne · ${b.surfaceM2} m² · ${b.roomsCount} Salles Aménageables
         </text>
       </svg>
     `;
@@ -647,6 +680,489 @@ window.ProtecLocaux = {
   // Récupère ou initialise la structure de locaux d'une antenne
   
   // Initialisation et rétrocompatibilité modulaire des locaux de l'antenne
+  
+  // Récupère les specs de travaux pour une pièce et un niveau cible
+  getRoomWorkSpec(roomId, targetLevel) {
+    const spec = this.ROOM_WORK_SPECS[roomId];
+    if (!spec) return { artisanHours: 4, volunteerHours: 40 };
+    const lvlKey = 'lvl' + targetLevel;
+    return spec[lvlKey] || spec.lvl2 || { artisanHours: 4, volunteerHours: 40 };
+  },
+
+  // Rendu interactif du bloc d'action d'une pièce (Artisans vs Bénévoles)
+  renderRoomActionBlock(station, roomId, room, premises) {
+    if (!room) return '';
+    if (room.level >= 3) {
+      return `<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Aménagement Maximal Atteint (Niveau ${room.level}) ✓</div>`;
+    }
+
+    const targetLevel = (room.level || 1) + 1;
+    const spec = this.getRoomWorkSpec(roomId, targetLevel);
+
+    // 1. Chantier Artisans en cours
+    if (room.artisanWork && room.artisanWork.targetCompletionTime) {
+      const now = Date.now();
+      const remainingMs = Math.max(0, room.artisanWork.targetCompletionTime - now);
+      const totalMs = (room.artisanWork.targetCompletionTime - (room.artisanWork.startTime || (now - 1000))) || (spec.artisanHours * 3600000);
+      const pct = Math.min(100, Math.max(5, Math.round(((totalMs - remainingMs) / totalMs) * 100)));
+      
+      const totalSec = Math.floor(remainingMs / 1000);
+      const hours = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const timeStr = hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+
+      return `
+        <div class="p-3 rounded-2xl bg-indigo-50/90 border border-indigo-200 text-indigo-900 space-y-2">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="flex items-center gap-1.5 text-indigo-700">
+              <i data-lucide="hard-hat" class="w-4 h-4"></i>
+              <span>Artisans en cours (Niv. ${targetLevel})</span>
+            </span>
+            <span class="mono-num text-[11px] font-extrabold text-indigo-800">Livraison dans ~${timeStr}</span>
+          </div>
+          <div class="w-full bg-indigo-200/70 rounded-full h-2 overflow-hidden shadow-inner">
+            <div class="bg-indigo-600 h-full rounded-full transition-all duration-500 animate-pulse" style="width: ${pct}%"></div>
+          </div>
+          <p class="text-[10px] text-indigo-600 font-semibold leading-tight">
+            Intervention en tâche de fond. La pièce reste opérationnelle au Niveau ${room.level} jusqu'à livraison.
+          </p>
+        </div>
+      `;
+    }
+
+    // 2. Chantier Bénévoles en cours (Jauge d'heures-bénévoles)
+    if (room.volunteerWork) {
+      const vw = room.volunteerWork;
+      const req = vw.requiredHours || spec.volunteerHours || 50;
+      const cur = vw.currentHours || 0;
+      const pct = Math.min(100, Math.round((cur / req) * 100));
+
+      const activeMissions = (window.game?.missions || []).filter(m => 
+        m.type === 'travaux' && 
+        m.roomKey === roomId && 
+        m.stationId === station.id && 
+        (m.status === 'planifie' || m.status === 'ongoing')
+      );
+
+      return `
+        <div class="p-3.5 rounded-2xl bg-amber-50/90 border border-amber-200 text-amber-950 space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-black">
+            <span class="flex items-center gap-1.5 text-amber-800">
+              <i data-lucide="hammer" class="w-4 h-4 text-amber-600"></i>
+              <span>Chantier Bénévoles (Niv. ${vw.targetLevel || targetLevel})</span>
+            </span>
+            <span class="mono-num text-[11px] font-extrabold text-amber-900">${cur} / ${req} h (${pct}%)</span>
+          </div>
+          <div class="w-full bg-amber-200/80 rounded-full h-2.5 overflow-hidden shadow-inner">
+            <div class="bg-amber-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1 border-t border-amber-200/60">
+            <span class="text-[10.5px] font-bold text-amber-800 flex items-center gap-1">
+              <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+              <span>${activeMissions.length > 0 ? `${activeMissions.length} session(s) au planning` : 'Aucune session active'}</span>
+            </span>
+            <button onclick="window.ProtecLocaux.openPlanTravauxSessionModal(window.game, '${station.id}', '${roomId}')" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-[10.5px] font-black shadow-xs transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <i data-lucide="calendar-plus" class="w-3.5 h-3.5"></i>
+              <span>Planifier une session travaux</span>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // 3. Choix initial : Chantier Bénévoles vs Artisans
+    const matCost = room.volunteerMatCost || 750;
+    const craftCost = room.craftsmanCost || 2200;
+
+    return `
+      <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+        <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', '${roomId}', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition flex items-center justify-center gap-1" title="Achat matériaux (${matCost} €) puis planification libre de sessions travaux">
+          <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
+          <span>Chantier (${matCost} €)</span>
+        </button>
+        <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', '${roomId}', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition flex items-center justify-center gap-1" title="Artisans du bâtiment (${craftCost} € • ${spec.artisanHours}h réelles)">
+          <i data-lucide="hard-hat" class="w-3.5 h-3.5 text-slate-500"></i>
+          <span>Artisans (${craftCost} €)</span>
+        </button>
+      </div>
+    `;
+  },
+
+  // Rendu interactif du bloc isolation
+  renderInsulationActionBlock(station, premises) {
+    if (premises.isolationLevel >= 3) {
+      return '<span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-200">Isolé BBC ✓</span>';
+    }
+
+    if (premises.isolationArtisanWork && premises.isolationArtisanWork.targetCompletionTime) {
+      const now = Date.now();
+      const remainingMs = Math.max(0, premises.isolationArtisanWork.targetCompletionTime - now);
+      const hours = Math.floor(remainingMs / 3600000);
+      const mins = Math.floor((remainingMs % 3600000) / 60000);
+      const timeStr = hours > 0 ? `${hours}h ${mins}min` : `${mins} min`;
+      return `<span class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200 animate-pulse">Artisans BBC (reste ~${timeStr})</span>`;
+    }
+
+    if (premises.isolationVolunteerWork) {
+      const vw = premises.isolationVolunteerWork;
+      const cur = vw.currentHours || 0;
+      const req = vw.requiredHours || 60;
+      return `
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-black text-amber-800 bg-amber-100 px-2 py-0.5 rounded-lg border border-amber-300">${cur}/${req}h BBC</span>
+          <button onclick="window.ProtecLocaux.openPlanTravauxSessionModal(window.game, '${station.id}', 'isolation')" class="px-2 py-1 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-[10px] transition">
+            + Session
+          </button>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="flex gap-1.5">
+        <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'chantier_benevole')" class="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-black text-[10px] transition" title="Chantier participatif (1 200 € matériaux)">
+          Chantier (1,2k€)
+        </button>
+        <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'artisan')" class="px-2 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] transition" title="Entreprise isolation (3 500 € • 8h réelles)">
+          Artisans (3,5k€)
+        </button>
+      </div>
+    `;
+  },
+
+  // Boîte de dialogue & ouverture de la modale de planification de session travaux
+  async openPlanTravauxSessionModal(game, stationId, roomId) {
+    const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+    
+    let targetName = 'Locaux';
+    let currentHours = 0;
+    let requiredHours = 50;
+
+    if (roomId === 'isolation') {
+      targetName = 'Isolation Thermique BBC';
+      currentHours = premises.isolationVolunteerWork?.currentHours || 0;
+      requiredHours = premises.isolationVolunteerWork?.requiredHours || 60;
+    } else {
+      const room = premises.rooms?.[roomId];
+      if (!room || !room.volunteerWork) {
+        game.showToast('Aucun Projet Chantier', 'Veuillez d\'abord lancer le chantier en achetant les matériaux.', 'blue');
+        return;
+      }
+      targetName = room.name;
+      currentHours = room.volunteerWork.currentHours || 0;
+      requiredHours = room.volunteerWork.requiredHours || 50;
+    }
+
+    const curDay = game.clock?.day || 1;
+    const curMonth = game.clock?.month || 0;
+    const curYear = game.clock?.year || 2026;
+    const curHour = game.clock?.hour || 10;
+
+    // Supprimer ancienne modale si existante
+    const existingModal = document.getElementById('plan-travaux-modal');
+    if (existingModal) existingModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'plan-travaux-modal';
+    modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in select-none';
+    
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg p-6 shadow-2xl border border-white/80 space-y-5 animate-scale-up">
+        
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b border-slate-200/80 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-700 flex items-center justify-center text-xl font-black">
+              🔨
+            </div>
+            <div>
+              <h3 class="text-base font-black text-slate-900 leading-tight">Planifier une Session Travaux</h3>
+              <p class="text-xs text-slate-500 font-semibold">${targetName} • Progression : ${currentHours} / ${requiredHours} h</p>
+            </div>
+          </div>
+          <button onclick="document.getElementById('plan-travaux-modal').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
+            <i data-lucide="x" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Jauge d'avancement actuelle -->
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-amber-950 space-y-1.5">
+          <div class="flex justify-between text-xs font-black">
+            <span>Avancement global du chantier</span>
+            <span>${currentHours} / ${requiredHours} heures-bénévoles requises</span>
+          </div>
+          <div class="w-full bg-amber-200 rounded-full h-2 overflow-hidden shadow-inner">
+            <div class="bg-amber-600 h-full rounded-full transition-all" style="width: ${Math.min(100, Math.round((currentHours / requiredHours) * 100))}%;"></div>
+          </div>
+        </div>
+
+        <!-- Formulaire de planification -->
+        <div class="space-y-4 text-xs font-bold text-slate-700">
+          
+          <!-- Date -->
+          <div>
+            <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Jour de la session</label>
+            <select id="pt-day-choice" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+              <option value="today">Aujourd'hui (Jour ${curDay}/${curMonth + 1}/${curYear})</option>
+              <option value="tomorrow" selected>Demain (Jour ${curDay + 1}/${curMonth + 1}/${curYear})</option>
+              <option value="weekend">Ce Samedi (Travaux associatifs du week-end)</option>
+              <option value="next_weekend">Samedi prochain (Grand chantier d'antenne)</option>
+            </select>
+          </div>
+
+          <!-- Horaires Début & Fin -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Heure de début</label>
+              <select id="pt-start-hour" onchange="window.ProtecLocaux.updateTravauxDurationHelp()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="8">08h00</option>
+                <option value="9" selected>09h00</option>
+                <option value="10">10h00</option>
+                <option value="13">13h00</option>
+                <option value="14">14h00</option>
+                <option value="15">15h00</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black mb-1.5">Heure de fin</label>
+              <select id="pt-end-hour" onchange="window.ProtecLocaux.updateTravauxDurationHelp()" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-bold text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="11">11h00</option>
+                <option value="12">12h00</option>
+                <option value="13" selected>13h00</option>
+                <option value="17">17h00</option>
+                <option value="18">18h00</option>
+                <option value="19">19h00</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Indicateur dynamique de réalisme / conseil durée -->
+          <div id="pt-duration-advisor" class="p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2">
+            <i data-lucide="info" class="w-4 h-4 text-emerald-600 mt-0.5 shrink-0"></i>
+            <div class="text-[11px] font-semibold leading-relaxed" id="pt-advisor-text">
+              Durée prévue : <strong>4 heures</strong>. Format idéal pour mobiliser les bénévoles le week-end (taux d'inscription optimal).
+            </div>
+          </div>
+
+          <!-- Plafond de bénévoles souhaité -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-[11px] uppercase tracking-wider text-slate-500 font-black">Plafond maximal de bénévoles</label>
+              <span class="text-[10px] text-slate-400 font-semibold">Le joueur choisit librement le plafond</span>
+            </div>
+            <div class="flex items-center gap-3">
+              <input id="pt-max-vols" type="number" min="2" max="15" value="5" class="w-24 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white font-extrabold text-sm text-center text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500" />
+              <span class="text-[11px] text-slate-600 font-semibold leading-tight">
+                bénévoles max sur ce créneau (progression apportée = bénévoles présents × durée).
+              </span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Boutons d'action -->
+        <div class="pt-3 border-t border-slate-200/80 flex items-center justify-end gap-2.5">
+          <button onclick="document.getElementById('plan-travaux-modal').remove()" class="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+            Annuler
+          </button>
+          <button onclick="window.ProtecLocaux.confirmPlanTravauxSession(window.game, '${station.id}', '${roomId}')" class="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="check" class="w-4 h-4"></i>
+            <span>Valider et Publier au Planning</span>
+          </button>
+        </div>
+
+      </div>
+    `;
+
+    document.body.appendChild(modal);
+    if (window.lucide) window.lucide.createIcons();
+    this.updateTravauxDurationHelp();
+  },
+
+  // Calcul interactif de la durée de session travaux et affichage du conseil
+  updateTravauxDurationHelp() {
+    const startEl = document.getElementById('pt-start-hour');
+    const endEl = document.getElementById('pt-end-hour');
+    const advisorEl = document.getElementById('pt-duration-advisor');
+    const textEl = document.getElementById('pt-advisor-text');
+    if (!startEl || !endEl || !advisorEl || !textEl) return;
+
+    let start = parseInt(startEl.value, 10) || 9;
+    let end = parseInt(endEl.value, 10) || 13;
+    if (end <= start) end = start + 1;
+
+    const duration = end - start;
+
+    if (duration <= 4) {
+      advisorEl.className = 'p-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. Format idéal pour mobiliser les bénévoles (taux d'inscription optimal). Chaque bénévole présent apportera ${duration}h à la jauge !`;
+    } else if (duration <= 6) {
+      advisorEl.className = 'p-3 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. Créneau long : mobilisation modérée des secouristes (prévoyez une collation pour le moral).`;
+    } else {
+      advisorEl.className = 'p-3 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 flex items-start gap-2';
+      textEl.innerHTML = `Durée prévue : <strong>${duration} heures</strong>. ⚠️ <em>Attention : créneau trop long !</em> Les bénévoles ont des contraintes et hésiteront fortement à s'inscrire sur une journée continue non-stop.`;
+    }
+  },
+
+  // Confirmation et injection de la mission dans le planning
+  confirmPlanTravauxSession(game, stationId, roomId) {
+    const station = game.stations.find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+
+    let targetName = 'Locaux';
+    let targetLevel = 2;
+    let targetWorkObj = null;
+
+    if (roomId === 'isolation') {
+      targetName = 'Isolation BBC';
+      targetLevel = 3;
+      targetWorkObj = premises.isolationVolunteerWork;
+    } else {
+      const room = premises.rooms?.[roomId];
+      if (!room || !room.volunteerWork) return;
+      targetName = room.name;
+      targetLevel = room.volunteerWork.targetLevel;
+      targetWorkObj = room.volunteerWork;
+    }
+
+    const dayChoice = document.getElementById('pt-day-choice')?.value || 'tomorrow';
+    const startHour = parseInt(document.getElementById('pt-start-hour')?.value, 10) || 9;
+    let endHour = parseInt(document.getElementById('pt-end-hour')?.value, 10) || 13;
+    if (endHour <= startHour) endHour = startHour + 1;
+    const durationHours = endHour - startHour;
+    const maxVols = Math.max(2, parseInt(document.getElementById('pt-max-vols')?.value, 10) || 4);
+
+    let targetDay = game.clock?.day || 1;
+    let targetMonth = game.clock?.month || 0;
+    let targetYear = game.clock?.year || 2026;
+
+    if (dayChoice === 'tomorrow') {
+      targetDay += 1;
+    } else if (dayChoice === 'weekend') {
+      targetDay += 3;
+    } else if (dayChoice === 'next_weekend') {
+      targetDay += 7;
+    }
+
+    const mission = {
+      id: 'chantier-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      type: 'travaux',
+      subtype: 'chantier_locaux',
+      title: `Chantier Participatif : ${targetName}`,
+      desc: `Travaux d'aménagement associatif pour ${targetName} (Niveau ${targetLevel}). Les bénévoles présents apportent de l'avancement et renforcent la cohésion d'antenne.`,
+      roomKey: roomId,
+      stationId: station.id,
+      requiredVolunteers: maxVols,
+      registeredVolunteers: [],
+      plannedDate: { year: targetYear, month: targetMonth, day: targetDay, hour: startHour, minute: 0 },
+      eventDate: { year: targetYear, month: targetMonth, day: targetDay, hour: startHour, minute: 0 },
+      startHour: startHour,
+      endHour: endHour,
+      durationHours: durationHours,
+      durationSeconds: durationHours * 3600,
+      status: 'planifie',
+      address: station.address || `${station.city || 'Nancy'} Centre`,
+      location: { lat: station.lat || 48.692, lng: station.lng || 6.184 },
+      targetRoomName: targetName,
+      targetLevel: targetLevel,
+      pole: 'dps',
+      poleLabel: 'Chantier Bénévoles',
+      badgeBg: 'bg-amber-100 text-amber-900 border border-amber-300',
+      publishedAt: Date.now()
+    };
+
+    if (targetWorkObj) {
+      targetWorkObj.sessionsPlanned = targetWorkObj.sessionsPlanned || [];
+      targetWorkObj.sessionsPlanned.push(mission.id);
+    }
+
+    game.missions.push(mission);
+    game.saveGame();
+    game.updateStatsUI();
+
+    const modal = document.getElementById('plan-travaux-modal');
+    if (modal) modal.remove();
+
+    game.showToast(
+      'Session Travaux Planifiée 📋',
+      `« ${mission.title} » est enregistrée au planning (${durationHours}h, max ${maxVols} bénévoles). Les secouristes vont s'inscrire selon leurs disponibilités !`,
+      'green'
+    );
+
+    this.renderModal(game);
+  },
+
+  // Appelée lorsqu'une mission de travaux se termine
+  onTravauxMissionCompleted(game, mission) {
+    if (!mission || mission.type !== 'travaux') return;
+    const station = game.stations.find(s => s.id === mission.stationId) || game.stations[0];
+    if (!station) return;
+    const premises = this.ensureModularPremises(station, game);
+
+    const vols = (mission.registeredVolunteers || [])
+      .map(id => (game.volunteers || []).find(v => v.id === id))
+      .filter(Boolean);
+
+    const durationHours = mission.durationHours || Math.max(1, Math.round((mission.durationSeconds || 10800) / 3600));
+    const hoursGained = vols.length * durationHours;
+
+    // Récompenses et fatigue aux bénévoles
+    vols.forEach(v => {
+      v.moral = Math.min(100, (v.moral || 70) + 25);
+      v.motivation = v.moral;
+      v.humeur = v.moral;
+      v.exp = (v.exp || 0) + 20;
+      v.fatigue = Math.min(100, (v.fatigue || 20) + (durationHours * 3));
+      v.energy = Math.max(0, 100 - v.fatigue);
+      v.status = 'dispo';
+    });
+
+    if (mission.roomKey === 'isolation') {
+      const vw = premises.isolationVolunteerWork;
+      if (vw) {
+        vw.currentHours = (vw.currentHours || 0) + hoursGained;
+        if (vw.currentHours >= (vw.requiredHours || 60)) {
+          premises.isolationLevel = 3;
+          delete premises.isolationVolunteerWork;
+          game.showToast('🎉 Isolation BBC Achevée !', `Chantier participatif terminé avec succès par vos bénévoles ! Bâtiment isolé standard BBC.`, 'green');
+        } else {
+          game.showToast('🔨 Session Travaux Clôturée', `+${hoursGained}h apportées par vos ${vols.length} bénévoles (${vw.currentHours}/${vw.requiredHours}h). Planifiez la prochaine session !`, 'blue');
+        }
+      }
+      return;
+    }
+
+    const room = premises.rooms?.[mission.roomKey];
+    if (room && room.volunteerWork) {
+      const vw = room.volunteerWork;
+      vw.currentHours = (vw.currentHours || 0) + hoursGained;
+      const req = vw.requiredHours || 50;
+
+      if (vw.currentHours >= req) {
+        const newLvl = vw.targetLevel || (room.level + 1);
+        room.level = newLvl;
+        room.state = 100;
+        if (mission.roomKey === 'garage_remisage') {
+          room.capacity = newLvl === 2 ? 4 : 8;
+          station.rooms = station.rooms || {};
+          station.rooms.garage = newLvl;
+          station.rooms.garage_remisage = room;
+          station.garageCapacity = room.capacity;
+        } else if (mission.roomKey === 'salle_formation_psc1') {
+          room.capacity = newLvl === 2 ? 20 : 30;
+        }
+        delete room.volunteerWork;
+        game.showToast('🎉 Chantier Participatif Réussi !', `Grâce à la mobilisation collective (${vols.length} bénévoles sur la dernière session), ${room.name} est officiellement inauguré au Niveau ${room.level} !`, 'green');
+      } else {
+        const pct = Math.round((vw.currentHours / req) * 100);
+        game.showToast('🔨 Session Travaux Clôturée', `+${hoursGained}h d'avancement apportées par vos ${vols.length} bénévoles (${vw.currentHours}/${req}h, ${pct}%). Planifiez la prochaine session !`, 'blue');
+      }
+    }
+  },
+
   ensureModularPremises(station, game) {
     if (!station) return null;
     if (!station.premises) {
@@ -805,7 +1321,7 @@ window.ProtecLocaux = {
   },
 
   // Amélioration d'une pièce : Artisans vs Chantier Bénévoles
-  upgradeRoom(game, stationId, roomId, mode) {
+  async upgradeRoom(game, stationId, roomId, mode) {
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
     if (!station) return;
     const premises = this.ensureModularPremises(station, game);
@@ -817,32 +1333,41 @@ window.ProtecLocaux = {
       return;
     }
 
+    const targetLevel = (room.level || 1) + 1;
+    const spec = this.getRoomWorkSpec(roomId, targetLevel);
+
     if (mode === 'artisan') {
       const cost = room.craftsmanCost || 2000;
       if (game.resources.money < cost) {
         game.showToast('Trésorerie Insuffisante', 'L\'intervention des artisans requiert ' + cost + ' €.', 'orange');
         return;
       }
+
+      const confirmed = await window.ProtecDialog.confirm(
+        `DEVIS TRAVAUX ARTISANS DU BÂTIMENT :\n\n• Pièce ciblée : ${room.name} (Niveau ${targetLevel})\n• Coût de l'intervention clé en main : ${cost} €\n• Durée des travaux : ${spec.artisanHours} heures réelles (en tâche de fond)\n\nPendant toute la durée du chantier, la pièce reste utilisable à son niveau actuel (Niveau ${room.level}).\n\nConfirmez-vous le lancement des travaux par les artisans ?`,
+        'Intervention Artisans du Bâtiment',
+        { confirmText: `Engager les Artisans (-${cost} €)`, cancelText: 'Annuler' }
+      );
+      if (!confirmed) return;
+
       game.resources.money -= cost;
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, -cost, 'Travaux d\'artisans : ' + room.name + ' Niveau ' + (room.level + 1), 'locaux');
+        window.ProtecFinances.recordTransaction(game, -cost, `Travaux Artisans : ${room.name} (Niv. ${targetLevel})`, 'locaux');
       }
 
-      room.level += 1;
-      room.state = 100;
-      if (roomId === 'garage_remisage') {
-        room.capacity = room.level === 2 ? 4 : 8;
-        station.rooms = station.rooms || {};
-        station.rooms.garage = room.level;
-        station.rooms.garage_remisage = room;
-        station.garageCapacity = room.capacity;
-      } else if (roomId === 'salle_formation_psc1') {
-        room.capacity = room.level === 2 ? 20 : 30;
-      }
-      room.craftsmanCost = Math.round(room.craftsmanCost * 1.5);
-      room.volunteerMatCost = Math.round(room.volunteerMatCost * 1.5);
+      room.artisanWork = {
+        targetLevel: targetLevel,
+        cost: cost,
+        startTime: Date.now(),
+        targetCompletionTime: Date.now() + (spec.artisanHours * 3600000),
+        durationHours: spec.artisanHours
+      };
 
-      game.showToast('Travaux Artisans Terminés 👷✓', room.name + ' a été agrandi et modernisé au Niveau ' + room.level + ' !', 'green');
+      game.showToast(
+        'Artisans Déployés 👷',
+        `Le chantier pour ${room.name} est lancé ! Livraison prévue dans ${spec.artisanHours} heures réelles.`,
+        'blue'
+      );
     } else if (mode === 'chantier_benevole') {
       const matCost = room.volunteerMatCost || 700;
       if (game.resources.money < matCost) {
@@ -850,52 +1375,37 @@ window.ProtecLocaux = {
         return;
       }
 
-      const reqCount = room.reqVolunteers || 3;
-      const availableVols = (game.volunteers || []).filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne') && (!v.fatigue || v.fatigue < 80));
-      if (availableVols.length < reqCount) {
-        game.showToast(
-          'Effectif Insuffisant',
-          'Le chantier participatif requiert au moins ' + reqCount + ' bénévoles disponibles et en forme (' + availableVols.length + '/' + reqCount + ' prêts).',
-          'orange'
-        );
-        return;
-      }
+      const confirmed = await window.ProtecDialog.confirm(
+        `CHANTIER PARTICIPATIF DES BÉNÉVOLES :\n\n• Pièce ciblée : ${room.name} (Niveau ${targetLevel})\n• Coût d'achat des matériaux : ${matCost} €\n• Effort requis : ${spec.volunteerHours} heures-bénévoles\n\nVous pourrez ensuite planifier des sessions de travaux au planning selon vos créneaux souhaités. Les bénévoles s'inscriront selon leurs disponibilités.\n\nConfirmez-vous l'achat des matériaux pour démarrer le chantier ?`,
+        'Lancement Chantier Bénévoles',
+        { confirmText: `Acheter les Matériaux (-${matCost} €)`, cancelText: 'Annuler' }
+      );
+      if (!confirmed) return;
 
       game.resources.money -= matCost;
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, -matCost, 'Achat matériaux - Chantier Bénévoles : ' + room.name, 'locaux');
+        window.ProtecFinances.recordTransaction(game, -matCost, `Achat matériaux chantier : ${room.name} (Niv. ${targetLevel})`, 'locaux');
       }
 
-      // Mobilisation des bénévoles
-      const mobilised = availableVols.slice(0, reqCount);
-      mobilised.forEach(v => {
-        v.fatigue = Math.min(100, (v.fatigue || 20) + 16);
-        v.energy = Math.max(0, 100 - v.fatigue);
-        v.moral = Math.min(100, (v.moral || 70) + 25); // Boost de cohésion collective !
-        v.motivation = v.moral;
-        v.humeur = v.moral;
-        v.exp = (v.exp || 0) + 20;
-      });
-
-      room.level += 1;
-      room.state = 100;
-      if (roomId === 'garage_remisage') {
-        room.capacity = room.level === 2 ? 4 : 8;
-        station.rooms = station.rooms || {};
-        station.rooms.garage = room.level;
-        station.rooms.garage_remisage = room;
-        station.garageCapacity = room.capacity;
-      } else if (roomId === 'salle_formation_psc1') {
-        room.capacity = room.level === 2 ? 20 : 30;
-      }
-      room.craftsmanCost = Math.round(room.craftsmanCost * 1.5);
-      room.volunteerMatCost = Math.round(room.volunteerMatCost * 1.5);
+      room.volunteerWork = {
+        targetLevel: targetLevel,
+        materialCostPaid: matCost,
+        requiredHours: spec.volunteerHours,
+        currentHours: 0,
+        sessionsPlanned: []
+      };
 
       game.showToast(
-        '🎉 Week-End Travaux Réussi !',
-        room.name + ' monté au Niveau ' + room.level + ' par ' + mobilised.map(v => v.name).join(', ') + ' ! Coût réduit (' + matCost + ' €), cohésion d\'équipe renforcée (+25 moral) !',
+        'Matériaux Livrés 🔨',
+        `Les matériaux sont arrivés au local ! Vous pouvez maintenant planifier vos sessions de travaux.`,
         'green'
       );
+
+      this.renderModal(game);
+      setTimeout(() => {
+        this.openPlanTravauxSessionModal(game, stationId, roomId);
+      }, 350);
+      return;
     }
 
     game.updateStatsUI();
@@ -903,7 +1413,6 @@ window.ProtecLocaux = {
     this.renderModal(game);
   },
 
-  // Installation d'une extension optionnelle
   installRoomExtension(game, stationId, roomId, extensionKey, mode) {
     const station = game.stations.find(s => s.id === stationId) || game.stations[0];
     if (!station) return;
@@ -1178,16 +1687,7 @@ window.ProtecLocaux = {
                   ${premises.isolationLevel === 3 ? 'Factures de chauffage -30%' : (premises.isolationLevel === 1 ? 'Surconsommation hiver +80%' : 'Isolation intermédiaire')}
                 </span>
               </div>
-              ${premises.isolationLevel < 3 ? `
-                <div class="flex gap-1.5">
-                  <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'chantier_benevole')" class="px-2 py-1 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 font-black text-[10px] transition" title="Chantier participatif bénévoles (1 200 €)">
-                    Chantier (1,2k€)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeInsulation(window.game, '${station.id}', 'artisan')" class="px-2 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-[10px] transition" title="Entreprise isolation (3 500 €)">
-                    Artisans
-                  </button>
-                </div>
-              ` : '<span class="px-2 py-1 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-800">Isolé BBC</span>'}
+              ${this.renderInsulationActionBlock(station, premises)}
             </div>
           </div>
 
@@ -1296,16 +1796,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Protège les ambulances VPSP et vecteurs contre la pluie, la canicule et le gel. ${garage.hasAtelierMecanique ? '✓ Atelier mécanique intégré réduisant de 50% les frais d\'entretien garage.' : 'Possibilité d\'installer un atelier pour réparations internes.'}
               </p>
-              ${garage.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'garage_remisage', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition" title="Achète les matériaux (750 €) et mobilise 3 bénévoles le week-end (+25 moral)">
-                    🔨 Chantier (${garage.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'garage_remisage', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition" title="Artisans du bâtiment (2 200 €)">
-                    👷 Artisans (${garage.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Garage Agrandissement Maximum (8 places) ✓</div>'}
+              ${this.renderRoomActionBlock(station, "garage_remisage", garage, premises)}
             </div>
 
             <!-- PIÈCE 2 : SAS DÉSINFECTION & PHARMACIE -->
@@ -1331,16 +1822,7 @@ window.ProtecLocaux = {
                     + Installer Centrale Désinfection VPSP (400 € chantier / 3 bénév.)
                   </button>
                 ` : ''}
-                ${sas.level < 3 ? `
-                  <div class="grid grid-cols-2 gap-2">
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'sas_desinfection_pharmacie', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                      🔨 Chantier (${sas.volunteerMatCost} €)
-                    </button>
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'sas_desinfection_pharmacie', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                      👷 Artisans (${sas.craftsmanCost} €)
-                    </button>
-                  </div>
-                ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Pharmacie & Bionettoyage Conforme ARS ✓</div>'}
+                ${this.renderRoomActionBlock(station, "sas_desinfection_pharmacie", sas, premises)}
               </div>
             </div>
 
@@ -1359,7 +1841,7 @@ window.ProtecLocaux = {
                 </span>
               </div>
               <p class="text-[11px] text-slate-600 leading-relaxed">
-                Conditionne les sessions de formation citoyenne PSC1/GQS. ${psc1.hasVideoprojecteur ? '✓ Vidéoprojecteur interactif actif (+20% inscrits).' : ''} ${psc1.hasQcprMannequins ? '✓ Mannequins connectés QCPR actifs (+30% réputation, +15 €/personne).' : ''}
+                Conditionne les sessions de formation citoyenne PSC1/GQS. ${psc1.hasVideoprojecteur ? '✓ Vidéoprojecteur interactif actif (+20% inscrits).' : ''} ${psc1.hasQcprMannequins ? '✓ Mannequins connectés QCPR actifs (+15 €/personne).' : ''}
               </p>
               <div class="space-y-2 pt-1 border-t border-slate-100">
                 <div class="flex flex-wrap gap-2">
@@ -1374,16 +1856,7 @@ window.ProtecLocaux = {
                     </button>
                   ` : ''}
                 </div>
-                ${psc1.level < 3 ? `
-                  <div class="grid grid-cols-2 gap-2">
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'salle_formation_psc1', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                      🔨 Chantier (${psc1.volunteerMatCost} €)
-                    </button>
-                    <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'salle_formation_psc1', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                      👷 Artisans (${psc1.craftsmanCost} €)
-                    </button>
-                  </div>
-                ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Amphithéâtre PSC1 30 Places Validé ✓</div>'}
+                ${this.renderRoomActionBlock(station, "salle_formation_psc1", psc1, premises)}
               </div>
             </div>
 
@@ -1404,16 +1877,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Espace détente (canapés, cuisine, café). Régénère passivement le moral des secouristes présents au local (+3 à +8 pts/cycle) et réduit l\'attrition/départ des membres.
               </p>
-              ${foyer.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'foyer_vie_associative', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                    🔨 Chantier (${foyer.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'foyer_vie_associative', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                    👷 Artisans (${foyer.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Foyer Convivial Haut de Gamme ✓</div>'}
+              ${this.renderRoomActionBlock(station, "foyer_vie_associative", foyer, premises)}
             </div>
 
             <!-- PIÈCE 5 : BUREAU PC RADIO & COMMANDEMENT -->
@@ -1433,16 +1897,7 @@ window.ProtecLocaux = {
               <p class="text-[11px] text-slate-600 leading-relaxed">
                 Poste de commandement radio et régulation opérationnelle. Permet la coordination simultanée de plusieurs dispositifs de secours (${pcRadio.level === 1 ? '1 DPS majeur' : (pcRadio.level === 2 ? '3 DPS simultanés sans pénalité' : 'Coordination illimitée / Salle de crise COD')}).
               </p>
-              ${pcRadio.level < 3 ? `
-                <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100 max-w-md">
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'bureau_pc_radio', 'chantier_benevole')" class="py-2 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-[10.5px] font-black shadow-xs transition">
-                    🔨 Chantier (${pcRadio.volunteerMatCost} €)
-                  </button>
-                  <button onclick="window.ProtecLocaux.upgradeRoom(window.game, '${station.id}', 'bureau_pc_radio', 'artisan')" class="py-2 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-[10.5px] font-extrabold transition">
-                    👷 Artisans (${pcRadio.craftsmanCost} €)
-                  </button>
-                </div>
-              ` : '<div class="p-2 rounded-xl bg-emerald-50 text-emerald-800 font-black text-center text-xs">Poste de Commandement de Crise (Niveau COD) ✓</div>'}
+              ${this.renderRoomActionBlock(station, "bureau_pc_radio", pcRadio, premises)}
             </div>
           </div>
         </div>
@@ -1502,7 +1957,7 @@ window.ProtecLocaux = {
 
   // Calcul des statistiques cumulées des locaux
   calculatePremisesStats(premises) {
-    if (!premises || !premises.grid) {
+    if (!premises) {
       return {
         surfaceM2: 0,
         storageCapacity: 0,
@@ -1513,6 +1968,7 @@ window.ProtecLocaux = {
         energyRegen: 0,
         moralBonus: 0,
         nightBeds: 0,
+        trainingQuality: 100,
         counts: {}
       };
     }
@@ -1522,28 +1978,167 @@ window.ProtecLocaux = {
       counts[key] = 0;
     }
 
-    premises.grid.forEach(tileKey => {
-      if (counts[tileKey] !== undefined) {
-        counts[tileKey]++;
-      }
-    });
+    if (premises.grid && Array.isArray(premises.grid)) {
+      premises.grid.forEach(tileKey => {
+        if (counts[tileKey] !== undefined) {
+          counts[tileKey]++;
+        }
+      });
+    }
 
-    const storageTiles = counts.stockage || 0;
-    const formationTiles = counts.formation || 0;
-    const garageTiles = counts.garage || 0;
-    const detenteTiles = counts.detente || 0;
-    const dortoirTiles = counts.dortoir || 0;
+    // Statistiques de base issues des tuiles
+    let storageCapacity = (counts.stockage || 0) * 50;
+    let studentCapacity = (counts.formation || 0) * 6;
+    let vehicleCapacity = ((counts.garage || 0) * 1) + ((counts.parking || 0) * 1);
+    let energyRegen = (counts.detente || 0) * 15;
+    let moralBonus = (counts.detente || 0) * 5;
+    let nightBeds = (counts.dortoir || 0) * 2;
+    let trainingQuality = 100; // Base 100%
+
+    // Intégration du plan d'architecte réel (architecture CAD / Les Sims)
+    const arch = premises.architecture;
+    if (arch) {
+      // 1. Pièces et vocations
+      if (arch.rooms && Array.isArray(arch.rooms)) {
+        arch.rooms.forEach(r => {
+          if (r.type === 'formation' || r.name?.toLowerCase().includes('formation')) {
+            studentCapacity += 8;
+          } else if (r.type === 'stockage' || r.type === 'reserve' || r.name?.toLowerCase().includes('réserve')) {
+            storageCapacity += 40;
+          } else if (r.type === 'detente' || r.name?.toLowerCase().includes('foyer')) {
+            energyRegen += 10;
+            moralBonus += 5;
+          } else if (r.type === 'dortoir' || r.name?.toLowerCase().includes('dortoir') || r.name?.toLowerCase().includes('garde')) {
+            nightBeds += 2;
+          }
+        });
+      }
+
+      // 2. Parking opérationnel extérieur (spots)
+      if (arch.parkingSpots && Array.isArray(arch.parkingSpots)) {
+        vehicleCapacity += arch.parkingSpots.length;
+      } else {
+        vehicleCapacity = Math.max(vehicleCapacity, 2); // Minimum 2 places par défaut (parking cour)
+      }
+
+      // 3. Mobilier réel placé dans les pièces
+      if (arch.furniture && Array.isArray(arch.furniture)) {
+        arch.furniture.forEach(item => {
+          switch (item.type) {
+            case 'etagere_lots':
+              storageCapacity += 35; // +35 capacité lots A/B
+              break;
+            case 'armoire_pharmacie':
+              storageCapacity += 20; // +20 capacité consommables
+              break;
+            case 'casiers_vestiaire':
+              storageCapacity += 25; // +25 capacité vestiaire / tenues
+              moralBonus += 2;
+              break;
+            case 'rack_palettes_lourd':
+              storageCapacity += 80; // +80 capacité rack lourd
+              break;
+            case 'casiers_tenues_xl':
+              storageCapacity += 40; // +40 capacité vestiaires XL
+              moralBonus += 3;
+              break;
+            case 'armoire_forte_securisee':
+              storageCapacity += 25; // +25 capacité armoire forte
+              trainingQuality += 5;
+              break;
+            case 'lits_superposes':
+              nightBeds += 2; // +2 lits superposés
+              energyRegen += 18;
+              moralBonus += 4;
+              break;
+            case 'kitchenette_foyer':
+              energyRegen += 15;
+              moralBonus += 6;
+              break;
+            case 'table_repas_equipe':
+              moralBonus += 8;
+              energyRegen += 5;
+              break;
+            case 'ecran_tactique_interactif':
+              trainingQuality += 20;
+              moralBonus += 3;
+              break;
+            case 'mannequin_pediatrique':
+              trainingQuality += 15;
+              break;
+            case 'dsa_demonstration':
+              trainingQuality += 10;
+              break;
+            case 'table_formation':
+              studentCapacity += 4; // +4 élèves par table
+              break;
+            case 'tableau_blanc':
+              trainingQuality += 10; // +10% qualité pédagogique
+              break;
+            case 'mannequin_rcp':
+              trainingQuality += 15; // +15% qualité formation
+              break;
+            case 'dae_mural':
+              trainingQuality += 5;
+              break;
+            case 'lit_garde':
+              nightBeds += 1; // +1 lit d'astreinte
+              energyRegen += 10;
+              break;
+            case 'canape_detente':
+              energyRegen += 10; // +10% régénération énergie
+              moralBonus += 5;
+              break;
+            case 'machine_cafe':
+              energyRegen += 5;
+              moralBonus += 3;
+              break;
+            case 'bureau':
+            case 'chaise':
+              moralBonus += 1;
+              break;
+            case 'babyfoot':
+              moralBonus += 8;
+              break;
+            case 'tv_foyer':
+              moralBonus += 6;
+              energyRegen += 5;
+              break;
+            case 'console_jeux':
+              moralBonus += 10;
+              break;
+            case 'ping_pong':
+              moralBonus += 5;
+              energyRegen += 5;
+              break;
+            case 'distributeur_snacks':
+              moralBonus += 4;
+              energyRegen += 5;
+              break;
+          }
+        });
+      }
+    } else {
+      // Valeurs de base par défaut
+      if (vehicleCapacity === 0) vehicleCapacity = 2;
+      if (studentCapacity === 0) studentCapacity = 10;
+      if (storageCapacity === 0) storageCapacity = 100;
+    }
+
+    const hasFormation = studentCapacity > 0;
+    const hasStorage = storageCapacity > 0;
 
     return {
-      surfaceM2: premises.surfaceM2 || (premises.width * premises.height * 25),
-      storageCapacity: storageTiles * 50, // 50 unités de capacité par case de 25m²
-      studentCapacity: formationTiles * 6, // 6 élèves par case
-      vehicleCapacity: garageTiles * 1, // 1 place de véhicule par case
-      hasFormation: formationTiles > 0,
-      hasStorage: storageTiles > 0,
-      energyRegen: detenteTiles * 15,
-      moralBonus: detenteTiles * 5,
-      nightBeds: dortoirTiles * 2,
+      surfaceM2: premises.surfaceM2 || 84.6,
+      storageCapacity,
+      studentCapacity,
+      vehicleCapacity,
+      hasFormation,
+      hasStorage,
+      energyRegen,
+      moralBonus,
+      nightBeds,
+      trainingQuality,
       counts
     };
   },
@@ -1587,7 +2182,7 @@ window.ProtecLocaux = {
         cap = room.level === 1 ? 2 : (room.level === 2 ? 4 : 8);
       }
     }
-    if (prem?.grid && typeof this.calculatePremisesStats === 'function') {
+    if ((prem?.grid || prem?.architecture) && typeof this.calculatePremisesStats === 'function') {
       const stats = this.calculatePremisesStats(prem);
       if (stats && stats.vehicleCapacity > cap) cap = stats.vehicleCapacity;
     }
@@ -2565,10 +3160,17 @@ window.ProtecLocaux = {
       return;
     }
 
+    // Assainissement préalable : régule strictement tout dépassement de stock
+    if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
+      window.ProtecSocial.clampStorageToCapacity(game);
+    }
+
     // CAS 2 : Le joueur a déjà des locaux
     const stats = this.calculatePremisesStats(premises);
-    const storageUsed = this.getCurrentStorageUsed(game);
+    const rawStorageUsed = this.getCurrentStorageUsed(game);
+    const storageUsed = Math.min(stats.storageCapacity, rawStorageUsed);
     const storagePercent = stats.storageCapacity > 0 ? Math.min(100, Math.round((storageUsed / stats.storageCapacity) * 100)) : 100;
+    const isStorageSaturated = stats.hasStorage && storageUsed >= stats.storageCapacity;
     const securityScore = this.getSecurityScore(premises);
     const ongoingWorksCount = (premises.ongoingWorks || []).length;
     const isOwner = premises.tenure === 'owned';
@@ -2612,16 +3214,16 @@ window.ProtecLocaux = {
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
           
           <!-- Capacité Stockage -->
-          <div class="p-3 rounded-2xl ${stats.hasStorage ? 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40' : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
+          <div class="p-3 rounded-2xl ${stats.hasStorage ? (isStorageSaturated ? 'bg-red-50/80 border border-red-300 dark:bg-red-950/30 dark:border-red-800' : 'glass-card border-amber-200/80 bg-amber-50/30 dark:bg-amber-950/20 dark:border-amber-900/40') : 'bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60'} space-y-1">
             <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
               <span class="flex items-center gap-1">📦 Stockage</span>
-              <span class="${stats.hasStorage ? 'text-amber-600' : 'text-red-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
+              <span class="${!stats.hasStorage || isStorageSaturated ? 'text-red-600' : 'text-amber-600'} font-black">${storageUsed} / ${stats.storageCapacity}</span>
             </div>
             <div class="w-full h-1.5 rounded-full bg-slate-200 overflow-hidden">
-              <div class="h-full ${storagePercent > 90 ? 'bg-red-500' : 'bg-amber-500'} transition-all" style="width: ${storagePercent}%"></div>
+              <div class="h-full ${isStorageSaturated ? 'bg-red-600' : (storagePercent > 80 ? 'bg-amber-500' : 'bg-emerald-500')} transition-all" style="width: ${storagePercent}%"></div>
             </div>
-            <p class="text-[10px] ${stats.hasStorage ? 'text-slate-500' : 'text-red-600 font-bold'}">
-              ${stats.hasStorage ? `Collectes & maraudes autorisées` : `⚠️ Pas de stockage`}
+            <p class="text-[10px] ${!stats.hasStorage || isStorageSaturated ? 'text-red-600 font-bold' : 'text-slate-500'}">
+              ${!stats.hasStorage ? `⚠️ Pas de stockage` : (isStorageSaturated ? `⛔ Réserve saturée - Collectes suspendues` : `Collectes & maraudes autorisées`)}
             </p>
           </div>
 
@@ -2654,7 +3256,7 @@ window.ProtecLocaux = {
               <span class="text-emerald-600 font-black">+${stats.energyRegen}% réc.</span>
             </div>
             <p class="text-[10px] text-slate-500">
-              ${stats.nightBeds} lits • Moral +${stats.moralBonus}%
+              ${stats.nightBeds} lits de repos
             </p>
           </div>
 
@@ -2711,19 +3313,44 @@ window.ProtecLocaux = {
 
   // Catalogue des meubles et équipements pour l'agencement "Les Sims"
   FURNITURE_CATALOG: [
-    { type: 'bureau', name: 'Bureau Direction & PC', cat: 'bureau', w: 1.8, d: 0.9, color: '#334155', cost: 250, icon: '🗄️' },
+    { type: 'bureau', name: 'Bureau Direction & PC', cat: 'bureau', w: 1.8, d: 0.9, color: '#334155', cost: 250, icon: '🖥️' },
     { type: 'chaise', name: 'Chaise de Réunion', cat: 'bureau', w: 0.5, d: 0.5, color: '#0284c7', cost: 45, icon: '🪑' },
-    { type: 'table_formation', name: 'Table Formation Pédagogique', cat: 'formation', w: 2.2, d: 1.1, color: '#ea580c', cost: 180, icon: '🪑' },
+    { type: 'table_formation', name: 'Table Formation Pédagogique', cat: 'formation', w: 2.2, d: 1.1, color: '#ea580c', cost: 180, icon: '📚' },
     { type: 'tableau_blanc', name: 'Tableau Blanc Mural', cat: 'formation', w: 2.2, d: 0.2, color: '#f8fafc', cost: 120, icon: '📋' },
-    { type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cat: 'formation', w: 0.6, d: 1.2, color: '#f59e0b', cost: 320, icon: '🩺' },
+    { type: 'mannequin_rcp', name: 'Mannequin Secourisme RCP', cat: 'formation', w: 0.6, d: 1.2, color: '#f59e0b', cost: 320, icon: '🫀' },
     { type: 'dae_mural', name: 'Défibrillateur DAE Mural', cat: 'secours', w: 0.35, d: 0.35, color: '#10b981', cost: 450, icon: '⚡' },
-    { type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cat: 'secours', w: 1.2, d: 0.4, color: '#dc2626', cost: 190, icon: '🧰' },
-    { type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cat: 'stockage', w: 0.6, d: 2.4, color: '#475569', cost: 150, icon: '📦' },
-    { type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cat: 'stockage', w: 0.6, d: 2.5, color: '#0f172a', cost: 180, icon: '👕' },
+    { type: 'armoire_pharmacie', name: 'Armoire Pharmacie d’Urgence', cat: 'secours', w: 1.2, d: 0.4, color: '#dc2626', cost: 190, icon: '🩹', maxWeightKg: 80 },
+    { type: 'etagere_lots', name: 'Étagère Métallique Lots A/B', cat: 'stockage', w: 0.6, d: 2.4, color: '#475569', cost: 150, icon: '📦', maxWeightKg: 300 },
+    { type: 'casiers_vestiaire', name: 'Casiers Tenues F1 Protec', cat: 'stockage', w: 0.6, d: 2.5, color: '#0f172a', cost: 180, icon: '🦺', maxWeightKg: 150 },
     { type: 'lit_garde', name: 'Lit de Camp / Astreinte', cat: 'detente', w: 1.0, d: 2.0, color: '#a855f7', cost: 220, icon: '🛏️' },
     { type: 'canape_detente', name: 'Canapé Foyer Bénévoles', cat: 'detente', w: 2.0, d: 0.9, color: '#059669', cost: 280, icon: '🛋️' },
-    { type: 'machine_cafe', name: 'Machine à Café & Pause', cat: 'detente', w: 0.8, d: 0.6, color: '#d97706', cost: 85, icon: '☕' }
+    { type: 'machine_cafe', name: 'Machine à Café & Pause', cat: 'detente', w: 0.8, d: 0.6, color: '#d97706', cost: 85, icon: '☕' },
+    { type: 'babyfoot', name: 'Baby-foot Bonzini', cat: 'detente', w: 1.5, d: 1.0, color: '#16a34a', cost: 420, icon: '⚽', bonus: '+8% Moral et cohésion d’équipe lors des gardes' },
+    { type: 'tv_foyer', name: 'Téléviseur Mural / Écran Foyer', cat: 'detente', w: 1.4, d: 0.15, color: '#0f172a', cost: 350, icon: '📺', bonus: '+6% Détente et anti-stress en veille' },
+    { type: 'console_jeux', name: 'Console de Jeux & Coin Gaming', cat: 'detente', w: 1.0, d: 0.5, color: '#6366f1', cost: 480, icon: '🎮', bonus: '+10% Moral et attractivité jeunes recrues' },
+    { type: 'ping_pong', name: 'Table de Ping-Pong Pliante', cat: 'detente', w: 2.7, d: 1.5, color: '#0284c7', cost: 290, icon: '🏓', bonus: '+5% Énergie et convivialité d’équipe' },
+    { type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cat: 'detente', w: 0.9, d: 0.8, color: '#dc2626', cost: 380, icon: '🥤', bonus: '+5% Énergie et +4 Moral d’antenne' },
+    { type: 'armoire_forte_securisee', name: 'Armoire Forte Sécurisée DAE/Sensible', cat: 'secours', w: 1.0, d: 0.5, color: '#334155', cost: 420, icon: '🔐', maxWeightKg: 120, pole: 'pole_secours', bonus: 'Armoire blindée avec serrure de sécurité pour DAE, radios et pharmacie' },
+    { type: 'rack_palettes_lourd', name: 'Rack à Palettes Lourd (650kg)', cat: 'stockage', w: 2.6, d: 1.0, color: '#1e293b', cost: 380, icon: '🏗️', maxWeightKg: 650, pole: 'pole_crise', bonus: 'Rack industriel grande charge pour lits picots, groupes électrogènes et tentes' },
+    { type: 'casiers_tenues_xl', name: 'Bloc Casiers Vestiaires Tenues XL (250kg)', cat: 'stockage', w: 1.2, d: 0.6, color: '#0f172a', cost: 260, icon: '🦺', maxWeightKg: 250, pole: 'pole_vestiaire', bonus: 'Vestiaire grande capacité pour tenues d’intervention et casques' },
+    { type: 'lits_superposes', name: 'Lits Superposés d’Astreinte (2 places)', cat: 'detente', w: 1.0, d: 2.0, color: '#6d28d9', cost: 340, icon: '🛏️', bonus: '+2 couchages d’astreinte & +18% repos de garde' },
+    { type: 'kitchenette_foyer', name: 'Kitchenette Foyer Équipée', cat: 'detente', w: 1.8, d: 0.7, color: '#0f766e', cost: 580, icon: '🍳', bonus: '+15% régénération équipe & +6 Moral' },
+    { type: 'table_repas_equipe', name: 'Grande Table Repas & Cohésion (8p)', cat: 'detente', w: 2.4, d: 1.1, color: '#b45309', cost: 240, icon: '🍽️', bonus: '+8 Moral & Cohésion d’équipe' },
+    { type: 'ecran_tactique_interactif', name: 'Écran Tactile Interactif 75"', cat: 'formation', w: 2.0, d: 0.25, color: '#0284c7', cost: 750, icon: '🖥️', bonus: '+20% qualité formation & débriefing' },
+    { type: 'mannequin_pediatrique', name: 'Mannequin Pédiatrique (Nourrisson)', cat: 'formation', w: 0.8, d: 0.6, color: '#ea580c', cost: 290, icon: '👶', bonus: '+15% apprentissage gestes pédiatriques' },
+    { type: 'dsa_demonstration', name: 'DAE / DSA de Démonstration Vocale', cat: 'formation', w: 0.45, d: 0.45, color: '#10b981', cost: 220, icon: '⚡', bonus: '+10% pratique PSC & gestes qui sauvent' }
   ],
+
+  furnitureCategoryFilter: 'all',
+
+  setFurnitureCategory(catId) {
+    this.furnitureCategoryFilter = catId;
+    const panel = document.getElementById('editor-subpanel');
+    if (panel) {
+      panel.innerHTML = this.renderEditorToolsHTML();
+      if (window.lucide) window.lucide.createIcons();
+    }
+  },
 
   // =========================================================================
   // ÉCRAN INITIAL & GESTION : VÉRITABLE PLAN D'ARCHITECTE 2D/3D & OUTILS LES SIMS
@@ -2883,28 +3510,105 @@ window.ProtecLocaux = {
     const money = window.game?.resources?.money || 0;
 
     if (this.editorTab === 'furniture') {
+      const activeCat = this.furnitureCategoryFilter || 'all';
+
+      const isItemInCat = (item, cat) => {
+        if (cat === 'all') return true;
+        if (cat === 'bureau') return item.cat === 'bureau';
+        if (cat === 'formation') return item.cat === 'formation';
+        if (cat === 'stockage') return (item.cat === 'stockage' || item.cat === 'secours') && !item.type.includes('casier');
+        if (cat === 'vestiaire') return item.type.includes('casier') || item.pole === 'pole_vestiaire';
+        if (cat === 'detente') return item.cat === 'detente';
+        return true;
+      };
+
+      const categoryDefinitions = [
+        { id: 'all', label: 'Tout', icon: '🗂️' },
+        { id: 'bureau', label: 'Direction & PC', icon: '💼' },
+        { id: 'formation', label: 'Formation', icon: '🎓' },
+        { id: 'stockage', label: 'Stockage & Secours', icon: '📦' },
+        { id: 'vestiaire', label: 'Vestiaires', icon: '👕' },
+        { id: 'detente', label: 'Foyer & Détente', icon: '☕' }
+      ];
+
+      const renderFurnitureCard = (item) => `
+        <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95 cursor-pointer">
+          <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
+          <span class="text-[10px] font-bold text-center leading-tight truncate w-full" title="${item.name}">${item.name}</span>
+          <div class="flex items-center justify-between w-full px-1 text-[9px]">
+            <span class="text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
+            <span class="font-black text-emerald-700 bg-emerald-100/70 px-1 rounded">${item.cost} €</span>
+          </div>
+        </button>
+      `;
+
       return `
         <div class="space-y-2.5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 pb-1 border-b border-slate-100">
-            <span class="text-slate-600">Sélectionnez un mobilier à acheter et placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
+            <span class="text-slate-600">Sélectionnez un mobilier classé par pôle pour <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
             <div class="flex items-center gap-2">
               <button type="button" onclick="window.game.openModule('marche_occasion')" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange font-bold text-[11px] border border-orange-200 transition">Bourse Occasion 🏷️</button>
               <button type="button" onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-300 transition">Vendre Mobilier</button>
               <span class="text-xs font-bold text-slate-700 ml-1">Trésorerie : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
             </div>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-            ${this.FURNITURE_CATALOG.map(item => `
-              <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95">
-                <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
-                <span class="text-[10px] font-bold text-center leading-tight truncate w-full">${item.name}</span>
-                <div class="flex items-center justify-between w-full px-1 text-[9px]">
-                  <span class="text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
-                  <span class="font-black text-emerald-700 bg-emerald-100/70 px-1 rounded">${item.cost} €</span>
-                </div>
-              </button>
-            `).join('')}
+
+          <!-- Barre d'onglets de catégorie dans l'éditeur du jeu -->
+          <div class="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+            ${categoryDefinitions.map(cat => {
+              const count = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, cat.id)).length;
+              const isSelected = activeCat === cat.id;
+              return `
+                <button 
+                  type="button" 
+                  onclick="window.ProtecLocaux.setFurnitureCategory('${cat.id}')"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${isSelected ? 'bg-pc-blue text-white shadow-xs font-black' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+                  <span>${cat.icon}</span>
+                  <span>${cat.label}</span>
+                  <span class="text-[9.5px] opacity-75">(${count})</span>
+                </button>
+              `;
+            }).join('')}
           </div>
+
+          <!-- Grille des meubles (soit par sections si 'all', soit filtrée) -->
+          ${(() => {
+            if (activeCat === 'all') {
+              const sections = [
+                { id: 'bureau', title: '💼 Direction & Commandement' },
+                { id: 'formation', title: '🎓 Formation & Pédagogie' },
+                { id: 'stockage', title: '📦 Stockage & Matériel de Secours' },
+                { id: 'vestiaire', title: '👕 Vestiaires & Paquetages' },
+                { id: 'detente', title: '☕ Foyer, Détente & Repos' }
+              ];
+              return `
+                <div class="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                  ${sections.map(sec => {
+                    const items = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, sec.id));
+                    if (items.length === 0) return '';
+                    return `
+                      <div class="space-y-1.5">
+                        <div class="text-[11px] font-black text-slate-700 uppercase tracking-wider pb-0.5 border-b border-slate-100 flex items-center justify-between">
+                          <span>${sec.title}</span>
+                          <span class="text-[10px] text-slate-400 font-bold">(${items.length})</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                          ${items.map(renderFurnitureCard).join('')}
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `;
+            }
+
+            const filteredItems = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, activeCat));
+            return `
+              <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-[360px] overflow-y-auto pr-1">
+                ${filteredItems.map(renderFurnitureCard).join('')}
+              </div>
+            `;
+          })()}
         </div>
       `;
     }
@@ -2913,30 +3617,54 @@ window.ProtecLocaux = {
       return `
         <div class="space-y-2.5">
           <div class="flex items-center justify-between text-xs pb-1 border-b border-slate-100">
-            <span class="text-slate-600">Ajoutez des ouvertures sur les murs :</span>
+            <span class="text-slate-600">Ajoutez des ouvertures, accès véhicules et cloisons sur les murs :</span>
             <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
             <button type="button" onclick="window.ProtecLocaux.addDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
                 <span class="text-2xl">🚪</span>
                 <div>
-                  <strong class="block text-xs font-black text-slate-900">+ Porte d'Entrée (93cm)</strong>
-                  <span class="text-[10.5px] text-slate-500">Accès parking / extérieur</span>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte Battante (83/93cm)</strong>
+                  <span class="text-[10.5px] text-slate-500">Accès intérieur / extérieur standard</span>
                 </div>
               </div>
               <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
             </button>
-            <button type="button" onclick="window.ProtecLocaux.addDoorItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+
+            <button type="button" onclick="window.ProtecLocaux.addDoubleDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
-                <span class="text-2xl">🚪</span>
+                <span class="text-2xl">🚪🚪</span>
                 <div>
-                  <strong class="block text-xs font-black text-slate-900">+ Porte Intérieure (83cm)</strong>
-                  <span class="text-[10.5px] text-slate-500">Cloison de communication</span>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte Double Battante (1.40m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Passage brancard & logistique</span>
                 </div>
               </div>
-              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">220 €</span>
             </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addGarageShutterItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🏭</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Rideau Métallique (3.20m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Accès garage motorisé VPSP / LOG</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">650 €</span>
+            </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addGlassPartitionItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🪟</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Cloison Vitrée Acoustique (2.00m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Séparation vitrée PC & réunion</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">290 €</span>
+            </button>
+
             <button type="button" onclick="window.ProtecLocaux.addWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
                 <span class="text-2xl">🪟</span>
@@ -2946,6 +3674,17 @@ window.ProtecLocaux = {
                 </div>
               </div>
               <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">180 €</span>
+            </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addBayWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">☀️</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Baie Vitrée Panoramique (2.40m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Luminosité accueil / foyer</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">320 €</span>
             </button>
           </div>
         </div>
@@ -3041,16 +3780,16 @@ window.ProtecLocaux = {
               <p class="text-[10px] text-slate-500">${metrics.capacityMetrics.totalUsableSurfaceM2} m² utiles • <strong>${metrics.capacityMetrics.nightDutyBedsCount} lit(s)</strong> garde 24h • <strong>${metrics.capacityMetrics.studentTrainingCapacity}</strong> places cours</p>
             </div>
 
-            <!-- 3. Autonomie en consommables -->
+            <!-- 3. Capacité Logistique & Stockage du Bâtiment (en kg) -->
             <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1">
               <div class="flex items-center justify-between text-xs font-black text-slate-800">
-                <span class="flex items-center gap-1">🩺 Autonomie Soins</span>
-                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${metrics.supplyMetrics.rating === 'AUTONOME' ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'}">
-                  ${metrics.supplyMetrics.rating}
+                <span class="flex items-center gap-1">📦 Capacité Stockage</span>
+                <span class="text-[10px] px-1.5 py-0.5 rounded font-mono ${(m.furniture || []).some(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)) ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
+                  ${(m.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)).length} RANGEMENT${(m.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type)).length > 1 ? 'S' : ''}
                 </span>
               </div>
-              <div class="text-base font-black text-slate-900">${metrics.supplyMetrics.medicalAutonomyDays} jours</div>
-              <p class="text-[10px] text-slate-500">Réserve : <strong>${metrics.supplyMetrics.totalStorageSlots} slots</strong> • Capacité : <strong>${metrics.supplyMetrics.consecutiveDpsAutonomy}</strong> DPS simultanés</p>
+              <div class="text-base font-black text-slate-900">${(m.furniture || []).reduce((sum, f) => sum + (f.maxWeightKg || (f.type === 'etagere_lots' ? 300 : f.type === 'armoire_pharmacie' ? 80 : f.type === 'casiers_vestiaire' ? 150 : 0)), 0)} kg utiles</div>
+              <p class="text-[10px] text-slate-500">Charge max admissible pour Lots A/B, kits CHU, tenues F1 et caisses d'intervention.</p>
             </div>
 
             <!-- 4. Coûts d'entretien journalier (OPEX) -->
@@ -3092,25 +3831,41 @@ window.ProtecLocaux = {
 
   renderRoomsListHTML(model) {
     const m = model || this.getArchitectModel();
+    const typeIcons = {
+      libre: '⚪',
+      bureau: '💼',
+      formation: '🎓',
+      stockage: '📦',
+      detente: '☕',
+      pc_radio: '📡',
+      dortoir: '🛏️',
+      vestiaire: '🚿',
+      vestiaires: '🚿'
+    };
+
     return (m.rooms || []).map((rm, idx) => {
       const isSelected = this.selectedRoomId === rm.id;
+      const cleanType = rm.type || 'libre';
+      const icon = typeIcons[cleanType] || '🏛️';
+
       return `
-        <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/30' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
+        <div onclick="window.ProtecLocaux.selectRoom('${rm.id}')" class="p-2.5 rounded-xl border transition cursor-pointer ${isSelected ? 'bg-blue-50/90 border-pc-blue ring-2 ring-pc-blue/40 shadow-xs' : 'bg-slate-50 border-slate-200 hover:bg-slate-100'}">
           <div class="flex items-center justify-between text-xs font-black mb-1.5">
             <span class="flex items-center gap-1.5 text-slate-900 truncate">
               <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono flex-shrink-0">${idx + 1}</span>
-              <span class="truncate">Pièce ${idx + 1} (${rm.area.toFixed(1)} m²)</span>
+              <span class="truncate">Pièce ${idx + 1} (${(rm.area || rm.w * rm.h || 20).toFixed(1)} m²)</span>
             </span>
-            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-bold flex-shrink-0">Active ★</span>' : ''}
+            ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-black bg-blue-100/80 px-1.5 py-0.2 rounded flex-shrink-0">Active ★</span>' : ''}
           </div>
-          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue">
-            <option value="libre" ${rm.type === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
-            <option value="bureau" ${rm.type === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
-            <option value="formation" ${rm.type === 'formation' ? 'selected' : ''}>🎓 Formation PSC & DPS</option>
-            <option value="stockage" ${rm.type === 'stockage' ? 'selected' : ''}>📦 Réserve Lots A/B & Vestiaires</option>
-            <option value="detente" ${rm.type === 'detente' ? 'selected' : ''}>☕ Foyer & Détente</option>
-            <option value="dortoir" ${rm.type === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir de Garde</option>
-            <option value="vestiaires" ${rm.type === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
+          <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue cursor-pointer">
+            <option value="libre" ${cleanType === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
+            <option value="bureau" ${cleanType === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
+            <option value="formation" ${cleanType === 'formation' ? 'selected' : ''}>🎓 Salle de Formation (PSC / SST)</option>
+            <option value="stockage" ${cleanType === 'stockage' ? 'selected' : ''}>📦 Stockage & Logistique (Lots A/B)</option>
+            <option value="detente" ${cleanType === 'detente' ? 'selected' : ''}>☕ Foyer & Détente (Bénévoles)</option>
+            <option value="pc_radio" ${cleanType === 'pc_radio' ? 'selected' : ''}>📡 PC Radio & Opérations</option>
+            <option value="dortoir" ${cleanType === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir d'Astreinte (SAMU/SDIS)</option>
+            <option value="vestiaire" ${cleanType === 'vestiaire' || cleanType === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
           </select>
         </div>
       `;
@@ -3120,16 +3875,27 @@ window.ProtecLocaux = {
   selectRoom(roomId) {
     this.selectedRoomId = roomId;
     this.renderArchitectScene();
+
+    const model = this.getArchitectModel();
+    const rm = (model.rooms || []).find(r => r.id === roomId);
+
+    // 1. Mettre à jour la liste des pièces
     const container = document.getElementById('starter-rooms-list');
     if (container) {
-      container.innerHTML = this.renderRoomsListHTML();
+      container.innerHTML = this.renderRoomsListHTML(model);
     }
+
+    // 2. Mettre à jour l'en-tête de la pièce sélectionnée à droite de la barre d'onglets
+    const headerLabel = document.getElementById('selected-room-header-name');
+    if (headerLabel && rm) {
+      headerLabel.textContent = rm.name.split('\n')[0];
+    }
+
+    // 3. Mettre à jour la barre contextuelle sous le canvas
     const contextBar = document.getElementById('canvas-context-bar');
     if (contextBar && !this.selectedFurnitureId) {
-      const model = this.getArchitectModel();
-      const rm = (model.rooms || []).find(r => r.id === roomId);
       if (rm) {
-        const areaLabel = this.isEditing ? ` (${rm.area.toFixed(1)} m²)` : '';
+        const areaLabel = rm.area ? ` (${rm.area.toFixed(1)} m²)` : '';
         contextBar.innerHTML = `
           <span class="flex items-center gap-1.5 font-bold text-blue-300">
             <span>🏛️</span>
@@ -3150,10 +3916,12 @@ window.ProtecLocaux = {
     const titles = {
       libre: `Salle ${roomIdx || 1} (Libre)\n(Non affectée)`,
       bureau: 'Accueil & Direction\n(Poste de Commandement)',
-      formation: 'Salle de Formation & DPS\n(Pédagogie Citoyenne)',
-      stockage: 'Réserve Lots A/B & Vestiaires\n(Pharmacie & Casiers F1)',
+      formation: 'Salle de Formation\n(Pédagogie & PSC/SST)',
+      stockage: 'Stockage & Logistique\n(Réserve Matériel & Lots)',
       detente: 'Foyer & Détente\n(Espace Convivial Bénévoles)',
-      dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / CUMP)',
+      pc_radio: 'PC Radio & Opérations\n(Poste de Commandement)',
+      dortoir: 'Dortoir d\'Astreinte\n(Garde SAMU 15 / SDIS)',
+      vestiaire: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)',
       vestiaires: 'Vestiaires Opérationnels\n(Casiers & Sanitaires)'
     };
     const colors = {
@@ -3162,7 +3930,9 @@ window.ProtecLocaux = {
       formation: '#141a26',
       stockage: '#181b2a',
       detente: '#14241e',
+      pc_radio: '#281328',
       dortoir: '#22182c',
+      vestiaire: '#131e28',
       vestiaires: '#131e28'
     };
 
@@ -3170,6 +3940,7 @@ window.ProtecLocaux = {
     room.color = colors[newRole] || '#131824';
 
     this.selectRoom(roomId);
+    this.saveCurrentArchitecture(window.game);
     this.renderArchitectScene();
   },
 
@@ -3225,6 +3996,128 @@ window.ProtecLocaux = {
       len: 1.40,
       wall: wall,
       label: 'Fenêtre (1.40m)'
+    };
+    model.windows.push(newWindow);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addDoubleDoorItem(wall = 'W') {
+    const cost = 220;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une porte double battante. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Porte Double Installée (-220 €)', 'Porte double 1.40m installée pour brancards.', 'blue');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_double_${Date.now()}`,
+      type: 'double_door',
+      x: wall === 'W' ? 6.2 : (wall === 'E' ? 15.6 : 10.8),
+      y: 3.5,
+      len: 1.40,
+      wall: wall,
+      label: 'Porte Double Battante (1.40m)',
+      isMain: false
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addGarageShutterItem(wall = 'W') {
+    const cost = 650;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser un rideau métallique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Rideau Métallique Installé (-650 €)', 'Accès garage motorisé 3.20m posé pour les véhicules d’intervention.', 'blue');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_shutter_${Date.now()}`,
+      type: 'garage_shutter',
+      x: wall === 'W' ? 6.2 : (wall === 'E' ? 15.6 : 8.0),
+      y: wall === 'N' || wall === 'S' ? (wall === 'N' ? 1.5 : 9.5) : 5.0,
+      len: 3.20,
+      wall: wall,
+      label: 'Rideau Métallique Garage (3.20m)',
+      isMain: true
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addGlassPartitionItem(wall = 'N') {
+    const cost = 290;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une cloison vitrée acoustique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Cloison Vitrée Posée (-290 €)', 'Cloison vitrée acoustique 2.00m installée.', 'cyan');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_glass_${Date.now()}`,
+      type: 'glass_partition',
+      x: 8.5,
+      y: 5.5,
+      len: 2.00,
+      wall: wall,
+      label: 'Cloison Vitrée Acoustique (2.00m)',
+      isMain: false
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addBayWindowItem(wall = 'N') {
+    const cost = 320;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une baie vitrée panoramique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Baie Vitrée Installée (-320 €)', 'Grande baie vitrée 2.40m installée.', 'cyan');
+    }
+
+    const model = this.getArchitectModel();
+    const newWindow = {
+      id: `w_${Date.now()}`,
+      x: wall === 'N' ? 9.0 : 15.6,
+      y: wall === 'N' ? 1.5 : 4.0,
+      len: 2.40,
+      wall: wall,
+      label: 'Grande Baie Vitrée (2.40m)'
     };
     model.windows.push(newWindow);
     this.renderArchitectScene();
@@ -3318,11 +4211,16 @@ window.ProtecLocaux = {
       d: catalogItem.d,
       color: catalogItem.color,
       label: catalogItem.name,
-      rotation: 0
+      icon: catalogItem.icon,
+      pole: catalogItem.pole || 'pole_libre',
+      rotation: 0,
+      storedInventory: {},
+      maxWeightKg: catalogItem.maxWeightKg || 0
     };
 
     model.furniture.push(newItem);
     this.selectedFurnitureId = newItem.id;
+    this.saveCurrentArchitecture(game);
     this.renderArchitectScene();
 
     // Mettre à jour la barre contextuelle
@@ -3347,17 +4245,71 @@ window.ProtecLocaux = {
     if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
+  // Détection du support pour adapter le message contextuel d'aide (Tactile vs Souris)
+  getContextBarDefaultHTML() {
+    const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    if (isTouch) {
+      return `
+        <div class="flex items-center gap-1.5 text-slate-700 dark:text-slate-200 text-[10px] sm:text-[11px] font-medium text-center">
+          <span>👆</span>
+          <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un véhicule ou une pièce</span>
+        </div>
+      `;
+    } else {
+      return `
+        <div class="flex items-center gap-2 text-slate-700 dark:text-slate-200 text-[10px] sm:text-[11px] font-medium text-center">
+          <span>🖱️</span>
+          <span><strong>Clic gauche + glisser :</strong> déplacer la vue • <strong>Molette :</strong> zoomer • <strong>Survol :</strong> infos véhicule • <strong>Clic :</strong> aménager</span>
+        </div>
+      `;
+    }
+  },
+
   updateContextBar(item) {
     const contextBar = document.getElementById('canvas-context-bar');
     if (!contextBar) return;
 
     if (item) {
+      const itype = item.type;
+      const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype);
+      const isComfort = ['canape_detente', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype);
+      const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
+      const isFunctional = ['mannequin_rcp', 'mannequin_pediatrique', 'dsa_demonstration', 'ecran_tactique_interactif', 'tableau_blanc', 'table_formation', 'bureau', 'dae_mural'].includes(itype);
+
+      let actionBtnHTML = '';
+      if (isStorage) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openStorageInventory('${item.id}')" class="px-2.5 py-1 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>📦</span> <span>Gérer le Stock</span>
+          </button>
+        `;
+      } else if (isComfort) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openComfortModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🛋️</span> <span>Espace Confort</span>
+          </button>
+        `;
+      } else if (isFun) {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openEntertainmentModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>🎮</span> <span>Divertissement</span>
+          </button>
+        `;
+      } else {
+        actionBtnHTML = `
+          <button type="button" onclick="window.ProtecLocaux.openFunctionalModal('${item.id}')" class="px-2.5 py-1 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
+            <span>📋</span> <span>Fonctionnalité</span>
+          </button>
+        `;
+      }
+
       contextBar.innerHTML = `
         <div class="flex items-center gap-2 flex-wrap justify-center text-xs">
           <span class="flex items-center gap-1 font-bold text-amber-300">
-            <span>🛋️</span>
+            <span>${item.icon || '🛋️'}</span>
             <span class="truncate max-w-[130px] sm:max-w-none"><strong>${item.name || item.label || 'Mobilier'}</strong></span>
           </span>
+          ${actionBtnHTML}
           <div class="h-3.5 w-[1px] bg-slate-700 hidden sm:block"></div>
           <button type="button" onclick="window.ProtecLocaux.rotateSelectedItem()" class="px-2.5 py-1 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] flex items-center gap-1 transition shadow cursor-pointer active:scale-95">
             <span>🔄</span> <span>Pivoter (90°)</span>
@@ -3371,12 +4323,7 @@ window.ProtecLocaux = {
         </div>
       `;
     } else {
-      contextBar.innerHTML = `
-        <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
-          <span>👆</span>
-          <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
-        </div>
-      `;
+      contextBar.innerHTML = this.getContextBarDefaultHTML();
     }
   },
 
@@ -3390,6 +4337,7 @@ window.ProtecLocaux = {
     item.w = item.d;
     item.d = tmp;
     this.updateContextBar(item);
+    this.saveCurrentArchitecture(window.game);
     this.renderArchitectScene();
   },
 
@@ -3413,6 +4361,7 @@ window.ProtecLocaux = {
     model.furniture = (model.furniture || []).filter(f => f.id !== this.selectedFurnitureId);
     this.selectedFurnitureId = null;
     this.updateContextBar(null);
+    this.saveCurrentArchitecture(game);
     this.renderArchitectScene();
 
     const subpanel = document.getElementById('editor-subpanel');
@@ -3448,6 +4397,9 @@ window.ProtecLocaux = {
 
   renderPlanTab(game, premises, stats) {
     const isOwner = premises.tenure === 'owned';
+    const model = this.getArchitectModel(premises.stationId);
+    this.selectedRoomId = this.selectedRoomId || 'room_1';
+    const selectedRoom = (model.rooms || []).find(r => r.id === this.selectedRoomId) || (model.rooms && model.rooms[0]);
 
     // Déclenchement réactif de l'initialisation du Canvas après le rendu dans le DOM
     requestAnimationFrame(() => {
@@ -3462,52 +4414,45 @@ window.ProtecLocaux = {
         <!-- Barre supérieure : Alertes & Statut de Propriété -->
         <div class="p-3.5 rounded-2xl glass-panel-heavy border border-slate-200/80 flex flex-col md:flex-row md:items-center justify-between gap-3">
           <div class="flex items-center gap-2 flex-wrap">
-            ${isOwner ? `
-              <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="px-4 py-2 rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 ${this.isEditing ? 'bg-amber-500 text-white animate-pulse' : 'bg-pc-blue text-white hover:bg-pc-blue-light'}">
-                <i data-lucide="${this.isEditing ? 'check-circle' : 'hammer'}" class="w-4 h-4"></i>
-                <span>${this.isEditing ? 'Valider le Plan d’Aménagement' : 'Réaménager les Cloisons (Travaux)'}</span>
-              </button>
-            ` : `
-              <button onclick="window.ProtecLocaux.showRentalRestrictedModal(window.game)" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-500 cursor-not-allowed flex items-center gap-2" title="Travaux interdits en location">
-                <i data-lucide="lock" class="w-4 h-4 text-slate-400"></i>
-                <span>Aménagements Verrouillés (Bail Locatif)</span>
-              </button>
-            `}
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="px-4 py-2 rounded-xl text-xs font-black shadow-md transition flex items-center gap-2 cursor-pointer ${this.isEditing ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400' : 'bg-pc-blue hover:bg-blue-600 text-white'}">
+              <i data-lucide="${this.isEditing ? 'check-circle' : 'layout-grid'}" class="w-4 h-4"></i>
+              <span>${this.isEditing ? 'Valider l’Aménagement' : 'Mode Aménagement & Mobilier'}</span>
+            </button>
 
             <!-- Indicateur de surface totale et hauteur sous plafond -->
             <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">
-              <span>Hauteur sous plafond : <strong>2.80 m</strong></span>
+              <span>🏛️ Locaux Bâtiment : <strong class="text-pc-blue">84.6 m²</strong></span>
               <span>•</span>
-              <span>Surface Bâtiment : <strong class="text-pc-blue">84.6 m²</strong></span>
+              <span>🚒 Cour & Hangar : <strong class="text-amber-600">43.2 m²</strong></span>
               <span>•</span>
-              <span>Cour & Parking : <strong class="text-amber-600">43.2 m²</strong></span>
+              <span>👥 Capacité : <strong class="text-emerald-600">24 secouristes</strong></span>
             </div>
           </div>
 
           <!-- Actions rapides -->
           <div class="flex items-center gap-2 text-xs font-bold">
-            <button onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1.5 cursor-pointer">
               <span>🎯</span> Recentrer la Vue
             </button>
-            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5">
-              <span class="font-mono text-cyan-400">{ }</span> Fiche Technique
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="px-3 py-1.5 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition flex items-center gap-1.5 cursor-pointer">
+              <span>📋</span> Agencement des Salles
             </button>
           </div>
         </div>
 
         <!-- Avertissement pédagogique si Locataire -->
         ${!isOwner ? `
-          <div class="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-950 text-xs flex items-start justify-between gap-3">
+          <div class="p-3.5 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-slate-800 text-xs flex items-start justify-between gap-3">
             <div class="flex items-start gap-2.5">
-              <i data-lucide="alert-circle" class="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5"></i>
+              <i data-lucide="info" class="w-4 h-4 text-pc-blue flex-shrink-0 mt-0.5"></i>
               <div class="space-y-0.5">
-                <strong class="font-black text-amber-900 block">Locataire sous Convention Municipale</strong>
-                <p class="text-[11px] text-amber-800 leading-relaxed">
-                  En location, le bailleur vous interdit de casser les cloisons ou de modifier la structure. Pour aménager librement la caserne, rachetez les murs.
+                <strong class="font-black text-slate-900 block">Convention Municipale d'Occupation (Bailleur Public)</strong>
+                <p class="text-[11px] text-slate-600 leading-relaxed">
+                  Vous pouvez agencer librement l'intérieur de la caserne, installer du mobilier et réaffecter les salles de secours. Seule la démolition de cloisons porteuses nécessite le rachat des murs.
                 </p>
               </div>
             </div>
-            <button onclick="window.ProtecLocaux.buyoutPremisesWalls(window.game)" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition flex-shrink-0">
+            <button onclick="window.ProtecLocaux.buyoutPremisesWalls(window.game)" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow-sm transition flex-shrink-0 cursor-pointer">
               Racheter les Murs (${(premises.buyoutPrice || 45000).toLocaleString('fr-FR')} €)
             </button>
           </div>
@@ -3541,60 +4486,91 @@ window.ProtecLocaux = {
         <!-- ========================================================================= -->
         <!-- ZONE VISUALISEUR D'ARCHITECTE 2D / 3D TEMPS RÉEL (ADAPTÉ SMARTPHONE & PC)  -->
         <!-- ========================================================================= -->
-        <div class="relative w-full h-[360px] sm:h-[480px] md:h-[580px] rounded-3xl bg-[#0b0f19] border-2 border-slate-800 shadow-2xl overflow-hidden select-none">
+        <div class="relative w-full h-[360px] sm:h-[480px] md:h-[580px] rounded-3xl bg-[#f5f0e8] border-2 border-amber-200/80 shadow-2xl overflow-hidden select-none">
           
           <!-- CANVAS PRINCIPAL HAUTE DÉFINITION TACTILE -->
           <canvas id="architect-canvas" style="touch-action: none;" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
 
           <!-- 1. En-tête gauche : Badge Plan d'Architecte 2D -->
-          <div class="absolute top-2.5 sm:top-3.5 left-2.5 sm:left-3.5 z-20 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-lg text-[11px] sm:text-xs font-bold text-white pointer-events-none">
-            <span class="text-blue-400">📐</span>
-            <span>Plan 2D Bâtiment</span>
+          <div class="absolute top-2.5 sm:top-3.5 left-2.5 sm:left-3.5 z-20 flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl bg-white/90 backdrop-blur border border-amber-200 shadow-md text-[11px] sm:text-xs font-bold text-slate-700 pointer-events-none">
+            <span>🏠</span>
+            <span>🏢 Caserne Opérationnelle</span>
           </div>
 
           <!-- 2. En-tête droite : Boutons + et { } -->
           <div class="absolute top-2.5 sm:top-3.5 right-2.5 sm:right-3.5 z-20 flex items-center gap-1.5">
-            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-white border border-slate-700/80 flex items-center justify-center font-black text-lg shadow-lg transition active:scale-95 cursor-pointer" title="Ajouter un équipement ou mobilier">
+            <button onclick="window.ProtecLocaux.showAddElementModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-white/90 hover:bg-amber-50 text-slate-700 border border-amber-200 flex items-center justify-center font-black text-lg shadow-md transition active:scale-95 cursor-pointer" title="Ajouter un équipement ou mobilier">
               +
             </button>
-            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-slate-900/90 hover:bg-slate-800 text-cyan-400 border border-slate-700/80 flex items-center justify-center font-mono font-bold text-xs sm:text-sm shadow-lg transition active:scale-95 cursor-pointer" title="Fiche technique & cotes d'architecte">
-              { }
+            <button onclick="window.ProtecLocaux.showTechnicalSpecsModal(window.game)" class="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-white/90 hover:bg-slate-50 text-slate-500 border border-slate-200 flex items-center justify-center font-mono font-bold text-xs sm:text-sm shadow-md transition active:scale-95 cursor-pointer" title="Agencement des pièces et surfaces">
+              📋
             </button>
           </div>
 
           <!-- 3. Barre d'outils latérale droite (Flottante sombre) -->
-          <div class="absolute top-1/2 -translate-y-1/2 right-2.5 sm:right-3.5 z-20 flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-slate-900/90 backdrop-blur border border-slate-700/80 shadow-2xl">
+          <div class="absolute top-1/2 -translate-y-1/2 right-2.5 sm:right-3.5 z-20 flex flex-col items-center gap-1.5 p-1 sm:p-1.5 rounded-2xl bg-white/90 backdrop-blur border border-slate-200 shadow-xl">
             <!-- Crayon / Éditer -->
-            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
+            <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-slate-700 hover:bg-amber-50'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
               ✏️
             </button>
             <!-- Aimant Snap / Magnétisme -->
-            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-600 text-white shadow-md shadow-blue-500/50 ring-2 ring-blue-400' : 'text-slate-400 hover:text-white hover:bg-slate-800'}" title="Magnétisme Grille (Snap)">
+            <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-500 text-white shadow-md ring-2 ring-blue-300' : 'text-slate-400 hover:text-slate-700 hover:bg-blue-50'}" title="Alignement automatique des meubles">
               🧲
             </button>
             <div class="w-5 h-[1px] bg-slate-700/80 my-0.5"></div>
             <!-- Zoom + -->
-            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom avant">
+            <button onclick="window.ProtecLocaux.zoomCamera(1.2)" class="w-8 h-8 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom avant">
               +
             </button>
             <!-- Zoom - -->
-            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom arrière">
+            <button onclick="window.ProtecLocaux.zoomCamera(0.8)" class="w-8 h-8 rounded-xl text-slate-500 hover:text-slate-700 hover:bg-slate-100 flex items-center justify-center font-black text-base transition cursor-pointer" title="Zoom arrière">
               −
             </button>
             <!-- Centrer caméra -->
-            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-slate-800 flex items-center justify-center transition cursor-pointer" title="Recentrer la vue">
+            <button onclick="window.ProtecLocaux.resetCamera()" class="w-8 h-8 rounded-xl text-orange-400 hover:text-orange-500 hover:bg-orange-50 flex items-center justify-center transition cursor-pointer" title="Recentrer la vue">
               🎯
             </button>
           </div>
 
-          <!-- 4. Barre contextuelle inférieure interactive (Mobile & Bureau) -->
-          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-2xl bg-slate-900/95 backdrop-blur border border-slate-700/80 shadow-2xl max-w-[94%] transition-all">
-            <div class="flex items-center gap-1.5 text-slate-300 text-[10px] sm:text-[11px] font-medium text-center">
-              <span>👆</span>
-              <span><strong>1 doigt :</strong> déplacer • <strong>2 doigts :</strong> zoomer • Touchez un meuble ou une pièce</span>
+          <!-- 4. Barre contextuelle inférieure interactive adaptée au support (Mobile / Tactile vs Ordinateur / Souris) -->
+          <div id="canvas-context-bar" class="absolute bottom-2.5 left-1/2 -translate-x-1/2 z-20 px-3.5 py-1.5 rounded-2xl bg-white/95 backdrop-blur border border-slate-200/90 shadow-lg max-w-[94%] transition-all">
+            ${this.getContextBarDefaultHTML()}
+          </div>
+
+        </div>
+
+        <!-- BARRE D'OUTILS D'AMÉNAGEMENT & MOBILIER "LES SIMS" -->
+        <div class="p-4 rounded-3xl bg-white border border-slate-200/90 shadow-sm space-y-3">
+          <div class="flex items-center justify-between border-b border-slate-200 pb-2.5 flex-wrap gap-2">
+            <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('furniture')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'furniture' || !this.editorTab ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🛋️</span> Mobilier & Matériel
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('doors')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'doors' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🚪</span> Portes & Ouvertures
+              </button>
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('rooms')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'rooms' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>🏛️</span> Vocation des Salles
+              </button>
+              ${isOwner ? `
+                <button type="button" onclick="window.ProtecLocaux.setEditorTab('expand')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'expand' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                  <span>➕</span> Agrandir (Extension)
+                </button>
+              ` : ''}
+              <button type="button" onclick="window.ProtecLocaux.setEditorTab('metrics')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${this.editorTab === 'metrics' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
+                <span>📊</span> Métriques & Bonus
+              </button>
+            </div>
+
+            <div class="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-semibold">
+              <span>Pièce sélectionnée : <strong id="selected-room-header-name" class="text-slate-800">${selectedRoom?.name?.split('\n')[0] || 'Salle 1'}</strong></span>
             </div>
           </div>
 
+          <!-- Contenu interactif de l'onglet actif -->
+          <div id="editor-subpanel">
+            ${this.renderEditorToolsHTML(model)}
+          </div>
         </div>
 
         <!-- Récapitulatif des Espaces Aménagés de la Caserne -->
@@ -3749,11 +4725,41 @@ window.ProtecLocaux = {
       };
     };
 
+    canvas.addEventListener('dblclick', (e) => {
+      const { wx, wy } = getMouseWorldPos(e.clientX, e.clientY);
+      const model = this.getArchitectModel();
+      const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
+        return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+      });
+      if (clickedFurniture) {
+        this.openFurnitureInteractionModal(clickedFurniture.id);
+      }
+    });
+
     const onPointerDown = (clientX, clientY, button) => {
       const { wx, wy } = getMouseWorldPos(clientX, clientY);
       const model = this.getArchitectModel();
 
       if (button === 0) {
+        // 0. Détection de clic sur un véhicule garé dans la cour / hangar opérationnel
+        if (model.parking && model.parking.spots) {
+          const game = window.game;
+          const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+          const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
+
+          const clickedSpotIdx = model.parking.spots.findIndex(spot => {
+            return wx >= spot.x && wx <= spot.x + spot.w && wy >= spot.y && wy <= spot.y + spot.d;
+          });
+
+          if (clickedSpotIdx >= 0 && stVehs[clickedSpotIdx]) {
+            const clickedVeh = stVehs[clickedSpotIdx];
+            if (window.game && typeof window.game.openVehicleDetailsModal === 'function') {
+              window.game.openVehicleDetailsModal(clickedVeh.id);
+              return;
+            }
+          }
+        }
+
         // 1. Détection de clic sur un meuble (mode Les Sims)
         const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
           return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
@@ -3854,8 +4860,34 @@ window.ProtecLocaux = {
         return;
       }
 
-      // Curseur dynamique selon survol et tracking du meuble sous le curseur
+      // Détection dynamique du survol d'un véhicule, meuble ou pièce
       const model = this.getArchitectModel();
+
+      // 1. Détection survol véhicule sur une place de parking
+      let hoveredVeh = null;
+      let hoveredSpot = null;
+      if (model.parking && model.parking.spots) {
+        const game = window.game;
+        const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+        const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
+
+        model.parking.spots.forEach((spot, idx) => {
+          if (wx >= spot.x && wx <= spot.x + spot.w && wy >= spot.y && wy <= spot.y + spot.d) {
+            if (stVehs[idx]) {
+              hoveredVeh = stVehs[idx];
+              hoveredSpot = spot;
+            }
+          }
+        });
+      }
+
+      if (this.hoveredVehicle !== hoveredVeh) {
+        this.hoveredVehicle = hoveredVeh;
+        this.hoveredVehicleSpot = hoveredSpot;
+        this.renderArchitectScene();
+      }
+
+      // 2. Détection survol meuble
       const hoveredFurniture = (model.furniture || []).slice().reverse().find(f => {
         return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
       });
@@ -3866,8 +4898,11 @@ window.ProtecLocaux = {
         this.renderArchitectScene();
       }
 
+      // 3. Mise à jour du curseur
       if (hoveredFurniture) {
         canvas.style.cursor = 'move';
+      } else if (hoveredVeh) {
+        canvas.style.cursor = 'pointer';
       } else {
         const hoveredRoom = (model.rooms || []).find(r => {
           return wx >= r.x && wx <= r.x + r.w && wy >= r.y && wy <= r.y + r.h;
@@ -3877,6 +4912,9 @@ window.ProtecLocaux = {
     };
 
     const onPointerUp = () => {
+      if (this.draggingFurniture && window.game) {
+        this.saveCurrentArchitecture(window.game);
+      }
       this.draggingFurniture = null;
       this.isDraggingCanvas = false;
     };
@@ -3889,6 +4927,18 @@ window.ProtecLocaux = {
     window.addEventListener('mousemove', (e) => onPointerMove(e.clientX, e.clientY));
     window.addEventListener('mouseup', () => onPointerUp());
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // Double-clic direct sur un meuble pour ouvrir son interface de gestion (Stock, Confort...)
+    canvas.addEventListener('dblclick', (e) => {
+      const { wx, wy } = getMouseWorldPos(e.clientX, e.clientY);
+      const model = this.getArchitectModel();
+      const clickedFurniture = (model.furniture || []).slice().reverse().find(f => {
+        return wx >= f.x && wx <= f.x + f.w && wy >= f.y && wy <= f.y + f.d;
+      });
+      if (clickedFurniture) {
+        this.openFurnitureInteractionModal(clickedFurniture.id);
+      }
+    });
 
     // Molette Zoom
     canvas.addEventListener('wheel', (e) => {
@@ -4004,18 +5054,15 @@ window.ProtecLocaux = {
     const st = (window.game && window.game.stations)
       ? (window.game.stations.find(s => s.id === stationId) || window.game.stations[0])
       : null;
-    if (st && st.premises && st.premises.architecture) {
-      const arch = st.premises.architecture;
-      // Migration douce : si l'antenne a encore les anciens noms par défaut de démonstration, les passer en "Libre"
-      if (arch.rooms) {
-        arch.rooms.forEach((r, idx) => {
-          if (r.name && (r.name.includes('Accueil Public & Direction') || r.name.includes('Salle de Formation & DPS') || r.name.includes('Réserve Lots A/B & Vestiaires'))) {
-            r.type = 'libre';
-            r.name = `Salle ${idx + 1} (Libre)\n(Non affectée)`;
-            r.color = '#121722';
-          }
-        });
+    if (st) {
+      if (!st.premises) {
+        st.premises = { tenure: 'rented', level: 1, monthlyRent: 350, securityEquipments: [] };
       }
+      if (!st.premises.architecture) {
+        st.premises.architecture = JSON.parse(JSON.stringify(this.getDefaultModel()));
+      }
+      const arch = st.premises.architecture;
+      // Les vocations et types de pièces configurés par le joueur sont strictement préservés
       if (arch.parking && arch.parking.spots) {
         arch.parking.spots.forEach((sp, idx) => {
           if (sp.label && (sp.label.includes('VPSP 01') || sp.label.includes('VTU 01'))) {
@@ -4133,51 +5180,1390 @@ window.ProtecLocaux = {
     }
   },
 
+
   // =========================================================================
-  // RENDU 2D ARCHITECTURAL STYLE CAD (CONFORME À LA MAQUETTE OFFICIELLE)
+  // GESTION FONCTIONNELLE DU MOBILIER (STOCKAGE, FOYER, DIVERTISSEMENT)
   // =========================================================================
+
+  // Pôles logistiques pour affectation des zones de stock / étagères / armoires
+  STORAGE_POLES: {
+    pole_libre: { id: 'pole_libre', label: 'Général / Libre (Sans restriction)', icon: '⚪', color: '#64748b', desc: 'Accepte tout matériel sans filtrage' },
+    pole_formation: { id: 'pole_formation', label: 'Pôle Formation', icon: '🎓', color: '#2563eb', desc: 'Mannequins RCP, DAE formation, tapis, pédagogie' },
+    pole_secours: { id: 'pole_secours', label: 'Pôle Secours / DPS', icon: '🩹', color: '#ea580c', desc: 'Lots A/B/C, caisses réarmement VPSP, réassort pharmacie' },
+    pole_crise: { id: 'pole_crise', label: 'Pôle Crise & Soutien aux Populations', icon: '🚨', color: '#dc2626', desc: 'Lots pompage, tronçonnage, bâchage, kits CHU hébergement, CAI' },
+    pole_vestiaire: { id: 'pole_vestiaire', label: 'Pôle Habillement & Vestiaires', icon: '👕', color: '#7c3aed', desc: 'Tenues F1, rangers, paquetages et équipements individuels' }
+  },
+
+  getItemPole(itemId) {
+    const id = (itemId || '').toLowerCase();
+    if (id.includes('mannequin') || id.includes('formation') || id.includes('dsa') || id.includes('tapis') || id.includes('pedagogique') || id.includes('schiller')) {
+      return 'pole_formation';
+    }
+    if (id.includes('tenue') || id.includes('rangers') || id.includes('casque') || id.includes('gilet') || id.includes('f1')) {
+      return 'pole_vestiaire';
+    }
+    if (id.includes('tronconnage') || id.includes('pompage') || id.includes('bachage') || id.includes('eclairage') || id.includes('hebergement') || id.includes('ravitaillement') || id.includes('psy') || id.includes('drone') || id.includes('poste_commandement')) {
+      return 'pole_crise';
+    }
+    if (id.includes('secours') || id.includes('rearmement') || id.includes('reassort') || id.includes('dae') || id.includes('brancard') || id.includes('pansement') || id.includes('caisse')) {
+      return 'pole_secours';
+    }
+    return 'pole_libre';
+  },
+
+  setStoragePole(furnitureId, poleId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    item.pole = poleId || 'pole_libre';
+    const game = window.game;
+    this.saveCurrentArchitecture(game);
+    if (game && game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+
+    const poleInfo = this.STORAGE_POLES[item.pole] || this.STORAGE_POLES.pole_libre;
+    if (game && game.showToast) {
+      game.showToast('Pôle Assigné', `« ${item.label || item.name} » est désormais assigné au ${poleInfo.label}.`, 'blue');
+    }
+  },
+
+  getItemWeightKg(itemId) {
+    const WEIGHTS = {
+      lot_secours_a: 45,
+      lot_secours_b: 15,
+      lot_secours_c: 25,
+      lot_tronconnage: 30,
+      lot_pompage: 40,
+      lot_eclairage: 35,
+      lot_bachage: 25,
+      lot_hebergement: 60,
+      lot_ravitaillement: 35,
+      lot_soutien_psy: 20,
+      lot_poste_commandement_mobile: 15,
+      lot_drone_reco: 10,
+      lot_drone_thermique: 12,
+      caisse_rearmement: 10,
+      caisse_reassort: 8,
+      tenue_pc: 3,
+      tenue_f1: 3,
+      tenue_moto: 4,
+      tenue_usar: 5,
+      rangers1: 2,
+      rangers2: 2,
+      rangers3: 2,
+      mannequin_rcp_adulte: 12,
+      dsa_formation: 4,
+      telephone_garde: 0.5,
+      remorque_groupe_electro: 120,
+      remorque_motopompe: 100
+    };
+    return WEIGHTS[itemId] !== undefined ? WEIGHTS[itemId] : 5;
+  },
+
+  getItemDisplayName(itemId) {
+    if (window.ProtecEquipements && window.ProtecEquipements.LOTS_CATALOG) {
+      const found = window.ProtecEquipements.LOTS_CATALOG.find(x => x.id === itemId);
+      if (found) return found.name;
+    }
+    const NAMES = {
+      lot_secours_a: 'Lot A - Poste de secours',
+      lot_secours_b: 'Lot B - Secours à personne',
+      lot_secours_c: 'Lot C - Brancardage & relevage',
+      lot_tronconnage: 'Lot Tronçonnage',
+      lot_pompage: 'Lot Pompage',
+      lot_eclairage: 'Lot Éclairage d’urgence',
+      lot_bachage: 'Lot Bâchage',
+      lot_hebergement: 'Kit CHU (30 Lits Picots)',
+      lot_ravitaillement: 'Lot Ravitaillement',
+      lot_soutien_psy: 'Lot CAI (Soutien psychologique)',
+      lot_poste_commandement_mobile: 'Poste de commandement mobile',
+      lot_drone_reco: 'Pack Drone de reconnaissance',
+      lot_drone_thermique: 'Pack Drone thermique',
+      caisse_rearmement: 'Caisse de Réarmement VPSP',
+      caisse_reassort: 'Caisse de Réassort PS',
+      tenue_pc: 'Tenue d’intervention Protection Civile',
+      tenue_f1: 'Tenue de caserne F1 Protec',
+      tenue_moto: 'Tenue de pilote moto MPS',
+      tenue_usar: 'Tenue technique Sauvetage-Déblaiement',
+      rangers1: 'Rangers d’intervention Standard',
+      mannequin_rcp_adulte: 'Mannequin Secourisme RCP Adulte',
+      dsa_formation: 'Défibrillateur DSA de formation'
+    };
+    return NAMES[itemId] || itemId;
+  },
+
+  getItemIcon(itemId) {
+    const ICONS = {
+      lot_secours_a: '⛺',
+      lot_secours_b: '💼',
+      lot_secours_c: '🩹',
+      lot_tronconnage: '🪓',
+      lot_pompage: '🌊',
+      lot_eclairage: '💡',
+      lot_bachage: '🏠',
+      lot_hebergement: '🛏️',
+      lot_ravitaillement: '🍲',
+      lot_soutien_psy: '🤝',
+      lot_poste_commandement_mobile: '📡',
+      lot_drone_reco: '📷',
+      lot_drone_thermique: '👁️',
+      caisse_rearmement: '📦',
+      caisse_reassort: '🩹',
+      tenue_pc: '👕',
+      tenue_f1: '👖',
+      tenue_moto: '🏍️',
+      tenue_usar: '🦺',
+      mannequin_rcp_adulte: '🫀',
+      dsa_formation: '⚡'
+    };
+    return ICONS[itemId] || '📦';
+  },
+
+  getStorageMaxWeight(type) {
+    if (type === 'rack_palettes_lourd') return 650;
+    if (type === 'etagere_lots') return 300;
+    if (type === 'casiers_tenues_xl') return 250;
+    if (type === 'casiers_vestiaire') return 150;
+    if (type === 'armoire_forte_securisee') return 120;
+    if (type === 'armoire_pharmacie') return 80;
+    return 100;
+  },
+
+  openFurnitureInteractionModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const itype = item.type;
+    if (['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype)) {
+      this.openStorageInventory(furnitureId);
+    } else if (['canape_detente', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype)) {
+      this.openComfortModal(furnitureId);
+    } else if (['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype)) {
+      this.openEntertainmentModal(furnitureId);
+    } else {
+      this.openFunctionalModal(furnitureId);
+    }
+  },
+
+  // 1. INVENTAIRE DÉDIÉ ET GESTION DU POIDS EN 2 COLONNES (ÉTAGÈRES & ARMOIRES)
+  openStorageInventory(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    item.storedInventory = item.storedInventory || {};
+    item.pole = item.pole || 'pole_libre';
+    const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+
+    let currentWeight = 0;
+    for (const [id, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) currentWeight += count * this.getItemWeightKg(id);
+    }
+
+    const percent = Math.min(100, Math.round((currentWeight / maxWeight) * 100));
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    const stationStock = (station && station.stock) ? station.stock : {};
+
+    // Liste du matériel actuellement stocké dans ce meuble
+    const storedList = Object.entries(item.storedInventory).filter(([_, c]) => c > 0);
+
+    // Liste du matériel disponible dans l'antenne
+    const availableItems = Object.entries(stationStock).filter(([_, c]) => c > 0);
+
+    // Filtrage et tri selon le pôle pour guider le joueur
+    const currentPole = item.pole || 'pole_libre';
+    const poleInfo = this.STORAGE_POLES[currentPole] || this.STORAGE_POLES.pole_libre;
+
+    const oldModal = document.getElementById('furniture-storage-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-storage-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-4xl bg-slate-900 border-2 border-amber-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[94vh] overflow-y-auto custom-scrollbar">
+        
+        <!-- En-tête : Nom, Type et Sélecteur de Pôle Interactif -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3.5 border-b border-slate-800 gap-3">
+          <div class="flex items-center gap-3">
+            <span class="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-2xl flex items-center justify-center shadow-inner flex-shrink-0">
+              ${item.icon || '📦'}
+            </span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <h3 class="text-base sm:text-lg font-black text-white leading-tight">${item.label || item.name || 'Rayonnage de Stockage'}</h3>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black border" style="background-color: ${poleInfo.color}20; color: ${poleInfo.color}; border-color: ${poleInfo.color}40">
+                  ${poleInfo.icon} ${poleInfo.label}
+                </span>
+              </div>
+              <p class="text-xs text-slate-400">Capacité de charge : ${maxWeight} kg • Affectez ce stockage pour le rangement automatique</p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2 flex-wrap justify-between sm:justify-end">
+            <!-- Sélecteur de Pôle / Tâche -->
+            <div class="flex items-center gap-1.5 p-1 rounded-xl bg-slate-950/90 border border-slate-700 text-xs">
+              <span class="text-[11px] font-bold text-slate-400 pl-1">🎯 Pôle :</span>
+              <select onchange="window.ProtecLocaux.setStoragePole('${item.id}', this.value)" class="text-xs font-black py-1 px-2 rounded-lg bg-slate-800 border border-slate-600 text-amber-300 focus:ring-2 focus:ring-amber-400 cursor-pointer">
+                <option value="pole_libre" ${currentPole === 'pole_libre' ? 'selected' : ''}>⚪ Général / Libre (Tout Matériel)</option>
+                <option value="pole_formation" ${currentPole === 'pole_formation' ? 'selected' : ''}>🎓 Pôle Formation (Pédagogie, DAE...)</option>
+                <option value="pole_secours" ${currentPole === 'pole_secours' ? 'selected' : ''}>🩹 Pôle Secours / DPS (Lots A/B/C...)</option>
+                <option value="pole_crise" ${currentPole === 'pole_crise' ? 'selected' : ''}>🚨 Pôle Crise & Soutien Pops (Pompage...)</option>
+                <option value="pole_vestiaire" ${currentPole === 'pole_vestiaire' ? 'selected' : ''}>👕 Pôle Habillement & Vestiaires (F1...)</option>
+              </select>
+            </div>
+
+            <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+          </div>
+        </div>
+
+        <!-- Jauge Visuelle de Charge Utile (kg) -->
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 space-y-2">
+          <div class="flex items-center justify-between text-xs font-bold">
+            <span class="text-slate-300 flex items-center gap-1.5">
+              <span>⚖️</span> Charge Utile Actuelle :
+            </span>
+            <span class="${percent >= 95 ? 'text-rose-400' : (percent >= 75 ? 'text-amber-400' : 'text-emerald-400')} font-mono font-black text-sm">
+              ${currentWeight} kg / ${maxWeight} kg (${percent}%)
+            </span>
+          </div>
+          <div class="w-full h-3 rounded-full bg-slate-800 overflow-hidden p-0.5 border border-slate-700/60">
+            <div class="h-full rounded-full transition-all duration-300 ${percent >= 95 ? 'bg-gradient-to-r from-amber-500 to-rose-500' : (percent >= 75 ? 'bg-amber-400' : 'bg-emerald-500')}" style="width: ${percent}%"></div>
+          </div>
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Reste disponible : <strong class="text-white font-mono">${Math.max(0, maxWeight - currentWeight)} kg</strong></span>
+            <span>Rangement automatique prioritaire actif sur ce meuble</span>
+          </div>
+        </div>
+
+        <!-- TABLEAU CLAIR EN 2 COLONNES : STOCK ANTENNE (GAUCHE) / CONTENU DU MEUBLE (DROITE) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          <!-- COLONNE GAUCHE : RÉSERVE GÉNÉRALE DE L'ANTENNE -->
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 flex flex-col">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div class="flex items-center gap-1.5 text-xs font-black text-emerald-400 uppercase tracking-wider">
+                <span>🏢</span>
+                <span>Réserve de l'Antenne (${availableItems.length})</span>
+              </div>
+              ${currentPole !== 'pole_libre' ? `
+                <button type="button" onclick="window.ProtecLocaux.depositAllMatchingPole('${furnitureId}')" class="px-2 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-[10px] font-bold transition cursor-pointer" title="Ranger tout le matériel correspondant au pôle d'un coup">
+                  📥 Tout Ranger (${poleInfo.icon})
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="space-y-1.5 flex-1 max-h-[38vh] overflow-y-auto custom-scrollbar pr-1">
+              ${availableItems.length === 0 ? `
+                <div class="p-6 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-center text-xs text-slate-500 italic">
+                  Aucun matériel non rangé en stock dans l'antenne. Commandez des lots ou des caisses dans l'onglet Équipements !
+                </div>
+              ` : availableItems.map(([sId, count]) => {
+                const uW = this.getItemWeightKg(sId);
+                const dName = this.getItemDisplayName(sId);
+                const dIcon = this.getItemIcon(sId);
+                const itemP = this.getItemPole(sId);
+                const isMatchingPole = currentPole === 'pole_libre' || itemP === currentPole;
+                const canFit1 = (currentWeight + uW) <= maxWeight;
+                const canFit5 = (currentWeight + uW * Math.min(5, count)) <= maxWeight && count >= 5;
+                const maxPossible = Math.min(count, Math.floor((maxWeight - currentWeight) / uW));
+
+                return `
+                  <div class="p-2.5 rounded-xl ${isMatchingPole ? 'bg-slate-800/80 border-slate-700 ring-1 ring-emerald-500/30' : 'bg-slate-900/70 border-slate-800/80 opacity-80'} border flex items-center justify-between gap-2 text-xs hover:border-slate-600 transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xl flex-shrink-0">${dIcon}</span>
+                      <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-1.5">
+                          <strong class="text-white font-bold truncate block">${dName}</strong>
+                          ${isMatchingPole && currentPole !== 'pole_libre' ? '<span class="text-[9px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded">Pôle ✓</span>' : ''}
+                        </div>
+                        <span class="text-[10px] text-slate-400 font-mono">Dispo : <strong>${count}</strong> · ${uW} kg/u</span>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" ${canFit1 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg ${canFit1 ? 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger 1 exemplaire">
+                        +1
+                      </button>
+                      ${count >= 5 ? `
+                        <button type="button" ${canFit5 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', 5)" class="px-2 py-1 rounded-lg ${canFit5 ? 'bg-emerald-700 hover:bg-emerald-600 text-white cursor-pointer active:scale-95' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger 5 exemplaires">
+                          +5
+                        </button>
+                      ` : ''}
+                      <button type="button" ${maxPossible > 0 ? '' : 'disabled'} onclick="window.ProtecLocaux.depositToStorage('${furnitureId}', '${sId}', ${maxPossible})" class="px-2 py-1 rounded-lg ${maxPossible > 0 ? 'bg-emerald-800 hover:bg-emerald-700 text-emerald-100 cursor-pointer active:scale-95 border border-emerald-600/50' : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'} font-black text-[10px] transition" title="Ranger le maximum possible (${maxPossible})">
+                        Tout (${maxPossible})
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+
+          <!-- COLONNE DROITE : CONTENU ACTUEL DE CE RANGEMENT -->
+          <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5 flex flex-col">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div class="flex items-center gap-1.5 text-xs font-black text-amber-400 uppercase tracking-wider">
+                <span>📦</span>
+                <span>Contenu du Meuble (${storedList.length})</span>
+              </div>
+              ${storedList.length > 0 ? `
+                <button type="button" onclick="window.ProtecLocaux.emptyStorage('${furnitureId}')" class="px-2 py-1 rounded-lg bg-rose-900/40 hover:bg-rose-900 text-rose-300 border border-rose-700/50 text-[10px] font-bold transition cursor-pointer" title="Vider tout le meuble vers la réserve de l'antenne">
+                  📤 Tout Vider
+                </button>
+              ` : ''}
+            </div>
+
+            <div class="space-y-1.5 flex-1 max-h-[38vh] overflow-y-auto custom-scrollbar pr-1">
+              ${storedList.length === 0 ? `
+                <div class="p-8 rounded-xl bg-slate-900/40 border border-dashed border-slate-800 text-center space-y-2">
+                  <span class="text-3xl block">📭</span>
+                  <div class="text-xs font-bold text-slate-300">Ce rangement est actuellement vide</div>
+                  <p class="text-[11px] text-slate-500">Utilisez la colonne de gauche pour y ranger vos lots, caisses ou tenues.</p>
+                </div>
+              ` : storedList.map(([sId, count]) => {
+                const uW = this.getItemWeightKg(sId);
+                const totalW = uW * count;
+                const dName = this.getItemDisplayName(sId);
+                const dIcon = this.getItemIcon(sId);
+
+                return `
+                  <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700 flex items-center justify-between gap-2 text-xs hover:border-slate-600 transition">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-xl flex-shrink-0">${dIcon}</span>
+                      <div class="min-w-0 flex-1">
+                        <strong class="text-white font-bold truncate block">${dName}</strong>
+                        <span class="text-[10px] text-amber-400/90 font-mono">Stocké : <strong>${count}</strong> · ${totalW} kg total</span>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-1 flex-shrink-0">
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 1)" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-black transition cursor-pointer" title="Retirer 1 exemplaire vers la réserve">
+                        -1
+                      </button>
+                      ${count >= 5 ? `
+                        <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', 5)" class="px-2 py-1 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-black transition cursor-pointer" title="Retirer 5 exemplaires">
+                          -5
+                        </button>
+                      ` : ''}
+                      <button type="button" onclick="window.ProtecLocaux.withdrawFromStorage('${furnitureId}', '${sId}', ${count})" class="px-2 py-1 rounded-lg bg-rose-900/50 hover:bg-rose-900 text-rose-200 text-[10px] font-black border border-rose-700/50 transition cursor-pointer" title="Tout retirer vers la réserve">
+                        Tout (${count})
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+
+        <!-- Pied de page avec aide contextuelle -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-2">
+          <span>💡 <strong>Astuce</strong> : Les sessions de formation replacent automatiquement le matériel dans les rangements du Pôle Formation.</span>
+          <button type="button" onclick="document.getElementById('furniture-storage-modal').remove()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs transition cursor-pointer">
+            Fermer
+          </button>
+        </div>
+
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  depositToStorage(furnitureId, itemId, qty = 1) {
+    if (qty <= 0) return;
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    const avail = station.stock[itemId] || 0;
+    const actualQty = Math.min(avail, qty);
+    if (actualQty <= 0) {
+      if (game.showToast) game.showToast('Stock Insuffisant', 'Quantité insuffisante en réserve.', 'orange');
+      return;
+    }
+
+    item.storedInventory = item.storedInventory || {};
+    const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+
+    let currentWeight = 0;
+    for (const [id, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) currentWeight += count * this.getItemWeightKg(id);
+    }
+
+    const itemW = this.getItemWeightKg(itemId);
+    const maxCanFit = Math.floor((maxWeight - currentWeight) / itemW);
+    const toDeposit = Math.min(actualQty, maxCanFit);
+
+    if (toDeposit <= 0) {
+      if (game.showToast) game.showToast('Charge Maximale Atteinte', `Cette étagère ne peut supporter que ${maxWeight} kg.`, 'orange');
+      return;
+    }
+
+    station.stock[itemId] -= toDeposit;
+    if (station.stock[itemId] <= 0) delete station.stock[itemId];
+
+    item.storedInventory[itemId] = (item.storedInventory[itemId] || 0) + toDeposit;
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Matériel Rangé', `+${toDeposit}x ${this.getItemDisplayName(itemId)} rangé(s) dans le meuble.`, 'green');
+  },
+
+  withdrawFromStorage(furnitureId, itemId, qty = 1) {
+    if (qty <= 0) return;
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item || !item.storedInventory) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    const current = item.storedInventory[itemId] || 0;
+    const toWithdraw = Math.min(current, qty);
+    if (toWithdraw <= 0) return;
+
+    item.storedInventory[itemId] -= toWithdraw;
+    if (item.storedInventory[itemId] <= 0) delete item.storedInventory[itemId];
+
+    station.stock[itemId] = (station.stock[itemId] || 0) + toWithdraw;
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Matériel Déchargé', `${toWithdraw}x ${this.getItemDisplayName(itemId)} remis en réserve libre.`, 'blue');
+  },
+
+  depositAllMatchingPole(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station || !station.stock) return;
+
+    const targetPole = item.pole || 'pole_libre';
+    let totalMoved = 0;
+
+    for (const [sId, count] of Object.entries(station.stock)) {
+      if (count <= 0) continue;
+      const itemP = this.getItemPole(sId);
+      if (targetPole === 'pole_libre' || itemP === targetPole) {
+        const itemW = this.getItemWeightKg(sId);
+        const maxWeight = item.maxWeightKg || this.getStorageMaxWeight(item.type);
+        let curW = 0;
+        for (const [id, c] of Object.entries(item.storedInventory || {})) {
+          if (c > 0) curW += c * this.getItemWeightKg(id);
+        }
+        const maxCanFit = Math.floor((maxWeight - curW) / itemW);
+        const toTake = Math.min(count, maxCanFit);
+        if (toTake > 0) {
+          station.stock[sId] -= toTake;
+          if (station.stock[sId] <= 0) delete station.stock[sId];
+          item.storedInventory = item.storedInventory || {};
+          item.storedInventory[sId] = (item.storedInventory[sId] || 0) + toTake;
+          totalMoved += toTake;
+        }
+      }
+    }
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) {
+      if (totalMoved > 0) game.showToast('Rangement Effectué', `${totalMoved} article(s) rangé(s) selon le pôle.`, 'green');
+      else game.showToast('Rangement Impossible', 'Aucun matériel correspondant ou capacité max atteinte.', 'orange');
+    }
+  },
+
+  emptyStorage(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item || !item.storedInventory) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return;
+
+    station.stock = station.stock || {};
+    let totalMoved = 0;
+
+    for (const [sId, count] of Object.entries(item.storedInventory)) {
+      if (count > 0) {
+        station.stock[sId] = (station.stock[sId] || 0) + count;
+        totalMoved += count;
+      }
+    }
+    item.storedInventory = {};
+
+    this.saveCurrentArchitecture(game);
+    if (game.saveGame) game.saveGame();
+    this.renderArchitectScene();
+    this.openStorageInventory(furnitureId);
+    if (game.showToast) game.showToast('Rangement Vidé', `${totalMoved} article(s) remis en réserve de l'antenne.`, 'blue');
+  },
+
+  // Rangement automatique intelligent selon les pôles et priorités
+  // 1. Meuble d'origine si spécifié
+  // 2. Meuble affecté au même pôle ayant de la place (kg)
+  // 3. Meuble sans affectation (libre) ayant de la place
+  // 4. Si tous pleins : laisser dans le véhicule (ou à l'endroit)
+  autoStoreItem(itemId, qty = 1, options = {}) {
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    if (!station) return { stored: false, remaining: qty };
+
+    const model = this.getArchitectModel(station.id);
+    const furnitureList = (model.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(f.type));
+    if (furnitureList.length === 0) {
+      station.stock = station.stock || {};
+      station.stock[itemId] = (station.stock[itemId] || 0) + qty;
+      return { stored: false, remaining: qty };
+    }
+
+    const itemPole = this.getItemPole(itemId);
+    const itemWeight = this.getItemWeightKg(itemId);
+
+    const getFreeWeight = (f) => {
+      const maxW = f.maxWeightKg || this.getStorageMaxWeight(f.type);
+      let curW = 0;
+      for (const [id, count] of Object.entries(f.storedInventory || {})) {
+        if (count > 0) curW += count * this.getItemWeightKg(id);
+      }
+      return Math.max(0, maxW - curW);
+    };
+
+    let remaining = qty;
+    const targetFurnitures = [];
+
+    // Priorité 1 : Meuble d'origine
+    if (options.preferredFurnitureId) {
+      const orig = furnitureList.find(f => f.id === options.preferredFurnitureId);
+      if (orig) targetFurnitures.push(orig);
+    }
+
+    // Priorité 2 : Meubles affectés au même pôle
+    furnitureList.forEach(f => {
+      if (f.pole === itemPole && !targetFurnitures.includes(f)) {
+        targetFurnitures.push(f);
+      }
+    });
+
+    // Priorité 3 : Meubles libres / sans affectation
+    furnitureList.forEach(f => {
+      if ((!f.pole || f.pole === 'pole_libre') && !targetFurnitures.includes(f)) {
+        targetFurnitures.push(f);
+      }
+    });
+
+    let storedTotal = 0;
+    for (const furn of targetFurnitures) {
+      if (remaining <= 0) break;
+      const freeW = getFreeWeight(furn);
+      const canFit = Math.min(remaining, Math.floor(freeW / itemWeight));
+      if (canFit > 0) {
+        furn.storedInventory = furn.storedInventory || {};
+        furn.storedInventory[itemId] = (furn.storedInventory[itemId] || 0) + canFit;
+        remaining -= canFit;
+        storedTotal += canFit;
+      }
+    }
+
+    if (storedTotal > 0) {
+      this.saveCurrentArchitecture(game);
+      if (game.saveGame) game.saveGame();
+      this.renderArchitectScene();
+    }
+
+    // S'il n'y a plus de place dans les stockages :
+    if (remaining > 0) {
+      if (options.vehicle && Array.isArray(options.vehicle.loadedItems)) {
+        // Laisser dans le véhicule comme demandé !
+        options.vehicle.loadedItems.push({
+          id: itemId,
+          name: this.getItemDisplayName(itemId),
+          qty: remaining
+        });
+        if (game.showToast) {
+          game.showToast('Stockage Plein', `${remaining}x ${this.getItemDisplayName(itemId)} reste(nt) à bord de ${options.vehicle.name} faute de place dans les étagères.`, 'amber');
+        }
+      } else {
+        station.stock = station.stock || {};
+        station.stock[itemId] = (station.stock[itemId] || 0) + remaining;
+        if (game.showToast) {
+          game.showToast('Stockages Caserne Pleins', `Stockages pleins : ${remaining}x ${this.getItemDisplayName(itemId)} déposé(s) au sol en réserve.`, 'amber');
+        }
+      }
+    }
+
+    return { stored: storedTotal > 0, storedQty: storedTotal, remaining: remaining };
+  },
+
+    // 2. MODAL CONFORT & ESPACE REPOS (CANAPÉ, FOYER, LIT DE GARDE)
+  openComfortModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+    const stationVols = (game && game.volunteers) ? game.volunteers.filter(v => (v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte')) : [];
+
+    const oldModal = document.getElementById('furniture-comfort-modal');
+    if (oldModal) oldModal.remove();
+
+    const isBed = item.type === 'lit_garde' || item.type === 'lits_superposes';
+    const isKitchen = item.type === 'kitchenette_foyer';
+    const isTable = item.type === 'table_repas_equipe';
+    const modal = document.createElement('div');
+    modal.id = 'furniture-comfort-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-xl bg-slate-900 border-2 border-emerald-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <!-- En-tête -->
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-black text-xl flex items-center justify-center">
+              ${item.icon || '🛋️'}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Foyer & Repos'}</h3>
+              <p class="text-xs text-slate-400">${isBed ? 'Dortoir d’astreinte nocturne et gardes 24h' : 'Zone d’attente et de repos des bénévoles en faction'}</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-comfort-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <!-- Statistiques d'apport passif -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center gap-2.5">
+            <span class="text-2xl">⚡</span>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 block uppercase">Régénération Énergie</span>
+              <strong class="text-sm font-black text-emerald-400">${isBed ? '+15%' : '+10%'} / veille</strong>
+            </div>
+          </div>
+          <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800 flex items-center gap-2.5">
+            <span class="text-2xl">😊</span>
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 block uppercase">Sérénité & Moral</span>
+              <strong class="text-sm font-black text-amber-400">+5 pts d’antenne</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bénévoles présents au local -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-black uppercase text-emerald-400 tracking-wider">
+              Bénévoles en attente de garde (${stationVols.length}) :
+            </span>
+            <span class="text-[11px] text-slate-400">Présents au foyer</span>
+          </div>
+
+          ${stationVols.length === 0 ? `
+            <div class="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 text-center text-xs text-slate-400 italic">
+              Tous vos secouristes sont actuellement en intervention ou en formation.
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[30vh] overflow-y-auto custom-scrollbar pr-1">
+              ${stationVols.map(v => `
+                <div class="p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/70 flex items-center justify-between gap-2 text-xs">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span class="text-lg flex-shrink-0">${v.avatar || '🧑‍🚒'}</span>
+                    <div class="min-w-0 flex-1">
+                      <strong class="block text-white font-bold truncate">${v.name}</strong>
+                      <span class="text-[10px] text-slate-400">${v.role || v.rank || 'Secouriste'}</span>
+                    </div>
+                  </div>
+                  <div class="text-right flex-shrink-0 font-mono text-[10px]">
+                    <span class="text-emerald-400 font-bold block">⚡ ${v.energy || 100}%</span>
+                    <span class="inline-block w-10 bg-slate-700 h-1 rounded-full overflow-hidden" title="Motivation"><span class="block h-full bg-pc-blue rounded-full" style="width: ${Math.min(100, Math.max(10, v.motivation || v.humeur || 85))}%"></span></span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- Action interactive : Tournée de café -->
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+          <div class="text-[11px] text-slate-400">
+            Pause conviviale : détend l’équipe et redonne de l'énergie aux bénévoles.
+          </div>
+          <button type="button" onclick="window.ProtecLocaux.serveCoffeeBreak('${station ? station.id : ''}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-white font-black text-xs transition shadow cursor-pointer active:scale-95 flex items-center gap-1.5 flex-shrink-0">
+            <span>☕</span> <span>Servir un café</span>
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  serveCoffeeBreak(stationId) {
+    const game = window.game;
+    if (!game) return;
+    const station = (game.stations || []).find(s => s.id === stationId) || game.stations[0];
+    if (!station) return;
+
+    const now = Date.now();
+    const lastCoffee = station._lastCoffeeTime || 0;
+    const cooldownMs = 15 * 60 * 1000; // 15 min
+    if (now - lastCoffee < cooldownMs) {
+      const remMin = Math.ceil((cooldownMs - (now - lastCoffee)) / 60000);
+      game.showToast('Cafetière en chauffe ☕', `Prochaine tournée de café disponible dans ${remMin} min.`, 'blue');
+      return;
+    }
+
+    station._lastCoffeeTime = now;
+    const vols = (game.volunteers || []).filter(v => v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte');
+    vols.forEach(v => {
+      v.energy = Math.min(100, (v.energy || 90) + 5);
+      v.humeur = Math.min(100, (v.humeur || 85) + 4);
+    });
+
+    if (game.saveGame) game.saveGame();
+    if (game.updateStatsUI) game.updateStatsUI();
+
+    game.showToast('☕ Tournée de Café Servie !', 'Moment de détente chaleureux au foyer : l’équipe en garde décompresse et reprend des forces !', 'green');
+
+    const modal = document.getElementById('furniture-comfort-modal');
+    if (modal) {
+      this.openComfortModal(this.selectedFurnitureId);
+    }
+  },
+
+  // 3. MODAL DIVERTISSEMENT & VIE D'ÉQUIPE (BABYFOOT, TV, CONSOLE, PING-PONG, DISTRIBUTEUR)
+  openEntertainmentModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
+
+    const TITLES = {
+      babyfoot: { title: 'Baby-foot Bonzini Professionnel', icon: '⚽', bonus: 'Convivialité & Détente', action: 'Lancer un tournoi de baby-foot', desc: 'Renforce les liens fraternels et détend les équipages entre deux sorties d’urgence.' },
+      tv_foyer: { title: 'Téléviseur Mural / Écran Foyer', icon: '📺', bonus: 'Veille & Confort', action: 'Suivre les alertes et reportages', desc: 'Idéal pour suivre l’évolution météo en direct et décompresser en soirée de garde.' },
+      console_jeux: { title: 'Console de Jeux & Coin Gaming', icon: '🎮', bonus: 'Espace Jeunes & Convivialité', action: 'Organiser une session gaming', desc: 'Attire les jeunes recrues et offre un sas de décompression convivial après les missions éprouvantes.' },
+      ping_pong: { title: 'Table de Ping-Pong Pliante', icon: '🏓', bonus: 'Détente & Réflexes', action: 'Jouer un match amical', desc: 'Maintient la tonicité musculaire et la vivacité de réaction des secouristes.' },
+      distributeur_snacks: { title: 'Distributeur Boissons & En-cas', icon: '🥤', bonus: 'Ravitaillement H24', action: 'Prendre une collation (-2 €)', desc: 'Des rafraîchissements et encas disponibles 24h/24 pour soutenir les équipages de garde.' }
+    };
+
+    const info = TITLES[item.type] || { title: item.label, icon: item.icon || '🎮', bonus: '+5% Moral', action: 'Interagir', desc: 'Mobilier de convivialité pour la caserne.' };
+
+    const oldModal = document.getElementById('furniture-fun-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-fun-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg bg-slate-900 border-2 border-indigo-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 font-black text-xl flex items-center justify-center">
+              ${info.icon}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${info.title}</h3>
+              <p class="text-xs text-indigo-300 font-semibold">${info.bonus}</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-fun-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+          ${info.desc}
+        </div>
+
+        <div class="p-3 rounded-2xl bg-indigo-950/40 border border-indigo-800/60 flex items-center justify-between text-xs">
+          <span class="text-indigo-200 font-bold">Cohésion d’équipe active</span>
+          <span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-black text-[11px]">En service ✓</span>
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
+          <button type="button" onclick="document.getElementById('furniture-fun-modal').remove()" class="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition cursor-pointer">
+            Fermer
+          </button>
+          <button type="button" onclick="window.ProtecLocaux.triggerEntertainmentAction('${furnitureId}', '${item.type}')" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:brightness-110 text-white font-black text-xs transition shadow cursor-pointer active:scale-95 flex items-center justify-center gap-1.5">
+            <span>${info.icon}</span> <span>${info.action}</span>
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  triggerEntertainmentAction(furnitureId, type) {
+    const game = window.game;
+    if (!game) return;
+
+    const station = (game.stations || []).find(s => s.id === this.currentStationId) || game.stations[0];
+    const vols = (game.volunteers || []).filter(v => v.status === 'dispo' || v.status === 'sdis_caserne' || v.status === 'astreinte');
+
+    if (type === 'babyfoot') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 6); });
+      game.showToast('🏆 Tournoi de Baby-foot !', 'Match acharné au foyer ! Rires et complicité au rendez-vous pour toute l’équipe !', 'green');
+    } else if (type === 'tv_foyer') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 4); v.energy = Math.min(100, (v.energy || 90) + 3); });
+      game.showToast('📺 Moment Détente Télé', 'Les bénévoles ont suivi les actualités et un reportage au chaud. Esprit apaisé !', 'blue');
+    } else if (type === 'console_jeux') {
+      vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 8); });
+      game.showToast('🎮 Session Gaming au Foyer !', 'Partie endiablée en multijoueur ! Ambiance conviviale au top pour l’équipe !', 'green');
+    } else if (type === 'ping_pong') {
+      vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
+      game.showToast('🏓 Match de Ping-Pong', 'Échanges rapides et bonne humeur pour les équipages !', 'blue');
+    } else if (type === 'distributeur_snacks') {
+      if (game.resources && game.resources.money >= 2) {
+        game.resources.money -= 2;
+        vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
+        game.showToast('🥤 Collation Fraîche (-2 €)', 'Boisson et en-cas réconfortants pour les bénévoles.', 'green');
+      } else {
+        game.showToast('Caisse insuffisante', 'Pas assez de petite monnaie en caisse.', 'orange');
+      }
+    }
+
+    if (game.saveGame) game.saveGame();
+    if (game.updateStatsUI) game.updateStatsUI();
+
+    const modal = document.getElementById('furniture-fun-modal');
+    if (modal) modal.remove();
+  },
+
+  // 4. MODAL FONCTIONNALITÉS POUR AUTRES MEUBLES (BUREAU, MANNEQUIN, DAE, TABLEAU)
+  openFunctionalModal(furnitureId) {
+    const model = this.getArchitectModel();
+    const item = (model.furniture || []).find(f => f.id === furnitureId);
+    if (!item) return;
+
+    const game = window.game;
+    const oldModal = document.getElementById('furniture-func-modal');
+    if (oldModal) oldModal.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'furniture-func-modal';
+    modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
+    modal.innerHTML = `
+      <div class="glass-panel-heavy rounded-3xl w-full max-w-lg bg-slate-900 border-2 border-sky-500/60 shadow-2xl text-white p-5 sm:p-6 space-y-4 max-h-[92vh] overflow-y-auto custom-scrollbar">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2.5">
+            <span class="w-10 h-10 rounded-2xl bg-sky-500/20 border border-sky-500/40 text-sky-400 font-black text-xl flex items-center justify-center">
+              ${item.icon || '📋'}
+            </span>
+            <div>
+              <h3 class="text-base sm:text-lg font-black text-white">${item.label || item.name || 'Équipement'}</h3>
+              <p class="text-xs text-slate-400">Équipement opérationnel & pédagogique</p>
+            </div>
+          </div>
+          <button type="button" onclick="document.getElementById('furniture-func-modal').remove()" class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white font-bold flex items-center justify-center transition cursor-pointer">✕</button>
+        </div>
+
+        <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed">
+          Cet équipement améliore directement les capacités de votre caserne :
+          ${item.type === 'mannequin_rcp' ? '<br>• <strong>+15% Qualité des formations</strong> PSC1 & SST<br>• Permet l’initiation aux gestes qui sauvent' : ''}
+          ${item.type === 'mannequin_pediatrique' ? '<br>• <strong>+15% Apprentissage pédiatrique</strong><br>• Spécialisé massage cardiaque nourrisson & désobstruction pédiatrique' : ''}
+          ${item.type === 'dsa_demonstration' ? '<br>• <strong>+10% Pratique des gestes d’urgence</strong><br>• DAE d’entraînement avec invite vocale réaliste et scénarios modulables' : ''}
+          ${item.type === 'ecran_tactique_interactif' ? '<br>• <strong>+20% Qualité formation & débriefing</strong><br>• Grand écran numérique 75 pouces pour cas concrets et cartographie' : ''}
+          ${item.type === 'dae_mural' ? '<br>• <strong>+5% Sécurité d’urgence</strong> du centre de secours<br>• Conforme aux normes ERP' : ''}
+          ${item.type === 'tableau_blanc' ? '<br>• <strong>+10% Clarté pédagogique</strong> pour les cours' : ''}
+          ${item.type === 'bureau' ? '<br>• Poste de commandement administratif et planification opérationnelle' : ''}
+        </div>
+
+        <div class="pt-2 border-t border-slate-800 flex justify-end">
+          <button type="button" onclick="document.getElementById('furniture-func-modal').remove()" class="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs transition cursor-pointer">
+            Compris
+          </button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+  },
+
+  // =========================================================================
+  // RENDU 2D STYLE MAQUETTE (FOND PARQUET, MURS BLANCS NETS, OMBRES DOUCES)
+  // =========================================================================
+
+  // Palette de sols et textures réalistes de jeu de gestion (SimCity / RimWorld / Theme Hospital)
+  _getRoomStyle(type) {
+    const ROOM_STYLES = {
+      libre:       { floor: '#f8fafc', accent: '#cbd5e1', label: '#475569', floorType: 'neutral', name: 'Espace Libre' },
+      bureau:      { floor: '#e2e8f0', accent: '#94a3b8', label: '#1e293b', floorType: 'carpet', name: 'Bureau & Direction' },
+      formation:   { floor: '#e0f2fe', accent: '#7dd3fc', label: '#0369a1', floorType: 'lino', name: 'Salle de Formation' },
+      stockage:    { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Réserve Logistique' },
+      reserve:     { floor: '#fef3c7', accent: '#fde68a', label: '#92400e', floorType: 'concrete', name: 'Réserve Lots A/B' },
+      garage:      { floor: '#94a3b8', accent: '#64748b', label: '#0f172a', floorType: 'epoxy', name: 'Hangar VPSP' },
+      detente:     { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      foyer:       { floor: '#fed7aa', accent: '#f97316', label: '#9a3412', floorType: 'wood', name: 'Foyer des Bénévoles' },
+      dortoir:     { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Dortoir de Garde' },
+      salle_garde: { floor: '#e0e7ff', accent: '#a5b4fc', label: '#3730a3', floorType: 'carpet_cozy', name: 'Salle de Garde' },
+      pc_radio:    { floor: '#ccfbf1', accent: '#5eead4', label: '#115e59', floorType: 'tech', name: 'PC Radio & Régulation' },
+      douche:      { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires & Douches' },
+      wc:          { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires' },
+      vestiaire:   { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' }
+    };
+    return ROOM_STYLES[type] || ROOM_STYLES.libre;
+  },
+
+  // Tracé des textures et revêtements de sol immersifs façon jeu de gestion
+  drawRoomFloor(ctx, rx, ry, rw, rh, room, style, isNight, scale) {
+    const fType = style.floorType || 'neutral';
+
+    // 1. Dalle de sol de base
+    ctx.fillStyle = isNight ? '#1e2433' : style.floor;
+    ctx.fillRect(rx, ry, rw, rh);
+
+    if (isNight) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(rx, ry, rw, rh);
+    ctx.clip();
+
+    // 2. Textures réalistes selon l'usage de la pièce
+    if (fType === 'wood') {
+      // --- PARQUET CHÊNE CHALEUREUX (Foyer / Détente) ---
+      const plankH = Math.max(7, scale * 0.35);
+      const plankW = Math.max(26, scale * 1.3);
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.28)';
+      ctx.lineWidth = 1;
+
+      for (let y = ry; y < ry + rh; y += plankH) {
+        ctx.beginPath();
+        ctx.moveTo(rx, y);
+        ctx.lineTo(rx + rw, y);
+        ctx.stroke();
+
+        const row = Math.floor((y - ry) / plankH);
+        const offset = (row % 2) * (plankW / 2);
+        for (let x = rx - offset; x < rx + rw; x += plankW) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x, Math.min(y + plankH, ry + rh));
+          ctx.stroke();
+        }
+      }
+
+      // Tapis de salon cosy au centre
+      const rugW = Math.min(rw * 0.65, 80);
+      const rugH = Math.min(rh * 0.55, 60);
+      const rugX = rx + rw / 2 - rugW / 2;
+      const rugY = ry + rh / 2 - rugH / 2;
+      ctx.fillStyle = '#dc2626'; // Rouge convivial
+      ctx.fillRect(rugX, rugY, rugW, rugH);
+      ctx.strokeStyle = '#fef08a'; // Liseré or
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rugX + 2, rugY + 2, rugW - 4, rugH - 4);
+
+    } else if (fType === 'tiles') {
+      // --- CARRELAGE BLANC BRILLANT / SANITAIRES & VESTIAIRES ---
+      const tileSize = Math.max(10, scale * 0.45);
+      ctx.strokeStyle = 'rgba(203, 213, 225, 0.7)';
+      ctx.lineWidth = 1;
+
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+    } else if (fType === 'epoxy') {
+      // --- BÉTON D'ATELIER & HANGAR VPSP ---
+      // Traces de passage des roues du véhicule
+      ctx.fillStyle = 'rgba(51, 65, 85, 0.15)';
+      ctx.fillRect(rx + rw * 0.2, ry, rw * 0.15, rh);
+      ctx.fillRect(rx + rw * 0.65, ry, rw * 0.15, rh);
+
+      // Zébrures jaunes et noires de sécurité au seuil d'accès
+      const stripH = Math.min(10, rh * 0.15);
+      const stripY = ry + rh - stripH;
+      for (let x = rx; x < rx + rw; x += 12) {
+        ctx.fillStyle = ((Math.floor(x / 12) % 2 === 0) ? '#facc15' : '#1e293b');
+        ctx.fillRect(x, stripY, Math.min(12, rx + rw - x), stripH);
+      }
+
+    } else if (fType === 'lino') {
+      // --- DALLES VINYLE SALLE DE COURS / PSC SST ---
+      const tileSize = Math.max(14, scale * 0.6);
+      ctx.strokeStyle = 'rgba(125, 211, 252, 0.4)';
+      ctx.lineWidth = 1;
+      for (let x = rx; x < rx + rw; x += tileSize) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += tileSize) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      // Tableau blanc mural au fond de la salle
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+      ctx.strokeStyle = '#0284c7';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + rw * 0.25, ry + 2, rw * 0.5, 4);
+
+    } else if (fType === 'concrete') {
+      // --- BÉTON CIRÉ LOGISTIQUE & PALETTES BOIS ---
+      ctx.strokeStyle = 'rgba(217, 119, 6, 0.2)';
+      ctx.lineWidth = 1;
+      const step = Math.max(18, scale * 0.8);
+      for (let x = rx; x < rx + rw; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, ry); ctx.lineTo(x, ry + rh); ctx.stroke();
+      }
+      for (let y = ry; y < ry + rh; y += step) {
+        ctx.beginPath(); ctx.moveTo(rx, y); ctx.lineTo(rx + rw, y); ctx.stroke();
+      }
+
+      // Silhouette d'une palette Europe en bois dans un angle
+      const palW = Math.min(rw * 0.35, 32);
+      const palH = Math.min(rh * 0.35, 24);
+      ctx.fillStyle = '#d97706';
+      ctx.fillRect(rx + 6, ry + 6, palW, palH);
+      ctx.strokeStyle = '#92400e';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx + 6, ry + 6, palW, palH);
+      for (let py = ry + 10; py < ry + 6 + palH; py += 6) {
+        ctx.beginPath(); ctx.moveTo(rx + 6, py); ctx.lineTo(rx + 6 + palW, py); ctx.stroke();
+      }
+
+    } else if (fType === 'carpet' || fType === 'carpet_cozy' || fType === 'tech') {
+      // --- MOQUETTE BUREAU / DORTOIR / PC RADIO ---
+      const step = Math.max(8, scale * 0.35);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+      for (let x = rx; x < rx + rw; x += step * 2) {
+        for (let y = ry; y < ry + rh; y += step * 2) {
+          ctx.fillRect(x, y, step, step);
+        }
+      }
+    }
+
+    ctx.restore();
+  },
+
+  _vehicleTopDownImagesCache: {},
+
+  // Recherche et chargement asynchrone des images vue du dessus (avec déduction automatique & cache)
+  getVehicleTopDownImage(veh) {
+    if (!veh) return null;
+    const key = veh.id || veh.variant || veh.image || veh.type;
+    if (this._vehicleTopDownImagesCache[key] !== undefined) {
+      return this._vehicleTopDownImagesCache[key]; // null si introuvable, ou HTMLImageElement chargé
+    }
+
+    const candidatePaths = [];
+    if (veh.imageTopDown) candidatePaths.push(veh.imageTopDown);
+    if (veh.topDownImage) candidatePaths.push(veh.topDownImage);
+    if (veh.top_down_image) candidatePaths.push(veh.top_down_image);
+
+    // 1. Déduction directe depuis l'image du véhicule (ex: 'images/vehicles/master3_vpsp.png' -> 'master3_vpsp')
+    const rawImage = veh.image || '';
+    let baseFileName = '';
+    if (rawImage) {
+      const parts = rawImage.split('/');
+      baseFileName = parts[parts.length - 1].replace(/\.[^/.]+$/, '').toLowerCase();
+    }
+    const cleanName = baseFileName.replace(/^top_/, '');
+
+    if (cleanName) {
+      candidatePaths.push(`images/vehicles/top/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/top/${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/topdown/top_${cleanName}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${cleanName}.png`);
+    }
+
+    // 2. Déduction à partir de la variante ou du modèle (ex: 'master3_vpsp', 'master3_vtu_log', 'master3')
+    const variant = (veh.variant || veh.variantId || '').toLowerCase().replace(/^top_/, '');
+    if (variant && variant !== cleanName) {
+      candidatePaths.push(`images/vehicles/top/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/top/${variant}.png`);
+      candidatePaths.push(`images/vehicles/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/topdown/top_${variant}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${variant}.png`);
+    }
+
+    const model = (veh.model || veh.modelId || '').toLowerCase().replace(/^top_/, '');
+    if (model && model !== cleanName && model !== variant) {
+      candidatePaths.push(`images/vehicles/top/top_${model}.png`);
+      candidatePaths.push(`images/vehicles/top/${model}.png`);
+      candidatePaths.push(`images/vehicles/top_${model}.png`);
+    }
+
+    // 3. Déduction à partir de l'identifiant du véhicule
+    if (veh.id) {
+      const cleanId = String(veh.id).toLowerCase().replace(/^top_/, '');
+      candidatePaths.push(`images/vehicles/top/top_${cleanId}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${cleanId}.png`);
+    }
+
+    // 4. Déduction à partir du type de véhicule (VPSP, VTU, VTP...)
+    const typeLower = (veh.type || '').toLowerCase().replace(/^top_/, '');
+    if (typeLower) {
+      candidatePaths.push(`images/vehicles/top/top_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/top/${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/top_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/topdown/${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/${typeLower}_topdown.png`);
+      candidatePaths.push(`images/vehicles/topdown_${typeLower}.png`);
+      candidatePaths.push(`images/vehicles/${typeLower}.png`);
+
+      // Fallbacks intelligents officiels Protection Civile (Master 3)
+      if (typeLower === 'vpsp') {
+        candidatePaths.push(`images/vehicles/top/top_master3_vpsp.png`);
+        candidatePaths.push(`images/vehicles/top_master3_vpsp.png`);
+      } else if (typeLower === 'vtu') {
+        if (veh.capacity_log > 0 || (veh.name && veh.name.toLowerCase().includes('log'))) {
+          candidatePaths.push(`images/vehicles/top/top_master3_vtu_log.png`);
+          candidatePaths.push(`images/vehicles/top_master3_vtu_log.png`);
+        } else {
+          candidatePaths.push(`images/vehicles/top/top_master3_vtu_pop.png`);
+          candidatePaths.push(`images/vehicles/top_master3_vtu_pop.png`);
+        }
+      } else if (typeLower === 'vtp') {
+        candidatePaths.push(`images/vehicles/top/top_master3.png`);
+        candidatePaths.push(`images/vehicles/top_master3.png`);
+      }
+    }
+
+    // Déduplication ordonnée
+    const uniquePaths = [...new Set(candidatePaths.filter(Boolean))];
+
+    this._vehicleTopDownImagesCache[key] = null; // En cours de chargement
+
+    const tryLoad = (idx) => {
+      if (idx >= uniquePaths.length) return;
+      const path = uniquePaths[idx];
+      const img = new Image();
+      img.onload = () => {
+        this._vehicleTopDownImagesCache[key] = img;
+        if (this.renderArchitectScene) this.renderArchitectScene();
+      };
+      img.onerror = () => {
+        tryLoad(idx + 1);
+      };
+      img.src = path;
+    };
+
+    tryLoad(0);
+    return null;
+  },
+
+  // Dessin d'un véhicule de secours avec orientation adaptée au sens de sa place de parking
+  // RÈGLE : Les images sources pointent vers le HAUT.
+  // - Si la place est horizontale (plus large que haute, sortie sur la gauche) : rotation de -90° (nez vers la GAUCHE).
+  // - Si la place est verticale (plus haute que large) : rotation de 0° (nez vers le HAUT).
+  drawTopDownVehicle(ctx, cx, cy, spotW, spotD, veh, isNight, isHovered) {
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    // Détermination de l'orientation de la place de parking
+    const isHorizontal = spotW >= spotD;
+    // Rotation : -90° si place horizontale (oriente le nez vers la GAUCHE), 0° si place verticale (nez vers le HAUT)
+    const rotationAngle = isHorizontal ? -Math.PI / 2 : 0;
+    ctx.rotate(rotationAngle);
+
+    // Dimensions dans le repère local où le véhicule pointe vers le haut :
+    const localW = isHorizontal ? Math.min(spotD * 0.76, 44) : Math.min(spotW * 0.76, 44);
+    const localH = isHorizontal ? Math.min(spotW * 0.85, 90) : Math.min(spotD * 0.85, 90);
+
+    const img = this.getVehicleTopDownImage(veh);
+    if (img && img.complete && img.naturalWidth > 0) {
+      // Ombre portée au sol
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-localW / 2 + 3, -localH / 2 + 4, localW, localH, 5);
+      else ctx.rect(-localW / 2 + 3, -localH / 2 + 4, localW, localH);
+      ctx.fill();
+
+      // Dessin de l'image vue du dessus avec respect parfait du ratio d'aspect
+      const drawH = localH;
+      const imgScale = drawH / (img.naturalHeight || 500);
+      const imgDrawW = (img.naturalWidth || 500) * imgScale;
+      const imgDrawH = drawH;
+      ctx.drawImage(img, -imgDrawW / 2, -imgDrawH / 2, imgDrawW, imgDrawH);
+    } else {
+      // Fallback vectoriel propre et réaliste orienté dans le même sens
+      this.drawVectorVehicleTopDown(ctx, -localW / 2, -localH / 2, localW, localH, veh, isNight);
+    }
+
+    // Halo de surbrillance lumineux si le véhicule est survolé par le curseur
+    if (isHovered) {
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
+      ctx.shadowColor = '#0284c7';
+      ctx.shadowBlur = 10;
+      ctx.strokeRect(-localW / 2 - 3, -localH / 2 - 3, localW + 6, localH + 6);
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.restore();
+  },
+
+  // Rendu vectoriel de secours vue du dessus (pointant vers le haut local)
+  drawVectorVehicleTopDown(ctx, x, y, w, h, veh, isNight) {
+    // Ombre portée au sol
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x + 2, y + 3, w, h, 6);
+    else ctx.rect(x + 2, y + 3, w, h);
+    ctx.fill();
+
+    // Carrosserie blanche de base
+    ctx.fillStyle = '#f8fafc';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x, y, w, h, 6);
+    else ctx.rect(x, y, w, h);
+    ctx.fill();
+
+    // Bandes latérales officielles Protection Civile (Orange fluo et Bleu Marine)
+    ctx.fillStyle = '#f97316'; // Orange fluorescent
+    ctx.fillRect(x, y + 4, 3, h - 8);
+    ctx.fillRect(x + w - 3, y + 4, 3, h - 8);
+
+    ctx.fillStyle = '#1e3a8a'; // Bleu marine
+    ctx.fillRect(x + 3, y + 6, 2, h - 12);
+    ctx.fillRect(x + w - 5, y + 6, 2, h - 12);
+
+    // Pare-brise avant teinté (le haut représente l'avant / le nez)
+    ctx.fillStyle = isNight ? '#0f172a' : '#1e293b';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x + 4, y + 4, w - 8, Math.min(h * 0.22, 14), 3);
+    else ctx.rect(x + 4, y + 4, w - 8, Math.min(h * 0.22, 14));
+    ctx.fill();
+
+    // Vitres latérales et arrière
+    ctx.fillStyle = isNight ? '#1e293b' : '#334155';
+    ctx.fillRect(x + 4, y + h * 0.35, 3, h * 0.3);
+    ctx.fillRect(x + w - 7, y + h * 0.35, 3, h * 0.3);
+    ctx.fillRect(x + 6, y + h - 5, w - 12, 3);
+
+    // Toit : Croix de Vie officielle ou chevrons
+    const cx = x + w / 2;
+    const cy = y + h * 0.6;
+    ctx.fillStyle = '#0284c7';
+    ctx.fillRect(cx - 2, cy - 6, 4, 12);
+    ctx.fillRect(cx - 6, cy - 2, 12, 4);
+
+    // Rampe de gyrophares bleus sur le pavillon avant
+    const lightY = y + 2;
+    ctx.fillStyle = '#38bdf8';
+    ctx.shadowColor = '#0284c7';
+    ctx.shadowBlur = 8;
+    ctx.fillRect(cx - 8, lightY, 5, 3);
+    ctx.fillRect(cx + 3, lightY, 5, 3);
+    ctx.shadowBlur = 0;
+
+    // Rétroviseurs extérieurs
+    ctx.fillStyle = '#e2e8f0';
+    ctx.fillRect(x - 2, y + 8, 2, 4);
+    ctx.fillRect(x + w, y + 8, 2, 4);
+
+    // Bordure générale du véhicule
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  },
+
+  // Dessin détaillé en vue du dessus d'un secouriste de la Protection Civile
+  drawTopDownVolunteer(ctx, x, y, name, role = 'Secouriste') {
+    ctx.save();
+
+    // Ombre douce au sol
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x + 1.5, y + 2, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Épaules et Veste d'intervention officielle (Bleu Marine & Orange Fluo)
+    ctx.fillStyle = '#0f172a'; // Bleu marine
+    ctx.beginPath();
+    ctx.ellipse(x, y, 10, 6.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Empiècement haute visibilité Orange Fluo sur le haut du buste
+    ctx.fillStyle = '#f97316';
+    ctx.beginPath();
+    ctx.ellipse(x, y - 1, 8.5, 4.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bande rétro-réfléchissante blanche
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 9, 5, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Tête / Casquette officielle Protection Civile
+    ctx.fillStyle = '#1e3a8a';
+    ctx.beginPath();
+    ctx.arc(x, y - 1, 4.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Visière casquette
+    ctx.fillStyle = '#0f172a';
+    ctx.fillRect(x - 3, y - 6, 6, 2);
+
+    // Badge nominatif au-dessus du secouriste
+    ctx.font = 'bold 8.5px "Plus Jakarta Sans", sans-serif';
+    const textW = ctx.measureText(name).width + 8;
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(x - textW / 2, y - 18, textW, 12, 4);
+    else ctx.rect(x - textW / 2, y - 18, textW, 12);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(name, x, y - 12);
+
+    ctx.restore();
+  },
 
   render2D(ctx, width, height) {
     const model = this.getArchitectModel();
     const cx = width / 2 + this.camera2D.panX;
     const cy = height / 2 + this.camera2D.panY;
     const scale = this.camera2D.zoom;
+    const dpr = window.devicePixelRatio || 1;
 
-    // 1. Fond sombre CAD et grille millimétrée
-    ctx.fillStyle = '#0a0e17';
+    // Heure du jeu pour mode nuit / jour
+    const curH = window.game ? (window.game.currentHour || new Date().getHours()) : new Date().getHours();
+    const isNightMode = curH < 6 || curH >= 22;
+
+    // 1. Fond extérieur : Pelouse verdoyante et cour pavée (style jeu de gestion vivant)
+    if (isNightMode) {
+      ctx.fillStyle = '#0f172a';
+    } else {
+      // Pelouse naturelle verte et fraîche
+      const grad = ctx.createRadialGradient(width/2, height/2, 0, width/2, height/2, Math.max(width, height) * 0.7);
+      grad.addColorStop(0, '#22c55e');
+      grad.addColorStop(1, '#15803d');
+      ctx.fillStyle = grad;
+    }
     ctx.fillRect(0, 0, width, height);
 
-    // Grille 0.5m et 1.0m
-    ctx.lineWidth = 1;
-    const gridSize = 1.0 * scale;
-    const startX = (cx % gridSize);
-    const startY = (cy % gridSize);
-
-    ctx.strokeStyle = '#121927';
-    ctx.beginPath();
-    for (let x = startX - gridSize; x < width + gridSize; x += gridSize / 2) {
-      ctx.moveTo(x, 0); ctx.lineTo(x, height);
-    }
-    for (let y = startY - gridSize; y < height + gridSize; y += gridSize / 2) {
-      ctx.moveTo(0, y); ctx.lineTo(width, y);
-    }
-    ctx.stroke();
-
-    ctx.strokeStyle = '#1b2438';
-    ctx.beginPath();
-    for (let x = startX - gridSize; x < width + gridSize; x += gridSize) {
-      ctx.moveTo(x, 0); ctx.lineTo(x, height);
-    }
-    for (let y = startY - gridSize; y < height + gridSize; y += gridSize) {
-      ctx.moveTo(0, y); ctx.lineTo(width, y);
-    }
-    ctx.stroke();
-
-    // Centrage du complexe (centre vers x=8.3m, y=6.0m)
+    // Centrage du complexe
     const ox = cx - 8.3 * scale;
     const oy = cy - 6.0 * scale;
 
-    // 2. Tracé de la zone extérieure : Parking Opérationnel 2 places
+    // 2. Zone extérieure : Cour enrobée bitumineuse & Parking Opérationnel
     if (model.parking) {
       const pk = model.parking;
       const px = ox + pk.x * scale;
@@ -4185,27 +6571,30 @@ window.ProtecLocaux = {
       const pw = pk.w * scale;
       const ph = pk.h * scale;
 
-      // Sol bitumé d'antenne
-      ctx.fillStyle = '#111724';
+      // Ombre portée de la cour
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.20)';
+      ctx.fillRect(px + 4, py + 5, pw, ph);
+
+      // Sol asphalte bitumé réaliste
+      ctx.fillStyle = isNightMode ? '#1e293b' : '#334155';
       ctx.fillRect(px, py, pw, ph);
 
-      // Bordure extérieure de la cour
-      ctx.strokeStyle = '#1e293b';
+      // Bordure en béton de voirie propre
+      ctx.strokeStyle = isNightMode ? '#334155' : '#64748b';
       ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
       ctx.strokeRect(px, py, pw, ph);
-      ctx.setLineDash([]);
 
-      // Titre de la zone parking
-      ctx.fillStyle = '#64748b';
-      ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+      // Marquage au sol du parking
+      ctx.fillStyle = isNightMode ? '#94a3b8' : '#ffffff';
+      ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText(pk.label.toUpperCase(), px + pw / 2, py + 14);
+      ctx.textBaseline = 'top';
+      ctx.fillText('🚒 COUR & HANGAR OPÉRATIONNEL', px + pw / 2, py + 8);
 
-      // Tracé des emplacements de parking
+      // Récupération des véhicules affectés à la station
       const game = window.game;
       const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
-      const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id)) : [];
+      const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
 
       (pk.spots || []).forEach((spot, idx) => {
         const sx = ox + spot.x * scale;
@@ -4213,28 +6602,95 @@ window.ProtecLocaux = {
         const sw = spot.w * scale;
         const sd = spot.d * scale;
 
-        // Tracé au sol jaune/orange sécurité
-        ctx.fillStyle = 'rgba(234, 88, 12, 0.06)';
-        ctx.fillRect(sx, sy, sw, sd);
-
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([5, 5]);
-        ctx.strokeRect(sx, sy, sw, sd);
-        ctx.setLineDash([]);
-
-        // Libellé de l'emplacement au sol
         const assignedVeh = stVehs[idx];
-        const displayLabel = assignedVeh ? `🚑 ${assignedVeh.name} (${assignedVeh.type})` : (spot.label || `🅿️ EMPLACEMENT LIBRE 0${idx + 1}`);
+        const isHovered = (this.hoveredVehicle && assignedVeh && this.hoveredVehicle.id === assignedVeh.id);
 
-        ctx.fillStyle = assignedVeh ? '#38bdf8' : '#fbbf24';
-        ctx.font = 'bold 9px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(displayLabel, sx + sw / 2, sy + sd / 2);
+        // Lignes de stationnement blanches nettes
+        ctx.strokeStyle = isHovered ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = isHovered ? 2.5 : 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(sx, sy, sw, sd);
+
+        if (assignedVeh) {
+          // Dessin du véhicule centré sur sa place, avec orientation adaptée au sens de la place
+          const centerX = sx + sw / 2;
+          const centerY = sy + sd / 2;
+          this.drawTopDownVehicle(ctx, centerX, centerY, sw, sd, assignedVeh, isNightMode, isHovered);
+        } else {
+          // Emplacement vide
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+          ctx.fillRect(sx, sy, sw, sd);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
+          ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(spot.label || `🅿️ EMPLACEMENT 0${idx + 1}`, sx + sw / 2, sy + sd / 2);
+        }
       });
+
+      // Infobulle flottante au survol du curseur sur un véhicule garé
+      if (this.hoveredVehicle && this.hoveredVehicleSpot) {
+        const sp = this.hoveredVehicleSpot;
+        const hx = ox + (sp.x + sp.w / 2) * scale;
+        const hy = oy + sp.y * scale;
+        const v = this.hoveredVehicle;
+
+        const titleText = `🚑 ${v.name || v.type}`;
+        const subText = `${v.type || 'Véhicule'} • État: ${v.conditionPercent || 100}% • Consommables: ${v.consumablesPercent || 100}%`;
+
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        const titleW = ctx.measureText(titleText).width;
+        ctx.font = '600 9.5px "Plus Jakarta Sans", sans-serif';
+        const subW = ctx.measureText(subText).width;
+        const cardW = Math.max(titleW, subW) + 24;
+        const cardH = 38;
+        const cardX = Math.max(10, Math.min(width - cardW - 10, hx - cardW / 2));
+        const cardY = Math.max(10, hy - cardH - 8);
+
+        // Boîte d'infobulle sombre et élégante avec flèche
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardW, cardH, 8);
+        else ctx.rect(cardX, cardY, cardW, cardH);
+        ctx.fill();
+
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Pointe vers la place
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.beginPath();
+        ctx.moveTo(hx - 6, cardY + cardH);
+        ctx.lineTo(hx + 6, cardY + cardH);
+        ctx.lineTo(hx, cardY + cardH + 6);
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(titleText, cardX + cardW / 2, cardY + 6);
+
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '600 9.5px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText(subText, cardX + cardW / 2, cardY + 21);
+      }
     }
 
-    // 3. Tracé des sols des 3 pièces intérieures
+    // 3. Ombre portée globale du bâtiment (effet de relief de jeu de gestion)
+    const buildX = ox + 6.0 * scale;
+    const buildY = oy + 1.4 * scale;
+    const buildW = 9.8 * scale;
+    const buildH = 9.2 * scale;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(buildX + 6, buildY + 8, buildW, buildH, 6);
+    else ctx.rect(buildX + 6, buildY + 8, buildW, buildH);
+    ctx.fill();
+
+    // 4. Tracé des sols réalistes des pièces de la caserne
     model.rooms.forEach(r => {
       const rx = ox + r.x * scale;
       const ry = oy + r.y * scale;
@@ -4242,143 +6698,209 @@ window.ProtecLocaux = {
       const rh = r.h * scale;
       const isSelected = this.selectedRoomId === r.id;
 
-      ctx.fillStyle = r.color;
-      ctx.fillRect(rx, ry, rw, rh);
+      const roomStyle = this._getRoomStyle(r.type);
 
-      // Si la pièce est sélectionnée par le joueur, surbrillance néon
+      // Tracé personnalisé du sol (bois, carrelage, lino, époxy atelier)
+      this.drawRoomFloor(ctx, rx, ry, rw, rh, r, roomStyle, isNightMode, scale);
+
+      // Surbrillance orange si la pièce est sélectionnée pour aménagement
       if (isSelected) {
-        ctx.strokeStyle = '#3b82f6';
+        ctx.strokeStyle = '#f97316';
         ctx.lineWidth = 3;
         ctx.strokeRect(rx, ry, rw, rh);
-
-        // Lueur néon
-        ctx.fillStyle = 'rgba(59, 130, 246, 0.08)';
+        ctx.fillStyle = 'rgba(249, 115, 22, 0.12)';
         ctx.fillRect(rx, ry, rw, rh);
       }
 
-      // Cartouche discret d'identification de la pièce (centré au milieu de la pièce)
-      const roomTitle = r.name.split('\n')[0];
-      const showDimensions = !!this.isEditing;
-      const roomSubtitle = showDimensions ? `${r.area.toFixed(1)} m² • ${r.w.toFixed(1)}m × ${r.h.toFixed(1)}m` : '';
-      
-      const badgeW = Math.min(rw - 16, showDimensions ? 200 : 160);
-      const badgeH = showDimensions ? 34 : 24;
-      const badgeX = rx + rw / 2 - badgeW / 2;
-      const badgeY = ry + rh / 2 - badgeH / 2;
+      // Pastille conviviale avec le nom de la pièce
+      if (rw > 40 && rh > 30) {
+        const roomTitle = r.name.split('\n')[0];
+        const showDimensions = !!this.isEditing;
+        const roomSubtitle = showDimensions ? `${r.area ? r.area.toFixed(1) : '?'} m²` : '';
 
-      ctx.fillStyle = isSelected ? 'rgba(30, 58, 138, 0.85)' : 'rgba(15, 23, 42, 0.75)';
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(badgeX, badgeY, badgeW, badgeH, 6);
-      else ctx.rect(badgeX, badgeY, badgeW, badgeH);
-      ctx.fill();
+        const labelColor = isNightMode ? '#e2e8f0' : roomStyle.label;
+        ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
 
-      ctx.strokeStyle = isSelected ? '#3b82f6' : 'rgba(148, 163, 184, 0.25)';
-      ctx.lineWidth = 1;
-      ctx.stroke();
+        const labelW = Math.min(rw - 12, Math.max(ctx.measureText(roomTitle).width + 16, 75));
+        const labelH = showDimensions ? 32 : 22;
+        const labelX = rx + rw / 2 - labelW / 2;
+        const labelY = ry + rh / 2 - labelH / 2;
 
-      ctx.fillStyle = '#f8fafc';
-      ctx.font = 'bold 11px "Plus Jakarta Sans", sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      if (showDimensions) {
-        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 11);
-        ctx.fillStyle = isSelected ? '#93c5fd' : '#94a3b8';
-        ctx.font = '600 9.5px monospace';
-        ctx.fillText(roomSubtitle, rx + rw / 2, badgeY + 24);
-      } else {
-        ctx.fillText(roomTitle, rx + rw / 2, badgeY + 12);
+        ctx.fillStyle = isSelected
+          ? 'rgba(249, 115, 22, 0.95)'
+          : (isNightMode ? 'rgba(30, 41, 59, 0.90)' : 'rgba(255, 255, 255, 0.88)');
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(labelX, labelY, labelW, labelH, 6);
+        else ctx.rect(labelX, labelY, labelW, labelH);
+        ctx.fill();
+
+        ctx.strokeStyle = isSelected ? '#ea6b00' : 'rgba(148, 163, 184, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = isSelected ? '#ffffff' : labelColor;
+        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        if (showDimensions) {
+          ctx.fillText(roomTitle, rx + rw / 2, labelY + 10);
+          ctx.fillStyle = isSelected ? 'rgba(255,255,255,0.8)' : '#64748b';
+          ctx.font = '600 8.5px "Plus Jakarta Sans", sans-serif';
+          ctx.fillText(roomSubtitle, rx + rw / 2, labelY + 23);
+        } else {
+          ctx.fillText(roomTitle, rx + rw / 2, labelY + 11);
+        }
       }
     });
 
-    // 4. Tracé des murs porteurs et cloisons (double trait ardoise)
+    // 5. Murs porteurs épais et solides (style jeu de gestion en relief)
     model.walls.forEach(w => {
       const x1 = ox + w.x1 * scale;
       const y1 = oy + w.y1 * scale;
       const x2 = ox + w.x2 * scale;
       const y2 = oy + w.y2 * scale;
-      const th = Math.max(4, w.th * scale);
+      const thBase = Math.max(7, w.th * scale);
 
-      ctx.strokeStyle = '#273349';
-      ctx.lineWidth = th;
-      ctx.lineCap = 'square';
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      // Ombre du mur
+      ctx.strokeStyle = isNightMode ? '#0f172a' : '#1e293b';
+      ctx.lineWidth = thBase + 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(x1 + 1, y1 + 2); ctx.lineTo(x2 + 1, y2 + 2); ctx.stroke();
 
-      // Bords clairs
-      ctx.strokeStyle = w.outer ? '#475569' : '#334155';
+      // Corps du mur solide
+      ctx.strokeStyle = isNightMode ? '#334155' : '#475569';
+      ctx.lineWidth = thBase;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+      // Arête claire de relief supérieur
+      ctx.strokeStyle = isNightMode ? '#475569' : '#94a3b8';
       ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.lineTo(x2, y2);
-      ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     });
 
-    // 5. Tracé des portes avec arc de débattement et battant marron
+    // 6. Portes, rideaux métalliques et cloisons vitrées
     model.doors.forEach(d => {
       const dx = ox + d.x * scale;
       const dy = oy + d.y * scale;
       const dlen = d.len * scale;
 
-      // Battant de porte ouvert à 90° (marron bois)
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(dx, dy);
+      if (d.type === 'garage_shutter') {
+        // Rideau métallique de garage VPSP / LOG
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = Math.max(9, 0.22 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W' || d.wall === 'E') ctx.lineTo(dx, dy + dlen);
+        else ctx.lineTo(dx + dlen, dy);
+        ctx.stroke();
 
-      if (d.wall === 'W') {
-        ctx.lineTo(dx + dlen, dy);
-      } else if (d.wall === 'E') {
-        ctx.lineTo(dx - dlen, dy);
-      } else if (d.wall === 'S') {
-        ctx.lineTo(dx, dy - dlen);
-      } else {
-        ctx.lineTo(dx, dy + dlen);
-      }
-      ctx.stroke();
+        // Lames métalliques rainurées
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        const numSlats = Math.max(5, Math.floor(dlen / 5));
+        for (let s = 1; s < numSlats; s++) {
+          const frac = s / numSlats;
+          ctx.beginPath();
+          if (d.wall === 'W' || d.wall === 'E') {
+            ctx.moveTo(dx - 3, dy + dlen * frac);
+            ctx.lineTo(dx + 3, dy + dlen * frac);
+          } else {
+            ctx.moveTo(dx + dlen * frac, dy - 3);
+            ctx.lineTo(dx + dlen * frac, dy + 3);
+          }
+          ctx.stroke();
+        }
+        // Repères de sécurité chevron jaune / noir
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(dx - 3, dy - 3, 6, 6);
+        if (d.wall === 'W' || d.wall === 'E') ctx.fillRect(dx - 3, dy + dlen - 3, 6, 6);
+        else ctx.fillRect(dx + dlen - 3, dy - 3, 6, 6);
+      } else if (d.type === 'glass_partition') {
+        // Cloison vitrée acoustique atelier / PC
+        ctx.strokeStyle = isNightMode ? '#0891b2' : '#06b6d4';
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W' || d.wall === 'E') ctx.lineTo(dx, dy + dlen);
+        else ctx.lineTo(dx + dlen, dy);
+        ctx.stroke();
 
-      // Arc de débattement en tirets blancs
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
-      ctx.beginPath();
-      if (d.wall === 'W') {
-        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
-      } else if (d.wall === 'E') {
-        ctx.arc(dx, dy, dlen, Math.PI, Math.PI * 1.5, false);
-      } else if (d.wall === 'S') {
-        ctx.arc(dx, dy, dlen, Math.PI * 1.5, Math.PI * 2, false);
-      } else {
-        ctx.arc(dx, dy, dlen, 0, Math.PI / 2, false);
-      }
-      ctx.stroke();
-      ctx.setLineDash([]);
+        // Reflet verre cyan
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (d.wall === 'W' || d.wall === 'E') {
+          ctx.moveTo(dx - 1, dy + 4); ctx.lineTo(dx - 1, dy + dlen - 4);
+        } else {
+          ctx.moveTo(dx + 4, dy - 1); ctx.lineTo(dx + dlen - 4, dy - 1);
+        }
+        ctx.stroke();
+      } else if (d.type === 'double_door') {
+        // Porte double battante (brancard / logistique)
+        ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
+        ctx.lineWidth = Math.max(7, 0.16 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        let endX = dx, endY = dy;
+        if (d.wall === 'W') { endX = dx + dlen; ctx.lineTo(endX, dy); }
+        else if (d.wall === 'E') { endX = dx - dlen; ctx.lineTo(endX, dy); }
+        else if (d.wall === 'S') { endY = dy - dlen; ctx.lineTo(dx, endY); }
+        else { endY = dy + dlen; ctx.lineTo(dx, endY); }
+        ctx.stroke();
 
-      // Cote de porte : taille uniquement en mode édition
-      const doorLabel = this.isEditing ? d.label : (d.label || '').replace(/\s*\(\d+cm\)/i, '').replace(/\s*\([\d\.]+m\)/i, '');
-      ctx.fillStyle = '#cbd5e1';
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
-      if (d.wall === 'W' || d.wall === 'E') {
-        ctx.save();
-        ctx.translate(dx + (d.wall === 'W' ? -8 : 8), dy + dlen / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText(doorLabel, 0, 0);
-        ctx.restore();
+        const half = dlen / 2;
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+
+        // Battant 1
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(dx - half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx - half * 0.7, dy - half * 0.7);
+        else ctx.lineTo(dx + half * 0.7, dy + half * 0.7);
+        ctx.stroke();
+
+        // Battant 2
+        ctx.beginPath(); ctx.moveTo(endX, endY);
+        if (d.wall === 'W') ctx.lineTo(endX - half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(endX + half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx + half * 0.7, endY + half * 0.7);
+        else ctx.lineTo(dx - half * 0.7, endY - half * 0.7);
+        ctx.stroke();
       } else {
-        ctx.fillText(doorLabel, dx + dlen / 2, dy - 8);
+        // Porte battante standard
+        ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
+        ctx.lineWidth = Math.max(7, 0.16 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + dlen, dy);
+        else if (d.wall === 'E') ctx.lineTo(dx - dlen, dy);
+        else if (d.wall === 'S') ctx.lineTo(dx, dy - dlen);
+        else ctx.lineTo(dx, dy + dlen);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(dx - dlen * 0.7, dy - dlen * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+        else ctx.lineTo(dx + dlen * 0.7, dy + dlen * 0.7);
+        ctx.stroke();
       }
     });
 
-    // 6. Tracé des fenêtres (cyan double vitrage avec cotes dégagées)
+    // 7. Fenêtres lumineuses avec reflets
     model.windows.forEach(w => {
       const wx = ox + w.x * scale;
       const wy = oy + w.y * scale;
       const wlen = w.len * scale;
 
-      ctx.strokeStyle = '#38bdf8';
-      ctx.lineWidth = 5;
+      // Encadrement
+      ctx.strokeStyle = isNightMode ? '#1e293b' : '#cbd5e1';
+      ctx.lineWidth = Math.max(5, 0.1 * scale);
       ctx.beginPath();
       if (w.wall === 'N' || w.wall === 'S') {
         ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
@@ -4387,63 +6909,76 @@ window.ProtecLocaux = {
       }
       ctx.stroke();
 
-      // Cote de fenêtre (taille uniquement en mode édition)
-      const winLabel = this.isEditing ? w.label : (w.label || '').replace(/\s*\([\d\.]+m\)/i, '').replace(/\s*\(\d+cm\)/i, '');
-      ctx.fillStyle = '#38bdf8';
-      ctx.font = 'bold 9px monospace';
-      ctx.textAlign = 'center';
+      // Vitrage bleu ciel brillant
+      ctx.strokeStyle = isNightMode ? 'rgba(56, 189, 248, 0.4)' : '#38bdf8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
       if (w.wall === 'N' || w.wall === 'S') {
-        ctx.fillText(winLabel, wx + wlen / 2, wy + (w.wall === 'N' ? -13 : 15));
+        ctx.moveTo(wx, wy); ctx.lineTo(wx + wlen, wy);
       } else {
-        ctx.save();
-        ctx.translate(wx + (w.wall === 'W' ? -12 : 14), wy + wlen / 2);
-        ctx.rotate(-Math.PI / 2);
-        ctx.fillText(winLabel, 0, 0);
-        ctx.restore();
+        ctx.moveTo(wx, wy); ctx.lineTo(wx, wy + wlen);
       }
+      ctx.stroke();
     });
 
-    // 7. Tracé des équipements techniques fixes (radiateurs, extincteurs, TGBT)
+    // 8. Équipements de sécurité (extincteurs, TGBT)
     model.fixtures.forEach(f => {
-      if (f.type === 'radiator') {
-        const fx = ox + f.x * scale;
-        const fy = oy + f.y * scale;
-        const flen = f.len * scale;
-
-        ctx.strokeStyle = '#ea580c';
-        ctx.lineWidth = 4;
-        ctx.setLineDash([3, 2]);
-        ctx.beginPath();
-        if (f.wall === 'N' || f.wall === 'S') {
-          ctx.moveTo(fx, fy + (f.wall === 'N' ? 5 : -5));
-          ctx.lineTo(fx + flen, fy + (f.wall === 'N' ? 5 : -5));
-        } else {
-          ctx.moveTo(fx + (f.wall === 'W' ? 5 : -5), fy);
-          ctx.lineTo(fx + (f.wall === 'W' ? 5 : -5), fy + flen);
-        }
-        ctx.stroke();
-        ctx.setLineDash([]);
-        // Symbole technique strié épuré (sans texte parasite orange qui masque les ouvertures)
-      } else if (f.type === 'duct' || f.type === 'extinguisher') {
+      if (f.type === 'extinguisher') {
         const px = ox + f.x * scale;
         const py = oy + f.y * scale;
-        const pw = f.w * scale;
-        const ph = f.h * scale;
-
-        ctx.fillStyle = f.type === 'extinguisher' ? '#dc2626' : '#1e293b';
-        ctx.fillRect(px, py, pw, ph);
-        ctx.strokeStyle = f.type === 'extinguisher' ? '#ef4444' : '#64748b';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(px, py, pw, ph);
-
-        ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(f.label, px + pw / 2, py + ph / 2 + 3);
+        ctx.fillStyle = '#ef4444';
+        ctx.beginPath();
+        ctx.arc(px + 4, py + 4, 4.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
     });
 
-    // 8. Tracé du mobilier en vue de dessus détaillée (style Les Sims)
+    // 9. Présence vivante des secouristes en faction dans la caserne
+    const availableVolunteers = (window.game && window.game.volunteers) ? window.game.volunteers.filter(v => v.status === 'dispo' || v.status === 'sdis_caserne') : [];
+    if (availableVolunteers.length > 0) {
+      model.rooms.forEach((rm, rIdx) => {
+        if (rm.type === 'foyer' || (rm.name && rm.name.includes('Foyer'))) {
+          const v1 = availableVolunteers[0];
+          if (v1) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.35) * scale, oy + (rm.y + rm.h * 0.45) * scale, v1.name);
+          const v2 = availableVolunteers[1];
+          if (v2) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.65) * scale, oy + (rm.y + rm.h * 0.60) * scale, v2.name);
+        } else if (rm.type === 'pc_radio' || (rm.name && rm.name.includes('Radio'))) {
+          const vOp = availableVolunteers.find(x => ['CE', 'CD', 'Cadre'].includes(x.rank)) || availableVolunteers[0];
+          if (vOp) this.drawTopDownVolunteer(ctx, ox + (rm.x + rm.w * 0.50) * scale, oy + (rm.y + rm.h * 0.50) * scale, vOp.name, 'Opérateur');
+        }
+      });
+    }
+
+    // 10. Badge d'ambiance temporelle & statut base en haut à droite
+    const isGardeActive = !!(window.game && window.game.gardeActive);
+    ctx.save();
+    const statusText = isNightMode ? `🌙 Nuit (${curH}h00) • ${isGardeActive ? 'Garde SAMU 15 Active 🚑' : 'Veille Nocturne'}` : `☀️ Journée (${curH}h00) • Caserne Opérationnelle Active`;
+    ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+    const bW = ctx.measureText(statusText).width + 22;
+    const bH = 26;
+    const bX = width - bW - 14;
+    const bY = 14;
+
+    ctx.fillStyle = isNightMode ? 'rgba(15, 23, 42, 0.92)' : 'rgba(255, 255, 255, 0.95)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bX, bY, bW, bH, 8);
+    else ctx.rect(bX, bY, bW, bH);
+    ctx.fill();
+
+    ctx.strokeStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#475569') : '#cbd5e1';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    ctx.fillStyle = isNightMode ? (isGardeActive ? '#38bdf8' : '#e2e8f0') : '#0f172a';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(statusText, bX + bW / 2, bY + bH / 2);
+    ctx.restore();
+
+    // 11. Tracé du mobilier meublé (style Les Sims)
     (model.furniture || []).forEach(item => {
       const ix = ox + item.x * scale;
       const iy = oy + item.y * scale;
@@ -4452,88 +6987,264 @@ window.ProtecLocaux = {
       const isSelected = this.selectedFurnitureId === item.id;
 
       // Ombre portée du meuble
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.fillRect(ix + 2, iy + 2, iw, ih);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.16)';
+      ctx.fillRect(ix + 3, iy + 3, iw, ih);
 
       // Corps du meuble
-      ctx.fillStyle = item.color || '#334155';
-      ctx.fillRect(ix, iy, iw, ih);
+      ctx.fillStyle = item.color || '#8a9bb0';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(ix, iy, iw, ih, 4);
+      else ctx.rect(ix, iy, iw, ih);
+      ctx.fill();
 
       // Bordure intérieure
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(ix, iy, iw, ih);
+      ctx.stroke();
+
+      // Badge visuel du Pôle assigné (Formation, Secours, Crise, Vestiaires)
+      if (item.pole && item.pole !== 'pole_libre') {
+        const poleIcons = {
+          pole_formation: '🎓',
+          pole_secours: '🩹',
+          pole_crise: '🚨',
+          pole_vestiaire: '👕'
+        };
+        const pIcon = poleIcons[item.pole];
+        if (pIcon && iw >= 16 && ih >= 16) {
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'top';
+          ctx.fillText(pIcon, ix + iw - 2, iy + 2);
+        }
+      }
 
       // Détails graphiques selon le type
       if (item.type === 'mannequin_rcp') {
-        // Tête et torse
         ctx.fillStyle = '#fed7aa';
         ctx.beginPath();
-        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
+        ctx.arc(ix + iw / 2, iy + ih * 0.25, Math.min(iw, ih) * 0.22, 0, Math.PI * 2);
         ctx.fill();
       } else if (item.type === 'dae_mural') {
-        // Croix ou flash
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.4, iy + ih * 0.2, iw * 0.2, ih * 0.6);
         ctx.fillRect(ix + iw * 0.2, iy + ih * 0.4, iw * 0.6, ih * 0.2);
       } else if (item.type === 'armoire_pharmacie') {
-        // Croix rouge
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.45, iy + ih * 0.25, iw * 0.1, ih * 0.5);
         ctx.fillRect(ix + iw * 0.3, iy + ih * 0.45, iw * 0.4, ih * 0.1);
       } else if (item.type === 'etagere_lots') {
-        // Rayonnages
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33);
         ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66);
         ctx.stroke();
+
+        // Affichage des caisses et lots rangés sur l'étagère
+        const storedEntries = Object.entries(item.storedInventory || {}).filter(([_, c]) => c > 0);
+        if (storedEntries.length > 0) {
+          const colors = ['#ea580c', '#0284c7', '#16a34a', '#eab308', '#dc2626'];
+          let boxIdx = 0;
+          const numCols = Math.min(4, Math.max(2, Math.floor(iw / 8)));
+          for (const [sId, sCount] of storedEntries) {
+            for (let c = 0; c < Math.min(sCount, 3); c++) {
+              const bx = ix + 2 + (boxIdx % numCols) * (iw / numCols);
+              const by = iy + 2 + Math.floor(boxIdx / numCols) * 5;
+              if (by + 4 < iy + ih) {
+                ctx.fillStyle = colors[boxIdx % colors.length];
+                ctx.fillRect(bx, by, (iw / numCols) - 2, 4);
+              }
+              boxIdx++;
+            }
+          }
+        }
+      } else if (item.type === 'babyfoot') {
+        ctx.fillStyle = '#15803d';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih - 4);
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.33); ctx.lineTo(ix + iw, iy + ih * 0.33); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih * 0.66); ctx.lineTo(ix + iw, iy + ih * 0.66); ctx.stroke();
+        ctx.fillStyle = '#ef4444'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.33 - 1.5, 3, 3);
+        ctx.fillStyle = '#3b82f6'; ctx.fillRect(ix + iw * 0.4, iy + ih * 0.66 - 1.5, 3, 3);
+      } else if (item.type === 'tv_foyer') {
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.4)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+      } else if (item.type === 'console_jeux') {
+        ctx.fillStyle = '#312e81';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        ctx.fillStyle = '#a5b4fc';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.3, iw * 0.4, ih * 0.4);
+      } else if (item.type === 'ping_pong') {
+        ctx.fillStyle = '#0284c7';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(ix, iy + ih / 2); ctx.lineTo(ix + iw, iy + ih / 2); ctx.stroke();
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ix + iw / 2, iy); ctx.lineTo(ix + iw / 2, iy + ih); ctx.stroke();
+      } else if (item.type === 'distributeur_snacks') {
+        ctx.fillStyle = '#dc2626';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih * 0.5);
       } else if (item.type === 'lit_garde') {
-        // Oreiller
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
-      }
-
-      // Si le meuble est sélectionné ou survolé : surbrillance + cartouche d'information
-      const isHovered = this.hoveredFurnitureId === item.id;
-      if (isSelected || isHovered) {
-        ctx.strokeStyle = isSelected ? '#38bdf8' : '#67e8f9';
-        ctx.lineWidth = isSelected ? 2.5 : 1.5;
-        ctx.setLineDash(isSelected ? [4, 4] : []);
-        ctx.strokeRect(ix - 3, iy - 3, iw + 6, ih + 6);
-        ctx.setLineDash([]);
-
-        if (isSelected) {
-          // Poignée de rotation au sommet
-          ctx.fillStyle = '#38bdf8';
+      } else if (item.type === 'casiers_vestiaire' || item.type === 'casiers_tenues_xl') {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const cuts = item.type === 'casiers_tenues_xl' ? 4 : 3;
+        for (let c = 1; c < cuts; c++) {
+          ctx.moveTo(ix + (iw / cuts) * c, iy);
+          ctx.lineTo(ix + (iw / cuts) * c, iy + ih);
+        }
+        ctx.stroke();
+        // Aération vestiaire
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, 2);
+      } else if (item.type === 'armoire_forte_securisee') {
+        // Armoire forte blindée DAE / sensible
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih - 4);
+        // Cadran de sécurité / roue de verrouillage
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih / 2, Math.min(iw, ih) * 0.22, 0, Math.PI * 2);
+        ctx.stroke();
+        // Point central / serrure
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(ix + iw / 2 - 1.5, iy + ih / 2 - 1.5, 3, 3);
+      } else if (item.type === 'rack_palettes_lourd') {
+        // Rack à palettes lourd industriel
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Traverses acier
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        const numRacks = Math.max(3, Math.floor(iw / 12));
+        for (let r = 1; r < numRacks; r++) {
           ctx.beginPath();
-          ctx.arc(ix + iw / 2, iy - 10, 4.5, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.strokeStyle = '#ffffff';
-          ctx.lineWidth = 1;
+          ctx.moveTo(ix + (iw / numRacks) * r, iy);
+          ctx.lineTo(ix + (iw / numRacks) * r, iy + ih);
           ctx.stroke();
         }
+        // Palettes de matériel
+        const storedEntries = Object.entries(item.storedInventory || {}).filter(([_, c]) => c > 0);
+        if (storedEntries.length > 0) {
+          ctx.fillStyle = '#b45309';
+          ctx.fillRect(ix + 3, iy + 3, iw - 6, ih - 6);
+        }
+      } else if (item.type === 'lits_superposes') {
+        // Lits superposés (2 couchages)
+        ctx.fillStyle = '#ffffff';
+        // Oreiller du dessus
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.06, iw * 0.7, ih * 0.2);
+        // Oreiller du bas
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.74, iw * 0.7, ih * 0.2);
+        // Échelle latérale
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(ix + 2, iy + ih * 0.3); ctx.lineTo(ix + 2, iy + ih * 0.7);
+        ctx.moveTo(ix + 6, iy + ih * 0.3); ctx.lineTo(ix + 6, iy + ih * 0.7);
+        ctx.moveTo(ix + 2, iy + ih * 0.4); ctx.lineTo(ix + 6, iy + ih * 0.4);
+        ctx.moveTo(ix + 2, iy + ih * 0.5); ctx.lineTo(ix + 6, iy + ih * 0.5);
+        ctx.moveTo(ix + 2, iy + ih * 0.6); ctx.lineTo(ix + 6, iy + ih * 0.6);
+        ctx.stroke();
+      } else if (item.type === 'kitchenette_foyer') {
+        // Kitchenette équipée : évier inox et plaques
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(ix + iw * 0.08, iy + ih * 0.15, iw * 0.35, ih * 0.7);
+        // Robinet
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.23, iy + 2, 2, 4);
+        // Plaques de cuisson
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(ix + iw * 0.55, iy + ih * 0.15, iw * 0.38, ih * 0.7);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(ix + iw * 0.65, iy + ih * 0.5, 3.5, 0, Math.PI * 2);
+        ctx.arc(ix + iw * 0.82, iy + ih * 0.5, 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (item.type === 'table_repas_equipe') {
+        // Grande table repas conviviale 8 places
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        // 8 Assiettes / sets de table
+        const plateRadius = 2.5;
+        for (let p = 0; p < 4; p++) {
+          const px = ix + (iw / 5) * (p + 1);
+          ctx.beginPath(); ctx.arc(px, iy + ih * 0.25, plateRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px, iy + ih * 0.75, plateRadius, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (item.type === 'ecran_tactique_interactif') {
+        // Écran tactile interactif 75"
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Icône de briefing
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.3, iw * 0.4, 1.5);
+      } else if (item.type === 'mannequin_pediatrique') {
+        // Tapis d'exercice orange
+        ctx.fillStyle = 'rgba(234, 88, 12, 0.25)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Corps nourrisson
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih * 0.3, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(ix + iw * 0.35, iy + ih * 0.45, iw * 0.3, ih * 0.4);
+      } else if (item.type === 'dsa_demonstration') {
+        // DAE pédagogique
+        ctx.fillStyle = '#10b981';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.35, iy + ih * 0.2, iw * 0.3, ih * 0.6);
+        ctx.fillRect(ix + iw * 0.2, iy + ih * 0.35, iw * 0.6, ih * 0.3);
+      }
 
-        // Cartouche flottante informative au-dessus de l'objet
+      // Si le meuble est sélectionné ou survolé
+      const isHovered = this.hoveredFurnitureId === item.id;
+      if (isSelected || isHovered) {
+        ctx.strokeStyle = isSelected ? '#f97316' : '#fb923c';
+        ctx.lineWidth = isSelected ? 2.5 : 1.5;
+        ctx.strokeRect(ix - 2, iy - 2, iw + 4, ih + 4);
+
+        if (isSelected) {
+          ctx.fillStyle = '#f97316';
+          ctx.beginPath();
+          ctx.arc(ix + iw / 2, iy - 8, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
         const infoText = `${item.label} (${item.w.toFixed(1)}m × ${item.d.toFixed(1)}m)`;
-        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        ctx.font = 'bold 9.5px "Plus Jakarta Sans", sans-serif';
         const cardW = ctx.measureText(infoText).width + 16;
-        const cardH = 22;
-        const cardX = Math.max(8, Math.min(width - cardW - 8, ix + iw / 2 - cardW / 2));
-        const cardY = iy - (isSelected ? 32 : 26);
+        const cardH = 20;
+        const cardX = ix + iw / 2 - cardW / 2;
+        const cardY = iy - (isSelected ? 30 : 24);
 
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.95)';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
         ctx.beginPath();
         if (ctx.roundRect) ctx.roundRect(cardX, cardY, cardW, cardH, 5);
         else ctx.rect(cardX, cardY, cardW, cardH);
         ctx.fill();
 
-        ctx.strokeStyle = isSelected ? '#38bdf8' : '#64748b';
+        ctx.strokeStyle = isSelected ? '#f97316' : '#cbd5e1';
         ctx.lineWidth = 1;
         ctx.stroke();
 
-        ctx.fillStyle = '#f8fafc';
+        ctx.fillStyle = isSelected ? '#f97316' : '#374151';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(infoText, cardX + cardW / 2, cardY + cardH / 2);
@@ -4638,11 +7349,19 @@ window.ProtecLocaux = {
       this.draw3DWallSegment(ctx, minX, minY, isH ? minX + len : minX, isH ? minY : minY + len, w.th, wallH, cam, cx, cy);
     });
 
-    // 7. Rendu des Portes 3D Ouvertes (Vantail marron/orange)
+    // 7. Rendu des Portes et Ouvertures 3D
     model.doors.forEach(d => {
-      // Montant et vantail 3D ouvert en biais
       const px = d.x; const py = d.y;
-      this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.9, 2.05, '#b45309', cam, cx, cy);
+      if (d.type === 'garage_shutter') {
+        this.draw3DBox(ctx, px, py, 0, 0.15, d.len, 2.6, '#475569', cam, cx, cy);
+      } else if (d.type === 'glass_partition') {
+        this.draw3DBox(ctx, px, py, 0, 0.08, d.len, 2.2, 'rgba(6, 182, 212, 0.45)', cam, cx, cy);
+      } else if (d.type === 'double_door') {
+        this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.45, 2.05, '#b45309', cam, cx, cy);
+        this.draw3DBox(ctx, px, py + d.len * 0.55, 0, 0.06, d.len * 0.45, 2.05, '#b45309', cam, cx, cy);
+      } else {
+        this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.9, 2.05, '#b45309', cam, cx, cy);
+      }
     });
 
     // 8. Rendu des Fenêtres 3D (Vitres semi-transparentes cyan)
@@ -4774,35 +7493,44 @@ window.ProtecLocaux = {
   showAddElementModal(game) {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 z-[150] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4';
+    const money = game?.resources?.money || 0;
     modal.innerHTML = `
-      <div class="glass-panel-heavy rounded-3xl p-6 max-w-lg w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white">
+      <div class="glass-panel-heavy rounded-3xl p-5 max-w-2xl w-full space-y-4 border border-slate-700 shadow-2xl bg-slate-900 text-white max-h-[90vh] flex flex-col">
         <div class="flex items-center justify-between pb-3 border-b border-slate-800">
           <div class="flex items-center gap-2">
             <span class="text-xl">🧰</span>
             <h3 class="font-black text-base">Ajouter un Mobilier ou Équipement de Secours</h3>
           </div>
-          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold">✕</button>
+          <button onclick="this.closest('.fixed').remove()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 flex items-center justify-center text-slate-300 font-bold cursor-pointer">✕</button>
         </div>
-        <p class="text-xs text-slate-300 leading-relaxed">
-          Sélectionnez un agencement à installer dans vos locaux :
-        </p>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Baie Radio & PC Fixe opérationnelle dans le Poste de Commandement.', 'blue')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">📡 Baie Radio Fixe</strong>
-            <span class="text-[10px] text-slate-400">Communication Antac & PC</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Armoire DAE & Pharmacie installée.', 'green')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">💚 Armoire DAE Murale</strong>
-            <span class="text-[10px] text-slate-400">Accès d'urgence 24/7</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Tableau blanc interactif installé dans la salle PSC.', 'amber')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">🎓 Écran Vidéoprojection</strong>
-            <span class="text-[10px] text-slate-400">Pour formations PSC/SST</span>
-          </button>
-          <button onclick="this.closest('.fixed').remove(); window.game.showToast('Équipement Ajouté', 'Rack Bouteilles B5 Oxygène sécurisé.', 'emerald')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition space-y-1">
-            <strong class="block font-black text-white">🫁 Rack Bouteilles Oxygène</strong>
-            <span class="text-[10px] text-slate-400">Capacité réserve accrue</span>
-          </button>
+        <div class="flex items-center justify-between text-xs text-slate-300">
+          <span>Sélectionnez un équipement à placer sur votre plan 2D :</span>
+          <span>Trésorerie : <strong class="text-emerald-400 font-mono">${money.toLocaleString('fr-FR')} €</strong></span>
+        </div>
+        <!-- Onglets rapides de catégorie dans le modal -->
+        <div class="flex items-center gap-1 overflow-x-auto pb-1 text-xs" id="quick-furn-cat-bar">
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display=''); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs">🗂️ Tout</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='bureau'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">💼 Direction</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='formation'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">🎓 Formation</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = (c.dataset.cat==='stockage'||c.dataset.cat==='secours')?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">📦 Stockage</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='detente'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">☕ Foyer</button>
+        </div>
+        <div class="overflow-y-auto max-h-[60vh] grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pr-1">
+          ${this.FURNITURE_CATALOG.map(item => `
+            <button onclick="this.closest('.fixed').remove(); window.ProtecLocaux.addFurnitureItem('${item.type}')" data-cat="${item.cat}" class="modal-furn-card p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition flex flex-col justify-between gap-2 group cursor-pointer active:scale-95">
+              <div class="flex items-start gap-2.5">
+                <span class="text-2xl group-hover:scale-110 transition flex-shrink-0">${item.icon}</span>
+                <div>
+                  <strong class="block font-black text-white leading-tight">${item.name}</strong>
+                  <span class="text-[10px] text-slate-400 font-mono">${item.w}m × ${item.d}m</span>
+                </div>
+              </div>
+              <div class="flex items-center justify-between w-full pt-1 border-t border-slate-700/60">
+                <span class="text-[10px] text-slate-400 capitalize">${item.cat}</span>
+                <span class="font-black text-emerald-400 bg-emerald-500/20 px-1.5 py-0.5 rounded text-[11px]">${item.cost} €</span>
+              </div>
+            </button>
+          `).join('')}
         </div>
       </div>
     `;
@@ -4849,17 +7577,31 @@ window.ProtecLocaux = {
     document.body.appendChild(modal);
   },
 
-  toggleEditMode(game) {
-    const prem = game.stations[0]?.premises;
-    if (prem && prem.tenure !== 'owned') {
-      this.showRentalRestrictedModal(game);
-      return;
+  saveCurrentArchitecture(game) {
+    if (!game) game = window.game;
+    if (!game) return;
+    const stId = this.currentStationId;
+    const station = (game.stations && game.stations.find(s => s.id === stId)) || (game.stations && game.stations[0]);
+    if (!station) return;
+    if (!station.premises) {
+      station.premises = { tenure: 'rented', level: 1, monthlyRent: 350, securityEquipment: [] };
     }
+    const model = this.getArchitectModel(station.id);
+    if (model) {
+      station.premises.architecture = JSON.parse(JSON.stringify(model));
+    }
+    if (typeof game.saveGame === 'function') {
+      game.saveGame();
+    }
+  },
+
+  toggleEditMode(game) {
     this.isEditing = !this.isEditing;
     if (this.isEditing) {
-      game.showToast('Mode Aménagement Actif', 'Sélectionnez un type de pièce dans la palette pour réaménager vos cloisons.', 'purple');
+      game.showToast('Mode Aménagement Actif', 'Déplacez, pivotez ou ajoutez du mobilier pour équiper vos locaux.', 'purple');
     } else {
-      game.showToast('Plan Validé', 'Le plan d’aménagement de vos locaux est enregistré.', 'green');
+      this.saveCurrentArchitecture(game);
+      game.showToast('Plan Validé', 'L’aménagement et le mobilier de vos locaux sont enregistrés.', 'green');
     }
     this.renderModal(game);
   },
@@ -5170,20 +7912,28 @@ window.ProtecLocaux = {
   // =========================================================================
 
   renderStockTab(game, stats) {
-    const storageUsed = this.getCurrentStorageUsed(game);
+    if (window.ProtecSocial && typeof window.ProtecSocial.clampStorageToCapacity === 'function') {
+      window.ProtecSocial.clampStorageToCapacity(game);
+    }
+    const rawStorage = this.getCurrentStorageUsed(game);
+    const storageUsed = Math.min(stats.storageCapacity, rawStorage);
+    const isFull = stats.hasStorage && storageUsed >= stats.storageCapacity;
     const social = game.socialData || {};
     const log = game.logistics || {};
 
     return `
       <div class="space-y-4">
-        <div class="p-4 rounded-2xl ${stats.hasStorage ? 'bg-amber-50/80 border border-amber-200' : 'bg-red-50 border border-red-200'} flex items-center justify-between">
+        <div class="p-4 rounded-2xl ${!stats.hasStorage ? 'bg-red-50 border border-red-200' : (isFull ? 'bg-red-50/90 border border-red-300' : 'bg-amber-50/80 border border-amber-200')} flex items-center justify-between flex-wrap gap-3">
           <div class="space-y-1">
-            <h4 class="text-xs font-black ${stats.hasStorage ? 'text-amber-900' : 'text-red-900'}">Capacité de la Zone de Stockage de l’Antenne</h4>
+            <h4 class="text-xs font-black ${!stats.hasStorage || isFull ? 'text-red-900' : 'text-amber-900'} flex items-center gap-2">
+              <span>Capacité de la Zone de Stockage de l’Antenne</span>
+              ${isFull ? '<span class="px-2 py-0.5 rounded-full bg-red-200 text-red-900 text-[9px] font-black uppercase">Saturée (Limite Atteinte)</span>' : ''}
+            </h4>
             <p class="text-[11px] text-slate-600">
-              ${stats.hasStorage ? `Votre zone de stockage compte ${stats.counts.stockage || 0} case(s) de 25m², permettant d'entreposer jusqu'à <strong>${stats.storageCapacity} unités</strong>.` : `⚠️ Votre antenne n'a <strong>aucune zone de stockage</strong>. Vous ne pouvez pas réaliser de collectes alimentaires ni stocker de matériel d'urgence.`}
+              ${stats.hasStorage ? `Votre zone de stockage compte ${stats.counts.stockage || 0} case(s) de 25m², permettant d\'entreposer jusqu\'à <strong>${stats.storageCapacity} unités</strong> (actuellement occupé : <strong>${storageUsed} / ${stats.storageCapacity}</strong>). ${isFull ? '<span class="text-red-700 font-bold">Le stockage a atteint son plafond maximum : vous devez distribuer des denrées en maraude ou agrandir la réserve.</span>' : ''}` : `⚠️ Votre antenne n\'a <strong>aucune zone de stockage</strong>. Vous ne pouvez pas réaliser de collectes alimentaires ni stocker de matériel d\'urgence.`}
             </p>
           </div>
-          <button onclick="window.ProtecLocaux.setTab('plan', window.game); window.ProtecLocaux.isEditing = true; window.ProtecLocaux.selectedTool = 'stockage'; window.ProtecLocaux.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
+          <button onclick="window.ProtecLocaux.setTab(\'plan\', window.game); window.ProtecLocaux.isEditing = true; window.ProtecLocaux.selectedTool = \'stockage\'; window.ProtecLocaux.renderModal(window.game);" class="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs shadow transition flex-shrink-0">
             + Agrandir la Réserve
           </button>
         </div>

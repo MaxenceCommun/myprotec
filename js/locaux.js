@@ -3341,6 +3341,17 @@ window.ProtecLocaux = {
     { type: 'dsa_demonstration', name: 'DAE / DSA de Démonstration Vocale', cat: 'formation', w: 0.45, d: 0.45, color: '#10b981', cost: 220, icon: '⚡', bonus: '+10% pratique PSC & gestes qui sauvent' }
   ],
 
+  furnitureCategoryFilter: 'all',
+
+  setFurnitureCategory(catId) {
+    this.furnitureCategoryFilter = catId;
+    const panel = document.getElementById('editor-subpanel');
+    if (panel) {
+      panel.innerHTML = this.renderEditorToolsHTML();
+      if (window.lucide) window.lucide.createIcons();
+    }
+  },
+
   // =========================================================================
   // ÉCRAN INITIAL & GESTION : VÉRITABLE PLAN D'ARCHITECTE 2D/3D & OUTILS LES SIMS
   // =========================================================================
@@ -3499,28 +3510,105 @@ window.ProtecLocaux = {
     const money = window.game?.resources?.money || 0;
 
     if (this.editorTab === 'furniture') {
+      const activeCat = this.furnitureCategoryFilter || 'all';
+
+      const isItemInCat = (item, cat) => {
+        if (cat === 'all') return true;
+        if (cat === 'bureau') return item.cat === 'bureau';
+        if (cat === 'formation') return item.cat === 'formation';
+        if (cat === 'stockage') return (item.cat === 'stockage' || item.cat === 'secours') && !item.type.includes('casier');
+        if (cat === 'vestiaire') return item.type.includes('casier') || item.pole === 'pole_vestiaire';
+        if (cat === 'detente') return item.cat === 'detente';
+        return true;
+      };
+
+      const categoryDefinitions = [
+        { id: 'all', label: 'Tout', icon: '🗂️' },
+        { id: 'bureau', label: 'Direction & PC', icon: '💼' },
+        { id: 'formation', label: 'Formation', icon: '🎓' },
+        { id: 'stockage', label: 'Stockage & Secours', icon: '📦' },
+        { id: 'vestiaire', label: 'Vestiaires', icon: '👕' },
+        { id: 'detente', label: 'Foyer & Détente', icon: '☕' }
+      ];
+
+      const renderFurnitureCard = (item) => `
+        <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95 cursor-pointer">
+          <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
+          <span class="text-[10px] font-bold text-center leading-tight truncate w-full" title="${item.name}">${item.name}</span>
+          <div class="flex items-center justify-between w-full px-1 text-[9px]">
+            <span class="text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
+            <span class="font-black text-emerald-700 bg-emerald-100/70 px-1 rounded">${item.cost} €</span>
+          </div>
+        </button>
+      `;
+
       return `
         <div class="space-y-2.5">
           <div class="flex flex-col sm:flex-row sm:items-center justify-between text-xs gap-1 pb-1 border-b border-slate-100">
-            <span class="text-slate-600">Sélectionnez un mobilier à acheter et placer dans <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
+            <span class="text-slate-600">Sélectionnez un mobilier classé par pôle pour <strong>${selectedRoom?.name?.split('\n')[0] || 'la pièce'}</strong> :</span>
             <div class="flex items-center gap-2">
               <button type="button" onclick="window.game.openModule('marche_occasion')" class="px-2.5 py-1 rounded-xl bg-orange-50 hover:bg-orange-100 text-pc-orange font-bold text-[11px] border border-orange-200 transition">Bourse Occasion 🏷️</button>
               <button type="button" onclick="window.ProtecMarcheOccasion.openSellModal('equipment')" class="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] border border-slate-300 transition">Vendre Mobilier</button>
               <span class="text-xs font-bold text-slate-700 ml-1">Trésorerie : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
             </div>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
-            ${this.FURNITURE_CATALOG.map(item => `
-              <button type="button" onclick="window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50/80 border border-slate-200 hover:border-pc-blue text-slate-800 transition flex flex-col items-center justify-center gap-1 shadow-2xs group active:scale-95">
-                <span class="text-xl group-hover:scale-110 transition">${item.icon}</span>
-                <span class="text-[10px] font-bold text-center leading-tight truncate w-full">${item.name}</span>
-                <div class="flex items-center justify-between w-full px-1 text-[9px]">
-                  <span class="text-slate-500 font-mono">${item.w}m × ${item.d}m</span>
-                  <span class="font-black text-emerald-700 bg-emerald-100/70 px-1 rounded">${item.cost} €</span>
-                </div>
-              </button>
-            `).join('')}
+
+          <!-- Barre d'onglets de catégorie dans l'éditeur du jeu -->
+          <div class="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+            ${categoryDefinitions.map(cat => {
+              const count = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, cat.id)).length;
+              const isSelected = activeCat === cat.id;
+              return `
+                <button 
+                  type="button" 
+                  onclick="window.ProtecLocaux.setFurnitureCategory('${cat.id}')"
+                  class="px-2.5 py-1 rounded-lg text-[11px] font-bold transition flex items-center gap-1 shrink-0 cursor-pointer ${isSelected ? 'bg-pc-blue text-white shadow-xs font-black' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}">
+                  <span>${cat.icon}</span>
+                  <span>${cat.label}</span>
+                  <span class="text-[9.5px] opacity-75">(${count})</span>
+                </button>
+              `;
+            }).join('')}
           </div>
+
+          <!-- Grille des meubles (soit par sections si 'all', soit filtrée) -->
+          ${(() => {
+            if (activeCat === 'all') {
+              const sections = [
+                { id: 'bureau', title: '💼 Direction & Commandement' },
+                { id: 'formation', title: '🎓 Formation & Pédagogie' },
+                { id: 'stockage', title: '📦 Stockage & Matériel de Secours' },
+                { id: 'vestiaire', title: '👕 Vestiaires & Paquetages' },
+                { id: 'detente', title: '☕ Foyer, Détente & Repos' }
+              ];
+              return `
+                <div class="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                  ${sections.map(sec => {
+                    const items = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, sec.id));
+                    if (items.length === 0) return '';
+                    return `
+                      <div class="space-y-1.5">
+                        <div class="text-[11px] font-black text-slate-700 uppercase tracking-wider pb-0.5 border-b border-slate-100 flex items-center justify-between">
+                          <span>${sec.title}</span>
+                          <span class="text-[10px] text-slate-400 font-bold">(${items.length})</span>
+                        </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                          ${items.map(renderFurnitureCard).join('')}
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `;
+            }
+
+            const filteredItems = this.FURNITURE_CATALOG.filter(i => isItemInCat(i, activeCat));
+            return `
+              <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2 max-h-[360px] overflow-y-auto pr-1">
+                ${filteredItems.map(renderFurnitureCard).join('')}
+              </div>
+            `;
+          })()}
         </div>
       `;
     }
@@ -7419,9 +7507,17 @@ window.ProtecLocaux = {
           <span>Sélectionnez un équipement à placer sur votre plan 2D :</span>
           <span>Trésorerie : <strong class="text-emerald-400 font-mono">${money.toLocaleString('fr-FR')} €</strong></span>
         </div>
+        <!-- Onglets rapides de catégorie dans le modal -->
+        <div class="flex items-center gap-1 overflow-x-auto pb-1 text-xs" id="quick-furn-cat-bar">
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display=''); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs">🗂️ Tout</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='bureau'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">💼 Direction</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='formation'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">🎓 Formation</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = (c.dataset.cat==='stockage'||c.dataset.cat==='secours')?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">📦 Stockage</button>
+          <button type="button" onclick="document.querySelectorAll('.modal-furn-card').forEach(c => c.style.display = c.dataset.cat==='detente'?'':'none'); document.querySelectorAll('#quick-furn-cat-bar button').forEach(b => b.className='px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700'); this.className='px-2.5 py-1 rounded-lg text-[11px] font-black bg-pc-blue text-white shadow-xs';" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-800 text-slate-300 hover:bg-slate-700">☕ Foyer</button>
+        </div>
         <div class="overflow-y-auto max-h-[60vh] grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pr-1">
           ${this.FURNITURE_CATALOG.map(item => `
-            <button onclick="this.closest('.fixed').remove(); window.ProtecLocaux.addFurnitureItem('${item.type}')" class="p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition flex flex-col justify-between gap-2 group cursor-pointer active:scale-95">
+            <button onclick="this.closest('.fixed').remove(); window.ProtecLocaux.addFurnitureItem('${item.type}')" data-cat="${item.cat}" class="modal-furn-card p-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-left transition flex flex-col justify-between gap-2 group cursor-pointer active:scale-95">
               <div class="flex items-start gap-2.5">
                 <span class="text-2xl group-hover:scale-110 transition flex-shrink-0">${item.icon}</span>
                 <div>
