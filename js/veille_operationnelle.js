@@ -3,10 +3,17 @@
  * 
  * Gestion des 3 échelles de veille opérationnelle :
  * 1. "Protection Civile" (National)
- * 2. "Zone de Défense et de sécurité [X]" (Zone de Défense)
+ * 2. "Zone de Défense et de Sécurité" (Zonal)
  * 3. "Département" (Départemental)
  * 
- * Système d'inscription libre équitable garantissant un tour de rôle équilibré.
+ * Système de créneaux de 4h (6 créneaux par 24h) avec règle d'équité :
+ * - Un joueur peut s'inscrire sur n'importe quel créneau.
+ * - Premier arrivé, premier servi par défaut.
+ * - Règle anti-enchaînement : Si un joueur est titulaire sur un créneau et s'inscrit aussi sur le suivant,
+ *   son statut sur le créneau suivant est "Enchaînement (Non-prioritaire / Disponible au vol)".
+ * - Si un autre joueur arrive pour s'inscrire sur cette 2e garde, il prend directement la place titulaire !
+ * - Le joueur initial qui enchaînait bascule automatiquement en réserve / remplaçant.
+ * - Si personne d'autre ne s'inscrit, le joueur enchaîne normalement sans pénalité.
  */
 
 window.ProtecVeille = {
@@ -18,13 +25,13 @@ window.ProtecVeille = {
       scopeName: 'Départemental',
       icon: 'map-pin',
       theme: 'emerald',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
       bgGradient: 'from-emerald-700 to-teal-900',
-      shiftHours: 6,
-      indemniteHourly: 120,
-      reputationPoints: 15,
+      indemniteHourly: 120, // 480 € par créneau de 4h
+      reputationPoints: 10,
       getLabel: (dept) => `Département ${dept.code} - ${dept.name}`,
       getSubLabel: (dept) => `Préfecture : ${dept.chefLieu || dept.name}`,
-      description: 'Supervision des dispositifs locaux, coordination des moyens et alertes du département.'
+      description: 'Supervision des dispositifs locaux, coordination des moyens et alertes prioritaires du département.'
     },
     {
       id: 'zonal',
@@ -32,10 +39,10 @@ window.ProtecVeille = {
       scopeName: 'Zone de Défense et de Sécurité',
       icon: 'shield',
       theme: 'sky',
+      badgeColor: 'bg-sky-100 text-sky-800 border-sky-300',
       bgGradient: 'from-sky-700 to-indigo-950',
-      shiftHours: 8,
-      indemniteHourly: 250,
-      reputationPoints: 35,
+      indemniteHourly: 250, // 1 000 € par créneau de 4h
+      reputationPoints: 20,
       getLabel: (dept) => dept.zoneDefense.name,
       getSubLabel: (dept) => `Siège zonal : ${dept.zoneDefense.siege || 'EMIZ'} (${dept.zoneDefense.regions.join(', ')})`,
       description: 'Coordination zonale EMIZ, validation des colonnes de renforts inter-départementales.'
@@ -46,62 +53,65 @@ window.ProtecVeille = {
       scopeName: 'National (Fédération)',
       icon: 'flag',
       theme: 'indigo',
+      badgeColor: 'bg-indigo-100 text-indigo-800 border-indigo-300',
       bgGradient: 'from-indigo-800 to-slate-950',
-      shiftHours: 12,
-      indemniteHourly: 500,
-      reputationPoints: 75,
+      indemniteHourly: 500, // 2 000 € par créneau de 4h
+      reputationPoints: 35,
       getLabel: () => 'Protection Civile (National)',
       getSubLabel: () => 'Centre Opérationnel National (COPC) • Fédération Nationale',
       description: 'Veille opérationnelle nationale, supervision des crises majeures NOVI et renforts zonaux.'
     }
   ],
 
+  // 6 créneaux de 4h par jour pour couvrir 24h
+  SLOTS_CONFIG: [
+    { index: 0, startHour: 0, endHour: 4, label: '00h00 - 04h00', name: 'Nuit profonde', icon: 'moon' },
+    { index: 1, startHour: 4, endHour: 8, label: '04h00 - 08h00', name: 'Aube & Matinée', icon: 'sunrise' },
+    { index: 2, startHour: 8, endHour: 12, label: '08h00 - 12h00', name: 'Matinée', icon: 'sun' },
+    { index: 3, startHour: 12, endHour: 16, label: '12h00 - 16h00', name: 'Après-midi', icon: 'sun-medium' },
+    { index: 4, startHour: 16, endHour: 20, label: '16h00 - 20h00', name: 'Soirée', icon: 'sunset' },
+    { index: 5, startHour: 20, endHour: 24, label: '20h00 - 00h00', name: 'Nuit', icon: 'moon-star' }
+  ],
+
+  activeEchelonId: 'departemental',
+  activeDayOffset: 0, // 0 = Aujourd'hui, 1 = Demain
+
   // Initialisation du module
   init(game) {
+    if (!game) game = window.game;
+    if (!game) return;
     if (!game.veilleOperationnelle) {
-      game.veilleOperationnelle = this.getDefaultState(game);
+      game.veilleOperationnelle = this.getDefaultState();
     }
     this.ensureStateIntegrity(game);
+    this.syncFromSharedStorage(game);
+    this.checkAndRewardCompletedSlots(game);
+    this.updateCurrentOfficers(game);
   },
 
   // État par défaut
-  getDefaultState(game) {
+  getDefaultState() {
     return {
-      departemental: {
-        currentOfficer: null, // { playerId, playerName, stationName, startedAt, endsAt }
-        queue: [], // [{ playerId, playerName, stationName, requestedAt, shiftsDone }]
-        history: {}, // playerId -> count of shifts done
-        lastShiftOfficerId: null, // pour la règle de carence anti-monopole
-        journal: []
-      },
-      zonal: {
-        currentOfficer: null,
-        queue: [],
-        history: {},
-        lastShiftOfficerId: null,
-        journal: []
-      },
-      national: {
-        currentOfficer: null,
-        queue: [],
-        history: {},
-        lastShiftOfficerId: null,
-        journal: []
-      }
+      departemental: { slots: {}, currentOfficer: null, history: {}, journal: [] },
+      zonal: { slots: {}, currentOfficer: null, history: {}, journal: [] },
+      national: { slots: {}, currentOfficer: null, history: {}, journal: [] }
     };
   },
 
   ensureStateIntegrity(game) {
     if (!game.veilleOperationnelle) game.veilleOperationnelle = {};
-    ['departemental', 'zonal', 'national'].forEach(echId => {
-      if (!game.veilleOperationnelle[echId]) {
-        game.veilleOperationnelle[echId] = {
-          currentOfficer: null,
-          queue: [],
-          history: {},
-          lastShiftOfficerId: null,
-          journal: []
-        };
+    this.ECHELONS.forEach(ech => {
+      if (!game.veilleOperationnelle[ech.id]) {
+        game.veilleOperationnelle[ech.id] = { slots: {}, currentOfficer: null, history: {}, journal: [] };
+      }
+      if (!game.veilleOperationnelle[ech.id].slots) {
+        game.veilleOperationnelle[ech.id].slots = {};
+      }
+      if (!game.veilleOperationnelle[ech.id].journal) {
+        game.veilleOperationnelle[ech.id].journal = [];
+      }
+      if (!game.veilleOperationnelle[ech.id].history) {
+        game.veilleOperationnelle[ech.id].history = {};
       }
     });
   },
@@ -131,183 +141,406 @@ window.ProtecVeille = {
     };
   },
 
-  // Vérifie l'éligibilité du joueur pour un échelon (Règle du tour de rôle équitable)
-  checkEligibility(game, echelonId) {
-    this.ensureStateIntegrity(game);
-    const state = game.veilleOperationnelle[echelonId];
-    const myId = game.player?.id;
-
-    // Déjà en cours de veille ?
-    if (state.currentOfficer && state.currentOfficer.playerId === myId) {
-      return { eligible: false, reason: 'Vous êtes déjà actuellement en veille opérationnelle sur cet échelon.' };
-    }
-
-    // Déjà dans la file d'attente ?
-    if (state.queue.some(q => q.playerId === myId)) {
-      return { eligible: false, inQueue: true, reason: 'Vous êtes déjà inscrit dans la file d’attente pour le prochain tour.' };
-    }
-
-    // Règle de carence (Repos de veille obligatoire) :
-    // Si le joueur vient tout juste de terminer le dernier créneau, il doit laisser son tour pour le créneau suivant
-    if (state.lastShiftOfficerId === myId && (state.queue.length > 0 || state.currentOfficer)) {
-      return {
-        eligible: false,
-        resting: true,
-        reason: 'Période de relève / repos opérationnel : vous devez laisser un tour à un autre directeur pour assurer l’équité.'
-      };
-    }
-
-    return { eligible: true };
+  formatDateKey(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   },
 
-  // Prendre la garde immédiatement (si le poste est vacant)
-  takeShiftNow(game, echelonId) {
-    this.ensureStateIntegrity(game);
-    const state = game.veilleOperationnelle[echelonId];
-    const ech = this.ECHELONS.find(e => e.id === echelonId);
-    if (!ech) return;
+  getDateByOffset(offset = 0) {
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    return d;
+  },
 
-    const el = this.checkEligibility(game, echelonId);
-    if (!el.eligible && !el.resting) {
-      game.showToast('Action impossible', el.reason, 'orange');
-      return;
+  formatDateFr(date) {
+    const options = { weekday: 'long', day: 'numeric', month: 'long' };
+    const str = date.toLocaleDateString('fr-FR', options);
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  },
+
+  getSlotKey(dateStr, slotIndex) {
+    return `${dateStr}_${slotIndex}`;
+  },
+
+  getPrevSlotKey(dateStr, slotIndex) {
+    if (slotIndex > 0) {
+      return `${dateStr}_${slotIndex - 1}`;
     }
+    // Jour précédent, créneau 5
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const prevDate = new Date(y, m - 1, d);
+    prevDate.setDate(prevDate.getDate() - 1);
+    return `${this.formatDateKey(prevDate)}_5`;
+  },
 
-    const myId = game.player?.id || 'directeur-local';
-    const myName = game.player?.name || 'Directeur d’Antenne';
-    const myStation = game.stations?.[0]?.name || 'Antenne Locale';
+  getNextSlotKey(dateStr, slotIndex) {
+    if (slotIndex < 5) {
+      return `${dateStr}_${slotIndex + 1}`;
+    }
+    // Jour suivant, créneau 0
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const nextDate = new Date(y, m - 1, d);
+    nextDate.setDate(nextDate.getDate() + 1);
+    return `${this.formatDateKey(nextDate)}_0`;
+  },
 
-    const now = Date.now();
-    const durationMs = ech.shiftHours * 3600 * 1000;
+  // Synchronisation partagée (LocalStorage départemental/zonal/national + Realtime)
+  getSharedStorageKey(game, echelonId) {
+    const deptCtx = this.getDeptContext(game);
+    if (echelonId === 'departemental') return `protec_veille_dept_${deptCtx.code}`;
+    if (echelonId === 'zonal') return `protec_veille_zone_${deptCtx.zoneDefense.id}`;
+    return 'protec_veille_national';
+  },
 
-    state.currentOfficer = {
-      playerId: myId,
-      playerName: myName,
-      stationName: myStation,
-      startedAt: now,
-      endsAt: now + durationMs,
-      shiftHours: ech.shiftHours
+  syncFromSharedStorage(game) {
+    this.ECHELONS.forEach(ech => {
+      const key = this.getSharedStorageKey(game, ech.id);
+      try {
+        const stored = localStorage.getItem(key);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.slots) {
+            // Fusionner avec la mémoire locale
+            game.veilleOperationnelle[ech.id].slots = {
+              ...game.veilleOperationnelle[ech.id].slots,
+              ...parsed.slots
+            };
+          }
+          if (parsed && Array.isArray(parsed.journal)) {
+            game.veilleOperationnelle[ech.id].journal = parsed.journal;
+          }
+        }
+      } catch (e) {}
+    });
+  },
+
+  saveSharedStorage(game, echelonId) {
+    const key = this.getSharedStorageKey(game, echelonId);
+    const data = {
+      slots: game.veilleOperationnelle[echelonId]?.slots || {},
+      journal: game.veilleOperationnelle[echelonId]?.journal || []
     };
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (e) {}
 
-    // Retirer de la file s'il y était
-    state.queue = state.queue.filter(q => q.playerId !== myId);
-
-    // Enregistrer dans le journal
-    const deptCtx = this.getDeptContext(game);
-    const scopeLabel = ech.getLabel(deptCtx);
-    state.journal.unshift({
-      time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-      text: `Prise de garde opérationnelle par ${myName} (${myStation}) pour ${ech.shiftHours}h.`
-    });
-
-    // Mettre à jour l'historique
-    state.history[myId] = (state.history[myId] || 0) + 1;
-
-    game.showToast('Veille Opérationnelle Active', `Vous avez pris la veille opérationnelle pour « ${scopeLabel} » pour une durée de ${ech.shiftHours}h.`, 'green');
-    game.saveGame();
-    this.renderModal(game);
+    // Broadcast Realtime Supabase si disponible
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.broadcastDepartmentCrisisUpdate === 'function') {
+      try {
+        const deptCtx = this.getDeptContext(game);
+        window.ProtecSupabase.broadcastDepartmentCrisisUpdate({
+          type: 'veille_slot_update',
+          echelonId: echelonId,
+          departmentCode: deptCtx.code,
+          slots: data.slots
+        });
+      } catch (e) {}
+    }
   },
 
-  // S'inscrire dans la file d'attente pour le prochain tour
-  joinQueue(game, echelonId) {
+  // Recalcule tous les statuts d'enchaînement et de priorité
+  recomputeChains(game, echelonId) {
     this.ensureStateIntegrity(game);
     const state = game.veilleOperationnelle[echelonId];
-    const ech = this.ECHELONS.find(e => e.id === echelonId);
-    if (!ech) return;
+    const slots = state.slots || {};
 
+    // Trier les clés de créneaux par ordre chronologique
+    const sortedKeys = Object.keys(slots).sort();
+
+    sortedKeys.forEach(slotKey => {
+      const slot = slots[slotKey];
+      if (!slot || !slot.titular) return;
+
+      const [dateStr, slotIdxStr] = slotKey.split('_');
+      const slotIndex = parseInt(slotIdxStr, 10);
+      const prevKey = this.getPrevSlotKey(dateStr, slotIndex);
+      const prevSlot = slots[prevKey];
+
+      const isChained = !!(prevSlot && prevSlot.titular && prevSlot.titular.playerId === slot.titular.playerId);
+      slot.titular.isChained = isChained;
+
+      // Si le titulaire actuel est enchaîné et qu'il y a un remplaçant disponible qui lui n'enchaîne pas :
+      // le remplaçant prend automatiquement la place titulaire !
+      if (isChained && slot.substitute) {
+        const substituteIsChained = !!(prevSlot && prevSlot.titular && prevSlot.titular.playerId === slot.substitute.playerId);
+        if (!substituteIsChained) {
+          const oldTitular = slot.titular;
+          slot.titular = {
+            ...slot.substitute,
+            isChained: false
+          };
+          slot.substitute = oldTitular;
+        }
+      }
+    });
+
+    this.updateCurrentOfficers(game);
+  },
+
+  // Mettre à jour les officiers en cours pour chaque échelon
+  updateCurrentOfficers(game) {
+    if (!game) game = window.game;
+    if (!game) return;
+    this.ECHELONS.forEach(ech => {
+      const off = this.getCurrentOfficer(game, ech.id);
+      if (game.veilleOperationnelle?.[ech.id]) {
+        game.veilleOperationnelle[ech.id].currentOfficer = off;
+      }
+    });
+  },
+
+  // Récupère l'officier en service à l'instant présent pour un échelon
+  getCurrentOfficer(game, echelonId) {
+    if (!game) game = window.game;
+    if (!game) return null;
+    this.ensureStateIntegrity(game);
+
+    const now = new Date();
+    const dateStr = this.formatDateKey(now);
+    const currentHour = now.getHours();
+    const slotIndex = Math.floor(currentHour / 4);
+    const slotKey = this.getSlotKey(dateStr, slotIndex);
+
+    const slot = game.veilleOperationnelle?.[echelonId]?.slots?.[slotKey];
+    if (slot && slot.titular) {
+      const startHour = slotIndex * 4;
+      const endHour = startHour + 4;
+      const startTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), startHour, 0, 0).getTime();
+      const endTime = new Date(now.getFullYear(), now.getMonth(), now.getDate(), endHour, 0, 0).getTime();
+
+      return {
+        playerId: slot.titular.playerId,
+        playerName: slot.titular.playerName,
+        stationName: slot.titular.stationName || 'Cadre d’Astreinte',
+        startedAt: startTime,
+        endsAt: endTime,
+        shiftHours: 4,
+        isChained: !!slot.titular.isChained,
+        isLocal: (slot.titular.playerId === game.player?.id)
+      };
+    }
+    return null;
+  },
+
+  // Inscription sur un créneau
+  registerSlot(game, echelonId, dateStr, slotIndex) {
+    this.ensureStateIntegrity(game);
     const myId = game.player?.id || 'directeur-local';
     const myName = game.player?.name || 'Directeur d’Antenne';
     const myStation = game.stations?.[0]?.name || 'Antenne Locale';
 
-    if (state.queue.some(q => q.playerId === myId)) {
-      game.showToast('Déjà inscrit', 'Vous êtes déjà inscrit dans la liste d’attente pour ce créneau.', 'blue');
+    const slotKey = this.getSlotKey(dateStr, slotIndex);
+    const state = game.veilleOperationnelle[echelonId];
+    if (!state.slots[slotKey]) {
+      state.slots[slotKey] = {
+        dateStr,
+        slotIndex,
+        titular: null,
+        substitute: null,
+        rewardPaid: false
+      };
+    }
+    const slot = state.slots[slotKey];
+    const prevKey = this.getPrevSlotKey(dateStr, slotIndex);
+    const prevSlot = state.slots[prevKey];
+    const isMeChained = !!(prevSlot && prevSlot.titular && prevSlot.titular.playerId === myId);
+
+    const slotConfig = this.SLOTS_CONFIG.find(s => s.index === slotIndex) || { label: `${slotIndex * 4}h - ${(slotIndex + 1) * 4}h` };
+    const ech = this.ECHELONS.find(e => e.id === echelonId);
+
+    // Cas 1 : Créneau libre
+    if (!slot.titular) {
+      slot.titular = {
+        playerId: myId,
+        playerName: myName,
+        stationName: myStation,
+        registeredAt: Date.now(),
+        isChained: isMeChained
+      };
+
+      if (isMeChained) {
+        game.showToast(
+          'Astreinte Enregistrée (Enchaînement) ⚠️',
+          `Vous êtes inscrit sur le créneau ${slotConfig.label}. Comme vous enchaînez 2 gardes, un autre joueur pourra prendre la titularité s'il s'inscrit.`,
+          'amber'
+        );
+      } else {
+        game.showToast(
+          'Astreinte Confirmée ✓',
+          `Vous êtes titulaire prioritaire pour le créneau ${slotConfig.label} (${ech.title}).`,
+          'green'
+        );
+      }
+
+      state.journal.unshift({
+        time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+        text: `Inscription de ${myName} sur le créneau ${slotConfig.label} (${ech.title}) - ${isMeChained ? 'Enchaînement' : 'Titulaire'}.`
+      });
+    }
+    // Cas 2 : Déjà inscrit
+    else if (slot.titular.playerId === myId) {
+      game.showToast('Déjà Titulaire', `Vous êtes déjà titulaire de ce créneau ${slotConfig.label}.`, 'blue');
       return;
     }
+    // Cas 3 : Titulaire existant mais ENCHAÎNÉ -> Le nouveau joueur prend la titularité prioritaire !
+    else if (slot.titular.isChained) {
+      const oldTitular = slot.titular;
 
-    const shiftsDone = state.history[myId] || 0;
-
-    state.queue.push({
-      playerId: myId,
-      playerName: myName,
-      stationName: myStation,
-      requestedAt: Date.now(),
-      shiftsDone: shiftsDone
-    });
-
-    // Tri équitable : Priorité à ceux qui ont fait LE MOINS de veilles opérationnelles !
-    state.queue.sort((a, b) => a.shiftsDone - b.shiftsDone || a.requestedAt - b.requestedAt);
-
-    const pos = state.queue.findIndex(q => q.playerId === myId) + 1;
-    const deptCtx = this.getDeptContext(game);
-    game.showToast('Inscription Enregistrée', `Vous êtes inscrit en position #${pos} pour le prochain tour de veille « ${ech.getLabel(deptCtx)} ».`, 'green');
-    game.saveGame();
-    this.renderModal(game);
-  },
-
-  // Quitter la file d'attente
-  leaveQueue(game, echelonId) {
-    this.ensureStateIntegrity(game);
-    const state = game.veilleOperationnelle[echelonId];
-    const myId = game.player?.id;
-    state.queue = state.queue.filter(q => q.playerId !== myId);
-    game.showToast('Désinscription', 'Vous avez quitté la file d’attente de cet échelon.', 'blue');
-    game.saveGame();
-    this.renderModal(game);
-  },
-
-  // Transmettre la relève / Fin de garde
-  passRelief(game, echelonId) {
-    this.ensureStateIntegrity(game);
-    const state = game.veilleOperationnelle[echelonId];
-    const ech = this.ECHELONS.find(e => e.id === echelonId);
-    if (!ech) return;
-
-    const myId = game.player?.id;
-    if (!state.currentOfficer || state.currentOfficer.playerId !== myId) return;
-
-    const officerName = state.currentOfficer.playerName;
-    state.lastShiftOfficerId = myId;
-
-    // Calcul de l'indemnité perçue
-    const totalGains = ech.shiftHours * ech.indemniteHourly;
-    if (game.resources) {
-      game.resources.money = (game.resources.money || 0) + totalGains;
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + ech.reputationPoints;
-    }
-
-    // Y a-t-il quelqu'un dans la file d'attente pour prendre la relève ?
-    if (state.queue.length > 0) {
-      const nextOfficer = state.queue.shift();
-      const now = Date.now();
-      state.currentOfficer = {
-        playerId: nextOfficer.playerId,
-        playerName: nextOfficer.playerName,
-        stationName: nextOfficer.stationName,
-        startedAt: now,
-        endsAt: now + (ech.shiftHours * 3600 * 1000),
-        shiftHours: ech.shiftHours
+      slot.titular = {
+        playerId: myId,
+        playerName: myName,
+        stationName: myStation,
+        registeredAt: Date.now(),
+        isChained: isMeChained
       };
-      state.history[nextOfficer.playerId] = (state.history[nextOfficer.playerId] || 0) + 1;
+      // L'ancien joueur qui enchaînait devient le remplaçant (réserve)
+      slot.substitute = oldTitular;
+
+      game.showToast(
+        '⚡ Place Attribuée (Priorité Équité)',
+        `Vous êtes devenu titulaire prioritaire sur ${slotConfig.label} ! ${oldTitular.playerName} enchaînait deux gardes et bascule en remplaçant.`,
+        'green'
+      );
+
       state.journal.unshift({
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        text: `Relève assurée : ${officerName} transmet la consigne à ${nextOfficer.playerName} (${nextOfficer.stationName}).`
+        text: `Relève prioritaire : ${myName} devient titulaire du créneau ${slotConfig.label} face à ${oldTitular.playerName} (règle anti-enchaînement).`
       });
-    } else {
-      state.currentOfficer = null;
+    }
+    // Cas 4 : Titulaire existant NON enchaîné -> Premier arrivé premier servi
+    else {
+      if (slot.substitute && slot.substitute.playerId === myId) {
+        game.showToast('Déjà en Réserve', `Vous êtes déjà inscrit en remplaçant sur ce créneau.`, 'blue');
+        return;
+      }
+
+      slot.substitute = {
+        playerId: myId,
+        playerName: myName,
+        stationName: myStation,
+        registeredAt: Date.now()
+      };
+
+      game.showToast(
+        'Inscrit en Réserve 🛡️',
+        `Créneau ${slotConfig.label} déjà pourvu par ${slot.titular.playerName}. Vous êtes placé en remplaçant en cas de désistement.`,
+        'sky'
+      );
+
       state.journal.unshift({
         time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        text: `Fin de garde de ${officerName}. Poste en veille libre.`
+        text: `${myName} s'est inscrit en réserviste pour le créneau ${slotConfig.label} (${slot.titular.playerName} titulaire).`
       });
     }
 
-    game.showToast('Garde Terminée', `Fin de veille opérationnelle. Indemnités perçues : +${totalGains.toLocaleString('fr-FR')} €.`, 'green');
+    this.recomputeChains(game, echelonId);
+    this.saveSharedStorage(game, echelonId);
     game.saveGame();
     this.renderModal(game);
   },
 
-  // Rendu de la modale complète de Veille Opérationnelle
+  // Désinscription d'un créneau
+  unregisterSlot(game, echelonId, dateStr, slotIndex) {
+    this.ensureStateIntegrity(game);
+    const myId = game.player?.id || 'directeur-local';
+    const myName = game.player?.name || 'Directeur d’Antenne';
+    const slotKey = this.getSlotKey(dateStr, slotIndex);
+    const state = game.veilleOperationnelle[echelonId];
+    const slot = state.slots[slotKey];
+    if (!slot) return;
+
+    const slotConfig = this.SLOTS_CONFIG.find(s => s.index === slotIndex) || { label: `${slotIndex * 4}h` };
+    const ech = this.ECHELONS.find(e => e.id === echelonId);
+
+    if (slot.titular && slot.titular.playerId === myId) {
+      if (slot.substitute) {
+        // Le remplaçant monte en titulaire
+        const newTitular = slot.substitute;
+        slot.titular = newTitular;
+        slot.substitute = null;
+        game.showToast('Désinscription Confirmée', `Vous vous êtes retiré du créneau ${slotConfig.label}. ${newTitular.playerName} prend votre place.`, 'blue');
+        state.journal.unshift({
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          text: `Désistement de ${myName} sur ${slotConfig.label} (${ech.title}) : ${newTitular.playerName} devient titulaire.`
+        });
+      } else {
+        slot.titular = null;
+        game.showToast('Désinscription Confirmée', `Vous avez libéré le créneau ${slotConfig.label}.`, 'blue');
+        state.journal.unshift({
+          time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+          text: `Désistement de ${myName} sur ${slotConfig.label} (${ech.title}) : Créneau vacant.`
+        });
+      }
+    } else if (slot.substitute && slot.substitute.playerId === myId) {
+      slot.substitute = null;
+      game.showToast('Désinscription de la Réserve', `Vous n'êtes plus réserviste sur le créneau ${slotConfig.label}.`, 'blue');
+    }
+
+    this.recomputeChains(game, echelonId);
+    this.saveSharedStorage(game, echelonId);
+    game.saveGame();
+    this.renderModal(game);
+  },
+
+  // Vérification et versement des rémunérations pour les créneaux terminés
+  checkAndRewardCompletedSlots(game) {
+    if (!game) game = window.game;
+    if (!game) return;
+    this.ensureStateIntegrity(game);
+    const myId = game.player?.id;
+    const now = new Date();
+
+    this.ECHELONS.forEach(ech => {
+      const state = game.veilleOperationnelle[ech.id];
+      const slots = state.slots || {};
+
+      Object.keys(slots).forEach(slotKey => {
+        const slot = slots[slotKey];
+        if (!slot || !slot.titular || slot.rewardPaid) return;
+
+        const [dateStr, slotIdxStr] = slotKey.split('_');
+        const slotIndex = parseInt(slotIdxStr, 10);
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const endHour = (slotIndex + 1) * 4;
+        const endTime = new Date(y, m - 1, d, endHour, 0, 0).getTime();
+
+        // Le créneau est terminé
+        if (now.getTime() >= endTime) {
+          slot.rewardPaid = true;
+
+          // Si c'est le joueur local
+          if (slot.titular.playerId === myId) {
+            const gain = 4 * ech.indemniteHourly;
+            if (game.resources) {
+              game.resources.money = (game.resources.money || 0) + gain;
+              game.resources.reputationScore = (game.resources.reputationScore || 0) + ech.reputationPoints;
+            }
+            state.history[myId] = (state.history[myId] || 0) + 1;
+
+            const slotConfig = this.SLOTS_CONFIG.find(s => s.index === slotIndex) || { label: '' };
+            game.showToast(
+              'Vacation d’Astreinte Achevée 💰',
+              `Créneau ${slotConfig.label} (${ech.title}) complété avec succès ! Indemnités perçues : +${gain.toLocaleString('fr-FR')} € et +${ech.reputationPoints} pts de réputation.`,
+              'green'
+            );
+
+            state.journal.unshift({
+              time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              text: `Vacation achevée : ${slot.titular.playerName} a assuré l’astreinte ${slotConfig.label} (+${gain} €).`
+            });
+          }
+        }
+      });
+    });
+  },
+
+  // Rendu de la modale complète
   renderModal(game) {
+    if (!game) game = window.game;
     this.init(game);
+
     let modal = document.getElementById('veille-operationnelle-modal');
     if (!modal) {
       modal = document.createElement('div');
@@ -318,9 +551,18 @@ window.ProtecVeille = {
 
     const deptCtx = this.getDeptContext(game);
     const myId = game.player?.id;
+    const currentEch = this.ECHELONS.find(e => e.id === this.activeEchelonId) || this.ECHELONS[0];
+    const viewingDate = this.getDateByOffset(this.activeDayOffset);
+    const viewingDateStr = this.formatDateKey(viewingDate);
+    const viewingDateLabel = this.formatDateFr(viewingDate);
+
+    const now = new Date();
+    const isToday = this.activeDayOffset === 0;
+    const currentHour = now.getHours();
+    const activeSlotIndex = isToday ? Math.floor(currentHour / 4) : -1;
 
     modal.innerHTML = `
-      <div class="glass-panel w-full max-w-4xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 my-auto max-h-[92vh] overflow-y-auto">
+      <div class="glass-panel w-full max-w-5xl rounded-3xl p-5 sm:p-6 shadow-2xl space-y-5 bg-white border border-slate-200 text-slate-800 my-auto max-h-[92vh] overflow-y-auto">
         
         <!-- En-tête -->
         <div class="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -331,10 +573,10 @@ window.ProtecVeille = {
             <div>
               <div class="flex items-center gap-2">
                 <h3 class="text-lg font-black text-slate-900 leading-tight">Veille Opérationnelle & Astreintes des Cadres</h3>
-                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">Tour de Rôle Équitable</span>
+                <span class="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-100 text-indigo-800 border border-indigo-200">Créneaux de 4h • Équité Fédérale</span>
               </div>
               <p class="text-xs text-slate-500 font-semibold">
-                Permanent d'astreinte opérationnelle aux 3 échelons : Département, Zone de Défense et National
+                Permanent d'astreinte aux 3 échelons : Département (${deptCtx.code}), Zone de Défense et National
               </p>
             </div>
           </div>
@@ -343,26 +585,275 @@ window.ProtecVeille = {
           </button>
         </div>
 
-        <!-- Bannière explicative du tour de rôle équitable -->
-        <div class="p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-200 text-xs text-indigo-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-          <div class="flex items-start gap-2.5">
-            <span class="text-lg">⚖️</span>
+        <!-- Onglets Échelons & Sélecteur de Date -->
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <!-- 3 Échelons -->
+          <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl">
+            ${this.ECHELONS.map(ech => {
+              const isSelected = ech.id === this.activeEchelonId;
+              const off = this.getCurrentOfficer(game, ech.id);
+              return `
+                <button 
+                  type="button" 
+                  onclick="window.ProtecVeille.setActiveEchelon('${ech.id}')"
+                  class="px-3.5 py-2 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                    isSelected 
+                      ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' 
+                      : 'text-slate-600 hover:text-slate-900'
+                  }">
+                  <i data-lucide="${ech.icon}" class="w-3.5 h-3.5 ${isSelected ? 'text-pc-blue' : 'text-slate-400'}"></i>
+                  <span>${ech.title}</span>
+                  ${off ? '<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Cadre en veille active"></span>' : '<span class="w-2 h-2 rounded-full bg-amber-400" title="Poste vacant"></span>'}
+                </button>
+              `;
+            }).join('')}
+          </div>
+
+          <!-- Sélecteur Aujourd'hui / Demain -->
+          <div class="flex items-center gap-1.5 p-1 bg-slate-100 rounded-2xl self-end sm:self-auto">
+            <button 
+              type="button" 
+              onclick="window.ProtecVeille.setActiveDayOffset(0)"
+              class="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                this.activeDayOffset === 0 
+                  ? 'bg-pc-blue text-white shadow-sm' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }">
+              <span>Aujourd'hui</span>
+            </button>
+            <button 
+              type="button" 
+              onclick="window.ProtecVeille.setActiveDayOffset(1)"
+              class="px-3 py-1.5 rounded-xl text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                this.activeDayOffset === 1 
+                  ? 'bg-pc-blue text-white shadow-sm' 
+                  : 'text-slate-600 hover:text-slate-900'
+              }">
+              <span>Demain</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Bannière descriptive de l'échelon sélectionné -->
+        <div class="p-4 rounded-2xl bg-gradient-to-r ${currentEch.bgGradient} text-white shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="px-2 py-0.5 rounded-full font-black bg-white/20 uppercase tracking-wider text-[10px]">
+                Échelon ${currentEch.scopeName}
+              </span>
+              <span class="text-xs font-bold text-white/90">
+                📅 ${viewingDateLabel}
+              </span>
+            </div>
+            <h4 class="text-base font-black">${currentEch.getLabel(deptCtx)}</h4>
+            <p class="text-xs text-white/80 leading-relaxed">${currentEch.description}</p>
+          </div>
+          <div class="flex items-center gap-3 shrink-0 bg-white/10 backdrop-blur-md p-3 rounded-xl border border-white/20">
             <div>
-              <strong class="block font-black text-indigo-900">Règle Fédérale d'Équité & Relève Opérationnelle</strong>
-              <span class="text-[11px] text-indigo-800">Tout directeur est libre de s'inscrire. Pour garantir que chaque joueur ait son tour, une période de repos obligatoire sépare chaque créneau et la priorité est donnée aux directeurs ayant effectué le moins d'astreintes.</span>
+              <span class="block text-[9.5px] uppercase font-bold text-white/70">Indemnité</span>
+              <strong class="text-sm font-black text-white">${currentEch.indemniteHourly * 4} € <span class="text-[10px] font-normal text-white/80">/ créneau (4h)</span></strong>
+            </div>
+            <div class="w-px h-8 bg-white/20"></div>
+            <div>
+              <span class="block text-[9.5px] uppercase font-bold text-white/70">Réputation</span>
+              <strong class="text-sm font-black text-amber-300">+${currentEch.reputationPoints} pts</strong>
             </div>
           </div>
-          <div class="px-3 py-1.5 rounded-xl bg-white border border-indigo-200 text-[11px] font-bold text-indigo-900 whitespace-nowrap shadow-xs">
-            Antenne d'attache : <strong>${deptCtx.name} (${deptCtx.code})</strong>
+        </div>
+
+        <!-- Règle de fonctionnement & Règle d'enchaînement -->
+        <div class="p-3.5 rounded-2xl bg-amber-50/80 border border-amber-200 text-xs text-amber-950 flex items-start gap-2.5">
+          <span class="text-base">⚖️</span>
+          <div class="space-y-0.5 leading-snug">
+            <strong class="font-black text-amber-900">Règle d'équité des créneaux de 4 heures :</strong>
+            <p class="text-[11px] text-amber-800">
+              Vous pouvez vous inscrire sur autant de créneaux que vous le souhaitez. 
+              <strong>Règle anti-enchaînement :</strong> si vous êtes inscrit sur deux gardes consécutives, vous n'êtes pas prioritaire sur la seconde : 
+              tout autre joueur qui clique prend immédiatement la place titulaire (vous basculez alors en réserve). 
+              Si personne d'autre ne s'inscrit, vous enchaînez vos deux créneaux normalement.
+            </p>
           </div>
         </div>
 
-        <!-- Les 3 Cartes d'Échelons -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          ${this.ECHELONS.map(ech => this.renderEchelonCardHTML(game, ech, deptCtx, myId)).join('')}
+        <!-- GRILLE DES 6 CRÉNEAUX DE LA JOURNÉE -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between text-xs font-extrabold text-slate-700">
+            <span class="uppercase tracking-wider">Planning des 6 créneaux de 4h (${viewingDateLabel}) :</span>
+            <span class="text-[11px] text-slate-500 font-normal">Cliquez pour vous inscrire ou prendre la main</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            ${this.SLOTS_CONFIG.map(slotCfg => {
+              const slotKey = this.getSlotKey(viewingDateStr, slotCfg.index);
+              const slot = game.veilleOperationnelle[currentEch.id]?.slots?.[slotKey] || {
+                titular: null,
+                substitute: null
+              };
+
+              const isCurrentActive = (isToday && slotCfg.index === activeSlotIndex);
+              const isPast = isToday ? (slotCfg.endHour <= currentHour) : (this.activeDayOffset < 0);
+
+              const titular = slot.titular;
+              const substitute = slot.substitute;
+              const isMeTitular = titular && titular.playerId === myId;
+              const isMeSubstitute = substitute && substitute.playerId === myId;
+              const isChained = titular && titular.isChained;
+
+              return `
+                <div class="p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between space-y-3 ${
+                  isCurrentActive
+                    ? 'border-emerald-500 bg-emerald-50/40 shadow-md ring-2 ring-emerald-200'
+                    : isPast
+                      ? 'border-slate-200 bg-slate-50/70 opacity-75'
+                      : 'border-slate-200 bg-white hover:border-slate-300 shadow-2xs'
+                }">
+                  
+                  <!-- En-tête créneau -->
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <div class="w-8 h-8 rounded-xl ${isCurrentActive ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-700'} flex items-center justify-center font-bold">
+                        <i data-lucide="${slotCfg.icon}" class="w-4 h-4"></i>
+                      </div>
+                      <div>
+                        <strong class="text-xs font-black text-slate-900 block leading-tight">${slotCfg.label}</strong>
+                        <span class="text-[10px] text-slate-500">${slotCfg.name}</span>
+                      </div>
+                    </div>
+
+                    ${isCurrentActive ? `
+                      <span class="px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-600 text-white animate-pulse">
+                        🔴 EN COURS
+                      </span>
+                    ` : isPast ? `
+                      <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-200 text-slate-600">
+                        Terminé
+                      </span>
+                    ` : `
+                      <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">
+                        À venir
+                      </span>
+                    `}
+                  </div>
+
+                  <!-- Titulaire du créneau -->
+                  <div class="p-2.5 rounded-xl ${
+                    titular 
+                      ? (isMeTitular 
+                          ? (isChained ? 'bg-amber-50 border border-amber-300' : 'bg-emerald-50 border border-emerald-300')
+                          : (isChained ? 'bg-amber-50 border border-amber-300' : 'bg-sky-50 border border-sky-200'))
+                      : 'bg-slate-50 border border-dashed border-slate-300'
+                  } space-y-1">
+                    <div class="flex items-center justify-between text-[10px]">
+                      <span class="font-bold text-slate-500">Cadre Titulaire :</span>
+                      ${titular ? (
+                        isChained ? `
+                          <span class="px-1.5 py-0.2 rounded font-black text-[9px] bg-amber-200 text-amber-950 flex items-center gap-1" title="Ce joueur enchaîne deux créneaux consécutifs : disponible au vol par un autre joueur !">
+                            <span>⚠️ Enchaînement</span>
+                            <span>(Volable)</span>
+                          </span>
+                        ` : `
+                          <span class="px-1.5 py-0.2 rounded font-black text-[9px] bg-emerald-200 text-emerald-950">
+                            ✓ Prioritaire
+                          </span>
+                        `
+                      ) : `
+                        <span class="px-1.5 py-0.2 rounded font-bold text-[9px] bg-slate-200 text-slate-600">
+                          Vacant
+                        </span>
+                      `}
+                    </div>
+
+                    ${titular ? `
+                      <div class="flex items-center gap-2 pt-0.5 truncate">
+                        <div class="w-6 h-6 rounded-lg ${isMeTitular ? 'bg-pc-blue text-white' : 'bg-slate-700 text-white'} flex items-center justify-center font-black text-[10px] shrink-0">
+                          ${(titular.playerName || 'CP').substring(0, 2).toUpperCase()}
+                        </div>
+                        <div class="truncate text-xs">
+                          <strong class="text-slate-900 block truncate leading-tight">
+                            ${titular.playerName} ${isMeTitular ? '<span class="text-pc-blue font-black">(VOUS)</span>' : ''}
+                          </strong>
+                          <span class="text-[9.5px] text-slate-500 block truncate">${titular.stationName || 'Antenne'}</span>
+                        </div>
+                      </div>
+                    ` : `
+                      <p class="text-[11px] text-slate-500 italic py-0.5">Aucun titulaire inscrit pour le moment.</p>
+                    `}
+                  </div>
+
+                  <!-- Réserviste / Remplaçant (si existant) -->
+                  ${substitute ? `
+                    <div class="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[10.5px] space-y-0.5">
+                      <div class="flex items-center justify-between text-[9px] text-slate-500 font-bold">
+                        <span>Réserviste (Remplaçant) :</span>
+                        <span class="text-pc-blue">En réserve</span>
+                      </div>
+                      <div class="truncate text-slate-700 font-semibold">
+                        ${substitute.playerName} ${isMeSubstitute ? '<strong class="text-pc-blue font-black">(VOUS)</strong>' : ''}
+                      </div>
+                    </div>
+                  ` : ''}
+
+                  <!-- Boutons d'Action -->
+                  <div class="pt-1 border-t border-slate-100">
+                    ${isPast ? `
+                      <button disabled class="w-full py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed">
+                        Créneau expiré
+                      </button>
+                    ` : isMeTitular ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecVeille.unregisterSlot(window.game, '${currentEch.id}', '${viewingDateStr}', ${slotCfg.index})"
+                        class="w-full py-2 rounded-xl text-xs font-black bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition cursor-pointer flex items-center justify-center gap-1">
+                        <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+                        <span>Se désinscrire</span>
+                      </button>
+                    ` : isMeSubstitute ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecVeille.unregisterSlot(window.game, '${currentEch.id}', '${viewingDateStr}', ${slotCfg.index})"
+                        class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
+                        ✕ Quitter la réserve
+                      </button>
+                    ` : !titular ? `
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecVeille.registerSlot(window.game, '${currentEch.id}', '${viewingDateStr}', ${slotCfg.index})"
+                        class="w-full py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition cursor-pointer flex items-center justify-center gap-1.5">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                        <span>S'inscrire sur ce créneau</span>
+                      </button>
+                    ` : isChained ? `
+                      <!-- LE TITULAIRE ENCHAÎNE -> LE JOUEUR PEUT PRENDRE LA TITULARITÉ DIRECTEMENT ! -->
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecVeille.registerSlot(window.game, '${currentEch.id}', '${viewingDateStr}', ${slotCfg.index})"
+                        class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-600 hover:brightness-110 text-white shadow-md transition cursor-pointer flex items-center justify-center gap-1 animate-pulse">
+                        <i data-lucide="zap" class="w-3.5 h-3.5"></i>
+                        <span>⚡ Prendre ce créneau (Priorité)</span>
+                      </button>
+                    ` : !substitute ? `
+                      <!-- Titulaire non-enchaîné -> Inscription en réserve -->
+                      <button 
+                        type="button" 
+                        onclick="window.ProtecVeille.registerSlot(window.game, '${currentEch.id}', '${viewingDateStr}', ${slotCfg.index})"
+                        class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer flex items-center justify-center gap-1">
+                        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                        <span>S'inscrire en réserve</span>
+                      </button>
+                    ` : `
+                      <button disabled class="w-full py-1.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed">
+                        Complet (Titulaire + Réserve)
+                      </button>
+                    `}
+                  </div>
+
+                </div>
+              `;
+            }).join('')}
+          </div>
         </div>
 
-        <!-- Journal de bord & Consignes récentes -->
+        <!-- Main courante combinée -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
           <div class="flex items-center justify-between">
             <h5 class="text-xs font-black text-slate-800 flex items-center gap-1.5">
@@ -383,146 +874,21 @@ window.ProtecVeille = {
     if (window.lucide) window.lucide.createIcons();
   },
 
-  // Rendu de la carte d'un échelon
-  renderEchelonCardHTML(game, ech, deptCtx, myId) {
-    const state = game.veilleOperationnelle[ech.id] || {};
-    const label = ech.getLabel(deptCtx);
-    const subLabel = ech.getSubLabel(deptCtx);
-    const officer = state.currentOfficer;
-    const queue = state.queue || [];
-    const myShiftsCount = (state.history && state.history[myId]) || 0;
-    const isMe = officer && officer.playerId === myId;
-    const inQueue = queue.some(q => q.playerId === myId);
-    const queuePos = queue.findIndex(q => q.playerId === myId) + 1;
-    const eligibility = this.checkEligibility(game, ech.id);
-
-    return `
-      <div class="rounded-2xl border-2 ${isMe ? 'border-indigo-500 shadow-md ring-2 ring-indigo-200' : 'border-slate-200'} bg-white overflow-hidden flex flex-col justify-between transition-all">
-        
-        <!-- En-tête de l'échelon -->
-        <div class="p-3.5 bg-gradient-to-r ${ech.bgGradient} text-white space-y-1">
-          <div class="flex items-center justify-between text-[10px]">
-            <span class="px-2 py-0.5 rounded-full font-black bg-white/20 backdrop-blur-md uppercase tracking-wider text-[9px]">
-              ${ech.scopeName}
-            </span>
-            <span class="font-bold text-white/90">
-              Shift : ${ech.shiftHours}h
-            </span>
-          </div>
-          <h4 class="text-sm font-black text-white leading-tight truncate" title="${label}">${label}</h4>
-          <p class="text-[10px] text-white/75 truncate" title="${subLabel}">${subLabel}</p>
-        </div>
-
-        <!-- Corps de l'échelon -->
-        <div class="p-3.5 space-y-3 flex-1 text-xs">
-          
-          <!-- État actuel du poste -->
-          <div class="p-2.5 rounded-xl ${officer ? (isMe ? 'bg-indigo-50 border border-indigo-200' : 'bg-slate-50 border border-slate-200') : 'bg-amber-50/80 border border-amber-200'} space-y-1">
-            <div class="flex items-center justify-between text-[10px]">
-              <span class="font-bold text-slate-500">Cadre en poste :</span>
-              <span class="px-2 py-0.5 rounded-full font-black ${officer ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-900'}">
-                ${officer ? '🟢 En Veille Active' : '🟡 Poste Vacant'}
-              </span>
-            </div>
-            ${officer ? `
-              <div class="flex items-center gap-2 pt-1">
-                <div class="w-7 h-7 rounded-lg ${isMe ? 'bg-indigo-600' : 'bg-slate-700'} text-white flex items-center justify-center font-black text-xs flex-shrink-0">
-                  ${officer.playerName.substring(0, 2).toUpperCase()}
-                </div>
-                <div class="truncate">
-                  <strong class="block text-slate-900 truncate leading-tight">${officer.playerName} ${isMe ? '<span class="text-indigo-600 font-black">(VOUS)</span>' : ''}</strong>
-                  <span class="text-[10px] text-slate-500 block truncate">${officer.stationName}</span>
-                </div>
-              </div>
-            ` : `
-              <p class="text-[11px] text-amber-900 font-semibold pt-0.5">
-                Aucun cadre actuellement en veille. Vous pouvez prendre le tour immédiatement !
-              </p>
-            `}
-          </div>
-
-          <!-- Rémunération & Avantages -->
-          <div class="grid grid-cols-2 gap-1.5 text-[11px] p-2 rounded-xl bg-slate-50 border border-slate-100">
-            <div>
-              <span class="block text-[9px] text-slate-400 font-bold uppercase">Indemnité</span>
-              <strong class="text-emerald-700 font-black">${ech.indemniteHourly} € / h</strong>
-            </div>
-            <div>
-              <span class="block text-[9px] text-slate-400 font-bold uppercase">Prestige Antenne</span>
-              <strong class="text-indigo-700 font-black">+${ech.reputationPoints} pts</strong>
-            </div>
-          </div>
-
-          <!-- File d'attente / Relève -->
-          <div class="space-y-1 text-[11px]">
-            <div class="flex items-center justify-between text-slate-600 font-bold">
-              <span>File de Relève :</span>
-              <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-100 font-black text-slate-700">${queue.length} inscrit(s)</span>
-            </div>
-            ${queue.length > 0 ? `
-              <div class="space-y-1 max-h-16 overflow-y-auto text-[10px] bg-slate-50 p-1.5 rounded-lg border border-slate-100">
-                ${queue.map((q, idx) => `
-                  <div class="flex items-center justify-between text-slate-700 truncate">
-                    <span class="truncate"><strong>#${idx + 1}</strong> ${q.playerName} ${q.playerId === myId ? '<span class="text-indigo-600 font-bold">(Vous)</span>' : ''}</span>
-                    <span class="text-[9px] text-slate-400 font-mono">${q.shiftsDone} garde(s)</span>
-                  </div>
-                `).join('')}
-              </div>
-            ` : `
-              <p class="text-[10px] text-slate-400 italic">Personne en attente pour le prochain tour.</p>
-            `}
-          </div>
-
-          <!-- Mes statistiques sur cet échelon -->
-          <div class="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-100">
-            <span>Vos astreintes effectuées :</span>
-            <strong class="text-slate-800 font-black">${myShiftsCount} fois</strong>
-          </div>
-
-        </div>
-
-        <!-- Boutons d'action contextuels -->
-        <div class="p-3 border-t border-slate-100 bg-slate-50/60 flex flex-col gap-1.5">
-          ${isMe ? `
-            <button onclick="window.ProtecVeille.passRelief(window.game, '${ech.id}')" class="w-full py-2 rounded-xl text-xs font-black bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-              <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
-              Transmettre la Relève & Clôturer
-            </button>
-          ` : officer ? (
-            inQueue ? `
-              <button onclick="window.ProtecVeille.leaveQueue(window.game, '${ech.id}')" class="w-full py-2 rounded-xl text-xs font-bold bg-slate-200 hover:bg-slate-300 text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer">
-                ✕ Quitter la file (Position #${queuePos})
-              </button>
-            ` : `
-              <button onclick="window.ProtecVeille.joinQueue(window.game, '${ech.id}')" class="w-full py-2 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-                <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
-                S'inscrire pour la Relève Suivante
-              </button>
-            `
-          ) : (
-            eligibility.eligible ? `
-              <button onclick="window.ProtecVeille.takeShiftNow(window.game, '${ech.id}')" class="w-full py-2 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer animate-pulse">
-                <i data-lucide="shield-alert" class="w-3.5 h-3.5"></i>
-                Prendre la Veille Immédiatement
-              </button>
-            ` : `
-              <button disabled class="w-full py-2 rounded-xl text-xs font-bold bg-slate-200 text-slate-400 cursor-not-allowed text-center" title="${eligibility.reason}">
-                Période de Relève (En repos)
-              </button>
-            `
-          )}
-        </div>
-
-      </div>
-    `;
+  setActiveEchelon(echelonId) {
+    this.activeEchelonId = echelonId;
+    this.renderModal(window.game);
   },
 
-  // Rendu de la main courante combinée
+  setActiveDayOffset(offset) {
+    this.activeDayOffset = offset;
+    this.renderModal(window.game);
+  },
+
+  // Rendu du journal combiné
   renderCombinedJournalHTML(game) {
     const combined = [];
-    ['departemental', 'zonal', 'national'].forEach(id => {
-      const ech = this.ECHELONS.find(e => e.id === id);
-      const journal = game.veilleOperationnelle?.[id]?.journal || [];
+    this.ECHELONS.forEach(ech => {
+      const journal = game.veilleOperationnelle?.[ech.id]?.journal || [];
       journal.forEach(j => {
         combined.push({
           echelon: ech.title,
@@ -534,7 +900,7 @@ window.ProtecVeille = {
     });
 
     if (combined.length === 0) {
-      return `<p class="text-slate-400 text-center py-2 italic text-[11px]">Aucun mouvement de garde consigné pour le moment. Prenez votre première astreinte !</p>`;
+      return `<p class="text-slate-400 text-center py-2 italic text-[11px]">Aucun mouvement consigné pour le moment. Inscrivez-vous sur votre premier créneau d'astreinte !</p>`;
     }
 
     return combined.slice(0, 10).map(c => `

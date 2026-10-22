@@ -3375,6 +3375,10 @@ window.ProtecCriseLogistique = {
    */
   getDepartmentAstreinteOfficer(game, deptCode) {
     if (!game) game = window.game;
+    if (window.ProtecVeille && typeof window.ProtecVeille.getCurrentOfficer === 'function') {
+      const activeOff = window.ProtecVeille.getCurrentOfficer(game, 'departemental');
+      if (activeOff) return activeOff;
+    }
     const veilleDept = game.veilleOperationnelle?.departemental;
     if (veilleDept && veilleDept.currentOfficer) {
       const off = veilleDept.currentOfficer;
