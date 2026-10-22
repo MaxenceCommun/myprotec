@@ -2587,9 +2587,50 @@ window.ProtecAdmin = {
     if (!user) return;
 
     let sData = user.saveData || {};
+    const targetMission = (sData.missions || []).find(x => x.id === missionId);
     sData.missions = (sData.missions || []).filter(x => x.id !== missionId);
     await this.updateUser(userId, { saveData: sData }, `Mission annulée sans pénalité pour ${user.username}`);
+
+    // Si c'était une crise partagée, la purger également pour tout le département
+    if (targetMission && (targetMission.isCrisis || targetMission.type === 'crise')) {
+      const deptCode = targetMission.departmentCode || user.departmentCode || '54';
+      await this.deleteDepartmentCrisis(missionId, deptCode, true);
+    }
+
     this.refreshSupportPlayerView();
+  },
+
+  // Suppression administrative d'une crise pour TOUS les directeurs du département
+  async deleteDepartmentCrisis(crisisId, departmentCode, skipConfirm = false) {
+    if (!crisisId) return;
+    if (!skipConfirm && !confirm("Voulez-vous vraiment supprimer définitivement cette crise pour TOUS les joueurs du département ?\nCette action est irréversible.")) {
+      return;
+    }
+    const dept = departmentCode || window.game?.currentDepartmentCode || '54';
+
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.deleteDepartmentCrisis === 'function') {
+      await window.ProtecSupabase.deleteDepartmentCrisis(crisisId, dept);
+    } else {
+      try {
+        await fetch('/api/crises/department/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
+        });
+      } catch (err) {
+        console.warn('Erreur appel /api/crises/department/delete:', err);
+      }
+    }
+
+    if (window.game) {
+      window.game.handleDepartmentCrisisUpdate({
+        id: crisisId,
+        departmentCode: dept,
+        status: 'deleted'
+      });
+      window.game.showToast('Crise Supprimée', 'La crise départementale a été supprimée pour l\'ensemble du département.', 'red');
+    }
+    this.refreshAllTabs();
   },
 
   showPlayerPlatformModal(userId) {
@@ -4136,6 +4177,13 @@ window.ProtecAdmin = {
                       📻 Ordre Radio : « ${c.phases[c.currentPhaseIndex || 0].ordre_radio} »
                     </div>
                   ` : ''}
+                
+                  <div class="pt-2 flex items-center justify-end">
+                    <button onclick="window.ProtecAdmin.deleteDepartmentCrisis('${c.id}', '${c.departmentCode || '54'}')" class="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer" title="Supprimer la crise pour tous les joueurs du département">
+                      <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                      <span>Supprimer pour tout le département</span>
+                    </button>
+                  </div>
                 </div>
               `).join('')}
             </div>

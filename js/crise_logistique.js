@@ -2188,6 +2188,9 @@ window.ProtecCriseLogistique = {
     const myId = game.player?.id || 'usr_local';
     const isManager = (mission.managerPlayerId === myId);
     const hasOtherManager = (mission.managerPlayerId && !isManager);
+    const isAstreintePeriod = (mission.alertStage === 'targeted_astreinte' && mission.ackDeadline && Date.now() < mission.ackDeadline);
+    const isAstreinteOfficer = isAstreintePeriod && (mission.targetPlayerId === myId || mission.astreinteOfficerId === myId);
+    const secondsLeft = (isAstreintePeriod && mission.ackDeadline) ? Math.max(0, Math.floor((mission.ackDeadline - Date.now()) / 1000)) : null;
 
     if (isManager) {
       return `
@@ -2223,7 +2226,7 @@ window.ProtecCriseLogistique = {
             <div>
               <div class="text-xs font-black text-emerald-300 flex items-center gap-1.5">
                 <i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-400"></i>
-                <span>Commandement Assuré par : ${mission.managerPlayerName || 'Directeur Allié'} (Non disponible)</span>
+                <span>Commandement Assuré par : ${mission.managerPlayerName || 'Directeur Allié'} (Verrouillé)</span>
               </div>
               <p class="text-[10.5px] text-slate-300">Ce directeur coordonne les opérations. Vous ne pouvez intervenir qu'en répondant aux demandes de renfort.</p>
             </div>
@@ -2234,7 +2237,62 @@ window.ProtecCriseLogistique = {
           </span>
         </div>
       `;
+    } else if (isAstreintePeriod && !isAstreinteOfficer) {
+      // Période d'astreinte : en attente du cadre
+      const minLeft = Math.floor((secondsLeft || 0) / 60);
+      const sLeft = (secondsLeft || 0) % 60;
+      return `
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 border-2 border-amber-500 shadow-md flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-amber-600 text-white flex items-center justify-center">
+              <i data-lucide="clock" class="w-4 h-4"></i>
+            </div>
+            <div>
+              <div class="text-xs font-black text-amber-200 flex items-center gap-1.5">
+                <i data-lucide="phone-call" class="w-3.5 h-3.5 text-amber-400"></i>
+                <span>Priorité Cadre d'Astreinte : ${mission.targetPlayerName || 'En service'}</span>
+                <span class="px-2 py-0.5 rounded bg-amber-800 text-white text-[10px] font-mono">${minLeft}m ${sLeft}s</span>
+              </div>
+              <p class="text-[10.5px] text-slate-300">Le cadre de permanence départementale est alerté. Sans réponse sous 5 min, l'alerte sera ouverte à tout le département.</p>
+            </div>
+          </div>
+          <button 
+            disabled
+            class="px-3.5 py-1.5 rounded-xl text-xs font-bold bg-slate-800 text-slate-400 border border-slate-700 cursor-not-allowed opacity-80 flex items-center gap-1.5">
+            <i data-lucide="lock" class="w-3.5 h-3.5"></i>
+            <span>Priorité Astreinte (${secondsLeft}s)</span>
+          </button>
+        </div>
+      `;
+    } else if (isAstreintePeriod && isAstreinteOfficer) {
+      // Le joueur courant EST le cadre d'astreinte
+      const minLeft = Math.floor((secondsLeft || 0) / 60);
+      const sLeft = (secondsLeft || 0) % 60;
+      return `
+        <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-950 via-amber-950 to-slate-900 border-2 border-red-500 shadow-md flex items-center justify-between gap-3 flex-wrap animate-pulse">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-red-600 text-white flex items-center justify-center font-black">
+              <i data-lucide="bell-ring" class="w-4 h-4 animate-bounce"></i>
+            </div>
+            <div>
+              <div class="text-xs font-black text-red-200 flex items-center gap-1.5">
+                <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-400"></i>
+                <span>Cadre d'Astreinte • Vous êtes mobilisé en priorité !</span>
+                <span class="px-2 py-0.5 rounded bg-red-800 text-white text-[10px] font-mono">Délai : ${minLeft}m ${sLeft}s</span>
+              </div>
+              <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention. Passé 5 min sans réponse, une pénalité (-20 réputation) sera appliquée.</p>
+            </div>
+          </div>
+          <button 
+            onclick="window.ProtecCriseLogistique.claimCrisisCommand(window.game, '${mission.id}')"
+            class="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-amber-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+            <i data-lucide="shield" class="w-4 h-4"></i>
+            <span>Prendre la main (Cadre d'Astreinte)</span>
+          </button>
+        </div>
+      `;
     } else {
+      // Commandement vacant ouvert à tout le département (premier répondant)
       return `
         <div class="p-3.5 rounded-2xl bg-gradient-to-r from-red-950 via-amber-950 to-slate-900 border-2 border-red-500 shadow-md flex items-center justify-between gap-3 flex-wrap animate-pulse">
           <div class="flex items-center gap-2">
@@ -2244,9 +2302,9 @@ window.ProtecCriseLogistique = {
             <div>
               <div class="text-xs font-black text-red-200 flex items-center gap-1.5">
                 <i data-lucide="alert-triangle" class="w-3.5 h-3.5 text-red-400"></i>
-                <span>Commandement de Crise Vacant</span>
+                <span>Commandement de Crise Vacant • Département Ouvert</span>
               </div>
-              <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention pour coordonner les effectifs et les renforts.</p>
+              <p class="text-[10.5px] text-slate-300">Tout directeur du département peut prendre la direction de l'intervention.</p>
             </div>
           </div>
           <button 
@@ -2260,7 +2318,6 @@ window.ProtecCriseLogistique = {
     }
   },
 
-  // Bandeau d'état opérationnel de la Cellule de Crise Active (affiché sous la prise de commandement)
   renderCrisisActiveBarHTML(game, mission) {
     if (!game) game = window.game;
     if (!mission) return '';
@@ -3307,62 +3364,34 @@ window.ProtecCriseLogistique = {
    */
   setupCrisisAlertEscalation(game, crisis, deptCode) {
     if (!game) game = window.game;
-    const apc = window.ProtecAPC?.cachedAPC;
-    const strategy = apc?.crisisAlertStrategy || 'proche'; // 'proche' | 'astreinte' | 'tous'
-    const timeoutSec = apc?.crisisAckTimeoutSeconds || 45;
 
-    crisis.strategyApplied = strategy;
+    // Règle Départementale :
+    // - Si un cadre d'astreinte est actif, il est notifié en priorité avec 5 minutes (300 secondes) pour prendre la main.
+    // - S'il ne répond pas sous 5 minutes, il subit une sanction de -20 réputation et l'alerte est ouverte à tout le département.
+    // - Si aucun cadre d'astreinte n'est en service, l'alerte est immédiatement ouverte à tous les directeurs du département.
+    const officer = this.getDepartmentAstreinteOfficer(game, deptCode);
+    const timeoutSec = 300; // 5 minutes
+
     crisis.managerPlayerId = null;
     crisis.managerPlayerName = null;
     crisis.acknowledged = false;
 
-    if (strategy === 'tous') {
+    if (officer) {
+      crisis.alertStage = 'targeted_astreinte';
+      crisis.targetPlayerId = officer.playerId;
+      crisis.targetPlayerName = officer.playerName;
+      crisis.astreinteOfficerId = officer.playerId;
+      crisis.astreinteOfficerName = officer.playerName;
+      crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
+
+      this.logCrisisRadio(crisis, 'Permanence Départementale', `ALERTE CRISE INITIALE transmise en priorité au Cadre d'Astreinte (${officer.playerName}). Délai réglementaire de prise en charge : 5 minutes.`, 'ordre');
+    } else {
       crisis.alertStage = 'broadcast_all';
       crisis.targetPlayerId = null;
       crisis.targetPlayerName = null;
       crisis.ackDeadline = null;
-    } else if (strategy === 'astreinte') {
-      const officer = this.getDepartmentAstreinteOfficer(game, deptCode);
-      if (officer) {
-        crisis.alertStage = 'targeted_astreinte';
-        crisis.targetPlayerId = officer.playerId;
-        crisis.targetPlayerName = officer.playerName;
-        crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
-      } else {
-        // Pas d'astreinte active : relais antenne la plus proche ou broadcast
-        const nearest = this.findClosestDepartmentPlayer(game, deptCode, crisis.lat, crisis.lng);
-        if (nearest) {
-          crisis.alertStage = 'targeted_nearest';
-          crisis.targetPlayerId = nearest.playerId;
-          crisis.targetPlayerName = nearest.playerName;
-          crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
-        } else {
-          crisis.alertStage = 'broadcast_all';
-          crisis.targetPlayerId = null;
-          crisis.ackDeadline = null;
-        }
-      }
-    } else {
-      // Stratégie 'proche' (par défaut)
-      const nearest = this.findClosestDepartmentPlayer(game, deptCode, crisis.lat, crisis.lng);
-      if (nearest) {
-        crisis.alertStage = 'targeted_nearest';
-        crisis.targetPlayerId = nearest.playerId;
-        crisis.targetPlayerName = nearest.playerName;
-        crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
-      } else {
-        const officer = this.getDepartmentAstreinteOfficer(game, deptCode);
-        if (officer) {
-          crisis.alertStage = 'targeted_astreinte';
-          crisis.targetPlayerId = officer.playerId;
-          crisis.targetPlayerName = officer.playerName;
-          crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
-        } else {
-          crisis.alertStage = 'broadcast_all';
-          crisis.targetPlayerId = null;
-          crisis.ackDeadline = null;
-        }
-      }
+
+      this.logCrisisRadio(crisis, 'Permanence Départementale', `Aucun cadre d'astreinte départementale en service. Sinistre ouvert immédiatement à tous les directeurs du département. Le premier répondant prend la main.`, 'ordre');
     }
 
     return crisis;
@@ -3376,36 +3405,29 @@ window.ProtecCriseLogistique = {
     if (crisis.alertStage === 'broadcast_all') return;
     if (!crisis.ackDeadline || Date.now() < crisis.ackDeadline) return;
 
-    const deptCode = crisis.departmentCode || game.currentDepartmentCode || '54';
-    const timeoutSec = 45;
+    if (crisis.alertStage === 'targeted_astreinte') {
+      // Le cadre d'astreinte départementale n'a pas répondu sous 5 minutes -> Sanction -20 réputation + Alerte générale
+      const officerName = crisis.astreinteOfficerName || crisis.targetPlayerName || 'Cadre d\'Astreinte';
+      const myId = game.player?.id || 'usr_local';
 
-    if (crisis.alertStage === 'targeted_nearest') {
-      // L'antenne la plus proche n'a pas répondu -> Passer le relais à l'astreinte départementale
-      const officer = this.getDepartmentAstreinteOfficer(game, deptCode);
-      if (officer) {
-        crisis.alertStage = 'targeted_astreinte';
-        crisis.targetPlayerId = officer.playerId;
-        crisis.targetPlayerName = officer.playerName;
-        crisis.ackDeadline = Date.now() + (timeoutSec * 1000);
-
-        this.logCrisisRadio(crisis, 'Régulation Préfecture', `ABSENCE D'ACQUITTEMENT [Antenne la plus proche]. Escalade du protocole : alerte transmise à l'Astreinte Départementale (${officer.playerName}).`, 'ordre');
-
-        if (officer.playerId === game.player?.id) {
-          if (window.ProtecAudio) window.ProtecAudio.playCrisisAlertSound();
-          game.showToast(
-            '🚨 RELAIS ASTREINTE DÉPARTEMENTALE',
-            `L'antenne la plus proche n'a pas acquitté la crise « ${crisis.titre || crisis.title} ». En tant que cadre d'astreinte, vous devez prendre le relais !`,
-            'red',
-            { type: 'crise', id: crisis.id }
-          );
-        }
-      } else {
-        // Pas d'astreinte départementale en service -> Alerte générale à tous les directeurs
-        this.escalateToBroadcastAll(game, crisis, "Absence de réponse de l'antenne la plus proche et aucune astreinte départementale active");
+      if (crisis.astreinteOfficerId === myId || crisis.targetPlayerId === myId) {
+        // Le joueur local était d'astreinte et a manqué l'alerte
+        game.reputation = Math.max(0, (game.reputation || 100) - 20);
+        game.showToast(
+          '⚠️ DÉFAILLANCE D\'ASTREINTE',
+          'Délai réglementaire de 5 min dépassé sans prise en charge de la crise ! Sanction appliquée : -20 Réputation.',
+          'red'
+        );
       }
-    } else if (crisis.alertStage === 'targeted_astreinte') {
-      // L'astreinte départementale n'a pas répondu sous 45s -> Alerte générale à tous les directeurs
-      this.escalateToBroadcastAll(game, crisis, "L'astreinte départementale n'a pas acquitté le sinistre sous le délai imparti");
+
+      this.logCrisisRadio(
+        crisis,
+        'Régulation Préfecture',
+        `DÉFAILLANCE D'ASTREINTE : Le Cadre d'Astreinte (${officerName}) n'a pas répondu dans le délai imparti de 5 minutes (-20 Réputation). Mobilisation générale ouverte à tous les directeurs du département.`,
+        'alerte'
+      );
+
+      this.escalateToBroadcastAll(game, crisis, "Absence de réponse du Cadre d'Astreinte sous 5 minutes (-20 Réputation)");
     }
 
     this.broadcastCrisisState(game, crisis);
@@ -3427,7 +3449,7 @@ window.ProtecCriseLogistique = {
 
     if (window.ProtecAudio) window.ProtecAudio.playCrisisAlertSound();
     game.showToast(
-      '🚨 CRISE NON ACQUITTÉE • APPEL DÉPARTEMENTAL',
+      '🚨 CRISE OUVERTE AU DÉPARTEMENT',
       `Mobilisation générale pour « ${crisis.titre || crisis.title} ». Prenez la main sur la gestion de crise !`,
       'red',
       { type: 'crise', id: crisis.id }
@@ -3445,10 +3467,26 @@ window.ProtecCriseLogistique = {
     const myId = game.player?.id || 'usr_local';
     const myName = game.player?.name || 'Directeur';
 
-    // Sécurité contre la double prise de main concurrente
+    // Sécurité 1 : Si la crise a déjà un directeur désigné
     if (crisis.managerPlayerId && crisis.managerPlayerId !== myId) {
       game.showToast('Prise de Main Impossible', `Le commandement de cette crise est déjà assuré par ${crisis.managerPlayerName}.`, 'orange');
       return;
+    }
+
+    // Sécurité 2 : Période d'astreinte prioritaire de 5 minutes
+    if (crisis.alertStage === 'targeted_astreinte' && crisis.ackDeadline && Date.now() < crisis.ackDeadline) {
+      const isAstreinteOfficer = (crisis.targetPlayerId === myId || crisis.astreinteOfficerId === myId);
+      if (!isAstreinteOfficer) {
+        const secLeft = Math.ceil((crisis.ackDeadline - Date.now()) / 1000);
+        const minLeft = Math.floor(secLeft / 60);
+        const sLeft = secLeft % 60;
+        game.showToast(
+          'Priorité Astreinte Départementale',
+          `Cette crise est sous la responsabilité prioritaire du Cadre d'Astreinte (${crisis.targetPlayerName || 'Défini'}) pendant encore ${minLeft}m ${sLeft}s. En cas de non-réponse sous 5 min, l'alerte sera ouverte à tous les directeurs.`,
+          'amber'
+        );
+        return;
+      }
     }
 
     crisis.managerPlayerId = myId;
@@ -3465,7 +3503,7 @@ window.ProtecCriseLogistique = {
 
     game.showToast(
       'Commandement Établi',
-      `Vous assurez désormais la direction des opérations sur « ${crisis.titre || crisis.title} ».`,
+      `Vous assurez désormais la direction des opérations sur « ${crisis.titre || crisis.title} ». Vos décisions et arbitrages coordonnent le dispositif départemental.`,
       'green',
       { type: 'crise', id: crisis.id }
     );
@@ -3483,9 +3521,6 @@ window.ProtecCriseLogistique = {
     }
   },
 
-  /**
-   * Action : Le joueur coordinateur laisse la main pour qu'un autre puisse la prendre
-   */
   releaseCrisisCommand(game, crisisId) {
     if (!game) game = window.game;
     const crisis = (game.activeCrises || []).find(c => c.id === crisisId) || (game.missions || []).find(m => m.id === crisisId);

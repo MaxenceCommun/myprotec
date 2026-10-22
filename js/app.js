@@ -11444,13 +11444,63 @@ class ProtecGame {
     const targetId = payload.id || payload.crisisData?.id;
     if (!targetId) return;
 
-    if (payload.status === 'resolved') {
-      // Clôture départementale de la crise
-      const idx = (this.missions || []).findIndex(m => m.id === targetId);
-      if (idx !== -1) {
-        this.missions.splice(idx, 1);
-        this.renderMissions();
-        this.updateStatsUI();
+    // GESTION SUPPRESSION / CLÔTURE DÉPARTEMENTALE DE LA CRISE
+    if (['deleted', 'resolved', 'cancelled'].includes(payload.status)) {
+      // 1. Retrait de this.missions
+      const mIdx = (this.missions || []).findIndex(m => m.id === targetId);
+      if (mIdx !== -1) {
+        this.missions.splice(mIdx, 1);
+      }
+
+      // 2. Retrait de this.activeCrises
+      if (Array.isArray(this.activeCrises)) {
+        const cIdx = this.activeCrises.findIndex(c => c.id === targetId);
+        if (cIdx !== -1) {
+          this.activeCrises.splice(cIdx, 1);
+        }
+      }
+
+      // 3. Libération de tous les moyens locaux engagés ou en route vers cette crise
+      (this.vehicles || []).forEach(v => {
+        if (v.missionId === targetId || v.assignedCrisisId === targetId) {
+          v.status = 'dispo';
+          v.missionId = null;
+          v.assignedCrisisId = null;
+        }
+      });
+      (this.volunteers || []).forEach(vol => {
+        if (vol.missionId === targetId || vol.assignedCrisisId === targetId) {
+          vol.status = 'dispo';
+          vol.missionId = null;
+          vol.assignedCrisisId = null;
+        }
+      });
+
+      // 4. Fermeture des interfaces ouvertes sur cette crise
+      if (this.selectedMissionId === targetId) {
+        this.closeDrawer();
+      }
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.closePcCriseModal === 'function') {
+        window.ProtecCriseLogistique.closePcCriseModal();
+      }
+
+      // 5. Retrait des marqueurs cartographiques
+      if (typeof this.removeMissionMarker === 'function') {
+        this.removeMissionMarker(targetId);
+      } else if (this.map && this.markers && this.markers[targetId]) {
+        try {
+          this.map.removeLayer(this.markers[targetId]);
+          delete this.markers[targetId];
+        } catch (e) {}
+      }
+
+      this.renderMissions();
+      this.updateStatsUI();
+
+      if (payload.status === 'deleted') {
+        this.showToast('Crise Supprimée', 'La crise départementale a été supprimée pour l\'ensemble du département.', 'slate');
+      } else if (payload.status === 'resolved') {
+        this.showToast('Crise Clôturée', 'Le dispositif de crise départementale a été levé avec succès.', 'green');
       }
       return;
     }
@@ -11559,7 +11609,6 @@ class ProtecGame {
     }
   }
 
-  // Synchronisation des crises départementales et simulation de continuité du monde hors-ligne
   async syncDepartmentCrises() {
     if (!window.ProtecSupabase || typeof window.ProtecSupabase.fetchActiveDepartmentCrises !== 'function') return;
 
@@ -11568,6 +11617,37 @@ class ProtecGame {
     try {
       const activeCrises = await window.ProtecSupabase.fetchActiveDepartmentCrises(myDept);
       const now = Date.now();
+
+      // Nettoyage / purge immédiate des crises départementales supprimées
+      const activeIds = new Set((activeCrises || []).map(c => String(c.id)));
+      let hadDeletedDeptCrisis = false;
+
+      this.missions = (this.missions || []).filter(m => {
+        const isDeptCrisis = (m.isCrisis || m.type === 'crise') && String(m.departmentCode || myDept) === String(myDept);
+        if (isDeptCrisis && !activeIds.has(String(m.id))) {
+          hadDeletedDeptCrisis = true;
+          if (this.selectedMissionId === m.id) {
+            this.closeDrawer();
+          }
+          if (typeof this.removeMissionMarker === 'function') {
+            this.removeMissionMarker(m.id);
+          }
+          return false;
+        }
+        return true;
+      });
+
+      if (Array.isArray(this.activeCrises)) {
+        this.activeCrises = this.activeCrises.filter(c => {
+          const isDeptCrisis = String(c.departmentCode || myDept) === String(myDept);
+          return !isDeptCrisis || activeIds.has(String(c.id));
+        });
+      }
+
+      if (hadDeletedDeptCrisis) {
+        this.renderMissions();
+        this.updateStatsUI();
+      }
 
       if (Array.isArray(activeCrises) && activeCrises.length > 0) {
         // Des crises sont déjà actives dans la base départementale
@@ -15589,6 +15669,12 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
 
+    // Sécurité : Les crises départementales partagées ne peuvent être supprimées que par un administrateur
+    if (mission.isCrisis || mission.type === 'crise') {
+      this.showToast('Action Non Autorisée', 'Les crises départementales ne peuvent pas être annulées unilatéralement. Seul un administrateur peut supprimer une crise pour tout le département.', 'orange');
+      return;
+    }
+
     if (mission.status === 'ongoing' || mission.status === 'completed') {
       this.showToast('Action Impossible', 'Un dispositif déjà engagé sur le terrain ne peut pas être annulé.', 'orange');
       return;
@@ -15665,6 +15751,41 @@ class ProtecGame {
     this.saveGame();
     this.renderMissions();
     this.updateStatsUI();
+  }
+
+  // Suppression administrative d'une crise départementale pour tous les joueurs
+  async adminDeleteCrisis(missionId) {
+    const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
+    if (!mission) return;
+
+    if (!confirm(`Supprimer définitivement la crise départementale « ${mission.title || mission.titre || 'Crise'} » pour TOUT le département ?\nCette action est réservée aux administrateurs et est irréversible.`)) {
+      return;
+    }
+
+    const deptCode = String(mission.departmentCode || this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54');
+
+    if (window.ProtecSupabase && typeof window.ProtecSupabase.deleteDepartmentCrisis === 'function') {
+      await window.ProtecSupabase.deleteDepartmentCrisis(missionId, deptCode);
+    } else {
+      try {
+        await fetch('/api/crises/department/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ crisisId: String(missionId), departmentCode: deptCode })
+        });
+      } catch (err) {
+        console.warn('Erreur appel /api/crises/department/delete:', err);
+      }
+    }
+
+    // Retrait immédiat local
+    this.handleDepartmentCrisisUpdate({
+      id: missionId,
+      departmentCode: deptCode,
+      status: 'deleted'
+    });
+
+    this.showToast('Crise Supprimée', `La crise « ${mission.title || mission.titre} » a été supprimée pour l'ensemble du département.`, 'red');
   }
 
   // Confirmation formelle d'envoi de renfort au régulateur (CODIS / SAMU 15 / DPS débordé)
@@ -19238,10 +19359,19 @@ class ProtecGame {
       const canEchelon = registeredVols.length >= 3 && !isComplete;
       footer.innerHTML = `
         <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
-        <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200 whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0" title="${mission.type === 'social' ? 'Annuler la maraude' : ((mission.type === 'pompiers' || mission.isGarde) ? 'Annuler la garde' : (mission.type === 'samu' ? 'Refuser l\'urgence' : 'Annuler le DPS'))}">
-          <i data-lucide="x-circle" class="w-3.5 h-3.5 flex-shrink-0 text-rose-600"></i>
-          <span>${mission.type === 'social' ? 'Annuler Maraude' : ((mission.type === 'pompiers' || mission.isGarde) ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}</span>
-        </button>
+        ${(mission.isCrisis || mission.type === 'crise') ? `
+          ${(window.ProtecAdmin && typeof window.ProtecAdmin.isAdmin === 'function' && window.ProtecAdmin.isAdmin()) ? `
+            <button onclick="window.game.adminDeleteCrisis('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white transition shadow-sm whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0" title="Supprimer la crise pour tout le département">
+              <i data-lucide="trash-2" class="w-3.5 h-3.5 flex-shrink-0 text-white"></i>
+              <span>Supprimer Crise (Admin)</span>
+            </button>
+          ` : ''}
+        ` : `
+          <button onclick="window.game.cancelDpsMission('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition border border-rose-200 whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0" title="${mission.type === 'social' ? 'Annuler la maraude' : ((mission.type === 'pompiers' || mission.isGarde) ? 'Annuler la garde' : (mission.type === 'samu' ? 'Refuser l\'urgence' : 'Annuler le DPS'))}">
+            <i data-lucide="x-circle" class="w-3.5 h-3.5 flex-shrink-0 text-rose-600"></i>
+            <span>${mission.type === 'social' ? 'Annuler Maraude' : ((mission.type === 'pompiers' || mission.isGarde) ? 'Annuler Garde' : (mission.type === 'samu' ? 'Refuser Urgence' : 'Annuler DPS'))}</span>
+          </button>
+        `}
         ${!isComplete ? `
           <button onclick="window.game.manualRelanceVolunteers('${mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 border border-amber-200 cursor-pointer" title="Envoyer manuellement un appel par SMS aux secouristes pour combler les postes manquants">
             <i data-lucide="bell" class="w-3.5 h-3.5 flex-shrink-0 text-amber-600"></i>

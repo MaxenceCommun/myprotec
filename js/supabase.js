@@ -2023,57 +2023,118 @@ window.ProtecSupabase = {
 
   // Récupération des crises actives d'un département (pour les joueurs en ligne et ceux qui se reconnectent)
   async fetchActiveDepartmentCrises(departmentCode) {
-    if (!this.client || !departmentCode) return [];
-    try {
-      const nowIso = new Date().toISOString();
-      const { data, error } = await this.client
-        .from('active_missions')
-        .select('*')
-        .eq('player_id', `DEPT_${departmentCode}`)
-        .eq('mission_type', 'crise')
-        .gt('ends_at', nowIso)
-        .neq('status', 'resolved');
+    if (!departmentCode) return [];
+    // 1. Si Supabase est actif
+    if (this.client) {
+      try {
+        const nowIso = new Date().toISOString();
+        const { data, error } = await this.client
+          .from('active_missions')
+          .select('*')
+          .eq('player_id', `DEPT_${departmentCode}`)
+          .eq('mission_type', 'crise')
+          .gt('ends_at', nowIso)
+          .neq('status', 'resolved')
+          .neq('status', 'deleted')
+          .neq('status', 'cancelled')
+          .neq('status', 'terminee');
 
-      if (error || !data) return [];
-
-      return data.map(row => {
-        const details = row.details || {};
-        return {
-          ...details,
-          id: row.id,
-          title: row.title || details.title,
-          status: row.status || details.status,
-          departmentCode: departmentCode,
-          spawnedAt: row.starts_at ? new Date(row.starts_at).getTime() : details.spawnedAt,
-          durationSeconds: row.duration_seconds || details.durationSeconds || 7200,
-          endsAt: row.ends_at
-        };
-      });
-    } catch (e) {
-      console.warn('Erreur récupération crises départementales:', e);
-      return [];
+        if (!error && Array.isArray(data) && data.length > 0) {
+          return data.map(row => {
+            const details = row.details || {};
+            return {
+              ...details,
+              id: row.id,
+              title: row.title || details.title,
+              status: row.status || details.status,
+              departmentCode: departmentCode,
+              spawnedAt: row.starts_at ? new Date(row.starts_at).getTime() : details.spawnedAt,
+              durationSeconds: row.duration_seconds || details.durationSeconds || 7200,
+              endsAt: row.ends_at
+            };
+          });
+        }
+      } catch (e) {
+        console.warn('Erreur récupération crises départementales Supabase:', e);
+      }
     }
+
+    // 2. Fallback serveur local
+    try {
+      const resp = await fetch(`/api/crises/department/${departmentCode}`);
+      if (resp.ok) {
+        const json = await resp.json();
+        if (json && json.crisis && json.crisis.status !== 'deleted' && json.crisis.status !== 'resolved') {
+          return [json.crisis];
+        }
+      }
+    } catch (e) {
+      // Ignorer si serveur local indisponible
+    }
+
+    return [];
   },
 
   // Clôture d'une crise départementale dans la base
   async closeDepartmentCrisis(crisisId, departmentCode) {
-    if (!this.client || !crisisId) return;
+    if (!crisisId) return;
+    const dept = departmentCode || window.game?.currentDepartmentCode || '54';
     try {
-      await this.client
-        .from('active_missions')
-        .update({
-          status: 'resolved',
-          resolved_at: new Date().toISOString()
-        })
-        .eq('id', String(crisisId));
+      if (this.client) {
+        await this.client
+          .from('active_missions')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('id', String(crisisId));
 
-      this.broadcastDepartmentCrisisUpdate({
-        id: String(crisisId),
-        departmentCode: departmentCode,
-        status: 'resolved'
-      });
+        this.broadcastDepartmentCrisisUpdate({
+          id: String(crisisId),
+          departmentCode: dept,
+          status: 'resolved'
+        });
+      }
     } catch (e) {
       console.warn('Erreur clôture crise départementale:', e);
+    }
+  },
+
+  // Suppression administrative d'une crise départementale pour tous les joueurs
+  async deleteDepartmentCrisis(crisisId, departmentCode) {
+    if (!crisisId) return;
+    const dept = departmentCode || window.game?.currentDepartmentCode || '54';
+
+    // 1. Appel serveur local si disponible
+    try {
+      await fetch('/api/crises/department/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ crisisId: String(crisisId), departmentCode: String(dept) })
+      });
+    } catch (err) {
+      // Local server non joignable
+    }
+
+    // 2. Supabase si configuré
+    if (this.client) {
+      try {
+        await this.client
+          .from('active_missions')
+          .update({
+            status: 'deleted',
+            resolved_at: new Date().toISOString()
+          })
+          .eq('id', String(crisisId));
+
+        this.broadcastDepartmentCrisisUpdate({
+          id: String(crisisId),
+          departmentCode: String(dept),
+          status: 'deleted'
+        });
+      } catch (e) {
+        console.warn('Erreur suppression Supabase crise départementale:', e);
+      }
     }
   },
 

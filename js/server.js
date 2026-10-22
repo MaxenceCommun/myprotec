@@ -1609,6 +1609,36 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // 6c. Suppression d'une Crise Départementale (Admin)
+  if (url === '/api/crises/department/delete' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    req.on('end', () => {
+      try {
+        const payload = JSON.parse(body);
+        const deptCode = String(payload.departmentCode || '54');
+        const crisisId = payload.crisisId;
+
+        if (db.data.department_crises && db.data.department_crises[deptCode]) {
+          const currentCr = db.data.department_crises[deptCode];
+          if (!crisisId || currentCr.id === crisisId) {
+            delete db.data.department_crises[deptCode];
+          }
+        }
+        db.save();
+        broadcastSSE('department_crisis_update', {
+          id: crisisId,
+          departmentCode: deptCode,
+          status: 'deleted'
+        });
+        sendJson(res, 200, { success: true, deleted: true, departmentCode: deptCode });
+      } catch (err) {
+        sendJson(res, 400, { error: err.message });
+      }
+    });
+    return;
+  }
+
   // 7. Fournir un Renfort à un Allié
   if (url === '/api/alliances/renfort/fulfill' && req.method === 'POST') {
     let body = '';
