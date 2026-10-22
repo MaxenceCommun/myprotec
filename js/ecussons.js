@@ -4,7 +4,34 @@
  * tableau en liège interactif et bourse d'échanges inter-antennes en ligne.
  */
 
+// Liste des images réelles d'écussons présentes sur le serveur web
+const KNOWN_BADGE_IMAGES = new Set([
+  'images/badges/ecusson_inconnu.png',
+  'images/badges/badge_inconnu.png',
+  'images/ecusson_inconnu.png',
+  'images/badges/badge_54.png',
+  'images/badges/badge_admin.png',
+  'images/badges/badge_def_est.png',
+  'images/badges/badge_fondateur.png',
+  'images/badges/badge_meurthe_et_moselle_54.png',
+  'images/badge_admin.png',
+  'images/badge_def_est.png',
+  'images/badge_def_nord.png',
+  'images/badge_fondateur.png',
+  'images/badge_fondateur_reflet.png',
+  'images/ecusson_chat_noir.png',
+  'images/ecusson_chat_blanc.png'
+]);
+
+function isValidBadgeImage(url) {
+  if (!url || typeof url !== 'string') return false;
+  const clean = url.trim().replace(/^\.?\//, '');
+  if (clean.includes('ecusson_inconnu') || clean.includes('badge_inconnu')) return true;
+  return KNOWN_BADGE_IMAGES.has(clean) || KNOWN_BADGE_IMAGES.has('images/' + clean);
+}
+
 window.ProtecEcussons = {
+  isValidBadgeImage: isValidBadgeImage,
   catalog: [],
   playerEcussons: [], // [{ ecusson_id, quantite, ecusson: {...} }]
   activeOffers: [],
@@ -160,7 +187,7 @@ window.ProtecEcussons = {
               nom = 'Écusson Chat Blanc';
               img = 'images/ecusson_chat_blanc.png';
             }
-            if (!this.isValidBadgeImage(img)) {
+            if (!isValidBadgeImage(img)) {
               img = 'images/badges/ecusson_inconnu.png';
             }
             return {
@@ -392,7 +419,7 @@ window.ProtecEcussons = {
     }
 
     // Si le fichier image n'est pas valide ou n'existe pas en vrai -> ecusson_inconnu.png
-    if (!this.isValidBadgeImage(imgSrc)) {
+    if (!isValidBadgeImage(imgSrc)) {
       imgSrc = unknownImg;
     }
 
