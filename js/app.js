@@ -23259,8 +23259,11 @@ class ProtecGame {
           } else if (currentModuleKey === 'subventions') {
             isActive = item.key === 'social';
           }
+          const clickFn = item.key === 'planning' 
+            ? "window.game.setPlanningTab('calendar')" 
+            : (item.key === 'devis' ? "window.game.setPlanningTab('devis')" : `window.game.openModule('${item.key}')`);
           return `
-            <button onclick="window.game.openModule('${item.key}')" 
+            <button onclick="${clickFn}" 
               class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 whitespace-nowrap cursor-pointer ${isActive 
                 ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' 
                 : 'bg-white dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-slate-700'}">
@@ -23297,7 +23300,7 @@ class ProtecGame {
           <!-- Barre de bascule DPS : Planning vs Devis Ponctuels vs Contrats Annuels -->
           <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
             <div class="flex items-center gap-2">
-              <button onclick="window.game.openModule('planning')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 cursor-pointer">
+              <button onclick="window.game.setPlanningTab('calendar')" class="px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-1.5 bg-slate-100 hover:bg-pc-blue hover:text-white text-slate-700 border border-slate-200 cursor-pointer shadow-xs">
                 <i data-lucide="calendar" class="w-4 h-4 text-pc-blue"></i>
                 Vue Calendrier DPS
               </button>
@@ -24090,8 +24093,16 @@ class ProtecGame {
     } else if (moduleKey === 'devis') {
       this.activePlanningTab = 'devis';
       moduleKey = 'planning';
+    } else if (moduleKey === 'planning') {
+      if (!isBackNavigation) {
+        this.activePlanningTab = 'calendar';
+      }
     } else if (moduleKey && aliases[moduleKey]) {
-      moduleKey = aliases[moduleKey];
+      const resolved = aliases[moduleKey];
+      if (resolved === 'planning' && !isBackNavigation) {
+        this.activePlanningTab = 'calendar';
+      }
+      moduleKey = resolved;
     }
 
     // Affichage des sous-onglets contextuels de catégorie
@@ -25189,12 +25200,9 @@ class ProtecGame {
                                         </span>
                                         ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
                                         <div class="flex items-center gap-1.5">
-                                        <div class="flex items-center gap-1.5">
-                                        <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
-                                        ${this.renderPinButtonHTML(d.id)}
-                                      </div>
-                                        ${this.renderPinButtonHTML(d.id)}
-                                      </div>
+                                          <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
+                                          ${this.renderPinButtonHTML(d.id)}
+                                        </div>
                                       </div>
                                       <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
                                       <p class="text-[11px] text-slate-500 dark:text-slate-400">
