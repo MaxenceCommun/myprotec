@@ -388,7 +388,7 @@ window.ProtecEcussons = {
 
     // 1. Si l'écusson n'est pas encore découvert par le joueur
     if (isOwned === false) {
-      const h = Math.round(size * 1.28);
+      const h = Math.round(size * (400 / 300));
       return `
         <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;" title="Écusson non découvert">
           <img src="${unknownImg}" alt="Écusson non découvert" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" />
@@ -433,7 +433,7 @@ window.ProtecEcussons = {
     }
 
     const isFondateur = imgSrc.includes('membre_fondateur') || (badge && (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))));
-    const h = isFondateur ? Math.round(size * (400 / 300)) : Math.round(size * 1.28);
+    const h = Math.round(size * (400 / 300));
 
     if (isFondateur) {
       return `
