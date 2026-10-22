@@ -1360,12 +1360,21 @@
     static _mapLegacyFurnitureType(type) {
       const mapping = {
         'etagere_lots': 'etagere_rack_lourd',
+        'rack_palettes_lourd': 'etagere_rack_lourd',
         'armoire_pharmacie': 'armoire_pharmacie_dae',
+        'armoire_forte_securisee': 'armoire_pharmacie_dae',
         'casiers_vestiaire': 'casiers_tenues_f1',
+        'casiers_tenues_xl': 'casiers_tenues_f1',
         'lit_garde': 'lit_garde_camp',
+        'lits_superposes': 'lit_garde_camp',
         'canape_detente': 'canape_foyer',
+        'kitchenette_foyer': 'machine_cafe',
+        'table_repas_equipe': 'table_formation',
         'machine_cafe': 'machine_cafe',
         'table_formation': 'table_formation',
+        'ecran_tactique_interactif': 'table_formation',
+        'mannequin_pediatrique': 'table_formation',
+        'dsa_demonstration': 'armoire_pharmacie_dae',
         'bureau': 'bureau_direction_pc'
       };
       return mapping[type] || 'etagere_rack_lourd';

@@ -120,7 +120,16 @@ window.ProtecOnboarding = {
     { id: 'tv_foyer', type: 'tv_foyer', name: 'Écran TV & Débriefing', cost: 350, icon: '📺', defaultRoom: 'room_1', desc: 'Télévision murale pour les veilles météo, infos et séries en astreinte', w: 1.4, d: 0.25, color: '#0f172a', bonus: '+10 Moral & +8% repos astreinte' },
     { id: 'console_jeux', type: 'console_jeux', name: 'Console de Jeux Vidéo', cost: 390, icon: '🎮', defaultRoom: 'room_1', desc: 'Tournois de jeux vidéo entre secouristes avant le départ en garde', w: 0.8, d: 0.5, color: '#4338ca', bonus: '+12 Moral & Réduit le stress' },
     { id: 'ping_pong', type: 'ping_pong', name: 'Table de Tennis de Table', cost: 290, icon: '🏓', defaultRoom: 'room_1', desc: 'Parties dynamiques entre les interventions pour garder la forme', w: 2.7, d: 1.5, color: '#0284c7', bonus: '+8% Énergie & +10 Moral' },
-    { id: 'distributeur_snacks', type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cost: 520, icon: '🥤', defaultRoom: 'room_1', desc: 'En-cas et ravitaillement rapide 24h/24 pour les équipages', w: 0.9, d: 0.8, color: '#dc2626', bonus: '+15% Vitesse de régénération' }
+    { id: 'distributeur_snacks', type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cost: 520, icon: '🥤', defaultRoom: 'room_1', desc: 'En-cas et ravitaillement rapide 24h/24 pour les équipages', w: 0.9, d: 0.8, color: '#dc2626', bonus: '+15% Vitesse de régénération' },
+    { id: 'armoire_forte_securisee', type: 'armoire_forte_securisee', name: 'Armoire Forte Sécurisée DAE/Sensible', cost: 420, icon: '🔐', defaultRoom: 'room_3', desc: 'Armoire blindée avec serrure de sécurité pour DAE, radios et pharmacie', w: 1.0, d: 0.5, color: '#334155', bonus: 'Matériel sensible & sécurisé', maxWeightKg: 120, pole: 'pole_secours' },
+    { id: 'rack_palettes_lourd', type: 'rack_palettes_lourd', name: 'Rack à Palettes Lourd (650kg)', cost: 380, icon: '🏗️', defaultRoom: 'room_3', desc: 'Rack industriel grande charge pour lits picots, groupes électrogènes et tentes', w: 2.6, d: 1.0, color: '#1e293b', bonus: '+650kg stockage lourd', maxWeightKg: 650, pole: 'pole_crise' },
+    { id: 'casiers_tenues_xl', type: 'casiers_tenues_xl', name: 'Bloc Casiers Vestiaires Tenues XL (250kg)', cost: 260, icon: '🦺', defaultRoom: 'room_1', desc: 'Vestiaire grande capacité pour tenues d’intervention et casques', w: 1.2, d: 0.6, color: '#0f172a', bonus: '+250kg tenues & +3 moral', maxWeightKg: 250, pole: 'pole_vestiaire' },
+    { id: 'lits_superposes', type: 'lits_superposes', name: 'Lits Superposés d’Astreinte (2 places)', cost: 340, icon: '🛏️', defaultRoom: 'room_1', desc: 'Optimise l’espace dortoir pour les permanences SAMU et gardes 24h', w: 1.0, d: 2.0, color: '#6d28d9', bonus: '+2 lits de garde & +18% repos' },
+    { id: 'kitchenette_foyer', type: 'kitchenette_foyer', name: 'Kitchenette Foyer Équipée', cost: 580, icon: '🍳', defaultRoom: 'room_1', desc: 'Évier inox, micro-ondes et plaques pour les repas d’astreinte', w: 1.8, d: 0.7, color: '#0f766e', bonus: '+15% régénération & +6 Moral' },
+    { id: 'table_repas_equipe', type: 'table_repas_equipe', name: 'Grande Table Repas & Cohésion (8p)', cost: 240, icon: '🍽️', defaultRoom: 'room_1', desc: 'Table conviviale pour les repas d’antenne et briefings collectifs', w: 2.4, d: 1.1, color: '#b45309', bonus: '+8 Moral & Cohésion' },
+    { id: 'ecran_tactique_interactif', type: 'ecran_tactique_interactif', name: 'Écran Tactile Interactif 75"', cost: 750, icon: '🖥️', defaultRoom: 'room_2', desc: 'Écran tactile 75 pouces pour cas concrets et cartographie', w: 2.0, d: 0.25, color: '#0284c7', bonus: '+20% qualité formation & débriefing' },
+    { id: 'mannequin_pediatrique', type: 'mannequin_pediatrique', name: 'Mannequin Pédiatrique (Nourrisson)', cost: 290, icon: '👶', defaultRoom: 'room_2', desc: 'Entraînement RCP nourrisson et désobstruction pédiatrique', w: 0.8, d: 0.6, color: '#ea580c', bonus: '+15% apprentissage pédiatrique' },
+    { id: 'dsa_demonstration', type: 'dsa_demonstration', name: 'DAE / DSA de Démonstration Vocale', cost: 220, icon: '⚡', defaultRoom: 'room_2', desc: 'DAE d’entraînement réaliste avec invites vocales et scénarios', w: 0.45, d: 0.45, color: '#10b981', bonus: '+10% pratique gestes d’urgence' }
   ],
 
   // 4. Affiliation FNPC
@@ -1734,10 +1743,10 @@ window.ProtecOnboarding = {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 ${activeRoomFurniture.map(f => {
                   const itype = f.type || f.typeId;
-                  const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
+                  const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype);
                   const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
-                  const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde'].includes(itype);
-                  const maxW = f.maxWeightKg || (itype === 'etagere_lots' ? 300 : itype === 'armoire_pharmacie' ? 80 : itype === 'casiers_vestiaire' ? 150 : 0);
+                  const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype);
+                  const maxW = f.maxWeightKg || (itype === 'rack_palettes_lourd' ? 650 : itype === 'etagere_lots' ? 300 : itype === 'casiers_tenues_xl' ? 250 : itype === 'casiers_vestiaire' ? 150 : itype === 'armoire_forte_securisee' ? 120 : itype === 'armoire_pharmacie' ? 80 : 0);
 
                   return `
                   <div class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex flex-col gap-1.5 text-xs">
@@ -1855,19 +1864,33 @@ window.ProtecOnboarding = {
     if (!f) return;
 
     const itype = f.type || f.typeId;
-    const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
+    const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype);
     const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
-    const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde'].includes(itype);
+    const isComfort = ['canape_detente', 'machine_cafe', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype);
 
     if (isStorage) {
-      const maxW = f.maxWeightKg || (itype === 'etagere_lots' ? 300 : itype === 'armoire_pharmacie' ? 80 : 150);
+      const maxW = f.maxWeightKg || (itype === 'rack_palettes_lourd' ? 650 : itype === 'etagere_lots' ? 300 : itype === 'casiers_tenues_xl' ? 250 : itype === 'casiers_vestiaire' ? 150 : itype === 'armoire_forte_securisee' ? 120 : 80);
       let allowedItems = [];
-      if (itype === 'etagere_lots') {
+      if (itype === 'rack_palettes_lourd') {
+        allowedItems = [
+          '• Lots Tentes & Hébergement d\'urgence CHU (120 kg)',
+          '• Groupe électrogène de crise 6kVA (85 kg)',
+          '• Barrières & Balisage lourd DPS (90 kg)',
+          '• Motopompe d\'épuisement inondation (55 kg)'
+        ];
+      } else if (itype === 'etagere_lots') {
         allowedItems = [
           '• Lot A - Tente & Éclairage (45 kg)',
           '• Lot B - Matériel PS / Brancards (15 kg)',
           '• Kit CHU - Lits picots d\'hébergement (60 kg)',
           '• Lot Tronçonnage (30 kg) & Pompage (40 kg)'
+        ];
+      } else if (itype === 'armoire_forte_securisee') {
+        allowedItems = [
+          '• Défibrillateurs DAE opérationnels (3 kg / unité)',
+          '• Postes Radios ANTARES & VHF d\'intervention',
+          '• Trousse d\'urgence & Matériel sensible sous clé',
+          '• Clés des véhicules & Cartes carburant'
         ];
       } else if (itype === 'armoire_pharmacie') {
         allowedItems = [
@@ -2024,7 +2047,7 @@ window.ProtecOnboarding = {
       w: item.w || 1.2,
       d: item.d || 0.8,
       color: item.color || '#475569',
-      maxWeightKg: item.maxWeightKg || (['etagere_lots'].includes(item.id) ? 300 : ['armoire_pharmacie'].includes(item.id) ? 80 : ['casiers_vestiaire'].includes(item.id) ? 150 : 0),
+      maxWeightKg: item.maxWeightKg || (item.id === 'rack_palettes_lourd' ? 650 : item.id === 'etagere_lots' ? 300 : item.id === 'casiers_tenues_xl' ? 250 : item.id === 'casiers_vestiaire' ? 150 : item.id === 'armoire_forte_securisee' ? 120 : item.id === 'armoire_pharmacie' ? 80 : 0),
       storedInventory: {}
     });
 
@@ -2967,7 +2990,7 @@ window.ProtecOnboarding = {
           let rx = f.x || (f.room === 'room_2' ? 11.5 : (f.room === 'room_3' ? 9.0 : 7.0));
           let ry = f.y || (f.room === 'room_3' ? 7.0 : 2.5);
           const itemType = f.type || f.typeId;
-          const maxWeight = f.maxWeightKg || (catItem ? catItem.maxWeightKg : 0) || (itemType === 'etagere_lots' ? 300 : itemType === 'armoire_pharmacie' ? 80 : itemType === 'casiers_vestiaire' ? 150 : 0);
+          const maxWeight = f.maxWeightKg || (catItem ? catItem.maxWeightKg : 0) || (itemType === 'rack_palettes_lourd' ? 650 : itemType === 'etagere_lots' ? 300 : itemType === 'casiers_tenues_xl' ? 250 : itemType === 'casiers_vestiaire' ? 150 : itemType === 'armoire_forte_securisee' ? 120 : itemType === 'armoire_pharmacie' ? 80 : 0);
           return {
             id: f.id,
             type: itemType,

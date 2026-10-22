@@ -2035,6 +2035,40 @@ window.ProtecLocaux = {
               storageCapacity += 25; // +25 capacité vestiaire / tenues
               moralBonus += 2;
               break;
+            case 'rack_palettes_lourd':
+              storageCapacity += 80; // +80 capacité rack lourd
+              break;
+            case 'casiers_tenues_xl':
+              storageCapacity += 40; // +40 capacité vestiaires XL
+              moralBonus += 3;
+              break;
+            case 'armoire_forte_securisee':
+              storageCapacity += 25; // +25 capacité armoire forte
+              trainingQuality += 5;
+              break;
+            case 'lits_superposes':
+              nightBeds += 2; // +2 lits superposés
+              energyRegen += 18;
+              moralBonus += 4;
+              break;
+            case 'kitchenette_foyer':
+              energyRegen += 15;
+              moralBonus += 6;
+              break;
+            case 'table_repas_equipe':
+              moralBonus += 8;
+              energyRegen += 5;
+              break;
+            case 'ecran_tactique_interactif':
+              trainingQuality += 20;
+              moralBonus += 3;
+              break;
+            case 'mannequin_pediatrique':
+              trainingQuality += 15;
+              break;
+            case 'dsa_demonstration':
+              trainingQuality += 10;
+              break;
             case 'table_formation':
               studentCapacity += 4; // +4 élèves par table
               break;
@@ -3295,7 +3329,16 @@ window.ProtecLocaux = {
     { type: 'tv_foyer', name: 'Téléviseur Mural / Écran Foyer', cat: 'detente', w: 1.4, d: 0.15, color: '#0f172a', cost: 350, icon: '📺', bonus: '+6% Détente et anti-stress en veille' },
     { type: 'console_jeux', name: 'Console de Jeux & Coin Gaming', cat: 'detente', w: 1.0, d: 0.5, color: '#6366f1', cost: 480, icon: '🎮', bonus: '+10% Moral et attractivité jeunes recrues' },
     { type: 'ping_pong', name: 'Table de Ping-Pong Pliante', cat: 'detente', w: 2.7, d: 1.5, color: '#0284c7', cost: 290, icon: '🏓', bonus: '+5% Énergie et convivialité d’équipe' },
-    { type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cat: 'detente', w: 0.9, d: 0.8, color: '#dc2626', cost: 380, icon: '🥤', bonus: '+5% Énergie et +4 Moral d’antenne' }
+    { type: 'distributeur_snacks', name: 'Distributeur Boissons & Snacks', cat: 'detente', w: 0.9, d: 0.8, color: '#dc2626', cost: 380, icon: '🥤', bonus: '+5% Énergie et +4 Moral d’antenne' },
+    { type: 'armoire_forte_securisee', name: 'Armoire Forte Sécurisée DAE/Sensible', cat: 'secours', w: 1.0, d: 0.5, color: '#334155', cost: 420, icon: '🔐', maxWeightKg: 120, pole: 'pole_secours', bonus: 'Armoire blindée avec serrure de sécurité pour DAE, radios et pharmacie' },
+    { type: 'rack_palettes_lourd', name: 'Rack à Palettes Lourd (650kg)', cat: 'stockage', w: 2.6, d: 1.0, color: '#1e293b', cost: 380, icon: '🏗️', maxWeightKg: 650, pole: 'pole_crise', bonus: 'Rack industriel grande charge pour lits picots, groupes électrogènes et tentes' },
+    { type: 'casiers_tenues_xl', name: 'Bloc Casiers Vestiaires Tenues XL (250kg)', cat: 'stockage', w: 1.2, d: 0.6, color: '#0f172a', cost: 260, icon: '🦺', maxWeightKg: 250, pole: 'pole_vestiaire', bonus: 'Vestiaire grande capacité pour tenues d’intervention et casques' },
+    { type: 'lits_superposes', name: 'Lits Superposés d’Astreinte (2 places)', cat: 'detente', w: 1.0, d: 2.0, color: '#6d28d9', cost: 340, icon: '🛏️', bonus: '+2 couchages d’astreinte & +18% repos de garde' },
+    { type: 'kitchenette_foyer', name: 'Kitchenette Foyer Équipée', cat: 'detente', w: 1.8, d: 0.7, color: '#0f766e', cost: 580, icon: '🍳', bonus: '+15% régénération équipe & +6 Moral' },
+    { type: 'table_repas_equipe', name: 'Grande Table Repas & Cohésion (8p)', cat: 'detente', w: 2.4, d: 1.1, color: '#b45309', cost: 240, icon: '🍽️', bonus: '+8 Moral & Cohésion d’équipe' },
+    { type: 'ecran_tactique_interactif', name: 'Écran Tactile Interactif 75"', cat: 'formation', w: 2.0, d: 0.25, color: '#0284c7', cost: 750, icon: '🖥️', bonus: '+20% qualité formation & débriefing' },
+    { type: 'mannequin_pediatrique', name: 'Mannequin Pédiatrique (Nourrisson)', cat: 'formation', w: 0.8, d: 0.6, color: '#ea580c', cost: 290, icon: '👶', bonus: '+15% apprentissage gestes pédiatriques' },
+    { type: 'dsa_demonstration', name: 'DAE / DSA de Démonstration Vocale', cat: 'formation', w: 0.45, d: 0.45, color: '#10b981', cost: 220, icon: '⚡', bonus: '+10% pratique PSC & gestes qui sauvent' }
   ],
 
   // =========================================================================
@@ -3486,30 +3529,54 @@ window.ProtecLocaux = {
       return `
         <div class="space-y-2.5">
           <div class="flex items-center justify-between text-xs pb-1 border-b border-slate-100">
-            <span class="text-slate-600">Ajoutez des ouvertures sur les murs :</span>
+            <span class="text-slate-600">Ajoutez des ouvertures, accès véhicules et cloisons sur les murs :</span>
             <span class="text-xs font-bold text-slate-700">Trésorerie disponible : <strong class="text-emerald-600 font-black">${money.toLocaleString('fr-FR')} €</strong></span>
           </div>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
             <button type="button" onclick="window.ProtecLocaux.addDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
                 <span class="text-2xl">🚪</span>
                 <div>
-                  <strong class="block text-xs font-black text-slate-900">+ Porte d'Entrée (93cm)</strong>
-                  <span class="text-[10.5px] text-slate-500">Accès parking / extérieur</span>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte Battante (83/93cm)</strong>
+                  <span class="text-[10.5px] text-slate-500">Accès intérieur / extérieur standard</span>
                 </div>
               </div>
               <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
             </button>
-            <button type="button" onclick="window.ProtecLocaux.addDoorItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+
+            <button type="button" onclick="window.ProtecLocaux.addDoubleDoorItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
-                <span class="text-2xl">🚪</span>
+                <span class="text-2xl">🚪🚪</span>
                 <div>
-                  <strong class="block text-xs font-black text-slate-900">+ Porte Intérieure (83cm)</strong>
-                  <span class="text-[10.5px] text-slate-500">Cloison de communication</span>
+                  <strong class="block text-xs font-black text-slate-900">+ Porte Double Battante (1.40m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Passage brancard & logistique</span>
                 </div>
               </div>
-              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">120 €</span>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">220 €</span>
             </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addGarageShutterItem('W')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🏭</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Rideau Métallique (3.20m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Accès garage motorisé VPSP / LOG</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">650 €</span>
+            </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addGlassPartitionItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">🪟</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Cloison Vitrée Acoustique (2.00m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Séparation vitrée PC & réunion</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">290 €</span>
+            </button>
+
             <button type="button" onclick="window.ProtecLocaux.addWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
               <div class="flex items-center gap-3">
                 <span class="text-2xl">🪟</span>
@@ -3519,6 +3586,17 @@ window.ProtecLocaux = {
                 </div>
               </div>
               <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">180 €</span>
+            </button>
+
+            <button type="button" onclick="window.ProtecLocaux.addBayWindowItem('N')" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-left transition flex items-center justify-between group active:scale-95">
+              <div class="flex items-center gap-3">
+                <span class="text-2xl">☀️</span>
+                <div>
+                  <strong class="block text-xs font-black text-slate-900">+ Baie Vitrée Panoramique (2.40m)</strong>
+                  <span class="text-[10.5px] text-slate-500">Luminosité accueil / foyer</span>
+                </div>
+              </div>
+              <span class="text-xs font-black text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded">320 €</span>
             </button>
           </div>
         </div>
@@ -3837,6 +3915,128 @@ window.ProtecLocaux = {
     if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
   },
 
+  addDoubleDoorItem(wall = 'W') {
+    const cost = 220;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une porte double battante. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Porte Double Installée (-220 €)', 'Porte double 1.40m installée pour brancards.', 'blue');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_double_${Date.now()}`,
+      type: 'double_door',
+      x: wall === 'W' ? 6.2 : (wall === 'E' ? 15.6 : 10.8),
+      y: 3.5,
+      len: 1.40,
+      wall: wall,
+      label: 'Porte Double Battante (1.40m)',
+      isMain: false
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addGarageShutterItem(wall = 'W') {
+    const cost = 650;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser un rideau métallique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Rideau Métallique Installé (-650 €)', 'Accès garage motorisé 3.20m posé pour les véhicules d’intervention.', 'blue');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_shutter_${Date.now()}`,
+      type: 'garage_shutter',
+      x: wall === 'W' ? 6.2 : (wall === 'E' ? 15.6 : 8.0),
+      y: wall === 'N' || wall === 'S' ? (wall === 'N' ? 1.5 : 9.5) : 5.0,
+      len: 3.20,
+      wall: wall,
+      label: 'Rideau Métallique Garage (3.20m)',
+      isMain: true
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addGlassPartitionItem(wall = 'N') {
+    const cost = 290;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une cloison vitrée acoustique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Cloison Vitrée Posée (-290 €)', 'Cloison vitrée acoustique 2.00m installée.', 'cyan');
+    }
+
+    const model = this.getArchitectModel();
+    const newDoor = {
+      id: `d_glass_${Date.now()}`,
+      type: 'glass_partition',
+      x: 8.5,
+      y: 5.5,
+      len: 2.00,
+      wall: wall,
+      label: 'Cloison Vitrée Acoustique (2.00m)',
+      isMain: false
+    };
+    model.doors.push(newDoor);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
+  addBayWindowItem(wall = 'N') {
+    const cost = 320;
+    const game = window.game;
+    if (game && game.resources) {
+      if (game.resources.money < cost) {
+        game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour poser une baie vitrée panoramique. Solde : ${game.resources.money.toLocaleString('fr-FR')} €.`, 'orange');
+        return;
+      }
+      game.resources.money -= cost;
+      game.updateStatsUI();
+      game.saveGame();
+      game.showToast('Baie Vitrée Installée (-320 €)', 'Grande baie vitrée 2.40m installée.', 'cyan');
+    }
+
+    const model = this.getArchitectModel();
+    const newWindow = {
+      id: `w_${Date.now()}`,
+      x: wall === 'N' ? 9.0 : 15.6,
+      y: wall === 'N' ? 1.5 : 4.0,
+      len: 2.40,
+      wall: wall,
+      label: 'Grande Baie Vitrée (2.40m)'
+    };
+    model.windows.push(newWindow);
+    this.renderArchitectScene();
+    const subpanel = document.getElementById('editor-subpanel');
+    if (subpanel) subpanel.innerHTML = this.renderEditorToolsHTML();
+  },
+
   addCustomRoom() {
     const cost = 2500;
     const game = window.game;
@@ -3924,6 +4124,7 @@ window.ProtecLocaux = {
       color: catalogItem.color,
       label: catalogItem.name,
       icon: catalogItem.icon,
+      pole: catalogItem.pole || 'pole_libre',
       rotation: 0,
       storedInventory: {},
       maxWeightKg: catalogItem.maxWeightKg || 0
@@ -3982,9 +4183,10 @@ window.ProtecLocaux = {
 
     if (item) {
       const itype = item.type;
-      const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype);
-      const isComfort = ['canape_detente', 'lit_garde'].includes(itype);
+      const isStorage = ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype);
+      const isComfort = ['canape_detente', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype);
       const isFun = ['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype);
+      const isFunctional = ['mannequin_rcp', 'mannequin_pediatrique', 'dsa_demonstration', 'ecran_tactique_interactif', 'tableau_blanc', 'table_formation', 'bureau', 'dae_mural'].includes(itype);
 
       let actionBtnHTML = '';
       if (isStorage) {
@@ -5032,9 +5234,12 @@ window.ProtecLocaux = {
   },
 
   getStorageMaxWeight(type) {
+    if (type === 'rack_palettes_lourd') return 650;
     if (type === 'etagere_lots') return 300;
-    if (type === 'armoire_pharmacie') return 80;
+    if (type === 'casiers_tenues_xl') return 250;
     if (type === 'casiers_vestiaire') return 150;
+    if (type === 'armoire_forte_securisee') return 120;
+    if (type === 'armoire_pharmacie') return 80;
     return 100;
   },
 
@@ -5044,9 +5249,9 @@ window.ProtecLocaux = {
     if (!item) return;
 
     const itype = item.type;
-    if (['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(itype)) {
+    if (['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(itype)) {
       this.openStorageInventory(furnitureId);
-    } else if (['canape_detente', 'lit_garde'].includes(itype)) {
+    } else if (['canape_detente', 'lit_garde', 'lits_superposes', 'kitchenette_foyer', 'table_repas_equipe'].includes(itype)) {
       this.openComfortModal(furnitureId);
     } else if (['babyfoot', 'tv_foyer', 'console_jeux', 'ping_pong', 'distributeur_snacks'].includes(itype)) {
       this.openEntertainmentModal(furnitureId);
@@ -5437,7 +5642,7 @@ window.ProtecLocaux = {
     if (!station) return { stored: false, remaining: qty };
 
     const model = this.getArchitectModel(station.id);
-    const furnitureList = (model.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire'].includes(f.type));
+    const furnitureList = (model.furniture || []).filter(f => ['etagere_lots', 'armoire_pharmacie', 'casiers_vestiaire', 'armoire_forte_securisee', 'rack_palettes_lourd', 'casiers_tenues_xl'].includes(f.type));
     if (furnitureList.length === 0) {
       station.stock = station.stock || {};
       station.stock[itemId] = (station.stock[itemId] || 0) + qty;
@@ -5535,7 +5740,9 @@ window.ProtecLocaux = {
     const oldModal = document.getElementById('furniture-comfort-modal');
     if (oldModal) oldModal.remove();
 
-    const isBed = item.type === 'lit_garde';
+    const isBed = item.type === 'lit_garde' || item.type === 'lits_superposes';
+    const isKitchen = item.type === 'kitchenette_foyer';
+    const isTable = item.type === 'table_repas_equipe';
     const modal = document.createElement('div');
     modal.id = 'furniture-comfort-modal';
     modal.className = 'fixed inset-0 z-[200] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 modal-fade-in';
@@ -5783,6 +5990,9 @@ window.ProtecLocaux = {
         <div class="p-3.5 rounded-2xl bg-slate-950/70 border border-slate-800 text-xs text-slate-300 leading-relaxed">
           Cet équipement améliore directement les capacités de votre caserne :
           ${item.type === 'mannequin_rcp' ? '<br>• <strong>+15% Qualité des formations</strong> PSC1 & SST<br>• Permet l’initiation aux gestes qui sauvent' : ''}
+          ${item.type === 'mannequin_pediatrique' ? '<br>• <strong>+15% Apprentissage pédiatrique</strong><br>• Spécialisé massage cardiaque nourrisson & désobstruction pédiatrique' : ''}
+          ${item.type === 'dsa_demonstration' ? '<br>• <strong>+10% Pratique des gestes d’urgence</strong><br>• DAE d’entraînement avec invite vocale réaliste et scénarios modulables' : ''}
+          ${item.type === 'ecran_tactique_interactif' ? '<br>• <strong>+20% Qualité formation & débriefing</strong><br>• Grand écran numérique 75 pouces pour cas concrets et cartographie' : ''}
           ${item.type === 'dae_mural' ? '<br>• <strong>+5% Sécurité d’urgence</strong> du centre de secours<br>• Conforme aux normes ERP' : ''}
           ${item.type === 'tableau_blanc' ? '<br>• <strong>+10% Clarté pédagogique</strong> pour les cours' : ''}
           ${item.type === 'bureau' ? '<br>• Poste de commandement administratif et planification opérationnelle' : ''}
@@ -6480,34 +6690,118 @@ window.ProtecLocaux = {
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
     });
 
-    // 6. Portes de caserne accueillantes (seuil et battant ouvert en bois, sans arcs de cercle pointillés)
+    // 6. Portes, rideaux métalliques et cloisons vitrées
     model.doors.forEach(d => {
       const dx = ox + d.x * scale;
       const dy = oy + d.y * scale;
       const dlen = d.len * scale;
 
-      // Seuil d'ouverture franc dans le mur
-      ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
-      ctx.lineWidth = Math.max(7, 0.16 * scale);
-      ctx.lineCap = 'butt';
-      ctx.beginPath(); ctx.moveTo(dx, dy);
-      if (d.wall === 'W') ctx.lineTo(dx + dlen, dy);
-      else if (d.wall === 'E') ctx.lineTo(dx - dlen, dy);
-      else if (d.wall === 'S') ctx.lineTo(dx, dy - dlen);
-      else ctx.lineTo(dx, dy + dlen);
-      ctx.stroke();
+      if (d.type === 'garage_shutter') {
+        // Rideau métallique de garage VPSP / LOG
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = Math.max(9, 0.22 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W' || d.wall === 'E') ctx.lineTo(dx, dy + dlen);
+        else ctx.lineTo(dx + dlen, dy);
+        ctx.stroke();
 
-      // Battant de porte en bois avec sa poignée
-      ctx.strokeStyle = '#b45309';
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(dx, dy);
-      // Angle naturel d'ouverture de porte à 45 degrés
-      if (d.wall === 'W') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
-      else if (d.wall === 'E') ctx.lineTo(dx - dlen * 0.7, dy - dlen * 0.7);
-      else if (d.wall === 'S') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
-      else ctx.lineTo(dx + dlen * 0.7, dy + dlen * 0.7);
-      ctx.stroke();
+        // Lames métalliques rainurées
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1.5;
+        const numSlats = Math.max(5, Math.floor(dlen / 5));
+        for (let s = 1; s < numSlats; s++) {
+          const frac = s / numSlats;
+          ctx.beginPath();
+          if (d.wall === 'W' || d.wall === 'E') {
+            ctx.moveTo(dx - 3, dy + dlen * frac);
+            ctx.lineTo(dx + 3, dy + dlen * frac);
+          } else {
+            ctx.moveTo(dx + dlen * frac, dy - 3);
+            ctx.lineTo(dx + dlen * frac, dy + 3);
+          }
+          ctx.stroke();
+        }
+        // Repères de sécurité chevron jaune / noir
+        ctx.fillStyle = '#eab308';
+        ctx.fillRect(dx - 3, dy - 3, 6, 6);
+        if (d.wall === 'W' || d.wall === 'E') ctx.fillRect(dx - 3, dy + dlen - 3, 6, 6);
+        else ctx.fillRect(dx + dlen - 3, dy - 3, 6, 6);
+      } else if (d.type === 'glass_partition') {
+        // Cloison vitrée acoustique atelier / PC
+        ctx.strokeStyle = isNightMode ? '#0891b2' : '#06b6d4';
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W' || d.wall === 'E') ctx.lineTo(dx, dy + dlen);
+        else ctx.lineTo(dx + dlen, dy);
+        ctx.stroke();
+
+        // Reflet verre cyan
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (d.wall === 'W' || d.wall === 'E') {
+          ctx.moveTo(dx - 1, dy + 4); ctx.lineTo(dx - 1, dy + dlen - 4);
+        } else {
+          ctx.moveTo(dx + 4, dy - 1); ctx.lineTo(dx + dlen - 4, dy - 1);
+        }
+        ctx.stroke();
+      } else if (d.type === 'double_door') {
+        // Porte double battante (brancard / logistique)
+        ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
+        ctx.lineWidth = Math.max(7, 0.16 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        let endX = dx, endY = dy;
+        if (d.wall === 'W') { endX = dx + dlen; ctx.lineTo(endX, dy); }
+        else if (d.wall === 'E') { endX = dx - dlen; ctx.lineTo(endX, dy); }
+        else if (d.wall === 'S') { endY = dy - dlen; ctx.lineTo(dx, endY); }
+        else { endY = dy + dlen; ctx.lineTo(dx, endY); }
+        ctx.stroke();
+
+        const half = dlen / 2;
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+
+        // Battant 1
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(dx - half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx - half * 0.7, dy - half * 0.7);
+        else ctx.lineTo(dx + half * 0.7, dy + half * 0.7);
+        ctx.stroke();
+
+        // Battant 2
+        ctx.beginPath(); ctx.moveTo(endX, endY);
+        if (d.wall === 'W') ctx.lineTo(endX - half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(endX + half * 0.7, dy - half * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx + half * 0.7, endY + half * 0.7);
+        else ctx.lineTo(dx - half * 0.7, endY - half * 0.7);
+        ctx.stroke();
+      } else {
+        // Porte battante standard
+        ctx.strokeStyle = isNightMode ? '#1e293b' : '#e2e8f0';
+        ctx.lineWidth = Math.max(7, 0.16 * scale);
+        ctx.lineCap = 'butt';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + dlen, dy);
+        else if (d.wall === 'E') ctx.lineTo(dx - dlen, dy);
+        else if (d.wall === 'S') ctx.lineTo(dx, dy - dlen);
+        else ctx.lineTo(dx, dy + dlen);
+        ctx.stroke();
+
+        ctx.strokeStyle = '#b45309';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.beginPath(); ctx.moveTo(dx, dy);
+        if (d.wall === 'W') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+        else if (d.wall === 'E') ctx.lineTo(dx - dlen * 0.7, dy - dlen * 0.7);
+        else if (d.wall === 'S') ctx.lineTo(dx + dlen * 0.7, dy - dlen * 0.7);
+        else ctx.lineTo(dx + dlen * 0.7, dy + dlen * 0.7);
+        ctx.stroke();
+      }
     });
 
     // 7. Fenêtres lumineuses avec reflets
@@ -6713,13 +7007,122 @@ window.ProtecLocaux = {
       } else if (item.type === 'lit_garde') {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(ix + iw * 0.15, iy + ih * 0.08, iw * 0.7, ih * 0.25);
-      } else if (item.type === 'casiers_vestiaire') {
+      } else if (item.type === 'casiers_vestiaire' || item.type === 'casiers_tenues_xl') {
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(ix + iw * 0.33, iy); ctx.lineTo(ix + iw * 0.33, iy + ih);
-        ctx.moveTo(ix + iw * 0.66, iy); ctx.lineTo(ix + iw * 0.66, iy + ih);
+        const cuts = item.type === 'casiers_tenues_xl' ? 4 : 3;
+        for (let c = 1; c < cuts; c++) {
+          ctx.moveTo(ix + (iw / cuts) * c, iy);
+          ctx.lineTo(ix + (iw / cuts) * c, iy + ih);
+        }
         ctx.stroke();
+        // Aération vestiaire
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, 2);
+      } else if (item.type === 'armoire_forte_securisee') {
+        // Armoire forte blindée DAE / sensible
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(ix + 2, iy + 2, iw - 4, ih - 4);
+        // Cadran de sécurité / roue de verrouillage
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih / 2, Math.min(iw, ih) * 0.22, 0, Math.PI * 2);
+        ctx.stroke();
+        // Point central / serrure
+        ctx.fillStyle = '#f59e0b';
+        ctx.fillRect(ix + iw / 2 - 1.5, iy + ih / 2 - 1.5, 3, 3);
+      } else if (item.type === 'rack_palettes_lourd') {
+        // Rack à palettes lourd industriel
+        ctx.strokeStyle = '#ea580c';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Traverses acier
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 1;
+        const numRacks = Math.max(3, Math.floor(iw / 12));
+        for (let r = 1; r < numRacks; r++) {
+          ctx.beginPath();
+          ctx.moveTo(ix + (iw / numRacks) * r, iy);
+          ctx.lineTo(ix + (iw / numRacks) * r, iy + ih);
+          ctx.stroke();
+        }
+        // Palettes de matériel
+        const storedEntries = Object.entries(item.storedInventory || {}).filter(([_, c]) => c > 0);
+        if (storedEntries.length > 0) {
+          ctx.fillStyle = '#b45309';
+          ctx.fillRect(ix + 3, iy + 3, iw - 6, ih - 6);
+        }
+      } else if (item.type === 'lits_superposes') {
+        // Lits superposés (2 couchages)
+        ctx.fillStyle = '#ffffff';
+        // Oreiller du dessus
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.06, iw * 0.7, ih * 0.2);
+        // Oreiller du bas
+        ctx.fillRect(ix + iw * 0.15, iy + ih * 0.74, iw * 0.7, ih * 0.2);
+        // Échelle latérale
+        ctx.strokeStyle = '#cbd5e1';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(ix + 2, iy + ih * 0.3); ctx.lineTo(ix + 2, iy + ih * 0.7);
+        ctx.moveTo(ix + 6, iy + ih * 0.3); ctx.lineTo(ix + 6, iy + ih * 0.7);
+        ctx.moveTo(ix + 2, iy + ih * 0.4); ctx.lineTo(ix + 6, iy + ih * 0.4);
+        ctx.moveTo(ix + 2, iy + ih * 0.5); ctx.lineTo(ix + 6, iy + ih * 0.5);
+        ctx.moveTo(ix + 2, iy + ih * 0.6); ctx.lineTo(ix + 6, iy + ih * 0.6);
+        ctx.stroke();
+      } else if (item.type === 'kitchenette_foyer') {
+        // Kitchenette équipée : évier inox et plaques
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(ix + iw * 0.08, iy + ih * 0.15, iw * 0.35, ih * 0.7);
+        // Robinet
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.23, iy + 2, 2, 4);
+        // Plaques de cuisson
+        ctx.fillStyle = '#0f172a';
+        ctx.fillRect(ix + iw * 0.55, iy + ih * 0.15, iw * 0.38, ih * 0.7);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(ix + iw * 0.65, iy + ih * 0.5, 3.5, 0, Math.PI * 2);
+        ctx.arc(ix + iw * 0.82, iy + ih * 0.5, 3.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (item.type === 'table_repas_equipe') {
+        // Grande table repas conviviale 8 places
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+        // 8 Assiettes / sets de table
+        const plateRadius = 2.5;
+        for (let p = 0; p < 4; p++) {
+          const px = ix + (iw / 5) * (p + 1);
+          ctx.beginPath(); ctx.arc(px, iy + ih * 0.25, plateRadius, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(px, iy + ih * 0.75, plateRadius, 0, Math.PI * 2); ctx.fill();
+        }
+      } else if (item.type === 'ecran_tactique_interactif') {
+        // Écran tactile interactif 75"
+        ctx.fillStyle = '#020617';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.6)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Icône de briefing
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.3, iy + ih * 0.3, iw * 0.4, 1.5);
+      } else if (item.type === 'mannequin_pediatrique') {
+        // Tapis d'exercice orange
+        ctx.fillStyle = 'rgba(234, 88, 12, 0.25)';
+        ctx.fillRect(ix + 1, iy + 1, iw - 2, ih - 2);
+        // Corps nourrisson
+        ctx.fillStyle = '#fed7aa';
+        ctx.beginPath();
+        ctx.arc(ix + iw / 2, iy + ih * 0.3, Math.min(iw, ih) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(ix + iw * 0.35, iy + ih * 0.45, iw * 0.3, ih * 0.4);
+      } else if (item.type === 'dsa_demonstration') {
+        // DAE pédagogique
+        ctx.fillStyle = '#10b981';
+        ctx.fillRect(ix, iy, iw, ih);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(ix + iw * 0.35, iy + ih * 0.2, iw * 0.3, ih * 0.6);
+        ctx.fillRect(ix + iw * 0.2, iy + ih * 0.35, iw * 0.6, ih * 0.3);
       }
 
       // Si le meuble est sélectionné ou survolé
@@ -6858,11 +7261,19 @@ window.ProtecLocaux = {
       this.draw3DWallSegment(ctx, minX, minY, isH ? minX + len : minX, isH ? minY : minY + len, w.th, wallH, cam, cx, cy);
     });
 
-    // 7. Rendu des Portes 3D Ouvertes (Vantail marron/orange)
+    // 7. Rendu des Portes et Ouvertures 3D
     model.doors.forEach(d => {
-      // Montant et vantail 3D ouvert en biais
       const px = d.x; const py = d.y;
-      this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.9, 2.05, '#b45309', cam, cx, cy);
+      if (d.type === 'garage_shutter') {
+        this.draw3DBox(ctx, px, py, 0, 0.15, d.len, 2.6, '#475569', cam, cx, cy);
+      } else if (d.type === 'glass_partition') {
+        this.draw3DBox(ctx, px, py, 0, 0.08, d.len, 2.2, 'rgba(6, 182, 212, 0.45)', cam, cx, cy);
+      } else if (d.type === 'double_door') {
+        this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.45, 2.05, '#b45309', cam, cx, cy);
+        this.draw3DBox(ctx, px, py + d.len * 0.55, 0, 0.06, d.len * 0.45, 2.05, '#b45309', cam, cx, cy);
+      } else {
+        this.draw3DBox(ctx, px, py, 0, 0.06, d.len * 0.9, 2.05, '#b45309', cam, cx, cy);
+      }
     });
 
     // 8. Rendu des Fenêtres 3D (Vitres semi-transparentes cyan)
