@@ -587,41 +587,41 @@ window.ProtecAuth = {
     const url = this.getReferralLink(code);
 
     modalEl.innerHTML = `
-      <div class="w-full max-w-md rounded-3xl bg-white border border-slate-200 p-5 sm:p-6 shadow-2xl relative text-left space-y-4 max-h-[95vh] overflow-y-auto">
+      <div class="w-full max-w-md rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-2xl relative text-left space-y-4 max-h-[95vh] overflow-y-auto text-slate-900 dark:text-white">
         
         <!-- En-tête -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-100 flex-shrink-0">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0">
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-500 text-slate-950 flex items-center justify-center font-black shadow-md text-base">
               🎁
             </div>
             <div>
-              <h3 class="text-sm font-black text-slate-900 leading-tight">Fiche Officielle de Parrainage</h3>
-              <p class="text-[11px] text-pc-blue font-bold">Affiliation Directe & Téléchargement du Jeu</p>
+              <h3 class="text-sm font-black text-slate-900 dark:text-white leading-tight">Fiche Officielle de Parrainage</h3>
+              <p class="text-[11px] text-pc-blue dark:text-sky-400 font-bold">Affiliation Directe & Téléchargement du Jeu</p>
             </div>
           </div>
-          <button onclick="window.ProtecAuth.closeReferralShareModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-black text-xs cursor-pointer transition">
+          <button onclick="window.ProtecAuth.closeReferralShareModal()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 flex items-center justify-center font-black text-xs cursor-pointer transition">
             ✕
           </button>
         </div>
 
         <!-- Instructions pour le parrain -->
-        <div class="p-3 rounded-2xl bg-blue-50/80 border border-blue-200/80 text-xs text-blue-950 space-y-1">
-          <p class="font-bold flex items-center gap-1.5 text-pc-blue">
+        <div class="p-3 rounded-2xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 text-xs text-blue-950 dark:text-blue-200 space-y-1">
+          <p class="font-bold flex items-center gap-1.5 text-pc-blue dark:text-sky-400">
             <span>📲</span> Faites scanner ce QR Code à votre futur filleul
           </p>
-          <p class="text-[11px] text-slate-600 leading-relaxed">
+          <p class="text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
             Son smartphone ouvrira automatiquement MyProtec avec votre affiliation enregistrée. Dès qu'il crée son antenne, il reçoit immédiatement son bonus de <strong>1 500 €</strong> !
           </p>
         </div>
 
         <!-- Grand QR Code centré avec style officiel -->
-        <div class="flex flex-col items-center justify-center p-4 rounded-3xl bg-gradient-to-b from-slate-50 to-white border-2 border-slate-200 shadow-inner">
+        <div class="flex flex-col items-center justify-center p-4 rounded-3xl bg-gradient-to-b from-slate-50 to-white dark:from-slate-800 dark:to-slate-800/90 border-2 border-slate-200 dark:border-slate-700 shadow-inner">
           <div id="auth-modal-large-qrcode" class="p-3 bg-white rounded-2xl border border-slate-200 shadow-md flex items-center justify-center min-w-[200px] min-h-[200px]"></div>
           
           <div class="mt-3 text-center space-y-0.5">
             <span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Votre Code Parrain</span>
-            <div class="font-mono font-black text-lg text-pc-blue tracking-widest">
+            <div class="font-mono font-black text-lg text-pc-blue dark:text-sky-400 tracking-widest">
               ${code}
             </div>
           </div>
@@ -629,9 +629,9 @@ window.ProtecAuth = {
 
         <!-- Champ du lien complet copiable -->
         <div class="space-y-1.5">
-          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500">Lien d'invitation direct pour vos filleuls :</label>
+          <label class="block text-[10px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">Lien d'invitation direct pour vos filleuls :</label>
           <div class="flex items-center gap-1.5">
-            <input type="text" readonly value="${url}" id="auth-modal-ref-link-input" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 font-mono text-xs text-slate-800 font-semibold focus:outline-none select-all" />
+            <input type="text" readonly value="${url}" id="auth-modal-ref-link-input" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs text-slate-800 dark:text-slate-200 font-semibold focus:outline-none select-all" />
             <button id="auth-modal-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${code}')" class="px-3.5 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs transition cursor-pointer shadow-xs flex items-center gap-1 shrink-0">
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               <span>Copier</span>
@@ -641,12 +641,12 @@ window.ProtecAuth = {
 
         <!-- Rappel des bonus -->
         <div class="grid grid-cols-2 gap-2 text-center text-xs">
-          <div class="p-2.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900">
+          <div class="p-2.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-900 dark:text-emerald-200">
             <span class="text-[10px] font-black uppercase block text-emerald-700">Bonus Filleul</span>
             <strong class="text-sm font-black">+1 500 €</strong>
             <span class="text-[9px] block text-emerald-600 mt-0.5">Dès l'inscription</span>
           </div>
-          <div class="p-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900">
+          <div class="p-2.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200">
             <span class="text-[10px] font-black uppercase block text-amber-700">Prime Parrain</span>
             <strong class="text-sm font-black">+2 500 €</strong>
             <span class="text-[9px] block text-amber-600 mt-0.5">Au 1er DPS terminé</span>
@@ -655,7 +655,7 @@ window.ProtecAuth = {
 
         <!-- Boutons d'action -->
         <div class="grid grid-cols-2 gap-2 pt-1">
-          <button onclick="window.ProtecAuth.downloadReferralQRCode('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
+          <button onclick="window.ProtecAuth.downloadReferralQRCode('${code}')" class="w-full py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5">
             <i data-lucide="download" class="w-3.5 h-3.5"></i>
             <span>Télécharger PNG</span>
           </button>
@@ -1069,7 +1069,7 @@ window.ProtecAuth = {
           <!-- CONTENU ONGLET 1 : IDENTITÉ & ANTENNE -->
           ${activeTabKey === 'identite' ? `
             <div class="space-y-3 animate-in fade-in duration-150">
-              <div class="p-4 rounded-2xl bg-emerald-50 border border-emerald-200/80 flex items-center gap-3.5">
+              <div class="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 flex items-center gap-3.5">
                 <div class="w-12 h-12 rounded-2xl ${this.currentUser.discord?.avatarUrl ? 'p-0.5 bg-[#5865F2]' : 'bg-emerald-500'} text-white flex items-center justify-center text-xl font-black shadow-md shadow-emerald-500/20 flex-shrink-0 overflow-hidden">
                   ${this.currentUser.discord?.avatarUrl ? `
                     <img src="${this.currentUser.discord.avatarUrl}" alt="Avatar Discord" class="w-full h-full object-cover rounded-xl" onerror="this.parentElement.innerHTML='<i data-lucide=\'radio\' class=\'w-6 h-6\'></i>';" />
@@ -1079,13 +1079,13 @@ window.ProtecAuth = {
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="flex items-center gap-2">
-                    <span class="font-extrabold text-slate-900 text-base truncate">${this.currentUser.username}</span>
+                    <span class="font-extrabold text-slate-900 dark:text-white text-base truncate">${this.currentUser.username}</span>
                     <span class="text-[9px] font-black uppercase tracking-wider bg-emerald-200/70 text-emerald-900 px-2 py-0.5 rounded-full flex-shrink-0">Connecté</span>
                     ${this.currentUser.discord ? `
                       <span class="text-[9px] font-black uppercase tracking-wider bg-[#5865F2]/15 text-[#5865F2] border border-[#5865F2]/30 px-1.5 py-0.2 rounded-full flex-shrink-0" title="Compte Discord lié : @${this.currentUser.discord.username}">Discord</span>
                     ` : ''}
                   </div>
-                  <div class="text-xs text-slate-600 mt-0.5 truncate">
+                  <div class="text-xs text-slate-600 dark:text-slate-300 mt-0.5 truncate">
                     ${actualStationName} • Ville : <strong class="capitalize">${actualCity}</strong>
                   </div>
                 </div>
@@ -1172,7 +1172,7 @@ window.ProtecAuth = {
               `}
 
               <div class="pt-1">
-                <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 text-rose-700 transition flex items-center justify-center gap-1.5 border border-rose-200/60 cursor-pointer">
+                <button onclick="window.ProtecAuth.logout(window.game)" class="w-full py-2.5 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-300 transition flex items-center justify-center gap-1.5 border border-rose-200/60 dark:border-rose-800/60 cursor-pointer">
                   <i data-lucide="log-out" class="w-4 h-4"></i>
                   Se déconnecter du serveur
                 </button>
@@ -1182,31 +1182,31 @@ window.ProtecAuth = {
 
           <!-- CONTENU ONGLET 2 : PARRAINAGE & QR CODE -->
           ${activeTabKey === 'parrainage' ? `
-            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 border border-blue-200/80 shadow-xs space-y-3 animate-in fade-in duration-150">
+            <div class="p-4 rounded-2xl bg-gradient-to-br from-blue-50 via-indigo-50/40 to-slate-50 dark:from-slate-800/90 dark:via-slate-800/70 dark:to-slate-900 border border-blue-200/80 dark:border-slate-700/80 shadow-xs space-y-3 animate-in fade-in duration-150">
               <div class="flex items-center justify-between">
                 <div class="flex items-center gap-2">
                   <div class="w-8 h-8 rounded-xl bg-pc-blue text-white flex items-center justify-center font-black shadow-xs">
                     <i data-lucide="gift" class="w-4 h-4"></i>
                   </div>
                   <div>
-                    <h5 class="text-xs font-black text-slate-800 uppercase tracking-wide">Programme de Parrainage</h5>
-                    <p class="text-[10px] text-slate-500">Invitez de nouveaux joueurs</p>
+                    <h5 class="text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Programme de Parrainage</h5>
+                    <p class="text-[10px] text-slate-500 dark:text-slate-400">Invitez de nouveaux joueurs</p>
                   </div>
                 </div>
                 ${this.currentUser.referral_suspended ? `
-                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border border-rose-300 dark:border-rose-700">
                     Suspendu (Admin)
                   </span>
                 ` : `
-                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700">
                     Actif
                   </span>
                 `}
               </div>
 
               ${(this.currentUser.pendingAlerts && this.currentUser.pendingAlerts.length > 0) || (this.currentUser.pending_referral_alerts && this.currentUser.pending_referral_alerts.length > 0) ? `
-                <div class="p-3 rounded-xl bg-rose-500/10 border border-rose-300 text-rose-800 text-[11px] leading-relaxed flex items-start gap-2">
-                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5"></i>
+                <div class="p-3 rounded-xl bg-rose-500/10 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 text-rose-800 dark:text-rose-200 text-[11px] leading-relaxed flex items-start gap-2">
+                  <i data-lucide="alert-triangle" class="w-4 h-4 text-rose-600 dark:text-rose-400 flex-shrink-0 mt-0.5"></i>
                   <div>
                     <strong>Avertissement :</strong> Une tentative de parrainage non conforme a été détectée sur votre compte (adresse IP ou appareil doublon). La liaison a été rejetée et l'incident consigné.
                   </div>
@@ -1214,45 +1214,45 @@ window.ProtecAuth = {
               ` : ''}
 
               <!-- Code Parrain Unique -->
-              <div class="p-2.5 rounded-xl bg-white border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+              <div class="p-2.5 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shadow-2xs">
                 <div class="min-w-0">
-                  <div class="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
-                  <div class="font-mono font-black text-sm text-pc-blue tracking-wider truncate" id="auth-my-ref-code">
+                  <div class="text-[9px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">Votre Code Parrain Unique</div>
+                  <div class="font-mono font-black text-sm text-pc-blue dark:text-sky-400 tracking-wider truncate" id="auth-my-ref-code">
                     ${myRefCode}
                   </div>
                 </div>
-                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${myRefCode}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center gap-1 cursor-pointer">
+                <button type="button" onclick="window.ProtecAuth.copyReferralCode('${myRefCode}')" class="px-3 py-1.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200/80 dark:border-slate-600 transition flex items-center gap-1 cursor-pointer">
                   <i data-lucide="copy" class="w-3 h-3"></i> Copier
                 </button>
               </div>
 
               <!-- Lien de Parrainage Direct -->
               <div class="space-y-1">
-                <div class="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
+                <div class="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Lien d'invitation direct pour vos futurs filleuls</div>
                 <div class="flex items-center gap-1.5">
-                  <input type="text" readonly value="${this.getReferralLink(myRefCode)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 bg-white font-mono text-[11px] text-slate-800 font-semibold focus:outline-none select-all" />
-                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0">
+                  <input type="text" readonly value="${this.getReferralLink(myRefCode)}" id="auth-profile-ref-link-input" class="flex-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/90 font-mono text-[11px] text-slate-800 dark:text-slate-200 font-semibold focus:outline-none select-all" />
+                  <button type="button" id="auth-copy-ref-link-btn" onclick="window.ProtecAuth.copyReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-pc-blue hover:bg-pc-blue-light text-white transition flex items-center gap-1 cursor-pointer shrink-0 shadow-xs">
                     <i data-lucide="copy" class="w-3 h-3"></i> Copier
                   </button>
-                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
+                  <button type="button" onclick="window.ProtecAuth.shareReferralLink('${myRefCode}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition flex items-center gap-1 cursor-pointer shrink-0" title="Partager (SMS, WhatsApp...)">
                     <i data-lucide="share-2" class="w-3 h-3"></i> Partager
                   </button>
                 </div>
               </div>
 
               <!-- Bloc QR Code & Téléchargement -->
-              <div class="p-3 rounded-xl bg-white border border-slate-200 flex items-center gap-3 shadow-2xs">
-                <div id="auth-profile-qrcode" class="w-[84px] h-[84px] bg-slate-50 border border-slate-200 rounded-xl p-1 flex items-center justify-center shrink-0 min-w-[84px] min-h-[84px]"></div>
+              <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 flex items-center gap-3 shadow-2xs">
+                <div id="auth-profile-qrcode" class="w-[84px] h-[84px] bg-white border border-slate-200 dark:border-slate-700 rounded-xl p-1 flex items-center justify-center shrink-0 min-w-[84px] min-h-[84px]"></div>
                 <div class="space-y-1.5 min-w-0 flex-1 text-xs">
-                  <h6 class="font-black text-slate-900 leading-tight">QR Code d'Affiliation & Téléchargement</h6>
-                  <p class="text-[10px] text-slate-500 leading-snug">
+                  <h6 class="font-black text-slate-900 dark:text-slate-100 leading-tight">QR Code d'Affiliation & Téléchargement</h6>
+                  <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-snug">
                     Faites scanner ce code pour que votre filleul télécharge le jeu et soit affilié directement.
                   </p>
                   <div class="flex items-center gap-1.5 pt-0.5">
-                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.openReferralShareModal('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-extrabold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="maximize" class="w-3 h-3"></i> Agrandir
                     </button>
-                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
+                    <button type="button" onclick="window.ProtecAuth.downloadReferralQRCode('${myRefCode}')" class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-[10px] transition cursor-pointer flex items-center gap-1">
                       <i data-lucide="download" class="w-3 h-3"></i> PNG
                     </button>
                   </div>
@@ -1260,9 +1260,9 @@ window.ProtecAuth = {
               </div>
 
               <!-- Barème des gains -->
-              <div class="text-[10px] text-slate-600 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 border border-blue-100">
-                <span>🎁 Filleul : <strong>+1 500 €</strong> à l'inscription</span>
-                <span>👑 Parrain : <strong>+2 500 €</strong> au 1er DPS</span>
+              <div class="text-[10px] text-slate-600 dark:text-slate-300 flex items-center justify-between p-2 rounded-xl bg-blue-50/50 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/60">
+                <span>🎁 Filleul : <strong class="text-slate-900 dark:text-white">+1 500 €</strong> à l'inscription</span>
+                <span>👑 Parrain : <strong class="text-slate-900 dark:text-white">+2 500 €</strong> au 1er DPS</span>
               </div>
             </div>
           ` : ''}
