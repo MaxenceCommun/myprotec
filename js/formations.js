@@ -2485,9 +2485,9 @@ window.ProtecFormations = {
     const isPSECrewTraining = course?.id?.includes('PSE') || course?.kitRequired === 'kit_pedago_pse';
     if (hasSchillerT7Form && isPSECrewTraining) {
       repGain += 12;
-      tierNotice += ' [Schiller Touch 7 Formation : Scénarios ECG Connectés +12 Rép SAMU]';
+      tierNotice += ' [Moniteur défibrillateur Formation : Scénarios ECG Connectés +12 Rép SAMU]';
       if (window.ProtecConventions) {
-        window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', 8, 'Formation PSE sur Schiller Touch 7 connecté');
+        window.ProtecConventions.adjustInstitutionalReputation(game, 'samu', 8, 'Formation PSE sur Moniteur défibrillateur connecté');
       }
       if (trainer) {
         trainer.moral = Math.min(100, (trainer.moral || 75) + 8);
@@ -3721,12 +3721,12 @@ window.ProtecFormations = {
                               </div>
                             ` : ''}
 
-                            <!-- Statut Schiller Touch 7 Formation -->
+                            <!-- Statut Moniteur défibrillateur Formation -->
                             ${isPSECrewTraining ? `
                               <div class="flex items-center justify-between pt-1 border-t border-emerald-200/60 dark:border-emerald-800/60 text-[9.5px]">
                                 <span class="flex items-center gap-1 text-slate-700 dark:text-slate-300">
-                                  <img src="images/equipements/moniteur_t7.png" alt="Schiller T7" class="w-4 h-4 object-contain" onerror="this.outerHTML='📟'" />
-                                  <span>Moniteur Schiller T7 de Formation :</span>
+                                  <img src="images/equipements/moniteur_t7.png" alt="Moniteur défibrillateur" class="w-4 h-4 object-contain" onerror="this.outerHTML='📟'" />
+                                  <span>Moniteur défibrillateur de Formation :</span>
                                 </span>
                                 ${hasSchillerT7Form ? `
                                   <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black uppercase bg-purple-100 text-purple-900 border border-purple-300">Connecté Instructeur ✓</span>

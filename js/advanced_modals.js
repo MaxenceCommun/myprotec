@@ -364,12 +364,12 @@ window.ProtecAdvancedModals = {
 
   getClimateOptionLabel(vehType) {
     const t = String(vehType || '').toUpperCase();
-    return t === 'VPSP' ? 'Climatisation / Webasto' : 'Climatisation & Chauffage';
+    return t === 'VPSP' ? 'Climatisation / Chauffage à air' : 'Climatisation & Chauffage';
   },
 
   getClimateOptionInstalledText(vehType) {
     const t = String(vehType || '').toUpperCase();
-    return t === 'VPSP' ? 'Pack Climatisation Cellule & Chauffage Webasto' : 'Pack Climatisation & Chauffage Habitacle';
+    return t === 'VPSP' ? 'Pack Climatisation Cellule & Chauffage à air' : 'Pack Climatisation & Chauffage Habitacle';
   },
 
     ledBar: {
@@ -381,7 +381,7 @@ window.ProtecAdvancedModals = {
     },
     climatisation: {
       id: 'climatisation',
-      label: 'Pack Climatisation Cellule & Chauffage Webasto',
+      label: 'Pack Climatisation Cellule & Chauffage à air',
       cost: 1850,
       icon: '❄️',
       desc: 'Confort thermique canicule / grand froid pour les victimes et les bénévoles.'
@@ -395,7 +395,7 @@ window.ProtecAdvancedModals = {
     },
     schiller_t7: {
       id: 'schiller_t7',
-      label: 'Moniteur Multiparamétrique ECG Schiller Touch 7',
+      label: 'Moniteur défibrillateur multiparamétrique',
       cost: 3800,
       icon: '📟',
       desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
@@ -941,7 +941,7 @@ window.ProtecAdvancedModals = {
                         </button>
                       `) : ''}
 
-                      <!-- Option Climatisation / Chauffage : Webasto réservé uniquement aux ambulances VPSP -->
+                      <!-- Option Climatisation / Chauffage : Chauffage à air réservé uniquement aux ambulances VPSP -->
                       ${canClimate ? `
                         <button 
                           type="button" 
@@ -987,8 +987,8 @@ window.ProtecAdvancedModals = {
                           class="p-2 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${selOpts.schiller_t7 ? 'bg-purple-100/70 dark:bg-purple-950/50 border-purple-500 text-purple-900 dark:text-purple-200 font-black shadow-xs ring-1 ring-purple-400/50' : 'bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-bold hover:bg-slate-100 dark:hover:bg-slate-750'}"
                         >
                           <span class="flex items-center gap-1.5">
-                            <img src="images/vehicles/icons/t7.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Schiller T7" onerror="this.outerHTML='<span>📟</span>'" />
-                            <span>Schiller Touch 7 (ECG)</span>
+                            <img src="images/vehicles/icons/t7.png" class="w-4 h-4 object-contain inline-block shrink-0" alt="Moniteur défibrillateur" onerror="this.outerHTML='<span>📟</span>'" />
+                            <span>Moniteur défibrillateur (ECG)</span>
                           </span>
                           <span class="font-mono font-black text-[10px] ${selOpts.schiller_t7 ? 'text-purple-700 dark:text-purple-300' : 'text-slate-500 dark:text-slate-400'}">+3 800 €</span>
                         </button>

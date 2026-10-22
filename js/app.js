@@ -13140,7 +13140,7 @@ class ProtecGame {
 
     if (hasSchillerVeh) {
       if (window.ProtecConventions) {
-        window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 10, 'Bilan ECG instantané Schiller T7 embarqué');
+        window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 10, 'Bilan ECG instantané Moniteur défibrillateur embarqué');
       }
       crewVolunteers.forEach(vol => {
         vol.moral = Math.min(100, (vol.moral || 75) + 6);
@@ -29118,14 +29118,14 @@ class ProtecGame {
                   </div>
                 </div>
 
-                <!-- Moniteur ECG Multiparamétrique Schiller Touch 7 -->
+                <!-- Moniteur défibrillateur multiparamétrique -->
                 <div class="p-2.5 rounded-xl border ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-50/70 border-purple-300' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-2">
                   <div class="flex items-center gap-2">
                     <div class="w-8 h-8 rounded-lg ${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'bg-purple-600 text-white' : 'bg-slate-200 text-slate-500'} flex items-center justify-center font-bold text-sm">
                       <img src="images/vehicles/icons/t7.png" class="w-5 h-5 object-contain" alt="" onerror="this.outerHTML='📟'" />
                     </div>
                     <div>
-                      <h5 class="text-xs font-black text-slate-900">Schiller Touch 7 (ECG)</h5>
+                      <h5 class="text-xs font-black text-slate-900">Moniteur défibrillateur (ECG)</h5>
                       <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'Embarqué (+10 SAMU, +6 Moral)' : 'Non doté (Moniteur pro)'}</p>
                     </div>
                   </div>
@@ -29555,7 +29555,7 @@ class ProtecGame {
 
     const optDef = {
       tensiometre_auto: { key: 'hasTensiometreAuto', name: 'Tensiomètre Automatique NIBP', cost: 450, stockKey: 'tensiometre_auto' },
-      schiller_t7: { key: 'hasSchillerT7', name: 'Moniteur ECG Schiller Touch 7', cost: 3800, stockKey: 'schiller_t7' }
+      schiller_t7: { key: 'hasSchillerT7', name: 'Moniteur défibrillateur', cost: 3800, stockKey: 'schiller_t7' }
     }[optionKey];
     if (!optDef) return;
 

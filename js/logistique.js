@@ -759,7 +759,7 @@ window.ProtecLogistique = {
     {
       id: 'schiller_t7_formation',
       category: 'kits_formation',
-      name: 'Moniteur ECG & DAE Schiller Touch 7 de Formation (Connecté Instructeur)',
+      name: 'Moniteur défibrillateur de Formation (Connecté Instructeur)',
       lucideIcon: 'monitor',
       image: 'images/equipements/moniteur_t7.png',
       price: 2600,
