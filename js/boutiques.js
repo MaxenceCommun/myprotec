@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PROTEC LIVE - MODULE BOUTIQUES & GALERIES MARCHANDES DE LA SÉCURITÉ CIVILE
  * 
  * Permet au joueur de faire ses courses d'un magasin à un autre :
@@ -47,11 +47,10 @@ window.ProtecBoutiques = {
       specialty: 'Livraison 100% GRATUITE garantie sur toutes les commandes',
       desc: 'Boutique officielle : tenues, kits de réarmement, lots de secours et matériel pédagogique.',
       rayons: [
-        { id: 'all', label: 'Tous les rayons', icon: 'layout-grid' },
-        { id: 'tenues', label: 'Tenues & Équipements EPI', icon: 'shield' },
-        { id: 'pharmacie', label: 'Réarmement & Consommables', icon: 'archive' },
-        { id: 'lots_secours', label: 'Lots de Secours (A, B, C)', icon: 'briefcase' },
-        { id: 'formations', label: 'Kits Pédagogiques Formations', icon: 'graduation-cap' }
+        { id: 'all', label: 'Tous les articles', icon: 'layout-grid' },
+        { id: 'formation', label: 'Formation', icon: 'graduation-cap' },
+        { id: 'soins', label: 'Soins', icon: 'archive' },
+        { id: 'habillement', label: 'Habillement', icon: 'shirt' }
       ]
     },
     {
@@ -493,18 +492,44 @@ window.ProtecBoutiques = {
     let list = [];
 
     if (shop.id === 'centrale_federale') {
-      // 1. Coopérative Fédérale : Tenues, Consommables réassort, Lots A/B/C, Formations
+      // 1. Coopérative Fédérale : Tags "Formation", "Soins", "Habillement"
       const cat = window.ProtecLogistique?.CATALOG || [];
       list = cat.filter(it => {
         if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c', 'tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers1', 'rangers2', 'rangers3', 'rangers_secours'].includes(it.id)) return true;
         if (it.category === 'kits_formation') return true;
         return false;
-      }).map(it => ({ ...it, shopId: shop.id }));
+      }).map(it => {
+        let tag = 'soins';
+        let tagLabel = 'Soins';
+        let badgeColor = 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800';
 
-      if (rayon === 'tenues') list = list.filter(it => ['tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers1', 'rangers2', 'rangers3', 'rangers_secours'].includes(it.id));
-      else if (rayon === 'pharmacie') list = list.filter(it => it.id === 'caisse_rearmement');
-      else if (rayon === 'lots_secours') list = list.filter(it => ['lot_secours_a', 'lot_secours_b', 'lot_secours_c'].includes(it.id));
-      else if (rayon === 'formations') list = list.filter(it => it.category === 'kits_formation');
+        if (['caisse_rearmement', 'lot_secours_a', 'lot_secours_b', 'lot_secours_c'].includes(it.id)) {
+          tag = 'soins';
+          tagLabel = 'Soins';
+          badgeColor = 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800';
+        } else if (['tenue_pc', 'tenue_moto', 'tenue_usar', 'rangers1', 'rangers2', 'rangers3', 'rangers_secours'].includes(it.id)) {
+          tag = 'habillement';
+          tagLabel = 'Habillement';
+          badgeColor = 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800';
+        } else if (it.category === 'kits_formation') {
+          tag = 'formation';
+          tagLabel = 'Formation';
+          badgeColor = 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800';
+        }
+
+        return {
+          ...it,
+          shopId: shop.id,
+          tag,
+          tagLabel,
+          badge: tagLabel,
+          badgeColor: badgeColor
+        };
+      });
+
+      if (rayon === 'formation') list = list.filter(it => it.tag === 'formation');
+      else if (rayon === 'soins') list = list.filter(it => it.tag === 'soins');
+      else if (rayon === 'habillement') list = list.filter(it => it.tag === 'habillement');
 
     } else if (shop.id === 'hexacom_telecoms') {
       // 2. HexaCom Télécoms : Radios Analogiques, LTE, Hybrides, Packs dégressifs

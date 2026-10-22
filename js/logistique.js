@@ -280,70 +280,83 @@ window.ProtecLogistique = {
     // --- 1. CONSOMMABLES & RÉARMEMENT ---
     {
       id: 'caisse_rearmement',
-      category: 'pharmacie',
-      name: 'Kit de réarmement',
+      category: 'soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
+      name: 'Kit de réarmement (consommable)',
       lucideIcon: 'archive',
       image: 'images/equipements/caisse_rearmement.png',
-      price: 60,
-      unit: 'caisse',
+      price: 370,
+      unit: 'kit (3x VPSP)',
       slots: 1,
-      badge: 'Réarmement',
+      consumables: 300,
+      maxConsumables: 300,
+      badge: 'Soins • 3x VPSP',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-700/60',
-      desc: 'Réapprovisionne les consommables sanitaires des véhicules et lots de secours.',
-      usage: 'Recharge le matériel de secours à l\'antenne.'
+      desc: 'Kit de réarmement consommable complet. Correspond à 3x l\'armement d\'un VPSP (3 réarmements complets de véhicule).',
+      usage: 'Réarme 3 véhicules à 100% ou apporte 300 consommables au stock.'
     },
 
     // --- 2. LOTS DE SECOURS A / B / C ---
     {
       id: 'lot_secours_a',
-      category: 'lots_secours',
+      category: 'soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
       name: 'Lot A - Poste de secours',
       lucideIcon: 'tent',
       image: 'images/equipements/lot_secours_a.png',
-      price: 1750,
-      unit: 'lot complet',
+      price: 2830,
+      unit: 'lot complet armé',
       slots: 4,
       types: ['PS', 'LOG'],
-      consumables: 100,
+      consumables: 200,
+      maxConsumables: 200,
       isLot: true,
-      badge: 'Poste Fixe',
+      badge: 'Soins • Lot A (2x VPSP)',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
-      desc: 'Tente et équipement pour soigner les victimes sur les postes fixes (DPS).',
-      usage: 'Indispensable pour les DPS-ME, DPS-GE et festivals.'
+      desc: 'Tente et équipement complet pour poste de secours fixe (DPS). Armé en consommables à l\'achat (double de l\'armement d\'un VPSP).',
+      usage: 'Dotation de 200 consommables (2x VPSP). Indispensable DPS-ME / DPS-GE.'
     },
     {
       id: 'lot_secours_b',
-      category: 'lots_secours',
+      category: 'soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
       name: 'Lot B - Premiers secours',
       lucideIcon: 'briefcase',
       image: 'images/equipements/lot_secours_b.png',
-      price: 850,
-      unit: 'lot complet',
+      price: 320,
+      unit: 'lot complet armé',
       slots: 2,
       types: ['PS'],
-      consumables: 100,
+      consumables: 50,
+      maxConsumables: 50,
       isLot: true,
-      badge: 'Secours d\'Urgence',
+      badge: 'Soins • Lot B (0.5x VPSP)',
       badgeColor: 'bg-blue-50 text-pc-blue border-blue-300',
-      desc: 'Sac d\'urgence avec oxygène et défibrillateur pour les interventions réflexes.',
-      usage: 'Dotation obligatoire de tout VPSP et PAPS.'
+      desc: 'Sac d\'urgence avec oxygène et DAE pour les interventions réflexes. Armé en consommables à l\'achat (la moitié de l\'armement d\'un VPSP).',
+      usage: 'Dotation de 50 consommables (0.5x VPSP). Équipement des VPSP et PAPS.'
     },
     {
       id: 'lot_secours_c',
-      category: 'lots_secours',
+      category: 'soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
       name: 'Lot C - Brancardage & Immobilisation',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
-      price: 1250,
-      unit: 'lot complet',
+      price: 1950,
+      unit: 'lot complet armé',
       slots: 2,
       types: ['PS'],
       consumables: 100,
+      maxConsumables: 100,
       isLot: true,
-      badge: 'Immobilisation',
+      badge: 'Soins • Lot C',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
-      desc: 'Matériel de relevage et matelas coquille pour les traumatismes et fractures.',
-      usage: 'Nécessaire pour le brancardage et les traumatismes sportifs.'
+      desc: 'Matériel complet d\'immobilisation, matelas coquille et brancardage pour les traumatismes et fractures. Armé à l\'achat.',
+      usage: 'Nécessaire pour le relevage, le brancardage et les traumatismes.'
     },
 
     // --- 3. TECHNIQUE & CRISE ---
@@ -464,13 +477,15 @@ window.ProtecLogistique = {
     {
       id: 'tenue_pc',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Tenue bénévole',
       lucideIcon: 'shirt',
       image: 'images/equipements/tenue_pc.png',
       price: 160,
       unit: 'tenue complète',
       slots: 1,
-      badge: 'Dotation Bénévole',
+      badge: 'Habillement • Dotation',
       badgeColor: 'bg-blue-50 text-blue-900 border-blue-300 dark:bg-blue-950/60 dark:text-blue-200 dark:border-blue-800',
       desc: 'Uniforme réglementaire pour équiper un secouriste sur le terrain.',
       usage: 'Obligatoire pour autoriser un bénévole à partir en mission.'
@@ -478,13 +493,15 @@ window.ProtecLogistique = {
     {
       id: 'tenue_moto',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Tenue moto',
       lucideIcon: 'bike',
       image: 'images/equipements/tenue_moto.png',
       price: 240,
       unit: 'tenue moto',
       slots: 1,
-      badge: 'Pilote Moto',
+      badge: 'Habillement • Pilote Moto',
       badgeColor: 'bg-sky-50 text-sky-900 border-sky-300 dark:bg-sky-950/60 dark:text-sky-200 dark:border-sky-800',
       desc: 'Protection renforcée homologuée pour piloter les motos de secours.',
       usage: 'Équipement de sécurité pour les motocyclistes en intervention.'
@@ -492,13 +509,15 @@ window.ProtecLogistique = {
     {
       id: 'tenue_usar',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Tenue USAR',
       lucideIcon: 'hard-hat',
       image: 'images/equipements/tenue_usar.png',
       price: 320,
       unit: 'tenue USAR',
       slots: 1,
-      badge: 'Sauvetage-Déblaiement',
+      badge: 'Habillement • Sauvetage USAR',
       badgeColor: 'bg-amber-50 text-amber-900 border-amber-300 dark:bg-amber-950/60 dark:text-amber-200 dark:border-amber-800',
       desc: 'Combinaison anti-abrasion pour interventions en décombres et sauvetage.',
       usage: 'Protection pour interventions sur effondrements et séismes.'
@@ -506,12 +525,14 @@ window.ProtecLogistique = {
     {
       id: 'rangers1',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Rangers Standard',
       lucideIcon: 'footprints',
       image: 'images/equipements/rangers1.png',
       price: 65,
       unit: 'paire',
-      badge: 'Base',
+      badge: 'Habillement • Base',
       badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
       desc: 'Chaussures montantes réglementaires (dotation de base).',
       usage: 'Protection et confort de base (+5 Moral).',
@@ -522,12 +543,14 @@ window.ProtecLogistique = {
     {
       id: 'rangers2',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Rangers Confort',
       lucideIcon: 'footprints',
       image: 'images/equipements/rangers2.png',
       price: 120,
       unit: 'paire',
-      badge: 'Bien',
+      badge: 'Habillement • Confort',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
       desc: 'Cuir souple et semelle amortissante pour la marche prolongée.',
       usage: 'Bon confort sur les longues missions (+12 Moral).',
@@ -538,12 +561,14 @@ window.ProtecLogistique = {
     {
       id: 'rangers3',
       category: 'tenues_epi',
+      tag: 'habillement',
+      tagLabel: 'Habillement',
       name: 'Rangers Pro',
       lucideIcon: 'footprints',
       image: 'images/equipements/rangers3.png',
       price: 190,
       unit: 'paire',
-      badge: 'Super',
+      badge: 'Habillement • Pro',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Membrane imperméable respirante et renforts ergonomiques.',
       usage: 'Excellent confort et haute endurance (+20 Moral).',
@@ -668,12 +693,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_gqs',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Pédagogique GQS',
       lucideIcon: 'heart-pulse',
       image: 'images/equipements/kit_gqs.png',
       price: 650,
       unit: 'kit complet',
-      badge: 'Gestes Qui Sauvent',
+      badge: 'Formation • GQS',
       badgeColor: 'bg-amber-50 text-amber-900 border-amber-300',
       desc: 'Mannequins de massage cardiaque adulte/enfant, défibrillateur DAE de formation et garrots d\'exercice pour sensibiliser les citoyens.',
       usage: 'Ateliers de sensibilisation courte aux Gestes Qui Sauvent (2h).'
@@ -681,12 +708,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_psc',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Pédagogique PSC',
       lucideIcon: 'graduation-cap',
       image: 'images/equipements/kit_psc.png',
       price: 1200,
       unit: 'kit complet',
-      badge: 'Grand Public',
+      badge: 'Formation • PSC',
       badgeColor: 'bg-emerald-50 text-emerald-800 border-emerald-300',
       desc: 'Mannequins adultes, enfants, nourrissons, DAE de formation et matériel de simulation pour les formations certifiantes grand public PSC.',
       usage: 'Formations initiales et continues aux Premiers Secours Citoyens (PSC 7h).'
@@ -694,12 +723,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_pse',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Pédagogique PSE (PSE1 & PSE2)',
       lucideIcon: 'shield-alert',
       image: 'images/equipements/kit_pse.png',
       price: 2400,
       unit: 'kit complet',
-      badge: 'Secourisme Opérationnel',
+      badge: 'Formation • PSE',
       badgeColor: 'bg-indigo-50 text-indigo-900 border-indigo-300',
       desc: 'Lot pédagogique complet unifié pour former et recycler secouristes (PSE1) et équipiers secouristes (PSE2) : plan dur, colliers cervicaux, oxygénothérapie, brancardage et bilans.',
       usage: 'Formations initiales PSE1, PSE2, Chef d\'Équipe et recyclages annuels FC PSE.'
@@ -707,12 +738,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_sst',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Pédagogique SST',
       lucideIcon: 'briefcase',
       image: 'images/equipements/kit_pedago_sst.png',
       price: 1100,
       unit: 'kit complet',
-      badge: 'Santé Travail',
+      badge: 'Formation • SST',
       badgeColor: 'bg-blue-50 text-blue-800 border-blue-300',
       desc: 'Matériel officiel pour former les sauveteurs secouristes du travail en entreprise (INRS).',
       usage: 'Formations initiales SST et recyclages MAC SST.'
@@ -720,12 +753,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_extincteur',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Extincteurs Incendie',
       lucideIcon: 'flame',
       image: 'images/equipements/kit_pedago_extincteur.png',
       price: 1400,
       unit: 'kit complet',
-      badge: 'Sécurité Incendie',
+      badge: 'Formation • Incendie',
       badgeColor: 'bg-orange-50 text-orange-800 border-orange-300',
       desc: 'Bac à feu et extincteurs d\'exercice pour les formations incendie.',
       usage: 'Initiations à la manipulation d\'extincteurs.'
@@ -733,12 +768,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_picf',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Pédagogique PIC F',
       lucideIcon: 'clipboard-list',
       image: 'images/equipements/kit_pedago_picf.png',
       price: 850,
       unit: 'kit complet',
-      badge: 'Cadres Formateurs',
+      badge: 'Formation • Formateurs',
       badgeColor: 'bg-teal-50 text-teal-800 border-teal-300',
       desc: 'Supports pédagogiques pour former les formateurs de secours.',
       usage: 'Formations de formateurs PIC F.'
@@ -746,12 +783,14 @@ window.ProtecLogistique = {
     {
       id: 'kit_pedago_ssa',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Kit Sauvetage Aquatique (SSA)',
       lucideIcon: 'life-buoy',
       image: 'images/equipements/kit_pedago_ssa.png',
       price: 1300,
       unit: 'kit complet',
-      badge: 'Aquatique',
+      badge: 'Formation • Aquatique',
       badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-300',
       desc: 'Mannequins et bouées pour les entraînements aquatiques.',
       usage: 'Formations et entraînements aquatiques SSA.'
@@ -759,6 +798,8 @@ window.ProtecLogistique = {
     {
       id: 'schiller_t7_formation',
       category: 'kits_formation',
+      tag: 'formation',
+      tagLabel: 'Formation',
       name: 'Moniteur défibrillateur de Formation (Connecté Instructeur)',
       lucideIcon: 'monitor',
       image: 'images/equipements/moniteur_t7.png',
@@ -1236,7 +1277,8 @@ window.ProtecLogistique = {
             }
 
             if (targetId === 'caisse_rearmement') {
-              station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (100 * qty);
+              station.stockMaterielsPS = (station.stockMaterielsPS || 0) + (300 * qty);
+              station.stock.caisse_rearmement_charges = (station.stock.caisse_rearmement_charges || 0) + (3 * qty);
               game.stockMaterielsPS = station.stockMaterielsPS;
             }
 
@@ -2566,7 +2608,7 @@ window.ProtecLogistique = {
     const itemSlots = comp?.slots || catItem?.slots || 1;
 
     if (availableInStock <= 0) {
-      const cost = catItem ? catItem.price : (itemId === 'caisse_rearmement' ? 60 : 250);
+      const cost = catItem ? catItem.price : (itemId === 'caisse_rearmement' ? 370 : 250);
       if (game.resources.money < cost) {
         game.showToast('Stock épuisé ⚠️', `Aucun exemplaire de « ${comp?.title || catItem?.name || itemId} » au local et trésorerie insuffisante (${cost} € requise).`, 'orange');
         return;
@@ -2586,14 +2628,17 @@ window.ProtecLogistique = {
     station.stock[itemId] = Math.max(0, (station.stock[itemId] || 1) - 1);
 
     // Embarquer l'item dans le véhicule LOG
+    const initialConsumables = comp?.consumables !== undefined ? comp.consumables : (catItem?.consumables !== undefined ? catItem.consumables : 100);
+    const maxCons = comp?.maxConsumables !== undefined ? comp.maxConsumables : (catItem?.maxConsumables !== undefined ? catItem.maxConsumables : 100);
+
     const loadedEntry = {
       id: itemId,
       name: comp?.title || catItem?.name || itemId,
       shortName: comp?.title ? comp.title.split('(')[0].trim() : (catItem?.name ? catItem.name.split('(')[0].trim() : itemId),
       slots: itemSlots,
       types: catItem?.types || (itemId === 'caisse_rearmement' ? ['LOG'] : ['PS']),
-      consumables: 100,
-      maxConsumables: 100,
+      consumables: initialConsumables,
+      maxConsumables: maxCons,
       isLot: true,
       isCaisseRearm: itemId === 'caisse_rearmement',
       itemsList: comp?.items || []
@@ -2808,19 +2853,24 @@ window.ProtecLogistique = {
       return;
     }
 
-    const availableCaisses = station.stock.caisse_rearmement || 0;
+    // Règle : 1 kit de réarmement (consommable) correspond à 3x l'armement complet d'un VPSP (3 charges)
+    if (station.stock.caisse_rearmement_charges === undefined && (station.stock.caisse_rearmement || 0) > 0) {
+      station.stock.caisse_rearmement_charges = (station.stock.caisse_rearmement || 0) * 3;
+    }
+    const availableCharges = station.stock.caisse_rearmement_charges || 0;
     const availablePS = station.stockMaterielsPS || 0;
 
-    // Calculer les besoins : 1 caisse peut réarmer 100% de consommables
     let totalMissing = 0;
     candidateVehs.forEach(v => {
       totalMissing += (100 - (v.consumables || 100));
     });
-    const caissesNeeded = Math.ceil(totalMissing / 100) || 1;
+    const chargesNeeded = candidateVehs.length;
+    const kitsNeeded = Math.ceil(chargesNeeded / 3) || 1;
 
-    if (availableCaisses >= caissesNeeded) {
-      // Utiliser les caisses de réarmement du stock
-      station.stock.caisse_rearmement -= caissesNeeded;
+    if (availableCharges >= chargesNeeded) {
+      // Utiliser les charges des kits de réarmement (1 charge = 1 réarmement complet de VPSP)
+      station.stock.caisse_rearmement_charges -= chargesNeeded;
+      station.stock.caisse_rearmement = Math.ceil(station.stock.caisse_rearmement_charges / 3);
       candidateVehs.forEach(v => {
         v.consumables = 100;
         v.armementLevel = 100;
@@ -2829,7 +2879,7 @@ window.ProtecLogistique = {
         v.warnedLowConsumables = false;
         v.breachedConsumables = false;
       });
-      game.showToast('Flotte Réarmée en 1 Clic ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (-${caissesNeeded} caisse(s) de réarmement au stock).`, 'green');
+      game.showToast('Flotte Réarmée en 1 Clic ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (-${chargesNeeded} charge(s) sur kit(s) 3x VPSP, reste ${station.stock.caisse_rearmement_charges} charge(s)).`, 'green');
     } else if (availablePS >= totalMissing) {
       // Utiliser le stock Matériels PS
       station.stockMaterielsPS -= totalMissing;
@@ -2844,11 +2894,15 @@ window.ProtecLogistique = {
       });
       game.showToast('Flotte Réarmée au Local ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (-${Math.round(totalMissing)}% au stock Matériels PS).`, 'green');
     } else {
-      // Proposer d'acheter les caisses manquantes
-      const buyCost = caissesNeeded * 60;
+      // Proposer d'acheter les kits nécessaires (370 € par kit de 3 charges)
+      const buyCost = kitsNeeded * 370;
       if (game.resources.money >= buyCost) {
-        if (confirm(`Stock local insuffisant. Acheter ${caissesNeeded} Caisse(s) de réarmement pour ${buyCost} € et réarmer immédiatement la flotte ?`)) {
+        if (confirm(`Stock local insuffisant. Acheter ${kitsNeeded} Kit(s) de réarmement (370 € l'unité, chaque kit réarmant 3 VPSP) pour un total de ${buyCost} € et réarmer immédiatement la flotte ?`)) {
           game.resources.money -= buyCost;
+          const totalNewCharges = kitsNeeded * 3;
+          const remainingCharges = availableCharges + totalNewCharges - chargesNeeded;
+          station.stock.caisse_rearmement_charges = remainingCharges;
+          station.stock.caisse_rearmement = Math.ceil(remainingCharges / 3);
           candidateVehs.forEach(v => {
             v.consumables = 100;
             v.armementLevel = 100;
@@ -2857,12 +2911,12 @@ window.ProtecLogistique = {
             v.warnedLowConsumables = false;
             v.breachedConsumables = false;
           });
-          game.showToast('Réarmement Validé ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (${buyCost} € facturés à la Centrale d'Achats).`, 'green');
+          game.showToast('Réarmement Validé ✓', `${candidateVehs.length} véhicule(s) réarmé(s) à 100% (${buyCost} € débités, reste ${remainingCharges} charge(s) consommable).`, 'green');
         } else {
           return;
         }
       } else {
-        game.showToast('Ressources Insuffisantes', `Stock local vide et trésorerie insuffisante (${buyCost} € requis pour ${caissesNeeded} caisse(s)).`, 'orange');
+        game.showToast('Ressources Insuffisantes', `Stock local vide et trésorerie insuffisante (${buyCost} € requis pour ${kitsNeeded} kit(s) de réarmement).`, 'orange');
         return;
       }
     }
@@ -2887,16 +2941,23 @@ window.ProtecLogistique = {
     const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
     this.ensureStationStock(station, game);
 
+    // Initialisation cohérente des charges de kits : 1 kit = 3x armement VPSP
+    if (station.stock.caisse_rearmement_charges === undefined && (station.stock.caisse_rearmement || 0) > 0) {
+      station.stock.caisse_rearmement_charges = (station.stock.caisse_rearmement || 0) * 3;
+    }
+
     const missing = 100 - veh.consumables;
-    if ((station.stock.caisse_rearmement || 0) >= 1) {
-      station.stock.caisse_rearmement -= 1;
+    if ((station.stock.caisse_rearmement_charges || 0) >= 1) {
+      station.stock.caisse_rearmement_charges -= 1;
+      station.stock.caisse_rearmement = Math.ceil(station.stock.caisse_rearmement_charges / 3);
       veh.consumables = 100;
       veh.armementLevel = 100;
       veh.isRearmed = true;
       veh.needsRearming = false;
       veh.warnedLowConsumables = false;
       veh.breachedConsumables = false;
-      game.showToast('Véhicule Réarmé ✓', `${veh.name} a été réarmé à 100% (-1 caisse de réarmement).`, 'green');
+      const left = station.stock.caisse_rearmement_charges;
+      game.showToast('Véhicule Réarmé ✓', `${veh.name} a été réarmé à 100% (1 charge consommée sur kit de 3, reste ${left} charge(s)).`, 'green');
     } else if ((station.stockMaterielsPS || 0) >= missing) {
       station.stockMaterielsPS -= missing;
       game.stockMaterielsPS = station.stockMaterielsPS;
@@ -2917,7 +2978,7 @@ window.ProtecLogistique = {
 
       if (pendingDeliveries.length > 0) {
         const totalOrderedCaisses = pendingDeliveries.reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
-        const confirmMsg = `Stock local épuisé, mais vous avez ${totalOrderedCaisses} caisse(s) de réarmement déjà commandée(s) en transit.\n\nSouhaitez-vous planifier une Mission Logistique pour aller prélever 1 caisse sur la commande en cours et réarmer ${veh.name} sans attendre la livraison ?`;
+        const confirmMsg = `Stock local épuisé, mais vous avez ${totalOrderedCaisses} kit(s) de réarmement (soit ${totalOrderedCaisses * 3} réarmements) déjà commandé(s) en transit.\n\nSouhaitez-vous planifier une Mission Logistique pour aller prélever 1 kit sur la commande en cours et réarmer ${veh.name} sans attendre la livraison ?`;
         if (confirm(confirmMsg)) {
           if (typeof game.createRearmamentLogisticsMission === 'function') {
             game.createRearmamentLogisticsMission(veh.id, false, null, true);
@@ -2926,21 +2987,25 @@ window.ProtecLogistique = {
         }
       }
 
-      if (game.resources.money >= 60) {
-        if (confirm(`Stock épuisé et aucune commande en transit. Acheter 1 Caisse de réarmement pour 60 € et réarmer ${veh.name} ?`)) {
-          game.resources.money -= 60;
+      if (game.resources.money >= 370) {
+        if (confirm(`Stock épuisé et aucune commande en transit. Acheter 1 Kit de réarmement (consommables pour 3 réarmements complets de VPSP) pour 370 € et réarmer ${veh.name} ?`)) {
+          game.resources.money -= 370;
+          station.stock.caisse_rearmement_charges = (station.stock.caisse_rearmement_charges || 0) + 2; // 3 - 1 utilisé = 2 restants
+          station.stock.caisse_rearmement = Math.ceil(station.stock.caisse_rearmement_charges / 3);
+          station.stockMaterielsPS = (station.stockMaterielsPS || 0) + 200;
+          game.stockMaterielsPS = station.stockMaterielsPS;
           veh.consumables = 100;
           veh.armementLevel = 100;
           veh.isRearmed = true;
           veh.needsRearming = false;
           veh.warnedLowConsumables = false;
           veh.breachedConsumables = false;
-          game.showToast('Véhicule Réarmé ✓', `${veh.name} réarmé à 100% (60 € débités).`, 'green');
+          game.showToast('Kit acheté & Véhicule Réarmé ✓', `${veh.name} réarmé à 100% (-370 €). Il reste 2 réarmements sur ce kit.`, 'green');
         } else {
           return;
         }
       } else {
-        game.showToast('Stock épuisé', 'Aucune caisse de réarmement en stock ni en commande, et trésorerie insuffisante (60 €).', 'orange');
+        game.showToast('Stock épuisé', 'Aucun kit de réarmement en stock ni en commande, et trésorerie insuffisante (370 €).', 'orange');
         return;
       }
     }
@@ -2956,15 +3021,18 @@ window.ProtecLogistique = {
     if (!st) return;
     this.ensureStationStock(st, game);
 
-    const cost = 60;
+    const cost = 370;
     if ((game.resources?.money || 0) < cost) {
-      game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour acquérir 1 Kit de réarmement.`, 'orange');
+      game.showToast('Trésorerie Insuffisante', `Il vous faut ${cost} € pour acquérir 1 Kit de réarmement (3x armement VPSP).`, 'orange');
       return;
     }
 
     game.resources.money -= cost;
     st.stock.caisse_rearmement = (st.stock.caisse_rearmement || 0) + 1;
-    game.showToast('Kit de Réarmement Acquis ✓', `1 Kit de réarmement a été ajouté au stock de l'antenne (-${cost} €).`, 'green');
+    st.stock.caisse_rearmement_charges = (st.stock.caisse_rearmement_charges || 0) + 3;
+    st.stockMaterielsPS = (st.stockMaterielsPS || 0) + 300;
+    game.stockMaterielsPS = st.stockMaterielsPS;
+    game.showToast('Kit de Réarmement Acquis ✓', `1 Kit de réarmement (3 réarmements complets de VPSP) ajouté au stock (-${cost} €).`, 'green');
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
     game.saveGame();
     if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
@@ -3270,25 +3338,27 @@ window.ProtecLogistique = {
         station.stock.caisse_rearmement -= 1;
         veh.loadedItems.push({
           id: 'caisse_rearmement',
-          name: 'Caisse de Réarmement Opérationnel',
+          name: 'Kit de Réarmement (3x VPSP)',
           slots: 1,
           isCaisseRearm: true,
           types: ['LOG'],
-          consumables: 100
+          consumables: 300,
+          maxConsumables: 300
         });
         hasCaisse = true;
-      } else if (game.resources.money >= 60) {
-        game.resources.money -= 60;
+      } else if (game.resources.money >= 370) {
+        game.resources.money -= 370;
         veh.loadedItems.push({
           id: 'caisse_rearmement',
-          name: 'Caisse de Réarmement Opérationnel',
+          name: 'Kit de Réarmement (3x VPSP)',
           slots: 1,
           isCaisseRearm: true,
           types: ['LOG'],
-          consumables: 100
+          consumables: 300,
+          maxConsumables: 300
         });
         hasCaisse = true;
-        game.showToast('Caisse achetée 🛒', '1 Caisse de réarmement achetée pour 60 € et chargée à bord.', 'teal');
+        game.showToast('Kit acheté 🛒', '1 Kit de réarmement (3x armement VPSP) acheté pour 370 € et chargé à bord.', 'teal');
       }
     }
 
@@ -3406,63 +3476,101 @@ window.ProtecLogistique = {
   LOT_COMPOSITIONS: {
     caisse_rearmement: {
       id: 'caisse_rearmement',
-      title: 'Kit de réarmement',
+      title: 'Kit de réarmement (consommable)',
       shortName: 'Kit réarmement',
-      standard: 'RNMSC - Réassort Consommables',
-      category: 'Soins & Réarmement',
+      standard: 'RNMSC - Réarmement Consommables (3x VPSP)',
+      category: 'Soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
       slots: 1,
-      price: 60,
+      price: 370,
+      consumables: 300,
+      maxConsumables: 300,
       icon: 'archive',
       badgeClass: 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/40 dark:text-emerald-200 dark:border-emerald-700',
-      desc: 'Consommables d’avance pour réapprovisionner les sacs de secours et véhicules.',
+      desc: 'Kit de réarmement complet en consommables sanitaires. Correspond à 3x l\'armement complet d\'un VPSP (3 réarmements complets).',
       items: [
-        { icon: '🩹', name: 'Compresses stériles 10x10 cm', qty: 10 },
-        { icon: '🩹', name: 'Bandes extensibles Velpeau 10 cm', qty: 6 },
-        { icon: '🩸', name: 'Garrots tourniquets tactiques CAT Gen 7', qty: 2 },
-        { icon: '🩹', name: 'Pansements compressifs d’urgence israéliens', qty: 4 },
-        { icon: '🫁', name: 'Masques O2 haute concentration avec tubulure', qty: 3 },
-        { icon: '🧴', name: 'Flacon antiseptique chlorhexidine 250 ml', qty: 1 },
-        { icon: '🛡️', name: 'Colliers cervicaux pédiatriques & adultes', qty: 2 },
-        { icon: '✨', name: 'Couvertures de survie isothermes or/argent', qty: 4 },
-        { icon: '🧤', name: 'Paires de gants nitrile stériles usage unique', qty: 10 },
-        { icon: '🗑️', name: 'Sacs étanches DASRI déchets de soins', qty: 2 }
+        { icon: '🩹', name: 'Compresses stériles 10x10 cm (boîte 100)', qty: 3 },
+        { icon: '🩹', name: 'Bandes extensibles Velpeau 10 cm', qty: 18 },
+        { icon: '🩸', name: 'Garrots tourniquets tactiques CAT Gen 7', qty: 6 },
+        { icon: '🩹', name: 'Pansements compressifs d’urgence israéliens', qty: 12 },
+        { icon: '🫁', name: 'Masques O2 haute concentration avec tubulure', qty: 9 },
+        { icon: '🧴', name: 'Flacons antiseptique chlorhexidine 250 ml', qty: 3 },
+        { icon: '🛡️', name: 'Colliers cervicaux pédiatriques & adultes', qty: 6 },
+        { icon: '✨', name: 'Couvertures de survie isothermes or/argent', qty: 12 },
+        { icon: '🧤', name: 'Boîtes gants nitrile stériles usage unique', qty: 3 },
+        { icon: '🗑️', name: 'Sacs étanches DASRI déchets de soins', qty: 6 }
       ]
     },
     lot_secours_a: {
       id: 'lot_secours_a',
       title: 'Lot A - Poste de secours',
       shortName: 'Lot A',
-      standard: 'RNMSC FNPC - Dotation VPSP / DPS',
-      category: 'Premiers Secours & Urgence Vitale',
-      slots: 2,
-      price: 850,
-      icon: 'briefcase-medical',
-      badgeClass: 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700',
-      desc: 'Tente et équipement pour soigner jusqu’à 6 victimes sur les postes de secours.',
+      standard: 'RNMSC FNPC - Poste de Secours & DPS-ME/GE',
+      category: 'Soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
+      slots: 4,
+      price: 2830,
+      consumables: 200,
+      maxConsumables: 200,
+      icon: 'tent',
+      badgeClass: 'bg-orange-50 text-orange-800 border-orange-300 dark:bg-orange-950/40 dark:text-orange-200 dark:border-orange-700',
+      desc: 'Tente gonflable de secours 16 m², mobilier de soins, rampe d’éclairage et dotation complète armée en consommables (double de l\'armement d\'un VPSP).',
       items: [
-        { icon: '🫁', name: 'Bouteille Oxygène Médical 5L (200 bar) + manodétendeur', qty: 1 },
-        { icon: '⚡', name: 'Défibrillateur Automatisé DAE + 2 paires électrodes', qty: 1 },
-        { icon: '💨', name: 'Insufflateur manuel BAVU adulte & enfant + 3 masques', qty: 1 },
-        { icon: '🩺', name: 'Kit Diagnostic (Tensiomètre, Stéthoscope, Oxymètre SpO2, Glycémie)', qty: 1 },
-        { icon: '🩸', name: 'Kit Hémorragie (1 Garrot tourniquet CAT, 2 pansements israéliens)', qty: 1 },
-        { icon: '🧪', name: 'Aspirateur de mucosités manuel d’urgence + sondes', qty: 1 },
-        { icon: '🛡️', name: 'Pack Colliers Cervicaux multipostures (Adulte + Pédiatrique)', qty: 2 },
-        { icon: '🔥', name: 'Trousse Brûlures Water-Jel & pansements hydrogel', qty: 1 },
-        { icon: '✨', name: 'Couvertures de survie isothermes', qty: 2 },
-        { icon: '✂️', name: 'Lampe pupillaire diagnostic & ciseaux Gesco', qty: 1 }
+        { icon: '⛺', name: 'Tente gonflable de secours 16 m² avec armature & gonfleur électrique', qty: 1 },
+        { icon: '🛏️', name: 'Brancards pliables de soins sur tréteaux d’examen médical', qty: 2 },
+        { icon: '💡', name: 'Rampe d’éclairage de poste LED 220V/12V avec trépied télescopique', qty: 1 },
+        { icon: '📋', name: 'Table pliante de secrétariat & régulation SINUS', qty: 1 },
+        { icon: '🪑', name: 'Chaises pliantes d’attente victimes et témoins', qty: 4 },
+        { icon: '📁', name: 'Mallette Fiches Médicales de l’Avant (FMA) & Main Courante', qty: 1 },
+        { icon: '🌡️', name: 'Chauffage soufflant d’appoint électrique de tente', qty: 1 },
+        { icon: '🗑️', name: 'Poubelles à pédale étanches DASRI & Déchets ménagers', qty: 2 },
+        { icon: '📦', name: 'Pack consommables poste fixe (2x armement VPSP - 200 pts)', qty: 1 }
       ]
     },
     lot_secours_b: {
       id: 'lot_secours_b',
       title: 'Lot B - Premiers secours',
       shortName: 'Lot B',
-      standard: 'RNMSC FNPC - Dotation VPSP / DPS-ME',
-      category: 'Traumatologie & Évacuation',
+      standard: 'RNMSC FNPC - Dotation VPSP / Urgence Réflexe',
+      category: 'Soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
       slots: 2,
-      price: 1250,
+      price: 320,
+      consumables: 50,
+      maxConsumables: 50,
+      icon: 'briefcase-medical',
+      badgeClass: 'bg-blue-50 text-blue-800 border-blue-300 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-700',
+      desc: 'Sac d’urgence réflexe avec oxygène, DAE et matériel de bilan. Armé en consommables à l\'achat (la moitié de l\'armement d\'un VPSP).',
+      items: [
+        { icon: '🫁', name: 'Bouteille Oxygène Médical 2L (200 bar) + manodétendeur compact', qty: 1 },
+        { icon: '⚡', name: 'Défibrillateur Automatisé DAE + 2 paires électrodes', qty: 1 },
+        { icon: '💨', name: 'Insufflateur manuel BAVU adulte & enfant + 3 masques', qty: 1 },
+        { icon: '🩺', name: 'Kit Diagnostic (Tensiomètre, Stéthoscope, Oxymètre SpO2, Glycémie)', qty: 1 },
+        { icon: '🩸', name: 'Kit Hémorragie (1 Garrot tourniquet CAT, 2 pansements israéliens)', qty: 1 },
+        { icon: '🧪', name: 'Aspirateur de mucosités manuel d’urgence + sondes', qty: 1 },
+        { icon: '🛡️', name: 'Pack Colliers Cervicaux multipostures (Adulte + Pédiatrique)', qty: 2 },
+        { icon: '✨', name: 'Couvertures de survie isothermes', qty: 2 },
+        { icon: '📦', name: 'Dotation consommables premiers secours (0.5x VPSP - 50 pts)', qty: 1 }
+      ]
+    },
+    lot_secours_c: {
+      id: 'lot_secours_c',
+      title: 'Lot C - Brancardage & Immobilisation',
+      shortName: 'Lot C',
+      standard: 'RNMSC FNPC - Traumatologie & Relevage',
+      category: 'Soins',
+      tag: 'soins',
+      tagLabel: 'Soins',
+      slots: 2,
+      price: 1950,
+      consumables: 100,
+      maxConsumables: 100,
       icon: 'stretch-horizontal',
-      badgeClass: 'bg-indigo-50 text-indigo-800 border-indigo-300 dark:bg-indigo-950/40 dark:text-indigo-200 dark:border-indigo-700',
-      desc: 'Sac d’urgence vitale avec oxygène et défibrillateur pour équiper un VPSP ou PAPS.',
+      badgeClass: 'bg-slate-100 text-slate-800 border-slate-300 dark:bg-slate-900/60 dark:text-slate-200 dark:border-slate-700',
+      desc: 'Matériel complet d’immobilisation, de relevage et d’évacuation des blessés. Armé en consommables à l\'achat.',
       items: [
         { icon: '🛌', name: 'Matelas Immobilisateur à Dépression (MID Coquille) + pompe', qty: 1 },
         { icon: '📏', name: 'Plan Dur spinal radio-transparent + Sangles araignée', qty: 1 },
@@ -3472,28 +3580,6 @@ window.ProtecLogistique = {
         { icon: '🥄', name: 'Brancard cuillère / de relevage sécable alu', qty: 1 },
         { icon: '🩹', name: 'Attelle de traction fémorale / sangle pelvienne SAM Sling', qty: 1 },
         { icon: '📐', name: 'Écharpes triangulaires de maintien de membre', qty: 4 }
-      ]
-    },
-    lot_secours_c: {
-      id: 'lot_secours_c',
-      title: 'Lot C - Immobilisation & Brancardage',
-      shortName: 'Lot C',
-      standard: 'RNMSC FNPC - Poste Médical Avancé & DPS',
-      category: 'Structure & Accueil Soins',
-      slots: 3,
-      price: 1750,
-      icon: 'tent',
-      badgeClass: 'bg-purple-50 text-purple-800 border-purple-300 dark:bg-purple-950/40 dark:text-purple-200 dark:border-purple-700',
-      desc: 'Matériel complet d’immobilisation, de relevage et d’évacuation des blessés.',
-      items: [
-        { icon: '⛺', name: 'Tente gonflable de secours 16 m² avec armature & gonfleur électrique', qty: 1 },
-        { icon: '🛏️', name: 'Brancards pliables de soins sur tréteaux d’examen médical', qty: 2 },
-        { icon: '💡', name: 'Rampe d’éclairage de poste LED 220V/12V avec trépied télescopique', qty: 1 },
-        { icon: '📋', name: 'Table pliante de secrétariat & régulation SINUS', qty: 1 },
-        { icon: '🪑', name: 'Chaises pliantes d’attente victimes et témoins', qty: 4 },
-        { icon: '📁', name: 'Mallette Fiches Médicales de l’Avant (FMA) & Main Courante', qty: 1 },
-        { icon: '🌡️', name: 'Chauffage soufflant d’appoint électrique de tente', qty: 1 },
-        { icon: '🗑️', name: 'Poubelles à pédale étanches DASRI & Déchets ménagers', qty: 2 }
       ]
     },
     lot_hebergement: {

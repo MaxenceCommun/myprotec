@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PROTEC LIVE - SYSTÈME D'ÉQUIPEMENT ET D'INVENTAIRE ÉCHELONNÉ EN GAMMES
  * 
  * 1. Gammes de Matériel (Entrée de gamme / Standard / Haut de gamme & Connecté) :
@@ -466,7 +466,9 @@ window.ProtecEquipements = {
       name: 'Lot A - Poste de secours',
       lucideIcon: 'tent',
       image: 'images/equipements/lot_secours_a.png',
-      price: 1750,
+      price: 2830,
+      consumables: 200,
+      maxConsumables: 200,
       storageSize: 3,
       badge: 'Poste Fixe',
       badgeColor: 'bg-orange-100 text-orange-900 border-orange-300',
@@ -475,10 +477,12 @@ window.ProtecEquipements = {
     },
     {
       id: 'lot_secours_b',
-      name: 'Lot B - Secours à personne',
+      name: 'Lot B - Premiers secours',
       lucideIcon: 'briefcase',
       image: 'images/equipements/lot_secours_b.png',
-      price: 850,
+      price: 320,
+      consumables: 50,
+      maxConsumables: 50,
       storageSize: 1,
       badge: 'Secours à Personne',
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
@@ -487,10 +491,12 @@ window.ProtecEquipements = {
     },
     {
       id: 'lot_secours_c',
-      name: 'Lot C - Brancardage & relevage',
+      name: 'Lot C - Brancardage & Immobilisation',
       lucideIcon: 'stretch-horizontal',
       image: 'images/equipements/lot_secours_c.png',
-      price: 1250,
+      price: 1950,
+      consumables: 100,
+      maxConsumables: 100,
       storageSize: 2,
       badge: 'Brancardage & Relevage',
       badgeColor: 'bg-slate-200 text-slate-800 border-slate-300',
