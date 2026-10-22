@@ -715,7 +715,7 @@ window.ProtecIncidents = {
 
       // Compilation détaillée des résultats pour la notification après sélection
       const resultsSummary = [];
-      if (choice.rewardReputation) resultsSummary.push(`+${choice.rewardReputation} Notoriété`);
+      // Simulation interne pure - pas d'affichage de gain/perte de notoriété
       if (choice.rewardXp) resultsSummary.push(`+${choice.rewardXp} XP Équipage`);
       if (choice.rewardMoney) resultsSummary.push(`+${choice.rewardMoney} €`);
       if (choice.costMoney) resultsSummary.push(`-${choice.costMoney} €`);

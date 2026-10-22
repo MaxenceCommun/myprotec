@@ -971,12 +971,12 @@ window.ProtecAdvanced = {
     pharmacie: [
       { level: 1, name: 'Armoire Médicale Standard', desc: 'Stockage basique des consommables.', cost: 0, bonus: 'Standard' },
       { level: 2, name: 'Compresseur Médical O2', desc: 'Permet de recharger l’Oxygène B5 à moitié prix directement à l’antenne.', cost: 1200, bonus: '-50% coût Oxygène' },
-      { level: 3, name: 'Réserve Catastrophe & Lots PMA', desc: 'Capacité de stockage doublée pour le matériel d’urgence.', cost: 2400, bonus: 'Bonus +30% réputation NOVI' }
+      { level: 3, name: 'Réserve Catastrophe & Lots PMA', desc: 'Capacité de stockage doublée pour le matériel d’urgence.', cost: 2400, bonus: 'Capacité de prise en charge d\'urgence' }
     ],
     foyer: [
       { level: 1, name: 'Salle de Repos Simple', desc: 'Quelques chaises et une table.', cost: 0, bonus: 'Standard' },
       { level: 2, name: 'Foyer Convivial & Cafétéria', desc: 'Canapés confortables, cafetière. Récupération d’énergie +50% plus rapide.', cost: 800, bonus: '+50% régénération fatigue' },
-      { level: 3, name: 'Dortoir de Garde Équipé', desc: 'Lits individuels pour les gardes SAMU de 12h de nuit.', cost: 1800, bonus: 'Moral permanent +15%' }
+      { level: 3, name: 'Dortoir de Garde Équipé', desc: 'Lits individuels pour les gardes SAMU de 12h de nuit.', cost: 1800, bonus: 'Confort de repos optimal' }
     ],
     formation: [
       { level: 1, name: 'Salle de Réunion', desc: 'Réunions d’antenne et briefings.', cost: 0, bonus: 'Standard' },
@@ -1008,9 +1008,9 @@ window.ProtecAdvanced = {
     { id: 'cyno', name: 'Conducteur Cynotechnique USAR', icon: '🐕', xpRequired: 50, reqSkill: 'usar', desc: 'Maître-chien de recherche et sauvetage en décombres et quête de disparus.' },
 
     // Filière Communication & Médias (Photos/Vidéos à 3 Niveaux d'Impact)
-    { id: 'communication_1', name: 'Com N1 : Reporter d’Antenne', icon: '📸', xpRequired: 20, desc: 'Photos et vidéos de terrain valorisant les interventions (+10% dons et visibilité).' },
-    { id: 'communication_2', name: 'Com N2 : Chargé de Communication', icon: '📱', xpRequired: 35, reqSkill: 'communication_1', desc: 'Gestion des réseaux sociaux et couverture médiatique (+25% candidatures et +20% dons).' },
-    { id: 'communication_3', name: 'Com N3 : Responsable Communication', icon: '📢', xpRequired: 50, reqSkill: 'communication_2', desc: 'Campagnes d’appel aux dons et relations presse (+50% dons, +50% candidatures, boost réputation).' },
+    { id: 'communication_1', name: 'Com N1 : Reporter d’Antenne', icon: '📸', xpRequired: 20, desc: 'Photos et vidéos de terrain valorisant les interventions.' },
+    { id: 'communication_2', name: 'Com N2 : Chargé de Communication', icon: '📱', xpRequired: 35, reqSkill: 'communication_1', desc: 'Gestion des réseaux sociaux et couverture médiatique de l\'antenne.' },
+    { id: 'communication_3', name: 'Com N3 : Responsable Communication', icon: '📢', xpRequired: 50, reqSkill: 'communication_2', desc: 'Campagnes d’appel aux dons et relations presse locales.' },
 
     // Filière Aide & Écoute Psychologique (AEP)
     { id: 'aep1', name: 'Aide & Écoute Psychologique 1 (AEP1)', icon: '🧠', xpRequired: 25, desc: 'Sensibilisation à l’AEP : posture d’écoute active, réconfort immédiat des impliqués et premiers secours émotionnels.' },
@@ -1046,13 +1046,13 @@ window.ProtecAdvanced = {
     });
 
     if (maxLevel === 3) {
-      return { level: 3, donBonusPct: 50, candidateBonusPct: 50, repBonus: 20, label: 'Responsable Communication (Impact Maximum +50%)' };
+      return { level: 3, donBonusPct: 50, candidateBonusPct: 50, repBonus: 20, label: 'Responsable Communication' };
     }
     if (maxLevel === 2) {
-      return { level: 2, donBonusPct: 20, candidateBonusPct: 25, repBonus: 10, label: 'Chargé de Communication (+25% Candidatures / +20% Dons)' };
+      return { level: 2, donBonusPct: 20, candidateBonusPct: 25, repBonus: 10, label: 'Chargé de Communication' };
     }
     if (maxLevel === 1) {
-      return { level: 1, donBonusPct: 10, candidateBonusPct: 10, repBonus: 5, label: 'Reporter d’Antenne (+10% Visibilité & Dons)' };
+      return { level: 1, donBonusPct: 10, candidateBonusPct: 10, repBonus: 5, label: 'Reporter d’Antenne' };
     }
     return { level: 0, donBonusPct: 0, candidateBonusPct: 0, repBonus: 0, label: 'Aucun bénévole en communication' };
   },

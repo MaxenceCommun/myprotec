@@ -361,14 +361,14 @@ window.ProtecAdvancedModals = {
       label: 'Tensiomètre Automatique NIBP Brassard',
       cost: 450,
       icon: '🩺',
-      desc: 'Mesure automatique et rapide de la tension artérielle (+5 réputation SAMU 15).'
+      desc: 'Mesure automatique et rapide de la tension artérielle en intervention.'
     },
     schiller_t7: {
       id: 'schiller_t7',
       label: 'Moniteur défibrillateur multiparamétrique',
       cost: 14000,
       icon: '📟',
-      desc: 'Tracé ECG 12 dérivations, constantes temps réel Bluetooth (+10 réputation SAMU 15, +6 moral secouristes).'
+      desc: 'Tracé ECG 12 dérivations, constantes temps réel et surveillance avancée des urgences.'
     }
   },
 

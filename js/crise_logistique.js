@@ -2284,7 +2284,7 @@ window.ProtecCriseLogistique = {
                 <span>Cadre d'Astreinte • Vous êtes mobilisé en priorité !</span>
                 <span class="px-2 py-0.5 rounded bg-red-800 text-white text-[10px] font-mono">Délai : ${minLeft}m ${sLeft}s</span>
               </div>
-              <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention. Passé 5 min sans réponse, une pénalité (-20 réputation) sera appliquée.</p>
+              <p class="text-[10.5px] text-slate-300">Prenez la direction de l'intervention sous 5 min pour assurer la régulation de la crise.</p>
             </div>
           </div>
           <button 
@@ -3419,7 +3419,7 @@ window.ProtecCriseLogistique = {
         game.reputation = Math.max(0, (game.reputation || 100) - 20);
         game.showToast(
           '⚠️ DÉFAILLANCE D\'ASTREINTE',
-          'Délai réglementaire de 5 min dépassé sans prise en charge de la crise ! Sanction appliquée : -20 Réputation.',
+          'Délai réglementaire de 5 min dépassé sans prise en charge de la crise ! Manquement constaté par la Préfecture.',
           'red'
         );
       }
@@ -3427,11 +3427,11 @@ window.ProtecCriseLogistique = {
       this.logCrisisRadio(
         crisis,
         'Régulation Préfecture',
-        `DÉFAILLANCE D'ASTREINTE : Le Cadre d'Astreinte (${officerName}) n'a pas répondu dans le délai imparti de 5 minutes (-20 Réputation). Mobilisation générale ouverte à tous les directeurs du département.`,
+        `DÉFAILLANCE D'ASTREINTE : Le Cadre d'Astreinte (${officerName}) n'a pas répondu dans le délai imparti de 5 minutes. Mobilisation générale ouverte à tous les directeurs du département.`,
         'alerte'
       );
 
-      this.escalateToBroadcastAll(game, crisis, "Absence de réponse du Cadre d'Astreinte sous 5 minutes (-20 Réputation)");
+      this.escalateToBroadcastAll(game, crisis, "Absence de réponse du Cadre d'Astreinte sous 5 minutes");
     }
 
     this.broadcastCrisisState(game, crisis);

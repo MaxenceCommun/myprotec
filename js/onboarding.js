@@ -651,8 +651,11 @@ window.ProtecOnboarding = {
                     ${sk.replace('_', ' ')}
                   </span>
                 `).join('')}
-                <span class="px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 font-black border border-emerald-200 dark:border-emerald-800">
-                  Motivation ${vol.motivation}%
+                <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold" title="Motivation">
+                  <span class="text-[9px]">Motivation :</span>
+                  <span class="w-10 bg-slate-200 h-1.5 rounded-full overflow-hidden inline-block">
+                    <span class="block h-full rounded-full ${(vol.motivation || 80) < 30 ? 'bg-red-500' : ((vol.motivation || 80) < 60 ? 'bg-amber-500' : 'bg-pc-blue')}" style="width: ${Math.min(100, Math.max(10, vol.motivation || 80))}%"></span>
+                  </span>
                 </span>
               </div>
             </div>

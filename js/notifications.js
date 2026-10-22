@@ -1008,6 +1008,10 @@ window.ProtecNotifications = {
   sanitizeMessage(msg) {
     if (typeof msg !== 'string') return msg;
     let s = msg;
+    // Supprimer systématiquement toute mention de gain/perte de réputation, notoriété, visibilité, abonnés ou moral/motivation
+    s = s.replace(/\s*\([^)]*(?:r[ée]putation|r[ée]put|moral|motivation|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?)[^)]*\)/gi, '');
+    s = s.replace(/\s*(?:et|,|&)\s*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?(?:r[ée]put(?:ation)?|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?|moral|motivation|humeur)\b[^.!,]*/gi, '');
+    s = s.replace(/[,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?(?:r[ée]put(?:ation)?|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?|moral|motivation|humeur)\b[^.!,]*/gi, '');
     // Supprimer d'abord les mentions complètes entre parenthèses
     s = s.replace(/\s*\([^)]*(?:r[ée]putation|r[ée]put|moral|motivation)[^)]*\)/gi, '');
     // Supprimer spécifiquement les gains/pertes de réputation (ex: "et +30 réputation versés à l'antenne" -> "versés à l'antenne")

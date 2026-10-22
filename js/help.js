@@ -534,8 +534,8 @@ window.ProtecHelp = {
                 </p>
                 <ul class="list-disc list-inside space-y-1 text-[11.5px] text-amber-950 dark:text-amber-300 pl-1">
                   <li><strong>Notification avec alerte :</strong> Cette demande nécessite de la gestion manuelle (trouver un 2e VPSP disponible et mobiliser des secouristes libres), vous êtes donc immédiatement alerté par notification et sonnerie.</li>
-                  <li><strong>Sans aucune obligation :</strong> Si vous n'avez pas le matériel ou le personnel disponible, ou si vous déclinez la demande, <strong>aucune sanction, aucune pénalité financière et 0 perte de réputation</strong> ne sont appliquées.</li>
-                  <li><strong>Bonus exceptionnel si réalisé :</strong> Si vous parvenez à armer ce renfort d'urgence, vous recevez une prime financière exceptionnelle (+250 €) et un bond de réputation majeur auprès des autorités de santé.</li>
+                  <li><strong>Sans aucune obligation :</strong> Si vous n'avez pas le matériel ou le personnel disponible, ou si vous déclinez la demande, <strong>aucune sanction et aucune pénalité financière</strong> ne sont appliquées.</li>
+                  <li><strong>Bonus exceptionnel si réalisé :</strong> Si vous parvenez à armer ce renfort d'urgence, vous recevez une prime financière exceptionnelle (+250 €) et la reconnaissance officielle des autorités de santé.</li>
                 </ul>
               </div>
 

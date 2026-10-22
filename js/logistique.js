@@ -767,7 +767,7 @@ window.ProtecLogistique = {
       badge: 'Simulation Médicale',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
       desc: 'Moniteur-défibrillateur de simulation Touch 7 connecté en Bluetooth à la tablette du formateur. Permet de générer des scénarios ECG dynamiques (FV, TV, asystolie), piloter les constantes (SpO2, NIBP) et simuler des bilans réalistes pour les formations PSE.',
-      usage: 'Simulation haute fidélité pour les formations PSE1, PSE2 et recyclages opérationnels (+15% réussite, +12 réputation SAMU).'
+      usage: 'Simulation haute fidélité pour les formations PSE1, PSE2 et recyclages opérationnels.'
     }],
 
   // =========================================================================
@@ -3146,7 +3146,7 @@ window.ProtecLogistique = {
             <div class="p-3 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-2.5">
               <span class="text-xl">⚠️</span>
               <div>
-                <strong>Impact Moral Terrain :</strong> Frustration immédiate des bénévoles engagés (<strong>-15% de moral</strong>). Sans renfort logistique, le mécontentement va s'aggraver et l'autorité organisatrice appliquera des pénalités sévères.
+                <strong>Impact Moral Terrain :</strong> Frustration immédiate des bénévoles engagés sur le terrain. Sans renfort logistique, le mécontentement va s'aggraver et l'autorité organisatrice appliquera des pénalités sévères.
               </div>
             </div>
 
@@ -3165,7 +3165,7 @@ window.ProtecLogistique = {
                       <span>OPTION 1 : Envoyer un Renfort LOG d'Astreinte</span>
                     </h5>
                     <p class="text-[11px] text-emerald-800 mt-0.5">
-                      Fait partir immédiatement un véhicule LOG chargé de caisses de réarmement. À l'arrivée sur zone, le matériel est réarmé, le moral se stabilise (+10%) et la mission continue sereinement.
+                      Fait partir immédiatement un véhicule LOG chargé de caisses de réarmement. À l'arrivée sur zone, le matériel est réarmé, l'équipe est rassurée et la mission continue sereinement.
                     </p>
                   </div>
                 </div>
@@ -3203,7 +3203,7 @@ window.ProtecLogistique = {
                     <span>OPTION 2 : Refuser le Renfort (Indisponibilité de moyens)</span>
                   </h5>
                   <p class="text-[10.5px] text-rose-800 mt-0.5">
-                    L'équipe reste sur place sans matériel : <strong>-25% de moral</strong> supplémentaire et <strong>-35% de satisfaction organisateur</strong> (pénalité de convention).
+                    L'équipe reste sur place sans matériel : forte démotivation des secouristes et mécontentement de l'organisateur (pénalité de convention).
                   </p>
                 </div>
                 <button 

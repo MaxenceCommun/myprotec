@@ -211,8 +211,8 @@ window.ProtecEquipements = {
           bullets: [
             '⚡ Bilan secouriste 35% plus rapide et surveillance continue de la victime',
             '✓ 0% d’erreur de mesure ou de transcription manuscrite',
-            '💪 Confort et qualité de travail accrus pour les équipiers (+10 motivation/humeur)',
-            '🏥 Précision saluée lors des bilans passés à la régulation SAMU 15 (+6 réputation)'
+            '💪 Confort et qualité de travail accrus pour les équipiers',
+            '🏥 Précision saluée lors des bilans passés à la régulation SAMU 15'
           ],
           stats: { speedBonus: 0.35, errorRisk: 0, samuRepBonus: 6, crewMoralBonus: 10, regulationSpeed: 1.4 }
         },
@@ -227,8 +227,8 @@ window.ProtecEquipements = {
           bullets: [
             '⚡ Bilan vital instantané et exhaustif (-50% temps de prise en charge)',
             '🫀 Diagnostic immédiat des arrêts cardiaques et détresses respiratoires graves',
-            '🏥 Confiance totale et valorisation d’excellence par le SAMU 15 (+12 réputation)',
-            '🌟 Qualité de travail exceptionnelle : secouristes sereins et hautement valorisés (+20 moral)',
+            '🏥 Confiance totale et valorisation d’excellence par le SAMU 15',
+            '🌟 Qualité de travail exceptionnelle : secouristes sereins et valorisés',
             '🚑 Libération accélérée du VPSP aux Urgences hospitalières (-40% attente)'
           ],
           stats: { speedBonus: 0.50, errorRisk: 0, samuRepBonus: 12, crewMoralBonus: 20, regulationSpeed: 2.0, fastHospitalRelease: true }
@@ -255,8 +255,8 @@ window.ProtecEquipements = {
           bullets: [
             '📸 Prises de vue souvenirs de poste en plein jour convenables',
             '⚠️ Bruit numérique sur événements nocturnes ou concerts',
-            '🙂 +8 Humeur et Motivation des personnels photographes/vidéastes sur mission',
-            '📱 +10% de portée et d’impact sur les publications d’événements'
+            '🙂 Épanouissement des personnels photographes/vidéastes sur mission',
+            '📱 Excellente portée sur les publications d’événements'
           ],
           stats: { photoMoralBonus: 8, photoMotivationBonus: 10, comImpactBonus: 0.10, repBonusPerMission: 1, photoQuality: 'standard' }
         },
@@ -270,9 +270,9 @@ window.ProtecEquipements = {
           desc: 'Photos et vidéos nettes pour valoriser les actions de l’antenne.',
           bullets: [
             '🌟 Clichés d’action d’excellente qualité pour valoriser les secouristes en intervention',
-            '💪 +18 Humeur et Motivation des photographes (fierté et grand plaisir de shooter)',
-            '⚡ +25% de visibilité, likes et partages sur les publications de l’antenne',
-            '🏛️ Valorise la réputation d’antenne auprès des mairies et organisateurs (+3 rep/événement)'
+            '💪 Fierté et grand plaisir de reportage pour les photographes',
+            '⚡ Excellente visibilité sur les publications de l’antenne',
+            '🏛️ Valorise l’image d’antenne auprès des mairies et organisateurs'
           ],
           stats: { photoMoralBonus: 18, photoMotivationBonus: 22, comImpactBonus: 0.25, repBonusPerMission: 3, photoQuality: 'semipro' }
         },
@@ -286,9 +286,9 @@ window.ProtecEquipements = {
           desc: 'Matériel professionnel pour reportages et communication de haut niveau.',
           bullets: [
             '🏆 Rendu visuel digne des médias nationaux et de la communication de crise',
-            '🔥 +30 Humeur et Motivation des photographes (passion comblée, moral au zénith)',
-            '🚀 +50% d’impact des publications, forte viralité et afflux de nouveaux bénévoles',
-            '🤝 Retombées immédiates en dons et reconnaissance des partenaires (+6 rep/événement)'
+            '🔥 Passion comblée et épanouissement des photographes',
+            '🚀 Forte visibilité des publications et valorisation de l’équipe',
+            '🤝 Retombées concrètes auprès des partenaires et des donateurs'
           ],
           stats: { photoMoralBonus: 30, photoMotivationBonus: 35, comImpactBonus: 0.50, repBonusPerMission: 6, photoQuality: 'pro', recruitBoost: true }
         }
@@ -1120,7 +1120,7 @@ window.ProtecEquipements = {
           }
           game.showToast(
             '⚡ Remorque Groupe Électrogène 50 kVA Engagée !',
-            `Tractée avec boule d'attelage : réseau de secours réalimenté avec succès (+${powerBonus} € subvention préfecture/ARS, +45 réputation) !`,
+            `Tractée avec boule d'attelage : réseau de secours réalimenté avec succès (+${powerBonus} € subvention préfecture/ARS) !`,
             'amber'
           );
         } else {
@@ -1149,7 +1149,7 @@ window.ProtecEquipements = {
           }
           game.showToast(
             '🌊 Remorque Motopompe Lourd Engagée !',
-            `Tractée avec boule d'attelage : épuisement grande capacité 120 m³/h (2 000 L/min) (+${pumpBonus} € subvention mairie, +40 réputation) !`,
+            `Tractée avec boule d'attelage : épuisement grande capacité 120 m³/h (2 000 L/min) (+${pumpBonus} € subvention mairie) !`,
             'blue'
           );
         } else {

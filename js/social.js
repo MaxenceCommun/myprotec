@@ -321,7 +321,7 @@ window.ProtecSocial = {
 
     game.showToast(
       'Subvention Versée !',
-      `Félicitations ! ${contract.funder} vous a versé la dotation de ${contract.grantAmount.toLocaleString('fr-FR')} € (+25 réputation).`,
+      `Félicitations ! ${contract.funder} vous a versé la dotation de ${contract.grantAmount.toLocaleString('fr-FR')} €.`,
       'green'
     );
 

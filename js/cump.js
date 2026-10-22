@@ -262,7 +262,7 @@ window.ProtecCump = {
           'Mise à disposition du Centre d\'Accueil des Impliqués (CAI) et secouristes formés au soutien psychologique.',
           'Dotation d\'installation et d\'équipement allouée immédiatement à la ratification : 1 200 €.'
         ],
-        bonusText: 'Dotation d\'installation immédiate : +1 200 € & +20 Réputation',
+        bonusText: 'Dotation d\'installation immédiate : +1 200 €',
         stampText: 'VALIDÉ & CONVENTIONNÉ SAMU 15 / CUMP',
         stampColor: '#805ad5',
         onSign: () => executeSigning()
@@ -349,7 +349,7 @@ window.ProtecCump = {
       if (window.ProtecNotifications) {
         window.ProtecNotifications.recordNotification({
           title: '🚫 Annulation Convention CUMP',
-          message: 'Défaut de mise aux normes sous 48h. Convention résiliée par le SAMU 15 (-25 réputation).',
+          message: 'Défaut de mise aux normes sous 48h. Convention résiliée par le SAMU 15.',
           category: 'cump',
           level: 'alert'
         });
@@ -366,7 +366,7 @@ window.ProtecCump = {
     if (!game.cumpConvention.signed) return;
 
     const confirmed = await window.ProtecDialog.confirm(
-      'Dénonciation de la Convention CUMP :\n\nConformément au cadre légal, la résiliation par l\'AASC est soumise à un préavis de résiliation (-10 pts réputation).\nConfirmez-vous la transmission de votre préavis au SAMU ?',
+      'Dénonciation de la Convention CUMP :\n\nConformément au cadre légal, la résiliation par l\'AASC est soumise à un préavis de résiliation réglementaire.\nConfirmez-vous la transmission de votre préavis au SAMU ?',
       'Résiliation de Convention CUMP',
       { isDestructive: true, confirmText: 'Résilier la convention', cancelText: 'Conserver la convention' }
     );

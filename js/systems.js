@@ -2321,7 +2321,7 @@ triggerWeatherEmergencyMission(game) {
       type: 'meteo',
       categoryLabel: 'Plan d’Urgence Préfecture / PCS',
       title: `[URGENCE RÉQUISITION] ${missionDef.title}`,
-      desc: `🏛️ ALERTE PRÉFECTURE / PCS : ${missionDef.desc} Mobilisez immédiatement vos bénévoles. Succès : +20 pts Préfecture et +25 pts réputation ${city}. Échec/Refus : pénalité administrative sévère.`,
+      desc: `🏛️ ALERTE PRÉFECTURE / PCS : ${missionDef.desc} Mobilisez immédiatement vos bénévoles. Succès : reconnaissance officielle des autorités. Échec/Refus : pénalité administrative sévère.`,
       lat: meteoCoords.lat,
       lng: meteoCoords.lng,
       commune: city,
@@ -2553,7 +2553,7 @@ updateWeatherAndDayNight(game) {
         v.moral = Math.min(100, (v.moral || 80) + 30);
         v.energy = Math.min(100, (v.energy || 80) + 20);
       });
-      game.showToast('Moment de Cohésion Réussi !', 'Barbecue d’antenne : le moral et l’esprit d’équipe sont au maximum (+30% moral) !', 'green');
+      game.showToast('Moment de Cohésion Réussi !', 'Barbecue d’antenne : les bénévoles partagent un moment fraternel et l’esprit d’équipe est au beau fixe !', 'green');
     } else if (eventType === 'recyclage') {
       let count = 0;
       game.volunteers.forEach(v => {

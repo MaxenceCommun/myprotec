@@ -1841,7 +1841,7 @@ window.ProtecLocaux = {
                 </span>
               </div>
               <p class="text-[11px] text-slate-600 leading-relaxed">
-                Conditionne les sessions de formation citoyenne PSC1/GQS. ${psc1.hasVideoprojecteur ? '✓ Vidéoprojecteur interactif actif (+20% inscrits).' : ''} ${psc1.hasQcprMannequins ? '✓ Mannequins connectés QCPR actifs (+30% réputation, +15 €/personne).' : ''}
+                Conditionne les sessions de formation citoyenne PSC1/GQS. ${psc1.hasVideoprojecteur ? '✓ Vidéoprojecteur interactif actif (+20% inscrits).' : ''} ${psc1.hasQcprMannequins ? '✓ Mannequins connectés QCPR actifs (+15 €/personne).' : ''}
               </p>
               <div class="space-y-2 pt-1 border-t border-slate-100">
                 <div class="flex flex-wrap gap-2">
@@ -3256,7 +3256,7 @@ window.ProtecLocaux = {
               <span class="text-emerald-600 font-black">+${stats.energyRegen}% réc.</span>
             </div>
             <p class="text-[10px] text-slate-500">
-              ${stats.nightBeds} lits • Moral +${stats.moralBonus}%
+              ${stats.nightBeds} lits de repos
             </p>
           </div>
 
@@ -5806,7 +5806,7 @@ window.ProtecLocaux = {
                   </div>
                   <div class="text-right flex-shrink-0 font-mono text-[10px]">
                     <span class="text-emerald-400 font-bold block">⚡ ${v.energy || 100}%</span>
-                    <span class="text-amber-400">😊 ${v.humeur || 85}%</span>
+                    <span class="inline-block w-10 bg-slate-700 h-1 rounded-full overflow-hidden" title="Motivation"><span class="block h-full bg-pc-blue rounded-full" style="width: ${Math.min(100, Math.max(10, v.motivation || v.humeur || 85))}%"></span></span>
                   </div>
                 </div>
               `).join('')}
@@ -5817,7 +5817,7 @@ window.ProtecLocaux = {
         <!-- Action interactive : Tournée de café -->
         <div class="pt-2 border-t border-slate-800 flex items-center justify-between gap-3">
           <div class="text-[11px] text-slate-400">
-            Pause conviviale : booste immédiatement l’énergie (+5%) et le moral (+4).
+            Pause conviviale : détend l’équipe et redonne de l'énergie aux bénévoles.
           </div>
           <button type="button" onclick="window.ProtecLocaux.serveCoffeeBreak('${station ? station.id : ''}')" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-500 hover:brightness-110 text-white font-black text-xs transition shadow cursor-pointer active:scale-95 flex items-center gap-1.5 flex-shrink-0">
             <span>☕</span> <span>Servir un café</span>
@@ -5853,7 +5853,7 @@ window.ProtecLocaux = {
     if (game.saveGame) game.saveGame();
     if (game.updateStatsUI) game.updateStatsUI();
 
-    game.showToast('☕ Tournée de Café Servie !', 'Moment de détente chaleureux au foyer. +5% énergie et +4 moral pour l’équipe en garde !', 'green');
+    game.showToast('☕ Tournée de Café Servie !', 'Moment de détente chaleureux au foyer : l’équipe en garde décompresse et reprend des forces !', 'green');
 
     const modal = document.getElementById('furniture-comfort-modal');
     if (modal) {
@@ -5871,11 +5871,11 @@ window.ProtecLocaux = {
     const station = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
 
     const TITLES = {
-      babyfoot: { title: 'Baby-foot Bonzini Professionnel', icon: '⚽', bonus: '+8% Moral & Cohésion', action: 'Lancer un tournoi de baby-foot', desc: 'Renforce les liens fraternels et détend les équipages entre deux sorties d’urgence.' },
-      tv_foyer: { title: 'Téléviseur Mural / Écran Foyer', icon: '📺', bonus: '+6% Détente & Veille', action: 'Suivre les alertes et reportages', desc: 'Idéal pour suivre l’évolution météo en direct et décompresser en soirée de garde.' },
-      console_jeux: { title: 'Console de Jeux & Coin Gaming', icon: '🎮', bonus: '+10% Moral & Recrutement Jeunes', action: 'Organiser une session gaming', desc: 'Attire les jeunes recrues et offre un sas de décompression convivial après les missions éprouvantes.' },
-      ping_pong: { title: 'Table de Ping-Pong Pliante', icon: '🏓', bonus: '+5% Énergie & Réflexes', action: 'Jouer un match amical', desc: 'Maintient la tonicité musculaire et la vivacité de réaction des secouristes.' },
-      distributeur_snacks: { title: 'Distributeur Boissons & En-cas', icon: '🥤', bonus: '+5% Énergie & Convivialité', action: 'Prendre une collation (-2 €)', desc: 'Des rafraîchissements et encas disponibles 24h/24 pour soutenir les équipages de garde.' }
+      babyfoot: { title: 'Baby-foot Bonzini Professionnel', icon: '⚽', bonus: 'Convivialité & Détente', action: 'Lancer un tournoi de baby-foot', desc: 'Renforce les liens fraternels et détend les équipages entre deux sorties d’urgence.' },
+      tv_foyer: { title: 'Téléviseur Mural / Écran Foyer', icon: '📺', bonus: 'Veille & Confort', action: 'Suivre les alertes et reportages', desc: 'Idéal pour suivre l’évolution météo en direct et décompresser en soirée de garde.' },
+      console_jeux: { title: 'Console de Jeux & Coin Gaming', icon: '🎮', bonus: 'Espace Jeunes & Convivialité', action: 'Organiser une session gaming', desc: 'Attire les jeunes recrues et offre un sas de décompression convivial après les missions éprouvantes.' },
+      ping_pong: { title: 'Table de Ping-Pong Pliante', icon: '🏓', bonus: 'Détente & Réflexes', action: 'Jouer un match amical', desc: 'Maintient la tonicité musculaire et la vivacité de réaction des secouristes.' },
+      distributeur_snacks: { title: 'Distributeur Boissons & En-cas', icon: '🥤', bonus: 'Ravitaillement H24', action: 'Prendre une collation (-2 €)', desc: 'Des rafraîchissements et encas disponibles 24h/24 pour soutenir les équipages de garde.' }
     };
 
     const info = TITLES[item.type] || { title: item.label, icon: item.icon || '🎮', bonus: '+5% Moral', action: 'Interagir', desc: 'Mobilier de convivialité pour la caserne.' };
@@ -5932,21 +5932,21 @@ window.ProtecLocaux = {
 
     if (type === 'babyfoot') {
       vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 6); });
-      game.showToast('🏆 Tournoi de Baby-foot !', 'Match acharné au foyer ! Rires et complicité au rendez-vous, +6 moral pour toute l’équipe !', 'green');
+      game.showToast('🏆 Tournoi de Baby-foot !', 'Match acharné au foyer ! Rires et complicité au rendez-vous pour toute l’équipe !', 'green');
     } else if (type === 'tv_foyer') {
       vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 4); v.energy = Math.min(100, (v.energy || 90) + 3); });
       game.showToast('📺 Moment Détente Télé', 'Les bénévoles ont suivi les actualités et un reportage au chaud. Esprit apaisé !', 'blue');
     } else if (type === 'console_jeux') {
       vols.forEach(v => { v.humeur = Math.min(100, (v.humeur || 85) + 8); });
-      game.showToast('🎮 Session Gaming au Foyer !', 'Partie endiablée en multijoueur ! Ambiance au top, +8 moral pour l’équipe !', 'green');
+      game.showToast('🎮 Session Gaming au Foyer !', 'Partie endiablée en multijoueur ! Ambiance conviviale au top pour l’équipe !', 'green');
     } else if (type === 'ping_pong') {
       vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
-      game.showToast('🏓 Match de Ping-Pong', 'Échanges rapides et bonne humeur ! +5 énergie pour les équipages.', 'blue');
+      game.showToast('🏓 Match de Ping-Pong', 'Échanges rapides et bonne humeur pour les équipages !', 'blue');
     } else if (type === 'distributeur_snacks') {
       if (game.resources && game.resources.money >= 2) {
         game.resources.money -= 2;
         vols.forEach(v => { v.energy = Math.min(100, (v.energy || 90) + 5); });
-        game.showToast('🥤 Collation Fraîche (-2 €)', 'Boisson et en-cas réconfortants ! +5 énergie pour les bénévoles.', 'green');
+        game.showToast('🥤 Collation Fraîche (-2 €)', 'Boisson et en-cas réconfortants pour les bénévoles.', 'green');
       } else {
         game.showToast('Caisse insuffisante', 'Pas assez de petite monnaie en caisse.', 'orange');
       }

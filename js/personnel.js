@@ -97,12 +97,12 @@ window.ProtecPersonnel = {
     leader: {
       name: 'Leader Charismatique',
       badgeClass: 'bg-indigo-100 text-indigo-800 border-indigo-200',
-      desc: 'Apporte +10 de moral et motivation à tous ses équipiers dans le même véhicule.'
+      desc: 'Soutient et motive ses équipiers lors des interventions conjointes.'
     },
     sensible: {
       name: 'Sensible & Empathique',
       badgeClass: 'bg-purple-100 text-purple-800 border-purple-200',
-      desc: 'Excellente écoute sur les maraudes (+20% réputation). Plus affecté par les bilans graves du SAMU.'
+      desc: 'Excellente écoute sur les maraudes sociales. Plus affecté par les bilans graves du SAMU.'
     },
     dynamique: {
       name: 'Travailleur Infatigable',
@@ -271,7 +271,7 @@ window.ProtecPersonnel = {
 
     // Conséquence d'usure morale : mise en retrait
     if (volunteer.status === 'retrait' || (volunteer.moral !== undefined && volunteer.moral < 20)) {
-      return { available: false, reason: 'En retrait associatif (moral critique < 20% : cohésion d’antenne requise)' };
+      return { available: false, reason: 'En retrait associatif (démotivation : cohésion d’antenne requise)' };
     }
 
     // Règle d'usure stricte : fatigue > 80 = indisponibilité automatique pour repos obligatoire
@@ -456,7 +456,7 @@ window.ProtecPersonnel = {
       if (volunteer.status !== 'retrait') {
         volunteer.status = 'retrait';
         if (window.game?.showToast) {
-          window.game.showToast('Bénévole en Retrait 😟', volunteer.name + ' se met en retrait associatif (moral critique : ' + volunteer.moral + '%). Organisez un moment de cohésion pour le remobiliser.', 'orange');
+          window.game.showToast('Bénévole en Retrait 😟', volunteer.name + ' se met en retrait associatif faute d\'activité. Organisez un moment de cohésion pour le remobiliser.', 'orange');
         }
       } else {
         // Confirmation de démission définitive si déjà en retrait
@@ -566,7 +566,7 @@ window.ProtecPersonnel = {
 
             if (v.moral < 20 && v.status !== 'retrait') {
               v.status = 'retrait';
-              game.showToast('Inactivité Prolongée ⚠️', v.name + ' n’a pas été convoqué(e) depuis plus d’un mois (moral < 20%). Il se met en retrait associatif.', 'orange');
+              game.showToast('Inactivité Prolongée ⚠️', v.name + ' n’a pas été convoqué(e) depuis plus d’un mois. Il se met en retrait associatif.', 'orange');
             }
           }
         }
@@ -620,7 +620,7 @@ window.ProtecPersonnel = {
     const msgExtra = countReintegrated > 0 ? (' ' + countReintegrated + ' bénévole(s) remobilisé(s) !') : '';
     game.showToast(
       '🎉 Moment de Cohésion Réussi !',
-      'Repas convivial au local : fatigue collective réduite (-25%), moral reboosté (+30 pts) !' + msgExtra,
+      'Repas convivial au local : les bénévoles partagent un moment chaleureux et rechargent leurs batteries !' + msgExtra,
       'green'
     );
 
@@ -1181,7 +1181,7 @@ window.ProtecPersonnel = {
     if (!salarie) return;
 
     const confirmed = await window.ProtecDialog.confirm(
-      `Faire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n• Prime de pénibilité exceptionnelle : -150 €\n• Avertissement Inspection du Travail & Perte de -10 pts de réputation\n• Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`,
+      `Faire reprendre le travail à ${salarie.name} avant la fin de ses 11h de repos obligatoire constitue une dérogation au droit commun du travail (Art. L3131-1).\n\nConséquences :\n• Prime de pénibilité exceptionnelle : -150 €\n• Avertissement Inspection du Travail\n• Fatigue accrue du salarié\n\nConfirmez-vous cette décision de crise ?`,
       'Dérogation au Code du Travail',
       { isDestructive: true, confirmText: 'Forcer la reprise', cancelText: 'Respecter le repos' }
     );
@@ -1207,7 +1207,7 @@ window.ProtecPersonnel = {
 
     game.showToast(
       'Dérogation Exceptionnelle Accordée',
-      `Dérogation enregistrée pour ${salarie.name}. Prime de pénibilité versée (-150 €), avertissement inspection du travail (-10 réputation).`,
+      `Dérogation enregistrée pour ${salarie.name}. Prime de pénibilité versée (-150 €), avertissement inspection du travail.`,
       'orange'
     );
 
@@ -3963,7 +3963,14 @@ window.ProtecPersonnel = {
             ${game.getVolunteerAvatarHTML(vol, 'w-9 h-9')}
             <div>
               <div class="font-black text-slate-900 dark:text-white">${vol.name} <span class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">• ${vol.rank}</span></div>
-              <div class="text-[10px] text-slate-500 dark:text-slate-400">Profil : <strong>${vol.dispoType || 'Secouriste'}</strong> • Motivation : ${vol.motivation || 80}%</div>
+              <div class="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 mt-0.5">
+              <span>Profil : <strong>${vol.dispoType || 'Secouriste'}</strong></span>
+              <span>•</span>
+              <span>Motivation :</span>
+              <span class="w-12 bg-slate-200 dark:bg-slate-700 h-1.5 rounded-full overflow-hidden inline-block" title="Motivation">
+                <span class="block h-full rounded-full ${(vol.motivation || 80) < 30 ? 'bg-red-500' : ((vol.motivation || 80) < 60 ? 'bg-amber-500' : 'bg-pc-blue')}" style="width: ${Math.min(100, Math.max(10, vol.motivation || 80))}%"></span>
+              </span>
+            </div>
             </div>
           </div>
           <span class="px-2 py-1 rounded-xl text-[10px] font-black bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">

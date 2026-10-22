@@ -719,7 +719,7 @@ class ProtecGame {
       departureToast: (h) => `L’heure du départ est arrivée (${h}) ! L’équipe quitte l’antenne pour ouvrir le poste « ${mission.title} ».`,
       lateMsg: (hour, registered, req) => `L’heure du poste « ${mission.title} » est arrivée sur site (${hour}) mais l’effectif est incomplet (${registered}/${req}) ! L’organisateur attend son dispositif.`,
       departureLateMsg: (hour, registered, req) => `L’heure de départ pour le poste « ${mission.title} » est passée (${hour}) mais l’équipage n’est pas complet (${registered}/${req}) ! Complétez l’équipe pour autoriser le départ.`,
-      expiredMsg: `L'événement « ${mission.title} » est terminé et vos équipes ne se sont jamais présentées sur le poste ! L'organisateur a fait constater la défaillance par la Mairie (-35 réputation).`
+      expiredMsg: `L'événement « ${mission.title} » est terminé et vos équipes ne se sont jamais présentées sur le poste ! L'organisateur a fait constater la défaillance par la Mairie.`
     };
   }
 
@@ -12690,7 +12690,7 @@ class ProtecGame {
             this.resources.money = (this.resources.money || 0) + medBonus;
             window.ProtecConventions.adjustInstitutionalReputation(this, 'samu', 4, 'Présence équipe médicale certifiée');
             if (this.showToast) {
-              this.showToast('Prime de Médicalisation 🩺', `Organisateur et SAMU saluent votre équipe médicale : +${medBonus} € de gratification et +4 Réputation SAMU !`, 'green');
+              this.showToast('Prime de Médicalisation 🩺', `Organisateur et SAMU saluent votre équipe médicale : +${medBonus} € de gratification.`, 'green');
             }
           }
           if (mission.type === 'pompiers') window.ProtecConventions.adjustInstitutionalReputation(this, 'sdis', Math.round(6 * repGainMult), 'Garde pompiers');
@@ -15630,7 +15630,7 @@ class ProtecGame {
                       ${isRegisteredAsSecours ? `<span class="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-800">Inscrit en secours</span>` : ''}
                     </div>
                     <div class="text-[10px] text-slate-500 mt-0.5">
-                      Motivation : <strong class="text-slate-700">${v.motivation || 70}%</strong> • Énergie : <strong class="text-slate-700">${v.energy || 80}%</strong>
+                      <div class="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-500"><span>Motivation :</span><span class="w-14 bg-slate-200 h-1.5 rounded-full overflow-hidden inline-block"><span class="block h-full rounded-full ${(v.motivation || 70) < 30 ? 'bg-red-500' : ((v.motivation || 70) < 60 ? 'bg-amber-500' : 'bg-pc-blue')}" style="width: ${Math.min(100, Math.max(10, v.motivation || 70))}%"></span></span> • Énergie : <strong class="text-slate-700">${v.energy || 80}%</strong></div>
                     </div>
                   </div>
                 </div>
@@ -16083,7 +16083,7 @@ class ProtecGame {
                     <span class="font-bold text-slate-800">Motif & Conséquences :</span>
                     <span class="ml-1">${log.reason}</span>
                     ${log.moneyImpact ? `<span class="ml-1.5 font-black ${log.moneyImpact > 0 ? 'text-emerald-700' : 'text-rose-700'}">(${log.moneyImpact > 0 ? '+' : ''}${log.moneyImpact} €)</span>` : ''}
-                    ${log.reputationImpact ? `<span class="ml-1 font-black ${log.reputationImpact > 0 ? 'text-emerald-700' : 'text-rose-700'}">(${log.reputationImpact > 0 ? '+' : ''}${log.reputationImpact} réputation)</span>` : ''}
+                    
                   </div>
 
                   ${log.registeredVolunteersNames && log.registeredVolunteersNames.length > 0 ? `
@@ -16298,7 +16298,7 @@ class ProtecGame {
             <div class="flex items-baseline justify-between">
               <span class="text-slate-300">Temps restant :</span>
               <span class="font-black text-sm ${isPassed && !isTerminated ? 'text-red-400' : 'text-emerald-400'} font-mono">
-                ${isTerminated ? 'Clôturée' : (isPassed ? 'Expiré (-35 Rép)' : `${minLeft} min (${Math.floor(msLeft/3600000)}h ${pad(Math.floor((msLeft%3600000)/60000))}m)`)}
+                ${isTerminated ? 'Clôturée' : (isPassed ? 'Expiré (Carence)' : `${minLeft} min (${Math.floor(msLeft/3600000)}h ${pad(Math.floor((msLeft%3600000)/60000))}m)`)}
               </span>
             </div>
             <div class="text-[10px] text-slate-400 flex justify-between">
@@ -16315,7 +16315,7 @@ class ProtecGame {
             </div>
             <div class="flex items-center justify-between text-[10px]">
               <span class="text-slate-400">Pénalité carence :</span>
-              <span class="font-bold text-red-400">-35 Réputation</span>
+              <span class="font-bold text-red-400">Pénalité carence</span>
             </div>
             <div class="flex items-center justify-between text-[10px]">
               <span class="text-slate-400">Réputation autorité :</span>
@@ -25848,7 +25848,7 @@ class ProtecGame {
                   <i data-lucide="award" class="w-3.5 h-3.5"></i>
                   Habilitations & Bureau
                 </button>
-                <button onclick="window.ProtecPersonnel.triggerCohesionEvent(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:brightness-110 shadow transition flex items-center gap-1.5" title="Débit financier 250 € : Réduit la fatigue (-25%) et restaure le moral (+30%) de l'antenne">
+                <button onclick="window.ProtecPersonnel.triggerCohesionEvent(window.game)" class="px-3 py-1.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-teal-600 text-white hover:brightness-110 shadow transition flex items-center gap-1.5" title="Débit financier 250 € : Réduit la fatigue et remobilise les bénévoles de l'antenne">
                   <span>🎉</span> Moment de Cohésion (250 €)
                 </button>
                 <button onclick="window.ProtecSystems.organizeTeamEvent(window.game, 'recyclage')" class="px-3 py-1.5 rounded-xl text-xs font-bold glass-button text-indigo-700 transition">
@@ -26008,7 +26008,7 @@ class ProtecGame {
                                 </span>
                               </div>
                               ${uCount < 3 ? `
-                                <button type="button" onclick="window.ProtecPersonnel?.equipVolunteerTenue(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-0.5 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] transition cursor-pointer flex items-center gap-0.5" title="Doter une tenue supplémentaire (+10 Moral, max 3)">
+                                <button type="button" onclick="window.ProtecPersonnel?.equipVolunteerTenue(window.game, '${v.id}'); window.game.openModule('recrutement');" class="px-2 py-0.5 rounded-lg bg-pc-blue hover:bg-pc-blue-light text-white font-black text-[9px] transition cursor-pointer flex items-center gap-0.5" title="Doter une tenue supplémentaire (max 3)">
                                   + Tenue (${stTenues})
                                 </button>
                               ` : `
@@ -26022,7 +26022,7 @@ class ProtecGame {
                                 <span>🥾</span>
                                 <span class="font-extrabold text-slate-800 dark:text-slate-200">${rInfo.name}</span>
                                 <span class="px-1.5 py-0.2 rounded text-[8.5px] font-black border ${rInfo.badgeClass}">${rInfo.quality}</span>
-                                <span class="text-[9px] text-emerald-600 font-semibold">${rInfo.moralBonus > 0 ? `+${rInfo.moralBonus} Moral` : 'Sans bonus'}</span>
+                                
                               </div>
                               <button type="button" onclick="window.ProtecPersonnel?.openEquipRangersModal(window.game, '${v.id}');" class="px-2 py-0.5 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-extrabold text-[9px] transition cursor-pointer" title="Changer ou upgrader les Rangers">
                                 Doter Rangers ⚙️
@@ -26156,11 +26156,10 @@ class ProtecGame {
 
                         <div>
                           <div class="flex justify-between text-slate-500 mb-0.5">
-                            <span>Moral</span>
-                            <strong class="${(v.moral || 75) < 20 ? 'text-red-600 font-extrabold animate-pulse' : ((v.moral || 75) < 50 ? 'text-amber-600' : 'text-emerald-700')}">${v.moral !== undefined ? v.moral : motivation}%</strong>
+                            <span>Motivation</span>
                           </div>
-                          <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden">
-                            <div class="h-full rounded-full ${(v.moral || 75) < 20 ? 'bg-red-500' : ((v.moral || 75) < 50 ? 'bg-amber-500' : 'bg-pc-blue')}" style="width: ${v.moral !== undefined ? v.moral : motivation}%"></div>
+                          <div class="w-full bg-slate-200/70 h-1.5 rounded-full overflow-hidden" title="Jauge de motivation">
+                            <div class="h-full rounded-full ${(v.motivation || v.moral || 75) < 30 ? 'bg-red-500' : ((v.motivation || v.moral || 75) < 60 ? 'bg-amber-500' : 'bg-pc-blue')}" style="width: ${Math.min(100, Math.max(8, v.motivation || v.moral || 75))}%"></div>
                           </div>
                         </div>
 
@@ -28656,7 +28655,7 @@ class ProtecGame {
         if (!v.loadedItems.some(it => it.id === 'telephone_garde')) {
           v.loadedItems.push({ id: 'telephone_garde', name: 'Téléphone de service', shortName: 'Tél. Service', slots: 0 });
         }
-        this.showToast('Téléphone de Service Embarqué 📞', `Téléphone professionnel installé dans ${v.name}. Forfaits personnels préservés (+8 Moral équipage).`, 'green');
+        this.showToast('Téléphone de Service Embarqué 📞', `Téléphone professionnel installé dans ${v.name}. Confort et sécurité des liaisons garantis.`, 'green');
       } else {
         v.onboardPhone = false;
         station.stock.telephone_garde = (station.stock.telephone_garde || 0) + 1;
@@ -29046,7 +29045,7 @@ class ProtecGame {
                   </div>
                   <div>
                     <h5 class="text-xs font-black text-slate-900">Téléphone de Service</h5>
-                    <p class="text-[9.5px] text-slate-500 font-semibold">${v.onboardPhone ? 'Embarqué (+8 Moral équipage)' : 'Non doté'}</p>
+                    <p class="text-[9.5px] text-slate-500 font-semibold">${v.onboardPhone ? 'Embarqué' : 'Non doté'}</p>
                   </div>
                 </div>
                 <div>
@@ -29096,7 +29095,7 @@ class ProtecGame {
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900">Tensiomètre Auto NIBP</h5>
-                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'Embarqué (+5 Réputation SAMU)' : 'Non doté (Option confort)'}</p>
+                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasTensiometreAuto || (v.installedOptions && v.installedOptions.some(o => /tensiom[eè]tre auto|nibp/i.test(o))) ? 'Embarqué' : 'Non doté (Option confort)'}</p>
                     </div>
                   </div>
                   <div>
@@ -29126,7 +29125,7 @@ class ProtecGame {
                     </div>
                     <div>
                       <h5 class="text-xs font-black text-slate-900">Moniteur défibrillateur (ECG)</h5>
-                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'Embarqué (+10 SAMU, +6 Moral)' : 'Non doté (Moniteur pro)'}</p>
+                      <p class="text-[9.5px] text-slate-500 font-semibold">${v.hasSchillerT7 || (v.installedOptions && v.installedOptions.some(o => /schiller/i.test(o))) ? 'Embarqué' : 'Non doté (Moniteur pro)'}</p>
                     </div>
                   </div>
                   <div>
@@ -33129,6 +33128,16 @@ class ProtecGame {
   }
 
   showToast(title, message, color = 'blue', target = null, options = {}) {
+    // Règle d'or : aucun affichage de gain/perte de réputation, notoriété, visibilité, abonnés ou moral/motivation
+    if (typeof message === 'string') {
+      message = message
+        .replace(/\s*\([^)]*(?:r[ée]putation|r[ée]put|moral|motivation|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?)[^)]*\)/gi, '')
+        .replace(/\s*(?:et|,|&)\s*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?(?:r[ée]put(?:ation)?|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?|moral|motivation|humeur)\b[^.!,]*/gi, '')
+        .replace(/[,\s•\.\-]*[+\-]?\d+\s*(?:pts?|points?|%)?\s*(?:de\s*)?(?:r[ée]put(?:ation)?|notori[ée]t[ée]|visibilit[ée]|abonn[ée]s?|moral|motivation|humeur)\b[^.!,]*/gi, '')
+        .replace(/\s{2,}/g, ' ')
+        .replace(/\s+([!?,.])/g, '$1')
+        .trim();
+    }
     const container = document.getElementById('toast-container');
     if (!container) return;
 

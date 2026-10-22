@@ -3892,8 +3892,8 @@ window.ProtecFormations = {
             <div>
               <label class="text-[10px] font-bold uppercase text-slate-400">Prise en charge :</label>
               <select id="ext-pay-mode" class="w-full p-2 rounded-xl border border-slate-200 glass-input font-bold text-slate-800 bg-white">
-                <option value="asso">100% Antenne (Moral boosté)</option>
-                <option value="vol">Bénévole finance lui-même (Moral -25%)</option>
+                <option value="asso">100% Antenne (Prise en charge intégrale)</option>
+                <option value="vol">Bénévole finance lui-même (Reste à charge)</option>
               </select>
             </div>
             <div class="flex items-end">

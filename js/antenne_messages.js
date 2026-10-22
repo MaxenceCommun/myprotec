@@ -368,14 +368,14 @@ window.ProtecAntenneMessages = {
     let allowanceBadge = {
       color: 'emerald',
       text: 'Conforme barème (15€) — Humeur garantie',
-      impact: '+2 moral'
+      impact: 'Satisfaction'
     };
     if (allowance < 8) {
-      allowanceBadge = { color: 'rose', text: 'Scandaleusement bas (<8€) — Plaintes sévères & démissions', impact: '-18 moral' };
+      allowanceBadge = { color: 'rose', text: 'Scandaleusement bas (<8€) — Plaintes sévères & démissions', impact: 'Forte déception' };
     } else if (allowance < 12) {
-      allowanceBadge = { color: 'amber', text: 'Insuffisant (<12€) — Doléances & baisse de motivation', impact: '-8 moral' };
+      allowanceBadge = { color: 'amber', text: 'Insuffisant (<12€) — Doléances & baisse de motivation', impact: 'Insatisfaction' };
     } else if (allowance < 15) {
-      allowanceBadge = { color: 'sky', text: 'Modéré (12-14€) — Petits restes à charge', impact: '-3 moral' };
+      allowanceBadge = { color: 'sky', text: 'Modéré (12-14€) — Petits restes à charge', impact: 'Frustration légère' };
     }
 
     body.innerHTML = `
@@ -650,7 +650,7 @@ window.ProtecAntenneMessages = {
             <div class="flex items-center gap-2">
               <span class="font-black text-slate-800">${vol.name}</span>
               ${m.isComplaint ? `<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-200">Doléance / Plainte</span>` : `<span class="px-2 py-0.2 rounded-full text-[9px] font-black bg-blue-100 text-blue-800 border border-blue-200">Demande</span>`}
-              ${m.moodImpact ? `<span class="text-[10px] font-bold ${m.moodImpact < 0 ? 'text-rose-600' : 'text-emerald-600'}">(${m.moodImpact > 0 ? '+' : ''}${m.moodImpact} humeur)</span>` : ''}
+              
             </div>
             <span class="text-[10px] font-mono text-slate-400">${m.time}</span>
           </div>

@@ -3139,7 +3139,7 @@ window.ProtecMultiplayer = {
         </div>
 
         <p class="text-xs text-slate-600">
-          Transférez cet écusson de collection à un responsable d'antenne allié. Votre don solidaire vous rapportera <strong>+50 pts de réputation</strong> et <strong>+25 pts d'alliance</strong> !
+          Transférez cet écusson de collection à un responsable d'antenne allié. Votre don solidaire renforce les liens et la coopération au sein de votre réseau !
         </p>
 
         <div class="space-y-2 text-xs">
