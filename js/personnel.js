@@ -868,7 +868,7 @@ window.ProtecPersonnel = {
       desc: 'Rédaction des publications d’antenne, valorisation des missions et modération des messages citoyens pour maintenir la visibilité au maximum.',
       revenue: 0,
       repGain: 15,
-      boostSocialVisibility: 35
+      boostSocialVisibility: 0.5
     },
 
     // 3. Tâches Logistiques
@@ -1099,7 +1099,7 @@ window.ProtecPersonnel = {
       });
     }
     if (task.boostSocialVisibility && game.socialMedia) {
-      game.socialMedia.visibilityScore = Math.min(100, (game.socialMedia.visibilityScore || 50) + task.boostSocialVisibility);
+      game.socialMedia.visibilityScore = Math.min(100, Number(((game.socialMedia.visibilityScore || 5) + task.boostSocialVisibility).toFixed(1)));
       game.socialMedia.lastPostTimestamp = Date.now();
     }
 

@@ -23,8 +23,8 @@ window.ProtecCommunication = {
       badge: 'Urgence & Institutions',
       desc: 'Mettre en lumière l’action de nos secouristes sur les crises, plans d’hébergement d’urgence et intempéries (reconnaissance SAMU, SDIS, Préfecture et grand public).',
       sampleText: 'Mobilisation sans relâche de nos équipiers sur le plan d’urgence départemental ! Accueil des sinistrés, réconfort et coordination avec les services de secours du 15 et 18. Fiers de notre engagement républicain. 🧡💙 #Crise #ProtectionCivile #Solidarite #Secours',
-      visibilityGain: 28,
-      repGain: 18,
+      visibilityGain: 0.5,
+      repGain: 0.3,
       rewardType: 'reconnaissance_services'
     },
     {
@@ -36,8 +36,8 @@ window.ProtecCommunication = {
       badge: 'Terrain & Opérationnel',
       desc: 'Valoriser les secouristes mobilisés sur le dernier poste de secours (course, concert, événement local).',
       sampleText: 'Fiers de nos bénévoles engagés ce week-end pour assurer la sécurité du public ! Une équipe soudée et prête à intervenir à tout instant. 🧡💙 #ProtectionCivile #Secourisme #Bénévolat',
-      visibilityGain: 22,
-      repGain: 10,
+      visibilityGain: 0.4,
+      repGain: 0.2,
       rewardType: 'devis_boost'
     },
     {
@@ -49,8 +49,8 @@ window.ProtecCommunication = {
       badge: 'Organisateurs & Partenaires',
       desc: 'Communication ciblée pour valoriser notre savoir-faire auprès des comités des fêtes, clubs sportifs et festivals locaux.',
       sampleText: 'Vous organisez une compétition sportive, un concert ou un festival ? Nos équipes conçoivent des Dispositifs Prévisionnels de Secours adaptés et certifiés. Demandez votre devis sur notre site officiel ! 🏃‍♂️🎪 #DPS #Evenementiel #Secourisme',
-      visibilityGain: 25,
-      repGain: 14,
+      visibilityGain: 0.45,
+      repGain: 0.2,
       rewardType: 'devis_boost'
     },
     {
@@ -62,8 +62,8 @@ window.ProtecCommunication = {
       badge: 'Moyens & Rigueur',
       desc: 'Présentation de notre VPSP et des équipements de secours (DAE, oxygène, lots de prompt secours).',
       sampleText: 'Zoom sur notre VPSP réarmé et vérifié par nos équipes. Matériel de pointe opérationnel 24h/24 au service des citoyens ! 🚑✨ #Urgence #Secours #VPSP',
-      visibilityGain: 18,
-      repGain: 8,
+      visibilityGain: 0.3,
+      repGain: 0.1,
       rewardType: 'confiance'
     },
     {
@@ -75,8 +75,8 @@ window.ProtecCommunication = {
       badge: 'Pédagogie Citoyenne',
       desc: 'Conseil pratique de premier secours pour inciter la population à s’inscrire en formation.',
       sampleText: 'Le saviez-vous ? En cas d’arrêt cardiaque, chaque minute sans massage réduit les chances de survie de 10%. Formez-vous au PSC 1 avec nous ! 🩺❤️ #GestesQuiSauvent #PSC1 #SauverDesVies',
-      visibilityGain: 20,
-      repGain: 12,
+      visibilityGain: 0.35,
+      repGain: 0.2,
       rewardType: 'formation_boost'
     },
     {
@@ -88,8 +88,8 @@ window.ProtecCommunication = {
       badge: 'Ressources Humaines',
       desc: 'Témoignage d’engagement pour susciter des vocations et recruter de nouveaux secouristes.',
       sampleText: 'Envie de donner du sens à votre temps libre et d’apprendre à sauver des vies ? Rejoignez notre famille de secouristes bénévoles ! Inscriptions ouvertes. 🤝💪 #Engagement #Recrutement #Benevole',
-      visibilityGain: 25,
-      repGain: 10,
+      visibilityGain: 0.4,
+      repGain: 0.2,
       rewardType: 'recrutement_boost'
     },
     {
@@ -101,8 +101,8 @@ window.ProtecCommunication = {
       badge: 'Générosité & Soutien',
       desc: 'Mettre en avant l’utilité des dons citoyens pour financer nos trousses de secours et gilets.',
       sampleText: 'Un immense merci à nos donateurs et aux commerçants locaux pour leur générosité. Vos dons nous permettent de renouveler nos trousses d’urgence ! 💙🙏 #Merci #Soutien #Solidarite',
-      visibilityGain: 18,
-      repGain: 10,
+      visibilityGain: 0.3,
+      repGain: 0.1,
       rewardType: 'dons_boost'
     }
   ],
@@ -273,10 +273,10 @@ window.ProtecCommunication = {
     const web = game.antenneWebsite;
     web.freshness = 100;
     web.lastUpdatedTimestamp = Date.now();
-    web.totalVisits = (web.totalVisits || 0) + Math.floor(40 + Math.random() * 25);
-    web.quotesRequestedOnline = (web.quotesRequestedOnline || 0) + 1;
-    if (game.resources) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 12;
+    web.totalVisits = (web.totalVisits || 0) + Math.floor(15 + Math.random() * 10);
+    web.quotesRequestedOnline = (web.quotesRequestedOnline || 0) + (Math.random() < 0.25 ? 1 : 0);
+    if (game.resources && Math.random() < 0.30) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 1;
     }
     if (typeof game.saveGame === 'function') game.saveGame();
     if (typeof game.showToast === 'function') {
@@ -341,16 +341,17 @@ window.ProtecCommunication = {
         title: 'Cercle Proche & Bénévoles',
         badge: 'Portée Faible (Lancement)',
         badgeColor: 'bg-amber-100 text-amber-900 border-amber-300',
-        reachMultiplier: 0.20 + (followers / 100) * 0.15, // 0.20 à 0.35 (faible portée)
+        reachMultiplier: 0.20 + (followers / 100) * 0.10, // 0.20 à 0.30
         followers: followers,
         nextTierAt: 100,
         progressPct: progress,
-        desc: 'Page naissante vue uniquement par une poignée de proches et bénévoles. Vos publications ont peu d’impact direct mais font grandir votre communauté.',
+        desc: 'Page naissante suivie par les premiers bénévoles et proches. Vos publications posent les bases de votre notoriété.',
         likesMin: 1,
-        likesMax: Math.max(2, Math.floor(followers * 0.15)),
-        sharesChance: 0.10,
-        newFollowersRange: [3, 8],
-        opportunityChance: 0.05
+        likesMax: Math.max(2, Math.floor(followers * 0.10)),
+        sharesChance: 0.05,
+        newFollowersRange: [1, 1],
+        followerChance: 0.25, // 25% de chance de gagner 1 abonné lors d'un post
+        opportunityChance: 0.02
       };
     } else if (followers < 500) {
       const progress = Math.min(100, Math.round(((followers - 100) / 400) * 100));
@@ -359,16 +360,17 @@ window.ProtecCommunication = {
         title: 'Rayonnement Communal Émergent',
         badge: 'Portée Locale',
         badgeColor: 'bg-blue-100 text-blue-900 border-blue-300',
-        reachMultiplier: 0.40 + ((followers - 100) / 400) * 0.30, // 0.40 à 0.70
+        reachMultiplier: 0.35 + ((followers - 100) / 400) * 0.25,
         followers: followers,
         nextTierAt: 500,
         progressPct: progress,
-        desc: 'Les habitants et associations de votre commune suivent votre actualité. Vos publications génèrent des interactions régulières.',
-        likesMin: 6,
-        likesMax: Math.floor(12 + (followers * 0.06)),
-        sharesChance: 0.35,
-        newFollowersRange: [8, 18],
-        opportunityChance: 0.25
+        desc: 'Les habitants et associations de votre commune commencent à suivre votre page.',
+        likesMin: 3,
+        likesMax: Math.floor(6 + (followers * 0.03)),
+        sharesChance: 0.15,
+        newFollowersRange: [1, 2],
+        followerChance: 0.40,
+        opportunityChance: 0.08
       };
     } else if (followers < 2000) {
       const progress = Math.min(100, Math.round(((followers - 500) / 1500) * 100));
@@ -377,16 +379,17 @@ window.ProtecCommunication = {
         title: 'Communauté Territoriale Affirmée',
         badge: 'Forte Portée',
         badgeColor: 'bg-emerald-100 text-emerald-900 border-emerald-300',
-        reachMultiplier: 0.75 + ((followers - 500) / 1500) * 0.45, // 0.75 à 1.20
+        reachMultiplier: 0.60 + ((followers - 500) / 1500) * 0.30,
         followers: followers,
         nextTierAt: 2000,
         progressPct: progress,
-        desc: 'Voix reconnue sur le bassin de vie. Vos publications suscitent l’intérêt d’organisateurs d’événements et de candidats bénévoles.',
-        likesMin: 25,
-        likesMax: Math.floor(35 + (followers * 0.04)),
-        sharesChance: 0.65,
-        newFollowersRange: [18, 45],
-        opportunityChance: 0.55
+        desc: 'Voix reconnue sur le bassin de vie. Vos publications sont partagées et suivies localement.',
+        likesMin: 12,
+        likesMax: Math.floor(20 + (followers * 0.02)),
+        sharesChance: 0.30,
+        newFollowersRange: [1, 3],
+        followerChance: 0.60,
+        opportunityChance: 0.20
       };
     } else if (followers < 6000) {
       const progress = Math.min(100, Math.round(((followers - 2000) / 4000) * 100));
@@ -395,16 +398,17 @@ window.ProtecCommunication = {
         title: 'Grande Notoriété Départementale',
         badge: 'Très Forte Portée',
         badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',
-        reachMultiplier: 1.25 + ((followers - 2000) / 4000) * 0.55, // 1.25 à 1.80
+        reachMultiplier: 0.90 + ((followers - 2000) / 4000) * 0.40,
         followers: followers,
         nextTierAt: 6000,
         progressPct: progress,
-        desc: 'Rayonnement majeur à l’échelle départementale. Vos alertes et reportages déclenchent des vagues de dons et d’adhésions.',
-        likesMin: 80,
-        likesMax: Math.floor(100 + (followers * 0.03)),
-        sharesChance: 0.90,
-        newFollowersRange: [35, 90],
-        opportunityChance: 0.75
+        desc: 'Rayonnement majeur à l’échelle départementale.',
+        likesMin: 35,
+        likesMax: Math.floor(50 + (followers * 0.015)),
+        sharesChance: 0.50,
+        newFollowersRange: [2, 5],
+        followerChance: 0.80,
+        opportunityChance: 0.35
       };
     } else {
       return {
@@ -412,16 +416,17 @@ window.ProtecCommunication = {
         title: 'Institution & Référence Régionale',
         badge: 'Portée Maximale',
         badgeColor: 'bg-rose-100 text-rose-900 border-rose-300',
-        reachMultiplier: 2.0,
+        reachMultiplier: 1.4,
         followers: followers,
         nextTierAt: null,
         progressPct: 100,
-        desc: 'Page incontournable suivie par les élus, les médias régionaux et des milliers de citoyens. Chaque publication a un impact massif.',
-        likesMin: 200,
-        likesMax: Math.floor(240 + (followers * 0.025)),
-        sharesChance: 1.0,
-        newFollowersRange: [60, 150],
-        opportunityChance: 0.90
+        desc: 'Page incontournable suivie par les élus, les médias régionaux et des milliers de citoyens.',
+        likesMin: 80,
+        likesMax: Math.floor(120 + (followers * 0.01)),
+        sharesChance: 0.75,
+        newFollowersRange: [3, 8],
+        followerChance: 1.0,
+        opportunityChance: 0.50
       };
     }
   },
@@ -633,6 +638,11 @@ window.ProtecCommunication = {
       return;
     }
 
+    const now = Date.now();
+    const SPAM_INTERVAL_MS = 2 * 3600 * 1000; // 2 heures réelles pour effet plein
+    const timeSinceLast = now - (game.socialMedia.lastPostTimestamp || 0);
+    const isSpam = timeSinceLast < SPAM_INTERVAL_MS;
+
     const eff = this.calculateFolderEffectiveness(game, folder);
 
     // Détection de l'appareil photo d'antenne
@@ -643,26 +653,34 @@ window.ProtecCommunication = {
 
     const finalMultiplier = eff * (1 + photoBonusRatio);
 
-    const visGain = Math.round(folder.baseVisibilityGain * finalMultiplier);
-    const repGain = Math.round(folder.baseReputationGain * finalMultiplier);
-    const likes = Math.round(folder.baseLikes * finalMultiplier);
-    const shares = Math.round(folder.baseShares * finalMultiplier);
+    // Gains très progressifs (travail de plusieurs semaines)
+    let visGain = 0;
+    let repGain = 0;
+    if (!isSpam) {
+      visGain = Number(Math.max(0.1, (0.45 * finalMultiplier)).toFixed(2));
+      repGain = Math.random() < 0.35 ? 1 : 0;
+    }
 
-    const oldVis = game.socialMedia.visibilityScore || 50;
-    game.socialMedia.visibilityScore = Math.min(100, oldVis + visGain);
-    game.socialMedia.lastPostTimestamp = Date.now();
+    const likes = Math.max(2, Math.round((folder.baseLikes || 8) * finalMultiplier * 0.3));
+    const shares = Math.max(0, Math.round((folder.baseShares || 2) * finalMultiplier * 0.25));
+
+    const oldVis = Number(game.socialMedia.visibilityScore || 5);
+    game.socialMedia.visibilityScore = Math.min(100, Number((oldVis + visGain).toFixed(1)));
+    game.socialMedia.lastPostTimestamp = now;
     game.socialMedia.totalPosts = (game.socialMedia.totalPosts || 0) + 1;
     game.socialMedia.totalLikes = (game.socialMedia.totalLikes || 0) + likes;
     game.socialMedia.totalShares = (game.socialMedia.totalShares || 0) + shares;
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+    if (repGain > 0) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+    }
 
     const postText = folder.isFormation
       ? `🎓 Album photo de notre session « ${folder.title} » ! Félicitations à tous les stagiaires pour leur investissement citoyen et merci aux formateurs bénévoles. 🧡💙 #ProtectionCivile #Secourisme #Formation`
       : `📸 Retour en images sur le terrain : « ${folder.title} » ! Clichés capturés par ${folder.photographerNames} (${cameraTitle}). Fiers de nos bénévoles mobilisés pour la sécurité de tous ! 🧡💙 #ProtectionCivile #Secourisme #Bénévolat`;
 
     game.socialMedia.feed.unshift({
-      id: 'post-folder-' + folder.id + '-' + Date.now(),
-      timestamp: Date.now(),
+      id: 'post-folder-' + folder.id + '-' + now,
+      timestamp: now,
       themeId: folder.isFormation ? 'prevention' : 'dps',
       themeTitle: folder.isFormation ? 'Album Photo Formation' : 'Reportage Terrain Photo',
       authorName: folder.photographerNames,
@@ -670,22 +688,36 @@ window.ProtecCommunication = {
       text: postText,
       likes: likes,
       shares: shares,
-      commentsCount: Math.floor(4 * finalMultiplier) + 1,
+      commentsCount: Math.max(1, Math.floor(3 * finalMultiplier)),
       topComment: folder.isFormation
         ? 'Super formation, très formateurs et bienveillants ! 👏'
         : 'Superbe série de clichés, bravo aux secouristes pour leur dévouement ! 📸🧡',
-      isAutoPilot: false
+      isAutoPilot: false,
+      isSpam: isSpam
     });
     if (game.socialMedia.feed.length > 25) game.socialMedia.feed.pop();
 
     folder.published = true;
-    folder.publishedTimestamp = Date.now();
+    folder.publishedTimestamp = now;
 
-    game.showToast(
-      'Reportage Photo Publié ! 📸',
-      `Le reportage « ${folder.title} » est publié ! Les interactions des citoyens arriveront progressivement au cours des 12 prochaines heures.`,
-      'purple'
-    );
+    if (isSpam) {
+      const remainingMs = SPAM_INTERVAL_MS - timeSinceLast;
+      const remHours = Math.floor(remainingMs / 3600000);
+      const remMin = Math.ceil((remainingMs % 3600000) / 60000);
+      const remStr = remHours > 0 ? `${remHours}h ${remMin}m` : `${remMin} min`;
+
+      game.showToast(
+        'Reportage Photo Publié ! 📸 (Anti-spam)',
+        `Le reportage « ${folder.title} » est publié. Note : les publications étant trop rapprochées (audience saturée), l'effet sur la visibilité est bloqué. Prochain impact dans ${remStr}.`,
+        'orange'
+      );
+    } else {
+      game.showToast(
+        'Reportage Photo Publié ! 📸',
+        `Le reportage « ${folder.title} » est en ligne. Les interactions des citoyens arriveront progressivement au cours des 12 prochaines heures.`,
+        'purple'
+      );
+    }
 
     game.saveGame();
     game.updateStatsUI();
@@ -698,12 +730,17 @@ window.ProtecCommunication = {
     const theme = this.SOCIAL_POST_THEMES.find(t => t.id === themeId) || this.SOCIAL_POST_THEMES[0];
     const now = Date.now();
 
-    // Temps de cooldown léger de précaution (ex: 8 secondes réelles entre deux clics pour éviter le flood)
+    const SPAM_INTERVAL_MS = 2 * 3600 * 1000; // 2 heures réelles entre publications pour effet plein
     const timeSinceLast = now - (game.socialMedia.lastPostTimestamp || 0);
-    if (timeSinceLast < 6000) {
-      game.showToast('Publication en cours...', 'Veuillez patienter quelques instants entre deux publications.', 'slate');
+
+    // Temps de cooldown léger anti-clic flood (5 secondes réelles)
+    if (timeSinceLast < 5000) {
+      game.showToast('Publication en cours...', 'Veuillez patienter quelques instants entre deux clics.', 'slate');
       return;
     }
+
+    // Vérification de saturation anti-spam
+    const isSpam = timeSinceLast < SPAM_INTERVAL_MS;
 
     // Vérification stricte des conditions réelles de publication (ex: missions réelles nécessaires)
     const check = this.checkThemeEligibility(game, theme.id);
@@ -727,33 +764,42 @@ window.ProtecCommunication = {
     const photoTier = (game.equipmentTiers && game.equipmentTiers.appareil_photo) || 1;
     const photoDef = window.ProtecEquipements?.TIERED_EQUIPMENT_CATALOG?.appareil_photo?.tiers?.find(t => t.level === photoTier);
     const photoBonusRatio = photoDef?.stats?.comImpactBonus || 0.10;
-    const photoTitle = photoDef ? photoDef.title : 'Smartphone Basique';
 
     // 1. Analyse dynamique de la communauté actuelle (La Commu)
     const commu = this.getCommunityTier(game);
     const reachMult = commu.reachMultiplier;
     const effMultiplier = reachMult * (1 + photoBonusRatio);
 
-    // 2. Gains réels de visibilité proportionnels à l'audience (au lancement la portée est très faible)
-    const oldScore = game.socialMedia.visibilityScore || 5;
-    const baseGain = theme.visibilityGain || 20;
-    const gain = Math.max(2, Math.round(baseGain * effMultiplier));
-    const newScore = Math.min(100, oldScore + gain);
+    // 2. Gains réels très progressifs (si anti-spam actif : effets bloqués à 0)
+    let gain = 0;
+    let repGain = 0;
+    let newFollowers = 0;
+
+    if (!isSpam) {
+      const baseGain = theme.visibilityGain || 0.4;
+      gain = Math.max(0.1, Number((baseGain * effMultiplier).toFixed(2)));
+      repGain = Math.random() < 0.25 ? 1 : 0;
+
+      const [minNewF, maxNewF] = commu.newFollowersRange;
+      if (Math.random() < (commu.followerChance || 0.25)) {
+        newFollowers = Math.max(1, Math.floor(minNewF + Math.random() * (maxNewF - minNewF + 1)));
+      }
+    }
+
+    const oldScore = Number(game.socialMedia.visibilityScore || 5);
+    const newScore = Math.min(100, Number((oldScore + gain).toFixed(1)));
     game.socialMedia.visibilityScore = newScore;
     game.socialMedia.lastPostTimestamp = now;
     game.socialMedia.totalPosts = (game.socialMedia.totalPosts || 0) + 1;
 
-    // 3. Réputation d'antenne bonifiée par l'audience
-    const baseRep = theme.repGain || 10;
-    const repGain = Math.max(1, Math.round(baseRep * effMultiplier));
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+    if (repGain > 0) {
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + repGain;
+    }
+    if (newFollowers > 0) {
+      game.resources.followers = (game.resources.followers || 0) + newFollowers;
+    }
 
-    // 4. Croissance de la communauté : chaque post fait grandir la commu !
-    const [minNewF, maxNewF] = commu.newFollowersRange;
-    const newFollowers = Math.max(1, Math.floor((minNewF + Math.random() * (maxNewF - minNewF + 1)) * (1 + photoBonusRatio)));
-    game.resources.followers = (game.resources.followers || 0) + newFollowers;
-
-    // 5. Interactions réalistes (Likes et partages calqués sur la commu réelle)
+    // 3. Interactions citoyennes (Likes et partages calqués sur la commu)
     const postLikes = Math.max(commu.likesMin, Math.floor((commu.likesMin + Math.random() * (commu.likesMax - commu.likesMin + 1)) * (1 + photoBonusRatio)));
     const hasShares = Math.random() < commu.sharesChance;
     const postShares = hasShares ? Math.max(1, Math.floor(postLikes * 0.18)) : 0;
@@ -797,46 +843,58 @@ window.ProtecCommunication = {
       text: postText,
       likes: postLikes,
       shares: postShares,
-      newFollowers: newFollowers,
       commentsCount: Math.max(1, Math.floor(postLikes * 0.15)),
       topComment: pickedComment,
-      isAutoPilot: false
+      isAutoPilot: false,
+      isSpam: isSpam
     };
 
     game.socialMedia.feed.unshift(newPost);
     if (game.socialMedia.feed.length > 20) game.socialMedia.feed.pop();
 
-    // 6. Retombées concrètes sur l'activité (calibrées sur la commu)
+    // 4. Retombées sur l'activité (uniquement si non-spam)
     let impactDetail = '';
-    const roll = Math.random();
-    if (roll < commu.opportunityChance) {
-      const subRoll = Math.random();
-      if (subRoll < 0.35) {
-        const donation = Math.round((25 + Math.floor(Math.random() * 45)) * (commu.level >= 3 ? 2 : 1));
-        game.resources.money += donation;
-        if (window.ProtecFinances) {
-          window.ProtecFinances.recordTransaction(game, donation, `Micro-dons citoyens en ligne (Publication : ${theme.title})`, 'dons');
+    if (!isSpam) {
+      const roll = Math.random();
+      if (roll < commu.opportunityChance) {
+        const subRoll = Math.random();
+        if (subRoll < 0.35) {
+          const donation = Math.round((25 + Math.floor(Math.random() * 45)) * (commu.level >= 3 ? 2 : 1));
+          game.resources.money += donation;
+          if (window.ProtecFinances) {
+            window.ProtecFinances.recordTransaction(game, donation, `Micro-dons citoyens en ligne (Publication : ${theme.title})`, 'dons');
+          }
+          impactDetail = ` 🪙 +${donation} € de dons citoyens en ligne récoltés !`;
+        } else if (subRoll < 0.70 && typeof game.generateRandomCandidature === 'function') {
+          const spawned = game.generateRandomCandidature();
+          if (spawned) {
+            impactDetail = ' 🤝 Un citoyen inspiré a postulé pour devenir bénévole !';
+          }
+        } else if (typeof game.generateRandomDevisOpportunity === 'function') {
+          game.generateRandomDevisOpportunity();
+          impactDetail = ' 📋 Un organisateur local a vu le post et dépose un devis de DPS !';
         }
-        impactDetail = ` 🪙 +${donation} € de dons citoyens en ligne récoltés !`;
-      } else if (subRoll < 0.70 && typeof game.generateRandomCandidature === 'function') {
-        const spawned = game.generateRandomCandidature();
-        if (spawned) {
-          impactDetail = ' 🤝 Un citoyen inspiré a postulé pour devenir bénévole !';
-        } else {
-          impactDetail = ' 📢 Votre publication a suscité l’intérêt de citoyens locaux pour l’antenne.';
-        }
-      } else if (typeof game.generateRandomDevisOpportunity === 'function') {
-        game.generateRandomDevisOpportunity();
-        impactDetail = ' 📋 Un organisateur local a vu le post et dépose un devis de DPS !';
       }
     }
 
-    const reachLabel = commu.level === 1 ? 'Portée naissante (début d’antenne)' : `Portée ${Math.round(reachMult * 100)}% (${commu.followers} abonnés)`;
-    game.showToast(
-      'Publication Publiée ! 📱 (0 €)',
-      `Votre post sur « ${theme.title} » est en ligne (${reachLabel}). Les interactions et nouveaux abonnés arriveront progressivement au cours des 12 prochaines heures !${impactDetail}`,
-      'purple'
-    );
+    if (isSpam) {
+      const remainingMs = SPAM_INTERVAL_MS - timeSinceLast;
+      const remHours = Math.floor(remainingMs / 3600000);
+      const remMin = Math.ceil((remainingMs % 3600000) / 60000);
+      const remStr = remHours > 0 ? `${remHours}h ${remMin}m` : `${remMin} min`;
+
+      game.showToast(
+        'Publication Sans Impact ⚠️ (Anti-spam)',
+        `Post publié, mais les effets sont bloqués ! Vos publications sont trop rapprochées (audience saturée). Prochain impact disponible dans ${remStr}.`,
+        'orange'
+      );
+    } else {
+      game.showToast(
+        'Publication Publiée ! 📱 (0 €)',
+        `Votre post sur « ${theme.title} » est en ligne. Les interactions des citoyens arriveront progressivement au cours des 12 prochaines heures !${impactDetail}`,
+        'purple'
+      );
+    }
 
     game.saveGame();
     game.updateStatsUI();
@@ -882,12 +940,13 @@ window.ProtecCommunication = {
     const now = Date.now();
     const soc = game.socialMedia;
 
-    // Décroissance lente de la visibilité en l'absence de publications :
-    // Chaque minute in-game (si les secondes bouclent), petite dépréciation
-    if (game.clock && game.clock.second === 0) {
+    // Décroissance très lente de la visibilité en cas d'inactivité prolongée (> 48h réelles)
+    // Ne s'exécute qu'une fois par jour in-game à minuit (heure 0, min 0, sec 0)
+    if (game.clock && game.clock.hour === 0 && game.clock.minute === 0 && game.clock.second === 0) {
       const hoursSinceLast = (now - (soc.lastPostTimestamp || now)) / 3600000;
-      if (hoursSinceLast > 3 && soc.visibilityScore > 15) {
-        soc.visibilityScore = Math.max(10, soc.visibilityScore - 2);
+      if (hoursSinceLast > 48 && (soc.visibilityScore || 5) > 5) {
+        // Décroissance minime : -0.2% par jour sans publication (seuil plancher de 5%)
+        soc.visibilityScore = Math.max(5, Number(((soc.visibilityScore || 5) - 0.2).toFixed(1)));
       }
     }
 
@@ -899,9 +958,9 @@ window.ProtecCommunication = {
         // Vérifier le respect du repos légal de 11h consécutives (Code du Travail Art. L3131-1)
         const isResting = salarie.status === 'repos_legal' && salarie.mandatoryRestUntil && now < salarie.mandatoryRestUntil;
         
-        // Déclencher la publication automatique si la visibilité baisse sous 80% OU si le dernier post date de plus de 4h in-game
+        // Déclencher la publication automatique si le dernier post date de plus de 4h réelles
         const hoursSinceLast = (now - (soc.lastPostTimestamp || 0)) / 3600000;
-        if (!isResting && (soc.visibilityScore < 80 || hoursSinceLast >= 4)) {
+        if (!isResting && hoursSinceLast >= 4) {
           
           // Sélection d'un thème adapté (strictement éligible aux événements réels)
           const eligibleThemes = this.SOCIAL_POST_THEMES.filter(t => this.checkThemeEligibility(game, t.id).eligible);
@@ -913,7 +972,9 @@ window.ProtecCommunication = {
           const postTitle = check.customTitle || pickedTheme.title;
           const postText = check.customText || pickedTheme.sampleText;
           
-          soc.visibilityScore = 98; // Maintien optimal de la visibilité
+          // Progression douce et pérenne de la visibilité (+0.3% par publication soignée du salarié)
+          const currentVis = Number(soc.visibilityScore || 5);
+          soc.visibilityScore = Math.min(100, Number((currentVis + 0.3).toFixed(1)));
           soc.lastPostTimestamp = now;
           soc.totalPosts = (soc.totalPosts || 0) + 1;
 
@@ -921,8 +982,9 @@ window.ProtecCommunication = {
           salarie.monthlyHoursWorked = (salarie.monthlyHoursWorked || 0) + 1;
           salarie.todayHoursWorked = (salarie.todayHoursWorked || 0) + 1;
 
-          const postLikes = Math.floor(60 + Math.random() * 95);
-          const postShares = Math.floor(10 + Math.random() * 25);
+          const commu = this.getCommunityTier(game);
+          const postLikes = Math.floor(15 + Math.random() * 25);
+          const postShares = Math.floor(2 + Math.random() * 5);
           soc.totalLikes = (soc.totalLikes || 0) + postLikes;
           soc.totalShares = (soc.totalShares || 0) + postShares;
 
@@ -936,21 +998,23 @@ window.ProtecCommunication = {
             text: postText,
             likes: postLikes,
             shares: postShares,
-            commentsCount: Math.floor(4 + Math.random() * 10),
+            commentsCount: Math.floor(2 + Math.random() * 4),
             topComment: 'Super communication, continuez comme ça ! 👏',
             isAutoPilot: true
           });
           if (soc.feed.length > 20) soc.feed.pop();
 
-          // Retombées positives automatiques
-          game.resources.reputationScore = (game.resources.reputationScore || 0) + 6;
+          // Retombées positives automatiques occasionnelles
+          if (Math.random() < 0.20) {
+            game.resources.reputationScore = (game.resources.reputationScore || 0) + 1;
+          }
 
           // Toast discret occasionnel (throttlé)
           if (!this._lastAutoToastTime || (now - this._lastAutoToastTime > 120000)) {
             this._lastAutoToastTime = now;
             game.showToast(
               'Publication Automatique Salarié 👔',
-              `${salarie.name} a publié sur les réseaux sociaux. Visibilité maintenue à 100% !`,
+              `${salarie.name} a publié sur les réseaux sociaux. L'antenne entretient sa présence numérique !`,
               'blue'
             );
           }
@@ -1139,7 +1203,7 @@ window.ProtecCommunication = {
                       <div class="flex items-center gap-1.5">
                         <h4 class="text-xs font-black">Visibilité</h4>
                         <span class="px-1.5 py-0.2 rounded text-[9.5px] font-black ${visColor} border">
-                          ${visibility}%
+                          ${Number(visibility).toFixed(1)}%
                         </span>
                       </div>
                       <p class="text-[10px] text-slate-300">Activité opérationnelle</p>
@@ -1162,10 +1226,10 @@ window.ProtecCommunication = {
                 <div class="space-y-1 mt-3">
                   <div class="flex items-center justify-between text-[10px] text-slate-300">
                     <span class="font-bold truncate max-w-[130px]">${visLabel}</span>
-                    <span class="font-mono font-black text-white">${visibility} / 100</span>
+                    <span class="font-mono font-black text-white">${Number(visibility).toFixed(1)} / 100</span>
                   </div>
                   <div class="w-full bg-white/10 h-2 rounded-full overflow-hidden p-0.5 border border-white/10">
-                    <div class="h-full rounded-full transition-all duration-500 ${visBarColor}" style="width: ${visibility}%"></div>
+                    <div class="h-full rounded-full transition-all duration-500 ${visBarColor}" style="width: ${Number(visibility).toFixed(1)}%"></div>
                   </div>
                 </div>
               </div>
@@ -1606,18 +1670,36 @@ window.ProtecCommunication = {
       })()}
 
       <!-- BLOC ACTIONS MANUELLES GRATUITES (0 €) -->
+      ${(() => {
+        const SPAM_INTERVAL_MS = 2 * 3600 * 1000;
+        const now = Date.now();
+        const timeSinceLast = now - (soc.lastPostTimestamp || 0);
+        const isSpamCooldown = timeSinceLast < SPAM_INTERVAL_MS;
+        const remainingMs = Math.max(0, SPAM_INTERVAL_MS - timeSinceLast);
+        const remainingHours = Math.floor(remainingMs / 3600000);
+        const remainingMin = Math.ceil((remainingMs % 3600000) / 60000);
+        const remainingStr = remainingHours > 0 ? `${remainingHours}h ${remainingMin}m` : `${remainingMin} min`;
+
+        return `
       <div class="space-y-3">
-        <div class="flex items-center justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
           <div>
             <h5 class="text-xs font-black uppercase text-slate-800 tracking-wider flex items-center gap-1.5">
               <span>✍️</span> Publier Maintenant sur les Réseaux Sociaux (0 €)
             </h5>
-            <p class="text-[11px] text-slate-500">Choisissez un sujet d'actualité pour booster immédiatement la visibilité et susciter de l'activité</p>
+            <p class="text-[11px] text-slate-500">Valorisez l'activité de votre antenne sur les réseaux sociaux</p>
           </div>
-          <span class="px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800">
-            Gratuit • 0 €
-          </span>
-        </div>
+          ${isSpamCooldown ? `
+            <span class="self-start sm:self-center px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 flex items-center gap-1" title="L'algorithme pénalise les publications trop rapprochées">
+              <span>⏳</span> Anti-spam actif : plein effet dans ${remainingStr}
+            </span>
+          ` : `
+            <span class="self-start sm:self-center px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+              Audience Prête • Gratuit 0 €
+            </span>
+          `}
+        </div>`;
+      })()}
 
         <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           ${this.SOCIAL_POST_THEMES.map(theme => {
@@ -1651,31 +1733,62 @@ window.ProtecCommunication = {
 
               <div class="space-y-2 pt-2 border-t border-slate-100">
                 ${(() => {
-                  const commu = this.getCommunityTier(game);
-                  const actualVisGain = Math.max(2, Math.round(theme.visibilityGain * commu.reachMultiplier));
-                  const [minF, maxF] = commu.newFollowersRange;
-                  return `
-                  <div class="flex items-center justify-between text-[10px] font-bold text-slate-600">
-                    <span class="${isEligible ? 'text-emerald-700' : 'text-slate-400'} font-bold">+${actualVisGain}% visibilité</span>
-                    <span class="${isEligible ? 'text-indigo-700' : 'text-slate-400'} font-bold">👥 +${minF} à +${maxF} abonnés</span>
-                  </div>
-                  `;
-                })()}
-                ${isEligible ? `
-                  <button
-                    onclick="window.ProtecCommunication.publishManualPost(window.game, '${theme.id}')"
-                    class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
-                    <span>🚀</span> Publier (0 €)
-                  </button>
-                ` : `
-                  <button
-                    disabled
-                    title="${check.reason}"
-                    class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-not-allowed">
-                    <span>🔒</span> Mission requise pour publier
-                  </button>
-                `}
-              </div>
+                  const SPAM_INTERVAL_MS = 2 * 3600 * 1000;
+                  const now = Date.now();
+                  const timeSinceLast = now - (soc.lastPostTimestamp || 0);
+                  const isSpamCooldown = timeSinceLast < SPAM_INTERVAL_MS;
+                  const remainingMs = Math.max(0, SPAM_INTERVAL_MS - timeSinceLast);
+                  const remainingHours = Math.floor(remainingMs / 3600000);
+                  const remainingMin = Math.ceil((remainingMs % 3600000) / 60000);
+                  const remainingStr = remainingHours > 0 ? `${remainingHours}h ${remainingMin}m` : `${remainingMin} min`;
+
+                  if (isSpamCooldown) {
+                    return `
+                    <div class="flex items-center justify-between text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-xl border border-amber-200">
+                      <span class="flex items-center gap-1"><span>⏳</span> Audience saturée</span>
+                      <span>Effet dans : ${remainingStr}</span>
+                    </div>
+                    ${isEligible ? `
+                      <button
+                        onclick="window.ProtecCommunication.publishManualPost(window.game, '${theme.id}')"
+                        title="Audience saturée : cette publication aura un effet nul sur votre notoriété et vos abonnés tant que le délai anti-spam n'est pas écoulé."
+                        class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-300 transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>⚠️</span> Publier quand même (Effet nul • Anti-spam)
+                      </button>
+                    ` : `
+                      <button
+                        disabled
+                        title="${check.reason}"
+                        class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-not-allowed">
+                        <span>🔒</span> Mission requise pour publier
+                      </button>
+                    `}
+                    `;
+                  } else {
+                    return `
+                    <div class="flex items-center justify-between text-[10px] text-slate-500 font-medium">
+                      <span>Thématique d'actualité</span>
+                      <span class="${isEligible ? 'text-emerald-700 font-bold' : 'text-slate-400 font-medium'} flex items-center gap-1">
+                        ${isEligible ? '<span>✨</span> Audience réceptive' : '<span>🔒</span> Prérequis manquant'}
+                      </span>
+                    </div>
+                    ${isEligible ? `
+                      <button
+                        onclick="window.ProtecCommunication.publishManualPost(window.game, '${theme.id}')"
+                        class="w-full py-2 rounded-xl text-xs font-black bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer">
+                        <span>🚀</span> Publier (0 €)
+                      </button>
+                    ` : `
+                      <button
+                        disabled
+                        title="${check.reason}"
+                        class="w-full py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 border border-slate-200 transition flex items-center justify-center gap-1.5 cursor-not-allowed">
+                        <span>🔒</span> Mission requise pour publier
+                      </button>
+                    `}
+                    `;
+                  }
+                })()}</div>
             </div>
             `;
           }).join('')}
@@ -1749,11 +1862,6 @@ window.ProtecCommunication = {
                   <span class="flex items-center gap-1 font-bold text-slate-600">
                     <span>🔁</span> ${post.shares || 0}
                   </span>
-                  ${post.newFollowers ? `
-                    <span class="flex items-center gap-1 text-indigo-600 font-bold">
-                      <span>👥</span> +${post.newFollowers}
-                    </span>
-                  ` : ''}
                   <span class="flex items-center gap-1 text-slate-400">
                     <span>💬</span> ${post.commentsCount || 1}
                   </span>

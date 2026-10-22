@@ -2580,7 +2580,7 @@ window.ProtecFormations = {
     }
 
     // Les stagiaires certifiés rejoignent la communauté en ligne de l'antenne
-    const newFormFollowers = Math.floor(4 + Math.random() * 8);
+    const newFormFollowers = Math.random() < 0.30 ? 1 : 0; // Très progressif (quelques semaines de travail)
     game.resources.followers = (game.resources.followers || 0) + newFormFollowers;
 
     game.saveGame();

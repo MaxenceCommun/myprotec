@@ -12818,7 +12818,7 @@ class ProtecGame {
         }
 
         // Croissance naturelle de la communauté : le public et l'organisateur suivent l'antenne
-        const newDpsFollowers = Math.floor(6 + Math.random() * 12);
+        const newDpsFollowers = Math.random() < 0.35 ? 1 : 0; // Très progressif (quelques semaines de travail)
         this.resources.followers = (this.resources.followers || 0) + newDpsFollowers;
 
         // Bon retour occasionnel des partenaires (~40% de chance, "de temps en temps")
