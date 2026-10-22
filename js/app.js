@@ -4693,6 +4693,62 @@ class ProtecGame {
       };
     }
 
+    // 0c. GÉOLOCALISATION SUR AUTOROUTE / VOIE RAPIDE (Carambolage, AVP voie rapide, Plan NOVI)
+    const isHighwayOrCarambolage = targetEnv === 'autoroute_voie_rapide' ||
+      ctxText.includes('carambolage') ||
+      ctxText.includes('voie rapide') ||
+      ctxText.includes('autoroute') ||
+      ctxText.includes('rocade') ||
+      ctxText.includes('périphérique') ||
+      ctxText.includes('peripherique') ||
+      ctxText.includes('accident_novi') ||
+      ctxText.includes('accident_peripherique');
+
+    if (isHighwayOrCarambolage) {
+      if (isParisArea || isParisIntramuros) {
+        const periphPoints = [
+          { nom: 'Boulevard Périphérique Extérieur (Porte de Saint-Cloud)', cp: '75016', lat: 48.8384, lng: 2.2536, venue: 'Boulevard Périphérique Extérieur (Porte de Saint-Cloud)' },
+          { nom: 'Boulevard Périphérique Intérieur (Porte de Bagnolet)', cp: '75020', lat: 48.8643, lng: 2.4170, venue: 'Boulevard Périphérique Intérieur (Porte de Bagnolet)' },
+          { nom: 'Boulevard Périphérique Extérieur (Porte d’Italie)', cp: '75013', lat: 48.8188, lng: 2.3612, venue: 'Boulevard Périphérique Extérieur (Porte d’Italie)' },
+          { nom: 'Boulevard Périphérique Intérieur (Porte de la Chapelle)', cp: '75018', lat: 48.8992, lng: 2.3615, venue: 'Boulevard Périphérique Intérieur (Porte de la Chapelle)' },
+          { nom: 'Boulevard Périphérique Extérieur (Porte de Bercy)', cp: '75012', lat: 48.8286, lng: 2.3925, venue: 'Boulevard Périphérique Extérieur (Porte de Bercy)' },
+          { nom: 'Boulevard Périphérique Intérieur (Porte Maillot)', cp: '75017', lat: 48.8795, lng: 2.2828, venue: 'Boulevard Périphérique Intérieur (Porte Maillot)' },
+          { nom: 'Autoroute A86 (Échangeur Nanterre / A14)', cp: '92000', lat: 48.8985, lng: 2.2150, venue: 'Autoroute A86 (Sens Intérieur)' },
+          { nom: 'Autoroute A4 (Tronçon Charenton / Saint-Maurice)', cp: '94220', lat: 48.8190, lng: 2.4280, venue: 'Autoroute A4 (Direction Province)' }
+        ];
+        const pickPeriph = periphPoints[Math.floor(Math.random() * periphPoints.length)];
+        return {
+          lat: parseFloat((pickPeriph.lat + (Math.random() - 0.5) * 0.002).toFixed(5)),
+          lng: parseFloat((pickPeriph.lng + (Math.random() - 0.5) * 0.002).toFixed(5)),
+          commune: `Paris (${pickPeriph.nom})`,
+          postcode: pickPeriph.cp,
+          venue: pickPeriph.venue,
+          address: `${pickPeriph.venue}, ${pickPeriph.cp} Paris`,
+          targetEnvironment: 'autoroute_voie_rapide',
+          isHighway: true,
+          isRealCommuneAnchor: true,
+          isOsmRealLocation: true
+        };
+      }
+
+      if (window.ProtecOSMPOISystem && typeof window.ProtecOSMPOISystem.getNearestCachedPOI === 'function') {
+        const cachedHwy = window.ProtecOSMPOISystem.getNearestCachedPOI('autoroutes', base.lat, base.lng);
+        if (cachedHwy) {
+          return {
+            lat: cachedHwy.lat,
+            lng: cachedHwy.lng,
+            commune: cachedHwy.city || base.city || 'Secteur',
+            venue: cachedHwy.venue || cachedHwy.name,
+            address: cachedHwy.address || `${cachedHwy.venue}, ${cachedHwy.city}`,
+            targetEnvironment: 'autoroute_voie_rapide',
+            isHighway: true,
+            isOsmRealLocation: cachedHwy.isOsmReal,
+            isRealCommuneAnchor: true
+          };
+        }
+      }
+    }
+
     if (isSocial) {
       // 1. Maraude sociale : STRICTEMENT dans la ville de l'antenne (centre-ville, gare, mairie)
       targetCommune = communes.find(c => c.nom.toLowerCase() === (base.city || '').toLowerCase()) || communes[0];
@@ -5025,13 +5081,19 @@ class ProtecGame {
               item.sector = `Secteur Maraude : Centre-Ville, Gares & Halte de Nuit (${city || currentCity})`;
               item.address = item.sector;
             } else if (props.label) {
-              // Protection des adresses spécifiques de bois, parcs, berges et forêts
+              // Protection des adresses spécifiques de bois, parcs, berges, forêts et autoroutes / voies rapides
+              const isHwyContext = item.targetEnvironment === 'autoroute_voie_rapide' ||
+                item.isHighway ||
+                item.osmCategory === 'autoroutes' ||
+                (item.address && /autoroute|voie rapide|périphérique|peripherique|échangeur|echangeur|péage|a[0-9]+/i.test(item.address));
+
               if (item.targetEnvironment === 'bois_paris' || item.targetEnvironment === 'paris_urban_parks' || item.targetEnvironment === 'seine_paris' || item.targetEnvironment === 'foret_province' || (item.address && (item.address.includes('Bois de') || item.address.includes('Route Forestière') || item.address.includes('Carrefour de la Forêt')))) {
                 // Conserver l'adresse forestière / boisée réaliste déjà attribuée
-              } else if (isAutoroute && !item.title?.toLowerCase().includes('accident') && !item.title?.toLowerCase().includes('routier')) {
-                item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
-              } else if (isRail && !item.title?.toLowerCase().includes('sncf') && !item.title?.toLowerCase().includes('gare')) {
-                item.address = this.generateRealisticStreetAddress(city || currentCity, item.lat, item.lng, item.title);
+              } else if (isHwyContext || item.isOsmRealLocation) {
+                // Conserver l'axe autoroutier / voie rapide réel déjà attribué
+                if (city && item.address && !item.address.includes(city)) {
+                  item.address = `${item.venue || item.address}, ${city}`;
+                }
               } else {
                 item.address = props.label;
                 item.postcode = props.postcode;

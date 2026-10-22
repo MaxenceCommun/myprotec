@@ -268,20 +268,48 @@
 
     autoroutes: {
       id: 'autoroutes',
-      label: 'Autoroutes & Échangeurs',
+      label: 'Autoroutes, Voies Rapides & Échangeurs',
       icon: 'car',
-      overpassQuery: '(node["highway"="motorway_junction"](around:{radius},{lat},{lng});way["highway"="motorway"](around:{radius},{lat},{lng});node["highway"="toll_gantry"](around:{radius},{lat},{lng}););',
-      defaultRadiusMeters: 30000,
-      keywords: ['autoroute', 'echangeur', 'échangeur', 'peage', 'péage', 'avp', 'carambolage', 'voie rapide', 'naufrages de la route', 'rocade', 'voie express'],
-      cleanName: (raw, commune) => {
-        let n = (raw || '').trim();
-        if (!n) return `Autoroute (Secteur ${commune})`;
-        if (!/autoroute|échangeur|echangeur|péage|peage|a[0-9]+/i.test(n)) n = `Échangeur ${n}`;
-        return n;
+      overpassQuery: '(node["highway"="motorway_junction"](around:{radius},{lat},{lng});way["highway"="motorway"](around:{radius},{lat},{lng});way["highway"="trunk"](around:{radius},{lat},{lng});way["highway"="motorway_link"](around:{radius},{lat},{lng});way["highway"="trunk_link"](around:{radius},{lat},{lng});node["highway"="toll_gantry"](around:{radius},{lat},{lng}););',
+      defaultRadiusMeters: 35000,
+      keywords: ['autoroute', 'echangeur', 'échangeur', 'peage', 'péage', 'avp', 'carambolage', 'voie rapide', 'naufrages de la route', 'rocade', 'voie express', 'périphérique', 'peripherique', 'accident_novi', 'secours routier', 'circulation rapide'],
+      cleanName: (raw, commune, tags = {}) => {
+        const ref = (tags.ref || '').trim();
+        const name = (tags.name || '').trim();
+        const junction = (tags['junction:name'] || tags.junction_name || tags.ref_junction || '').trim();
+        const destination = tags.destination ? ` (Direction ${tags.destination.split(';')[0].trim()})` : '';
+
+        // 1. Échangeur ou sortie autoroutière identifiée
+        if (junction) {
+          return `${ref ? ref + ' - ' : ''}Échangeur ${junction}${destination}`;
+        }
+        // 2. Référence d'axe + nom usuel (ex: A31 Autoroute de Lorraine-Bourgogne ou Boulevard Périphérique)
+        if (ref && name && name !== ref) {
+          return `${ref} (${name})${destination}`;
+        }
+        // 3. Référence officielle seule (ex: A31, A4, N57, N4, A86, N104)
+        if (ref) {
+          const isA = /^A[0-9]+/i.test(ref);
+          const isN = /^N[0-9]+/i.test(ref);
+          const prefix = isA ? 'Autoroute ' : (isN ? 'Voie Rapide ' : 'Axe ');
+          return `${prefix}${ref}${destination}`;
+        }
+        // 4. Nom propre d'axe (ex: Boulevard Périphérique, Voie des Berges, Rocade Sud)
+        if (name) {
+          if (!/autoroute|voie rapide|périphérique|peripherique|rocade|échangeur|echangeur/i.test(name)) {
+            return `Voie Rapide ${name}${destination}`;
+          }
+          return `${name}${destination}`;
+        }
+        // 5. Cas générique avec sortie ou échangeur détecté
+        if (raw && /sortie|échangeur|echangeur|péage/i.test(raw)) {
+          return `${raw}${destination}`;
+        }
+        return `Autoroute / Voie Rapide (Secteur ${commune})`;
       },
       fallback: (commune) => ({
         name: `Autoroute A (Secteur ${commune})`,
-        venue: `Échangeur Autoroutier de ${commune}`,
+        venue: `Voie Rapide / Échangeur de ${commune}`,
         category: 'autoroutes'
       })
     }
@@ -353,7 +381,7 @@
                 const eLng = el.lon || el.center?.lon;
                 if (!eLat || !eLng) return null;
 
-                const cleanName = config.cleanName(rawName, fallbackCommune);
+                const cleanName = config.cleanName(rawName, fallbackCommune, tags);
                 const city = tags['addr:city'] || tags['addr:municipality'] || fallbackCommune;
                 const street = tags['addr:street'] ? `${tags['addr:housenumber'] ? tags['addr:housenumber'] + ' ' : ''}${tags['addr:street']}` : '';
 
@@ -547,14 +575,37 @@
     return poi;
   }
 
-  // 5. PRÉCHAUFFAGE DU CACHE EN ARRIÈRE-PLAN AUTOUR DE L'ANTENNE
+  // 5. RECHERCHE SYNCHRONE DANS LE CACHE MÉMOIRE EXISTANT
+  /**
+   * Retourne immédiatement un POI réel en cache le plus proche des coordonnées demandées.
+   */
+  function getNearestCachedPOI(categoryKey, lat, lng) {
+    if (!categoryKey || !lat || !lng) return null;
+    let closestPoi = null;
+    let minDistance = Infinity;
+
+    for (const [key, cacheEntry] of _poiCache.entries()) {
+      if (key.startsWith(`${categoryKey}_`) && Array.isArray(cacheEntry.elements)) {
+        for (const el of cacheEntry.elements) {
+          const d = Math.hypot((el.lat - lat) * 111, (el.lng - lng) * 75);
+          if (d < minDistance) {
+            minDistance = d;
+            closestPoi = el;
+          }
+        }
+      }
+    }
+    return closestPoi;
+  }
+
+  // 6. PRÉCHAUFFAGE DU CACHE EN ARRIÈRE-PLAN AUTOUR DE L'ANTENNE
   /**
    * Lance des requêtes Overpass en arrière-plan pour alimenter le cache dès le lancement du jeu.
-   * Ainsi, lorsque des missions surviennent, les résultats sont déjà en mémoire !
+   * Ainsi, lorsque des missions surviennent (ex: carambolage autoroute), les résultats sont déjà en mémoire !
    */
   function warmupCacheAroundStation(lat, lng, communeName = 'Secteur') {
     if (!lat || !lng) return;
-    const essentialCategories = ['sports', 'centres_commerciaux', 'gares', 'plans_eau', 'casernes', 'hopitaux'];
+    const essentialCategories = ['autoroutes', 'sports', 'centres_commerciaux', 'gares', 'plans_eau', 'casernes', 'hopitaux'];
 
     // Échelonnement discret des requêtes en arrière-plan
     essentialCategories.forEach((catKey, index) => {
@@ -566,14 +617,15 @@
             }
           })
           .catch(() => {});
-      }, 1000 + (index * 1500));
+      }, 500 + (index * 1200));
     });
   }
 
-  // 6. EXPOSITION GLOBALE
+  // 7. EXPOSITION GLOBALE
   window.ProtecOSMPOISystem = {
     POI_CATEGORIES: POI_CATEGORIES,
     fetchPOI: fetchPOIByCategory,
+    getNearestCachedPOI: getNearestCachedPOI,
     detectCategoryFromMission: detectCategoryFromMission,
     enrichMissionWithRealPOI: enrichMissionWithRealPOI,
     warmupCacheAroundStation: warmupCacheAroundStation,

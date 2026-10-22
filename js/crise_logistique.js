@@ -4022,6 +4022,80 @@ window.ProtecCriseLogistique = {
         ],
         recompenses: { reputation_prefecture: 40, reputation_samu: 15, reputation_sdis: 25, indemnite_crise: 3400 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
+      },
+      accident_novi: {
+        type: 'accident_novi',
+        titre: 'Carambolage Multiple sur Voie Rapide (Plan NOVI)',
+        anticipation: 'immediate',
+        autorite_demandeur: 'Préfecture & SDIS 18 (Plan NOVI)',
+        autorite_code: 'prefecture',
+        niveau_alerte: 'PLAN NOVI / NOMBREUSES VICTIMES',
+        targetEnvironment: 'autoroute_voie_rapide',
+        description: 'Grave carambolage impliquant un autocar et plusieurs véhicules sur voie rapide. Le Préfet déclenche le Plan NOVI : norias VPSP, montage PMA et soutien CUMP.',
+        phases: [
+          {
+            phase_id: 1,
+            nom: 'Phase 1 : Noria VPSP & Sécurisation de l’Axe',
+            direction: 'montante',
+            ordre_radio: 'COMMANDEMENT SDIS / SAMU : Carambolage sur la voie rapide. Engagez 2 VPSP en noria d’évacuation vers le CHU et balisez la zone.',
+            sous_missions: [
+              {
+                id: 'sub_noria_carambolage_1',
+                type: 'noria_vpsp',
+                titre: 'Noria VPSP #1 - Évacuation des Urgences Relatives',
+                statut: 'en_attente',
+                moyens_requis: { vols_count: 3, ranks: ['CE', 'PSE2', 'PSE1'], vehicles: ['VPSP'] },
+                progression: 0,
+                duree_estimee_sec: 1800
+              },
+              {
+                id: 'sub_noria_carambolage_2',
+                type: 'noria_vpsp',
+                titre: 'Noria VPSP #2 - Relevage & Brancardage d’Urgence',
+                statut: 'en_attente',
+                moyens_requis: { vols_count: 3, ranks: ['PSE2', 'PSE1', 'PSE1'], vehicles: ['VPSP'] },
+                progression: 0,
+                duree_estimee_sec: 2100
+              }
+            ]
+          },
+          {
+            phase_id: 2,
+            nom: 'Phase 2 : Armement PMA & Éclairage Autoroutier',
+            direction: 'montante',
+            ordre_radio: 'PRÉFECTURE (COD) : Axe saturé. Montage du Poste Médical Avancé (PMA) et mât d’éclairage sur la bande d’arrêt d’urgence.',
+            sous_missions: [
+              {
+                id: 'sub_montage_pma_axe',
+                type: 'montage_pma',
+                titre: 'Montage PMA & Éclairage Grande Puissance',
+                statut: 'en_attente',
+                moyens_requis: { vols_count: 4, ranks: ['CD', 'PSE2', 'PSE1'], vehicles: ['VTU'], specialite_requise: 'pma' },
+                progression: 0,
+                duree_estimee_sec: 2400
+              }
+            ]
+          },
+          {
+            phase_id: 3,
+            nom: 'Phase 3 : Évacuation Terminée & Dégagement de la Voie',
+            direction: 'descendante',
+            ordre_radio: 'CODIS 18 : Toutes les victimes sont évacuées vers les hôpitaux. Repli du dispositif et réouverture progressive de l’axe routier.',
+            sous_missions: [
+              {
+                id: 'sub_repli_voie_rapide',
+                type: 'repli_materiel',
+                titre: 'Repli du PMA & Rentrée en Base',
+                statut: 'en_attente',
+                moyens_requis: { vols_count: 3, ranks: ['PSE1'], vehicles: ['VTU'] },
+                progression: 0,
+                duree_estimee_sec: 1500
+              }
+            ]
+          }
+        ],
+        recompenses: { reputation_prefecture: 45, reputation_samu: 35, reputation_sdis: 30, indemnite_crise: 4200 },
+        penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       }
     };
     return templates[type] || templates.novi_attentat;
