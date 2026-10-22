@@ -455,6 +455,108 @@
       ],
       isDefault: true,
       enabled: true
+    }    ,
+    // =========================================================================
+    // D. GARDE CASERNE SDIS (COUVERTURE OPÉRATIONNELLE / RELÈVE POMPIERS)
+    // =========================================================================
+    {
+      id: 'sdis_couverture_operationnelle',
+      type: 'sdis',
+      category: 'renfort_sdis',
+      timing: 'anticipation',
+      anticipationDelays: [30, 120],
+      anticipationDelay: 30,
+      scalingMode: 'adaptive',
+      scaleIntensity: 'moyenne',
+      minVolunteers: 4,
+      maxVolunteers: 8,
+      minDurationHours: 4.0,
+      maxDurationHours: 8.0,
+      minRewardMoney: 600,
+      maxRewardMoney: 1100,
+      authority: 'sdis',
+      scale: 'Garde Caserne SDIS (Couverture VPSP)',
+      title: 'Couverture Opérationnelle Caserne SDIS (Gros Sinistre)',
+      desc: 'Très important incendie d\'entrepôt logistique mobilisant tous les moyens et VSAV des sapeurs-pompiers du secteur. Le CODIS déclenche l\'antenne pour prendre la garde postée au Centre de Secours principal (CIS) et assurer les départs réflexes secours à personne (SUAP).',
+      requiredVolunteers: 4,
+      requiredRanks: ['CE', 'PSE2', 'PSE1'],
+      requiredVehicles: ['VPSP'],
+      vehiclesMode: 'auto',
+      requiredLots: ['lot_secours_b'],
+      durationHours: 6.0,
+      rewardMoney: 750,
+      rewardReputation: 60,
+      riskLevel: 'moyen',
+      urgency: 'haute',
+      environment: 'ouvert_urbain',
+      isEvolutive: true,
+      phases: [
+        {
+          id: 'p1',
+          step: 1,
+          name: 'Phase 1 : Prise de Garde au CIS & Vérification VPSP',
+          direction: 'stable',
+          durationMin: 45,
+          alertStatus: 'prealerte',
+          instructions: 'Rassemblement en caserne de pompiers, inventaire et prise de contact avec l\'officier de garde.',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VPSP'],
+          requiredLots: ['lot_secours_b'],
+          color: '#38bdf8'
+        },
+        {
+          id: 'p2a',
+          step: 2,
+          name: 'Phase 2A : Multiples Départs Réflexes SAP en Ville',
+          direction: 'montante',
+          durationMin: 180,
+          alertStatus: 'alerte',
+          instructions: 'Départ réflexe pour malaises et accidents du secteur pendant que les pompiers luttent sur le feu.',
+          requiredVolunteers: 6,
+          requiredVehicles: ['VPSP', 'VTU'],
+          requiredLots: ['lot_secours_b'],
+          color: '#f43f5e'
+        },
+        {
+          id: 'p2b',
+          step: 2,
+          name: 'Phase 2B : Garde Calme & Veille Opérationnelle',
+          direction: 'descendante',
+          durationMin: 180,
+          alertStatus: 'alerte',
+          instructions: 'Maintien de la garde postée sans départ majeur, écoute radio permanente CTA 18.',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VPSP'],
+          requiredLots: ['lot_secours_b'],
+          color: '#10b981'
+        },
+        {
+          id: 'p3',
+          step: 3,
+          name: 'Phase 3 : Retour des Pompiers & Fin de Garde',
+          direction: 'descendante',
+          durationMin: 45,
+          alertStatus: 'repli',
+          instructions: 'Retour des engins pompiers du gros incendie, relève de dispositif et réarmement du VPSP.',
+          requiredVolunteers: 4,
+          requiredVehicles: ['VPSP'],
+          requiredLots: ['lot_secours_b'],
+          color: '#8b5cf6'
+        }
+      ],
+      evolutions: [
+        { source: 'p1', target: 'p2a', probability: 65, label: 'Multiplication des appels 18 sur le secteur', instructions: 'Ordre CTA 18 : Départs réflexes en chaîne', addedResources: '+1 VPSP de renfort' },
+        { source: 'p1', target: 'p2b', probability: 35, label: 'Secteur calme sous couverture', instructions: 'Poursuite de la garde en caserne', addedResources: '' },
+        { source: 'p2a', target: 'p3', probability: 65, label: 'Feu d\'usine maîtrisé par les pompiers', instructions: 'Fin de la couverture opérationnelle', addedResources: '' },
+        { source: 'p2b', target: 'p3', probability: 35, label: 'Fin de mission et relève', instructions: 'Passation des consignes', addedResources: '' }
+      ],
+      peripeties: [
+        'Départ réflexe pour un arrêt cardiaque (ACR) à 2 minutes du centre de secours (RCP + DAE)',
+        'Accident de circulation urbain avec 2 blessés légers nécessitant transport aux urgences',
+        'Ravitaillement des pompiers rentrant épuisés du sinistre majeur'
+      ],
+      isDefault: true,
+      enabled: true
     }
   ];
 
@@ -698,17 +800,17 @@
 
     // Configuration des choix de délais de pré-alerte disponibles
     AVAILABLE_ANTICIPATION_DELAYS: [
-      { value: 15, label: '15 min', hint: 'Alerte rapide' },
-      { value: 30, label: '30 min', hint: 'Préavis court' },
-      { value: 60, label: '1 heure', hint: 'Standard' },
-      { value: 120, label: '2 heures', hint: 'Préfecture' },
-      { value: 240, label: '4 heures', hint: 'Mobilisation' },
-      { value: 360, label: '6 heures', hint: 'Demi-journée' },
-      { value: 720, label: '12 heures', hint: 'Veille' },
-      { value: 1440, label: 'J-1 (24h)', hint: 'La veille' },
-      { value: 2880, label: 'J-2 (48h)', hint: '2 jours avant' },
-      { value: 4320, label: 'J-3 (72h)', hint: '3 jours avant' },
-      { value: 10080, label: 'J-7', hint: '1 semaine' }
+      { value: 15, label: '15 min', hint: 'H+15m (Réflexe)' },
+      { value: 30, label: '30 min', hint: 'H+30m (Après 1er bilan)' },
+      { value: 60, label: '1 heure', hint: 'H+1h (Renfort)' },
+      { value: 120, label: '2 heures', hint: 'H+2h (Relève/COD/SDIS)' },
+      { value: 240, label: '4 heures', hint: 'H+4h (Intervention longue)' },
+      { value: 360, label: '6 heures', hint: 'H+6h (Mobilisation)' },
+      { value: 720, label: '12 heures', hint: 'Relève de nuit' },
+      { value: 1440, label: 'J-1 (24h)', hint: 'Anticipation la veille' },
+      { value: 2880, label: 'J-2 (48h)', hint: 'Anticipation J-2' },
+      { value: 4320, label: 'J-3 (72h)', hint: 'Vigilance J-3' },
+      { value: 10080, label: 'J-7', hint: '1 semaine avant' }
     ],
 
     getAnticipationDelays(sc) {
@@ -1170,6 +1272,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
       const countDPS = allScenarios.filter(s => s.type === 'dps').length;
       const countSAMU = allScenarios.filter(s => s.type === 'samu').length;
       const countCrise = allScenarios.filter(s => s.type === 'crise').length;
+      const countSDIS = allScenarios.filter(s => s.type === 'sdis').length;
       const countCustom = allScenarios.filter(s => s.isCustom).length;
 
       const isEditing = Boolean(this.editingScenarioId);
@@ -1236,7 +1339,8 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                   <div>
                     <label class="block text-[10px] font-black uppercase text-slate-300 mb-1">Type d'Opération :</label>
                     <select id="scen-edit-type" onchange="window.ProtecScenariosManager.onTypeChange(this.value)" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-black text-white focus:ring-2 focus:ring-indigo-500">
-                      <option value="crise" ${editingScenario.type === 'crise' ? 'selected' : ''}>🚨 Crise Majeure / NOVI / ORSEC</option>
+                      <option value="crise" ${editingScenario.type === 'crise' ? 'selected' : ''}>🚨 Crise Majeure / NOVI / ORSEC (Préfecture)</option>
+                      <option value="sdis" ${editingScenario.type === 'sdis' ? 'selected' : ''}>🚒 Garde Caserne SDIS (Couverture Opérationnelle / Remplacement Pompiers)</option>
                       <option value="samu" ${editingScenario.type === 'samu' ? 'selected' : ''}>🚑 Urgence & Garde SAMU 15</option>
                       <option value="dps" ${editingScenario.type === 'dps' ? 'selected' : ''}>📋 Dispositif Prévisionnel (DPS)</option>
                     </select>
@@ -1280,9 +1384,9 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                     <div>
                       <div class="flex items-center justify-between mb-2">
                         <label class="block text-[10px] font-black uppercase text-amber-400 tracking-wider">
-                          ⏱️ Délais d'Anticipation / Pré-alerte Possibles (Sélection Multiple) :
+                          ⏱️ Délais de Déclenchement & Anticipation AASC (Sélection Multiple) :
                         </label>
-                        <span class="text-[9.5px] text-slate-400">Cochez les délais envisagés (tirage aléatoire lors du déclenchement)</span>
+                        <span class="text-[9.5px] text-slate-400">Déclenchement différé après début du sinistre (H+15m, H+1h, H+2h) ou anticipation préalable (J-1, J-2)</span>
                       </div>
                       
                       <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
@@ -1301,7 +1405,7 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
                       <div class="flex items-center justify-between text-[10px] text-amber-300/90 bg-amber-950/30 border border-amber-900/40 p-2.5 rounded-xl mt-2.5 flex-wrap gap-2">
                         <div class="flex items-center gap-1.5">
                           <span>💡</span>
-                          <span><strong>Multi-délais actif :</strong> En cochant par exemple <strong>2 heures</strong> et <strong>J-2 (48h)</strong>, le scénario pourra être pré-alerté 2h avant comme 2 jours avant.</span>
+                          <span><strong>Multi-délais actif :</strong> <strong>Réalisme AASC :</strong> Les AASC sont souvent déclenchées <strong>quelques dizaines de minutes ou heures après le début de l'accident</strong> (ex: H+30m ou H+2h) pour monter en puissance ou remplacer les pompiers, ou en amont (J-2) si prévisible.</span>
                         </div>
                         <div class="flex items-center gap-2">
                           <button type="button" onclick="window.ProtecScenariosManager.selectAllDelays(true)" class="text-[9.5px] font-bold text-amber-400 hover:underline">Tout cocher</button>
@@ -1621,6 +1725,9 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
               </button>
               <button onclick="window.ProtecScenariosManager.setFilter('crise')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'crise' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                 🚨 Crises (${countCrise})
+              </button>
+              <button onclick="window.ProtecScenariosManager.setFilter('sdis')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'sdis' ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                🚒 SDIS (${countSDIS})
               </button>
               <button onclick="window.ProtecScenariosManager.setFilter('samu')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'samu' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                 🚑 SAMU 15 (${countSAMU})
@@ -2431,6 +2538,9 @@ Consigne: ${n.instructions || 'Aucune consigne spécifique'}`;
         if (newType === 'crise') {
           scaleInput.value = 'PLAN NOVI (PMA & Noria VPSP)';
           if (authSelect) authSelect.value = 'prefecture';
+        } else if (newType === 'sdis') {
+          scaleInput.value = 'Garde Caserne SDIS (Couverture VPSP)';
+          if (authSelect) authSelect.value = 'sdis';
         } else if (newType === 'samu') {
           scaleInput.value = 'Garde Postée SAMU 15 (1 VPSP)';
           if (authSelect) authSelect.value = 'samu';
