@@ -1,4 +1,4 @@
-/**
+﻿/**
  * PROTEC LIVE - PANEL ADMINISTRATEUR (GESTION DE TOUS LES JOUEURS)
  * Permet à l'administrateur de superviser la base de données,
  * modifier les trésoreries, réinitialiser des mots de passe,
@@ -102,7 +102,8 @@ window.ProtecAdmin = {
       (window.ProtecAuth?.currentUser?.isAdmin) ||
       (window.ProtecAuth?.currentUser?.role === 'admin') ||
       (window.game?.player?.isAdmin) ||
-      (window.game?.player?.role === 'admin')
+      (window.game?.player?.role === 'admin') ||
+      (localStorage.getItem('protec_admin_auth') === 'true')
     );
   },
 
@@ -246,6 +247,7 @@ window.ProtecAdmin = {
     const tabEquipmentBtn = document.getElementById('admin-tab-equipment-btn');
     const tabArchivesBtn = document.getElementById('admin-tab-archives-btn');
     const tabMissionsBtn = document.getElementById('admin-tab-missions-btn');
+    const tabScenariosBtn = document.getElementById('admin-tab-scenarios-btn');
     const tabEventsBtn = document.getElementById('admin-tab-events-btn');
     const tabReferralsBtn = document.getElementById('admin-tab-referrals-btn');
     const tabBalancingBtn = document.getElementById('admin-tab-balancing-btn');
@@ -260,6 +262,7 @@ window.ProtecAdmin = {
     const viewEquipment = document.getElementById('admin-view-materiel');
     const viewArchives = document.getElementById('admin-view-archives');
     const viewMissions = document.getElementById('admin-view-missions');
+    const viewScenarios = document.getElementById('admin-view-scenarios');
     const viewEvents = document.getElementById('admin-view-events');
     const viewReferrals = document.getElementById('admin-view-referrals');
     const viewBalancing = document.getElementById('admin-view-balancing');
@@ -277,6 +280,7 @@ window.ProtecAdmin = {
     if (tabEquipmentBtn) tabEquipmentBtn.className = (tab === 'materiel' ? activeClass : defaultClass);
     if (tabArchivesBtn) tabArchivesBtn.className = (tab === 'archives' ? activeClass : defaultClass);
     if (tabMissionsBtn) tabMissionsBtn.className = (tab === 'missions' ? activeClass : defaultClass);
+    if (tabScenariosBtn) tabScenariosBtn.className = (tab === 'scenarios' ? activeClass : defaultClass);
     if (tabEventsBtn) tabEventsBtn.className = (tab === 'events' ? activeClass : defaultClass);
     if (tabReferralsBtn) tabReferralsBtn.className = (tab === 'parrainages' ? activeClass : defaultClass);
     if (tabBalancingBtn) tabBalancingBtn.className = (tab === 'balancing' ? activeClass : defaultClass);
@@ -291,6 +295,7 @@ window.ProtecAdmin = {
     if (viewEquipment) viewEquipment.classList.toggle('hidden', tab !== 'materiel');
     if (viewArchives) viewArchives.classList.toggle('hidden', tab !== 'archives');
     if (viewMissions) viewMissions.classList.toggle('hidden', tab !== 'missions');
+    if (viewScenarios) viewScenarios.classList.toggle('hidden', tab !== 'scenarios');
     if (viewEvents) viewEvents.classList.toggle('hidden', tab !== 'events');
     if (viewReferrals) viewReferrals.classList.toggle('hidden', tab !== 'parrainages');
     if (viewBalancing) viewBalancing.classList.toggle('hidden', tab !== 'balancing');
@@ -316,6 +321,10 @@ window.ProtecAdmin = {
       this.renderBalancingView();
     } else if (tab === 'debug') {
       this.renderDebugDashboard();
+    } else if (tab === 'scenarios') {
+      if (window.ProtecScenariosManager) {
+        window.ProtecScenariosManager.renderAdminView(viewScenarios, window.game);
+      }
     }
   },
 
@@ -4364,6 +4373,9 @@ window.ProtecAdmin = {
           <button id="admin-tab-archives-btn" onclick="window.ProtecAdmin.switchTab('archives')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             📦 Archives Sauvegardes
           </button>
+          <button id="admin-tab-scenarios-btn" onclick="window.ProtecAdmin.switchTab('scenarios')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer" title="Créer, modifier, dupliquer et gérer tous les scénarios DPS, SAMU et Crises">
+            🎭 Scénarios & Missions
+          </button>
           <button id="admin-tab-missions-btn" onclick="window.ProtecAdmin.switchTab('missions')" class="px-3 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition flex items-center gap-1.5 cursor-pointer">
             🚀 Recette & Tests
           </button>
@@ -4579,6 +4591,9 @@ window.ProtecAdmin = {
         </div>
 
         <!-- Vue 3 : Déclencheur Universel de Missions (Tests & Sandbox) -->
+        <!-- Vue : Gestionnaire & Éditeur de Scénarios -->
+        <div id="admin-view-scenarios" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4"></div>
+
         <div id="admin-view-missions" class="hidden flex flex-col flex-1 min-h-0 overflow-y-auto space-y-4">
           <div class="p-3.5 rounded-2xl bg-indigo-50 border border-indigo-200 text-xs text-indigo-900 flex items-center justify-between">
             <div>

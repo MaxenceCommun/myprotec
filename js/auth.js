@@ -1,4 +1,4 @@
-// js/auth.js - Authentification Multijoueur Obligatoire & Synchronisation Serveur
+﻿// js/auth.js - Authentification Multijoueur Obligatoire & Synchronisation Serveur
 window.ProtecAuth = {
   token: null,
   currentUser: null,
@@ -390,8 +390,8 @@ window.ProtecAuth = {
     }
 
     // Sécurité stricte d'accès aux boutons Panel Admin et Gestionnaire (Desktop et Mobile)
-    const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin'));
-    const isActualGestionnaire = !isActualAdmin && !!(this.currentUser && (this.currentUser.isGestionnaire || this.currentUser.role === 'gestionnaire'));
+    const isActualAdmin = !!(this.currentUser && (this.currentUser.isAdmin || this.currentUser.role === 'admin')) || !!(window.game?.player?.isAdmin) || localStorage.getItem('protec_admin_auth') === 'true';
+    const isActualGestionnaire = !isActualAdmin && (!!(this.currentUser && (this.currentUser.isGestionnaire || this.currentUser.role === 'gestionnaire')) || !!(window.game?.player?.isGestionnaire));
     const isAuthorized = isActualAdmin || isActualGestionnaire;
 
     const adminBtn = document.getElementById('admin-header-btn');

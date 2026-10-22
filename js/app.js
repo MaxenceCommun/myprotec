@@ -1,4 +1,4 @@
-
+﻿
 if (typeof window !== 'undefined') {
   window.formatDurationMinutes = function(totalMinutes) {
     const mins = Math.round(Number(totalMinutes) || 0);
@@ -24041,6 +24041,13 @@ class ProtecGame {
   // --- POPUP MODULES DOCK ---
   openModule(moduleKey, isBackNavigation = false) {
     this.closeAllDockSubmenus();
+
+    if (moduleKey === 'scenarios' || moduleKey === 'scenario') {
+      if (window.ProtecScenariosManager) {
+        window.ProtecScenariosManager.openManager();
+      }
+      return;
+    }
 
     if (moduleKey === 'parrainage' || moduleKey === 'referral' || moduleKey === 'filleul') {
       if (window.ProtecAuth && typeof window.ProtecAuth.openReferralShareModal === 'function') {
