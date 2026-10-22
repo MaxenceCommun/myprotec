@@ -9,10 +9,12 @@ const KNOWN_BADGE_IMAGES = new Set([
   'images/badges/ecusson_inconnu.png',
   'images/badges/badge_inconnu.png',
   'images/ecusson_inconnu.png',
+  'images/badges/membre_fondateur.png',
+  'images/badges/membre_fondateur_mask.png',
+  'images/badges/badge_fondateur.png',
   'images/badges/badge_54.png',
   'images/badges/badge_admin.png',
   'images/badges/badge_def_est.png',
-  'images/badges/badge_fondateur.png',
   'images/badges/badge_meurthe_et_moselle_54.png',
   'images/badge_admin.png',
   'images/badge_def_est.png',
@@ -20,14 +22,21 @@ const KNOWN_BADGE_IMAGES = new Set([
   'images/badge_fondateur.png',
   'images/badge_fondateur_reflet.png',
   'images/ecusson_chat_noir.png',
-  'images/ecusson_chat_blanc.png'
+  'images/ecusson_chat_blanc.png',
+  'images/écusson_chat_noir.png',
+  'images/écusson_chat_blanc.png'
 ]);
 
 function isValidBadgeImage(url) {
   if (!url || typeof url !== 'string') return false;
-  const clean = url.trim().replace(/^\.?\//, '');
+  const trimmed = url.trim();
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return true;
+  }
+  const clean = trimmed.replace(/^\.?\//, '');
   if (clean.includes('ecusson_inconnu') || clean.includes('badge_inconnu')) return true;
-  return KNOWN_BADGE_IMAGES.has(clean) || KNOWN_BADGE_IMAGES.has('images/' + clean);
+  if (clean.includes('membre_fondateur') || clean.includes('badge_fondateur')) return true;
+  return KNOWN_BADGE_IMAGES.has(clean) || KNOWN_BADGE_IMAGES.has('images/' + clean) || KNOWN_BADGE_IMAGES.has('images/badges/' + clean);
 }
 
 window.ProtecEcussons = {
