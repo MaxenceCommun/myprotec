@@ -543,7 +543,10 @@
         type: data.type || 'crise',
         category: data.category || 'accident_collectif',
         timing: data.timing || 'imprevisible',
-        anticipationDelay: parseInt(data.anticipationDelay, 10) || 120,
+        anticipationDelays: Array.isArray(data.anticipationDelays) && data.anticipationDelays.length > 0 
+          ? data.anticipationDelays.map(Number).filter(n => !isNaN(n) && n > 0)
+          : (data.anticipationDelay ? [parseInt(data.anticipationDelay, 10)] : [120]),
+        anticipationDelay: parseInt(data.anticipationDelay, 10) || (Array.isArray(data.anticipationDelays) && data.anticipationDelays[0]) || 120,
         authority: data.authority || 'prefecture',
         scalingMode: data.scalingMode || 'adaptive',
         scaleIntensity: data.scaleIntensity || 'moyenne',
@@ -633,6 +636,56 @@
     },
 
     // =========================================================================
+    
+    // Configuration des choix de délais de pré-alerte disponibles
+    AVAILABLE_ANTICIPATION_DELAYS: [
+      { value: 15, label: '15 min', hint: 'Alerte rapide' },
+      { value: 30, label: '30 min', hint: 'Préavis court' },
+      { value: 60, label: '1 heure', hint: 'Standard' },
+      { value: 120, label: '2 heures', hint: 'Préfecture' },
+      { value: 240, label: '4 heures', hint: 'Mobilisation' },
+      { value: 360, label: '6 heures', hint: 'Demi-journée' },
+      { value: 720, label: '12 heures', hint: 'Veille' },
+      { value: 1440, label: 'J-1 (24h)', hint: 'La veille' },
+      { value: 2880, label: 'J-2 (48h)', hint: '2 jours avant' },
+      { value: 4320, label: 'J-3 (72h)', hint: '3 jours avant' },
+      { value: 10080, label: 'J-7', hint: '1 semaine' }
+    ],
+
+    getAnticipationDelays(sc) {
+      if (!sc) return [120];
+      if (Array.isArray(sc.anticipationDelays) && sc.anticipationDelays.length > 0) {
+        return sc.anticipationDelays.map(Number).filter(n => !isNaN(n) && n > 0);
+      }
+      if (sc.anticipationDelay !== undefined && sc.anticipationDelay !== null && sc.anticipationDelay !== '') {
+        const val = parseInt(sc.anticipationDelay, 10);
+        return isNaN(val) ? [120] : [val];
+      }
+      return [120];
+    },
+
+    pickAnticipationDelay(sc) {
+      const list = this.getAnticipationDelays(sc);
+      if (!list || list.length === 0) return 120;
+      return list[Math.floor(Math.random() * list.length)];
+    },
+
+    formatDelay(min) {
+      if (!min || min <= 0) return 'Immédiat';
+      if (min < 60) return min + ' min';
+      if (min < 1440) {
+        const h = min / 60;
+        return Number.isInteger(h) ? h + 'h' : h.toFixed(1) + 'h';
+      }
+      const days = Math.round(min / 1440);
+      return 'J-' + days + ' (' + (days * 24) + 'h)';
+    },
+
+    formatDelaysSummary(delays) {
+      if (!delays || delays.length === 0) return '2h';
+      return delays.map(d => this.formatDelay(d)).join(' ou ');
+    },
+
     // CALCUL DYNAMIQUE & ADAPTATIF DES MOYENS
     // =========================================================================
     calculateDynamicRequirements(game, sc) {
@@ -722,7 +775,7 @@
       const dept = st?.departmentCode || game.currentDepartmentCode || game.player?.departmentCode || '54';
 
       const isAnticipation = sc.timing === 'anticipation';
-      const delayMin = isAnticipation ? (parseInt(sc.anticipationDelay, 10) || 60) : 0;
+      const delayMin = isAnticipation ? this.pickAnticipationDelay(sc) : 0;
 
       const mission = {
         id: `scen-${sc.type}-${now}`,
@@ -770,7 +823,7 @@
           {
             timestamp: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
             text: isAnticipation 
-              ? `PRÉFECTURE (COD) : Pré-alerte opérationnelle activée (délai : ${delayMin} min). Mobilisation préventive en cours.`
+              ? `PRÉFECTURE (COD) : Pré-alerte opérationnelle activée (délai : ${this.formatDelay(delayMin)}). Mobilisation préventive en cours.`
               : `DÉCLENCHEMENT IMMÉDIAT : Ordre de départ opérationnel émis.`,
             author: sc.authority ? sc.authority.toUpperCase() : 'COMMANDEMENT'
           }
@@ -825,7 +878,7 @@
           <div class="p-6 rounded-2xl bg-slate-950/70 border border-slate-800 text-center space-y-2">
             <span class="text-2xl">🌱</span>
             <p class="text-xs font-bold text-slate-300">Aucune phase configurée pour ce scénario.</p>
-            <p class="text-[11px] text-slate-500">Utilisez un modèle d'évolution ci-dessous pour générer l'arbre des phases en un clic.</p>
+            <p class="text-[11px] text-slate-500">Utilisez un modèle de flux ci-dessus ou cliquez sur « + Ajouter une Phase » ci-dessous.</p>
           </div>
         `;
       }
@@ -855,7 +908,7 @@
         const count = colNodes.length;
         const paddingY = 25;
         const availH = svgH - (paddingY * 2);
-        const nodeH = Math.max(38, Math.min(62, (availH - ((count - 1) * 14)) / count));
+        const nodeH = Math.max(38, Math.min(56, (availH - ((count - 1) * 14)) / count));
 
         colNodes.forEach((n, rowIdx) => {
           const nodeY = paddingY + rowIdx * (nodeH + 14);
@@ -884,20 +937,21 @@
         if (!src || !tgt) return;
 
         const prob = Math.max(5, Math.min(100, parseInt(evo.probability, 10) || 50));
-        const ribbonH = Math.max(7, Math.min(24, (prob / 100) * src.h));
+        const ribbonH = Math.max(6, Math.min(24, (prob / 100) * src.h * 0.75));
 
-        const y1_top = src.y + 8 + (outOffsets[evo.source] || 0);
+        const y1_top = src.y + 6 + (outOffsets[evo.source] || 0);
         const y1_bot = y1_top + ribbonH;
-        const y2_top = tgt.y + 8 + (inOffsets[evo.target] || 0);
+        const y2_top = tgt.y + 6 + (inOffsets[evo.target] || 0);
         const y2_bot = y2_top + ribbonH;
 
-        outOffsets[evo.source] = (outOffsets[evo.source] || 0) + ribbonH + 2;
-        inOffsets[evo.target] = (inOffsets[evo.target] || 0) + ribbonH + 2;
+        outOffsets[evo.source] = (outOffsets[evo.source] || 0) + ribbonH + 3;
+        inOffsets[evo.target] = (inOffsets[evo.target] || 0) + ribbonH + 3;
 
         const x1 = src.x + src.w;
         const x2 = tgt.x;
-        const cpx1 = x1 + (x2 - x1) * 0.45;
-        const cpx2 = x1 + (x2 - x1) * 0.55;
+        const deltaX = Math.max(20, Math.abs(x2 - x1));
+        const cpx1 = x1 + deltaX * 0.45;
+        const cpx2 = x2 - deltaX * 0.45;
 
         const pathD = `M ${x1} ${y1_top} C ${cpx1} ${y1_top}, ${cpx2} ${y2_top}, ${x2} ${y2_top} L ${x2} ${y2_bot} C ${cpx2} ${y2_bot}, ${cpx1} ${y1_bot}, ${x1} ${y1_bot} Z`;
 
@@ -930,6 +984,18 @@
               </filter>
             </defs>
 
+            <!-- Colonnes d'étapes (repères temporels) -->
+            <g class="sankey-step-headers" opacity="0.4">
+              ${stepKeys.map((sKey, colIdx) => {
+                const colX = paddingX + (colCount > 1 ? (colIdx / (colCount - 1)) * availW : (availW / 2)) + (nodeW / 2);
+                return `
+                  <text x="${colX}" y="14" text-anchor="middle" fill="#94a3b8" font-size="8.5" font-weight="900" letter-spacing="1">
+                    ÉTAPE ${sKey}
+                  </text>
+                `;
+              }).join('')}
+            </g>
+
             <!-- Rubans de flux Sankey -->
             <g class="sankey-ribbons">
               ${ribbons.map(r => `
@@ -949,6 +1015,7 @@
               ${Object.values(nodeMap).map(n => {
                 const icon = n.direction === 'montante' ? '🔺' : (n.direction === 'descendante' ? '🔻' : '🔹');
                 const dirLabel = n.direction === 'montante' ? 'Escalade' : (n.direction === 'descendante' ? 'Repli' : 'Stable');
+                const textY2 = n.h > 45 ? 43 : 32;
                 return `
                   <g transform="translate(${n.x}, ${n.y})" filter="url(#node-glow)" class="cursor-pointer group">
                     <rect width="${n.w}" height="${n.h}" rx="10" fill="#0f172a" stroke="${n.color}" stroke-width="1.8" />
@@ -963,7 +1030,7 @@
                       ${icon} ${dirLabel} • ${n.durationMin || 45}m
                     </text>
 
-                    <text x="12" y="n.h > 45 ? 43 : 32" fill="#94a3b8" font-size="8" font-weight="600">
+                    <text x="12" y="${textY2}" fill="#94a3b8" font-size="8" font-weight="600">
                       👥 ${n.requiredVolunteers || 4} secouristes
                     </text>
                   </g>
@@ -1000,9 +1067,8 @@
       const countCustom = allScenarios.filter(s => s.isCustom).length;
 
       const isEditing = Boolean(this.editingScenarioId);
-      const editingScenario = isEditing 
-        ? (this.editingScenarioId === 'new' ? this.getEmptyScenarioTemplate() : this.getScenarioById(this.editingScenarioId))
-        : null;
+      const editingScenario = isEditing ? this.getCurrentEditingScenario() : null;
+      const selectedDelays = editingScenario ? this.getAnticipationDelays(editingScenario) : [120];
 
       container.innerHTML = `
         <div class="space-y-4">
@@ -1018,7 +1084,7 @@
                 </span>
               </div>
               <p class="text-[11px] text-slate-300 mt-1 max-w-2xl leading-relaxed">
-                Créez et paramétrez vos scénarios d'intervention. Définissez la temporalité (pré-alerte ou crise réflexe), les moyens adaptatifs selon votre antenne, et modélisez les flux de phases avec le diagramme de Sankey.
+                Créez et paramétrez vos scénarios d'intervention. Définissez la temporalité (pré-alerte multi-délais ou crise réflexe), les moyens adaptatifs selon votre antenne, et modélisez les flux de phases avec le diagramme de Sankey.
               </p>
             </div>
 
@@ -1071,7 +1137,7 @@
                   </div>
                 </div>
 
-                <!-- SECTION 2 : TEMPORALITÉ & ANTICIPATION -->
+                <!-- SECTION 2 : TEMPORALITÉ & ANTICIPATION (MULTI-SÉLECTION DE DÉLAIS) -->
                 <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5">
                   <div class="flex items-center justify-between">
                     <span class="text-[10px] font-black uppercase text-amber-400 tracking-wider flex items-center gap-1.5">
@@ -1103,23 +1169,45 @@
                     </label>
                   </div>
 
-                  <div id="scen-anticipation-box" class="${editingScenario.timing === 'anticipation' ? 'grid' : 'hidden'} grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80">
+                  <!-- Panneau des Délais d'anticipation avec sélection multiple -->
+                  <div id="scen-anticipation-box" class="${editingScenario.timing === 'anticipation' ? 'block' : 'hidden'} pt-3 border-t border-slate-800/80 space-y-3">
                     <div>
-                      <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">⏱️ Délai de Préavis / Pré-alerte :</label>
-                      <select id="scen-edit-anticipation-delay" class="w-full px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-amber-500">
-                        <option value="15" ${editingScenario.anticipationDelay == 15 ? 'selected' : ''}>15 minutes (Alerte rapide)</option>
-                        <option value="30" ${editingScenario.anticipationDelay == 30 ? 'selected' : ''}>30 minutes</option>
-                        <option value="60" ${editingScenario.anticipationDelay == 60 ? 'selected' : ''}>1 heure</option>
-                        <option value="120" ${editingScenario.anticipationDelay == 120 || !editingScenario.anticipationDelay ? 'selected' : ''}>2 heures (Standard Préfecture)</option>
-                        <option value="240" ${editingScenario.anticipationDelay == 240 ? 'selected' : ''}>4 heures</option>
-                        <option value="720" ${editingScenario.anticipationDelay == 720 ? 'selected' : ''}>12 heures (Veille de nuit)</option>
-                        <option value="1440" ${editingScenario.anticipationDelay == 1440 ? 'selected' : ''}>J-1 (24 heures)</option>
-                      </select>
+                      <div class="flex items-center justify-between mb-2">
+                        <label class="block text-[10px] font-black uppercase text-amber-400 tracking-wider">
+                          ⏱️ Délais d'Anticipation / Pré-alerte Possibles (Sélection Multiple) :
+                        </label>
+                        <span class="text-[9.5px] text-slate-400">Cochez les délais envisagés (tirage aléatoire lors du déclenchement)</span>
+                      </div>
+                      
+                      <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                        ${this.AVAILABLE_ANTICIPATION_DELAYS.map(d => {
+                          const isChecked = selectedDelays.includes(d.value);
+                          return `
+                            <label class="scen-delay-pill p-2 rounded-xl border flex flex-col items-center justify-center text-center cursor-pointer transition select-none ${isChecked ? 'bg-amber-950/70 border-amber-500 text-amber-200 shadow-sm ring-1 ring-amber-500/50' : 'bg-slate-800/60 border-slate-700/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200'}" onclick="window.ProtecScenariosManager.toggleAnticipationBadge(this)">
+                              <input type="checkbox" name="scen-anticipation-delay" value="${d.value}" ${isChecked ? 'checked' : ''} class="hidden" />
+                              <span class="text-xs font-black">${d.label}</span>
+                              <span class="text-[9px] text-slate-400 mt-0.5">${d.hint}</span>
+                            </label>
+                          `;
+                        }).join('')}
+                      </div>
+
+                      <div class="flex items-center justify-between text-[10px] text-amber-300/90 bg-amber-950/30 border border-amber-900/40 p-2.5 rounded-xl mt-2.5 flex-wrap gap-2">
+                        <div class="flex items-center gap-1.5">
+                          <span>💡</span>
+                          <span><strong>Multi-délais actif :</strong> En cochant par exemple <strong>2 heures</strong> et <strong>J-2 (48h)</strong>, le scénario pourra être pré-alerté 2h avant comme 2 jours avant.</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <button type="button" onclick="window.ProtecScenariosManager.selectAllDelays(true)" class="text-[9.5px] font-bold text-amber-400 hover:underline">Tout cocher</button>
+                          <span>•</span>
+                          <button type="button" onclick="window.ProtecScenariosManager.selectAllDelays(false)" class="text-[9.5px] font-bold text-slate-400 hover:underline">Tout décocher</button>
+                        </div>
+                      </div>
                     </div>
 
-                    <div>
+                    <div class="pt-2 border-t border-slate-800/60">
                       <label class="block text-[10px] font-black uppercase text-slate-400 mb-1">🏛️ Autorité Commanditaire :</label>
-                      <select id="scen-edit-authority" class="w-full px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500">
+                      <select id="scen-edit-authority" class="w-full sm:w-1/2 px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white focus:ring-2 focus:ring-indigo-500">
                         <option value="prefecture" ${editingScenario.authority === 'prefecture' ? 'selected' : ''}>Préfecture de Département (COD / SIDPC)</option>
                         <option value="samu" ${editingScenario.authority === 'samu' ? 'selected' : ''}>SAMU 15 / Régulation Médicale</option>
                         <option value="sdis" ${editingScenario.authority === 'sdis' ? 'selected' : ''}>SDIS / Sapeurs-Pompiers (CODIS)</option>
@@ -1247,13 +1335,13 @@
                     <!-- Presets en 1 clic -->
                     <div class="flex items-center gap-1.5 flex-wrap">
                       <span class="text-[10px] font-bold text-slate-400">Modèles de flux :</span>
-                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('arbre_2_branches')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('arbre_2_branches')" class="px-2.5 py-1 rounded-lg bg-indigo-950 hover:bg-indigo-600 text-[10px] font-bold text-indigo-200 border border-indigo-700/60 transition cursor-pointer">
                         🌿 Arbre à 2 Branches (60/40)
                       </button>
-                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('escalade_3_niveaux')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('escalade_3_niveaux')" class="px-2.5 py-1 rounded-lg bg-indigo-950 hover:bg-indigo-600 text-[10px] font-bold text-indigo-200 border border-indigo-700/60 transition cursor-pointer">
                         📈 Escalade à 3 Niveaux
                       </button>
-                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('lineaire')" class="px-2 py-1 rounded-lg bg-slate-800 hover:bg-indigo-600 text-[10px] font-bold text-slate-200 border border-slate-700 transition">
+                      <button type="button" onclick="window.ProtecScenariosManager.applySankeyPreset('lineaire')" class="px-2.5 py-1 rounded-lg bg-indigo-950 hover:bg-indigo-600 text-[10px] font-bold text-indigo-200 border border-indigo-700/60 transition cursor-pointer">
                         ➡️ Linéaire Simple
                       </button>
                     </div>
@@ -1264,63 +1352,36 @@
                     ${this.renderSankeyDiagram(editingScenario.phases, editingScenario.evolutions)}
                   </div>
 
-                  <!-- Édition détaillée des phases et des transitions -->
-                  <div class="pt-2 border-t border-slate-800 space-y-3">
+                  <!-- Configuration détaillée des phases -->
+                  <div class="pt-3 border-t border-slate-800 space-y-3">
                     <div class="flex items-center justify-between">
-                      <h5 class="text-[10px] font-black uppercase text-slate-400">Détail des Phases du Scénario :</h5>
-                      <button type="button" onclick="window.ProtecScenariosManager.addNewPhasePrompt()" class="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[10px] font-bold transition">
-                        + Ajouter une Phase
+                      <div>
+                        <h5 class="text-[10px] font-black uppercase text-indigo-300">1. Phases du Scénario (Étapes Chronologiques) :</h5>
+                        <p class="text-[9.5px] text-slate-500">Choisissez l'étape (colonne dans le Sankey), le nom, la tendance et les effectifs requis</p>
+                      </div>
+                      <button type="button" onclick="window.ProtecScenariosManager.addNewPhasePrompt()" class="px-3 py-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm">
+                        <span>+ Ajouter une Phase</span>
                       </button>
                     </div>
 
-                    <div id="scen-phases-editor-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-xs">
-                      ${(editingScenario.phases || []).map((p, idx) => `
-                        <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5 relative group">
-                          <div class="flex items-center justify-between">
-                            <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900" style="color: ${p.color || '#38bdf8'}">
-                              Étape ${p.step || 1}
-                            </span>
-                            <button type="button" onclick="window.ProtecScenariosManager.removePhase('${p.id}')" class="text-slate-400 hover:text-rose-400 text-xs font-bold" title="Supprimer la phase">✕</button>
-                          </div>
-                          
-                          <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'name', this.value)" class="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-bold text-white" />
-
-                          <div class="grid grid-cols-2 gap-1 text-[10px]">
-                            <select onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'direction', this.value)" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-slate-300">
-                              <option value="montante" ${p.direction === 'montante' ? 'selected' : ''}>🔺 Escalade</option>
-                              <option value="stable" ${p.direction === 'stable' ? 'selected' : ''}>🔹 Maintien</option>
-                              <option value="descendante" ${p.direction === 'descendante' ? 'selected' : ''}>🔻 Repli</option>
-                            </select>
-
-                            <input type="number" value="${p.durationMin || 45}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-center text-white" />
-                          </div>
-                        </div>
-                      `).join('')}
+                    <div id="scen-phases-editor-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+                      ${this.renderPhasesEditorHTML(editingScenario.phases || [])}
                     </div>
 
-                    <!-- Évolutions / Transitions et probabilités -->
-                    <div class="pt-2 border-t border-slate-800/80 space-y-2">
+                    <!-- Configuration détaillée des transitions & probabilités -->
+                    <div class="pt-3 border-t border-slate-800/80 space-y-2.5">
                       <div class="flex items-center justify-between">
-                        <h5 class="text-[10px] font-black uppercase text-slate-400">Branches d'Évolution & Probabilités (%) :</h5>
-                        <button type="button" onclick="window.ProtecScenariosManager.addNewEvolutionPrompt()" class="px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold transition">
-                          + Ajouter une Transition
+                        <div>
+                          <h5 class="text-[10px] font-black uppercase text-emerald-400">2. Branches d'Évolution & Probabilités (%) :</h5>
+                          <p class="text-[9.5px] text-slate-500">Reliez une phase source vers une phase cible avec le pourcentage d'occurrence</p>
+                        </div>
+                        <button type="button" onclick="window.ProtecScenariosManager.addNewEvolutionPrompt()" class="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold transition flex items-center gap-1 cursor-pointer shadow-sm">
+                          <span>+ Ajouter une Transition</span>
                         </button>
                       </div>
 
-                      <div id="scen-evolutions-editor-list" class="space-y-1.5">
-                        ${(editingScenario.evolutions || []).map((e, idx) => `
-                          <div class="flex items-center gap-2 p-2 rounded-xl bg-slate-800/60 border border-slate-700/80 text-xs">
-                            <span class="text-indigo-400 font-mono text-[11px] font-bold shrink-0">
-                              ${e.source} ➔ ${e.target}
-                            </span>
-                            <input type="text" value="${(e.label || '').replace(/"/g, '&quot;')}" placeholder="Condition / Intitulé de transition..." onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'label', this.value)" class="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white" />
-                            <div class="flex items-center gap-1 shrink-0">
-                              <input type="number" min="5" max="100" step="5" value="${e.probability || 50}" onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'probability', parseInt(this.value,10))" class="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-center font-bold text-amber-300" />
-                              <span class="text-[10px] text-slate-400">%</span>
-                            </div>
-                            <button type="button" onclick="window.ProtecScenariosManager.removeEvolution(${idx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs">✕</button>
-                          </div>
-                        `).join('')}
+                      <div id="scen-evolutions-editor-list" class="space-y-2">
+                        ${this.renderEvolutionsEditorHTML(editingScenario.phases || [], editingScenario.evolutions || [])}
                       </div>
                     </div>
                   </div>
@@ -1375,7 +1436,7 @@
                   </div>
                 </div>
 
-                <!-- SECTION 7 : PÉRIPÉTIES & INCIDENTS (THÉMATIQUES CLÉS) -->
+                <!-- SECTION 7 : PÉRIPÉTIES & INCIDENTS -->
                 <div class="p-3.5 rounded-2xl bg-slate-950/60 border border-slate-800 space-y-2.5">
                   <div class="flex items-center justify-between flex-wrap gap-2">
                     <div>
@@ -1449,67 +1510,57 @@
           <!-- FILTRES & BARRE DE RECHERCHE -->
           <div class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
             <div class="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-              <button onclick="window.ProtecScenariosManager.setFilter('all')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'all' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+              <button onclick="window.ProtecScenariosManager.setFilter('all')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'all' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                 Tous (${countTotal})
               </button>
-              <button onclick="window.ProtecScenariosManager.setFilter('crise')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'crise' ? 'bg-rose-600 text-white shadow-xs' : 'bg-slate-800 text-rose-300 hover:bg-rose-950/40'}">
-                🚨 Crises & NOVI (${countCrise})
+              <button onclick="window.ProtecScenariosManager.setFilter('crise')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'crise' ? 'bg-rose-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
+                🚨 Crises (${countCrise})
               </button>
-              <button onclick="window.ProtecScenariosManager.setFilter('samu')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'samu' ? 'bg-amber-600 text-white shadow-xs' : 'bg-slate-800 text-amber-300 hover:bg-amber-950/40'}">
+              <button onclick="window.ProtecScenariosManager.setFilter('samu')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'samu' ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                 🚑 SAMU 15 (${countSAMU})
               </button>
-              <button onclick="window.ProtecScenariosManager.setFilter('dps')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition cursor-pointer ${this.activeFilter === 'dps' ? 'bg-blue-600 text-white shadow-xs' : 'bg-slate-800 text-blue-300 hover:bg-blue-950/40'}">
+              <button onclick="window.ProtecScenariosManager.setFilter('dps')" class="px-3 py-1.5 rounded-xl text-xs font-black transition ${this.activeFilter === 'dps' ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}">
                 📋 DPS (${countDPS})
               </button>
-              ${countCustom > 0 ? `
-                <span class="px-2.5 py-1 rounded-xl bg-purple-950 text-purple-300 text-[10px] font-black border border-purple-800/60">
-                  ⭐ ${countCustom} personnalisé(s)
-                </span>
-              ` : ''}
             </div>
 
-            <div class="relative w-full sm:w-64 flex-shrink-0">
-              <input type="text" value="${this.searchQuery}" oninput="window.ProtecScenariosManager.setSearch(this.value)" placeholder="Rechercher un scénario (titre, format)..." class="w-full px-3.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-white placeholder-slate-400 focus:ring-2 focus:ring-indigo-500" />
+            <div class="relative w-full sm:w-64">
+              <input type="text" value="${this.searchQuery}" oninput="window.ProtecScenariosManager.setSearch(this.value)" placeholder="Rechercher un scénario..." class="w-full px-3 py-1.5 pl-8 rounded-xl bg-slate-800 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-2 focus:ring-indigo-500" />
+              <span class="absolute left-2.5 top-2 text-slate-500 text-xs">🔍</span>
             </div>
           </div>
 
           <!-- GRILLE DES SCÉNARIOS -->
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
             ${allScenarios.map(sc => {
-              const isCrisis = sc.type === 'crise';
-              const isSamu = sc.type === 'samu';
               const isAnticipation = sc.timing === 'anticipation';
-
-              const badgeColor = isCrisis 
-                ? 'bg-red-950 text-red-300 border-red-800/60' 
-                : (isSamu ? 'bg-amber-950 text-amber-300 border-amber-800/60' : 'bg-blue-950 text-blue-300 border-blue-800/60');
+              const delaysSummary = isAnticipation ? this.formatDelaysSummary(this.getAnticipationDelays(sc)) : '';
+              const borderCls = sc.type === 'crise' ? 'border-rose-900/40 hover:border-rose-500/70' : (sc.type === 'samu' ? 'border-sky-900/40 hover:border-sky-500/70' : 'border-emerald-900/40 hover:border-emerald-500/70');
+              const badgeTypeCls = sc.type === 'crise' ? 'bg-rose-950 text-rose-300 border-rose-800/60' : (sc.type === 'samu' ? 'bg-sky-950 text-sky-300 border-sky-800/60' : 'bg-emerald-950 text-emerald-300 border-emerald-800/60');
 
               return `
-                <div class="p-4 rounded-3xl bg-slate-900 border border-slate-800 flex flex-col justify-between space-y-3 shadow-md hover:border-slate-700 transition">
+                <div class="p-4 rounded-3xl bg-slate-900/90 border ${borderCls} shadow-md flex flex-col justify-between space-y-3 transition group">
                   <div class="space-y-2">
-                    
-                    <div class="flex items-center justify-between gap-2 flex-wrap">
-                      <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${badgeColor}">
-                        ${isCrisis ? '🚨 CRISE' : (isSamu ? '🚑 SAMU' : '📋 DPS')}
-                      </span>
-
-                      <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isAnticipation ? 'bg-amber-950 text-amber-300 border border-amber-800/60' : 'bg-rose-950 text-rose-300 border border-rose-800/60'}">
-                        ${isAnticipation ? `📅 Préalerte (${sc.anticipationDelay || 120}m)` : '🚨 Imprévisible'}
-                      </span>
-
-                      <span class="px-1.5 py-0.5 rounded text-[8.5px] font-bold bg-slate-800 text-slate-300 border border-slate-700">
-                        ${sc.scalingMode === 'adaptive' ? `⚡ Adaptatif (${sc.scaleIntensity || 'Moyen'})` : (sc.scalingMode === 'range' ? `🎯 ${sc.minVolunteers}-${sc.maxVolunteers} sec.` : `👥 ${sc.requiredVolunteers} sec.`)}
-                      </span>
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${badgeTypeCls}">
+                          ${sc.type === 'crise' ? '🚨 Crise' : (sc.type === 'samu' ? '🚑 SAMU' : '📋 DPS')}
+                        </span>
+                        <span class="px-2 py-0.5 rounded-full text-[9px] font-black ${isAnticipation ? 'bg-amber-950 text-amber-300 border border-amber-800/60' : 'bg-rose-950 text-rose-300 border border-rose-800/60'}">
+                          ${isAnticipation ? `📅 Pré-alerte (${delaysSummary})` : '⚡ Imprévisible'}
+                        </span>
+                      </div>
+                      ${sc.isCustom ? `
+                        <span class="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 text-[9px] font-bold border border-indigo-800/50">Custom</span>
+                      ` : ''}
                     </div>
 
                     <div>
-                      <h4 class="text-xs font-black text-white leading-snug line-clamp-2">${sc.title}</h4>
-                      <p class="text-[10px] font-bold text-amber-400 mt-0.5">${sc.scale || 'Format Standard'}</p>
-                      <p class="text-[11px] text-slate-400 mt-1 line-clamp-3 leading-relaxed">${sc.desc}</p>
+                      <h4 class="text-xs font-black text-white group-hover:text-indigo-300 transition line-clamp-1">${sc.title}</h4>
+                      <p class="text-[10px] text-slate-400 mt-1 line-clamp-2 leading-snug">${sc.desc || 'Aucune description fournie.'}</p>
                     </div>
 
-                    <!-- Métriques clés -->
-                    <div class="grid grid-cols-3 gap-1.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-center text-[10px]">
+                    <div class="grid grid-cols-3 gap-2 p-2 rounded-xl bg-slate-950/60 border border-slate-800 text-[10px]">
                       <div>
                         <span class="block text-[8px] uppercase text-slate-500 font-black">Secouristes</span>
                         <strong class="text-white">${sc.scalingMode === 'adaptive' ? `${sc.minVolunteers}-${sc.maxVolunteers}` : sc.requiredVolunteers}</strong>
@@ -1568,13 +1619,108 @@
       if (window.lucide) window.lucide.createIcons();
     },
 
+    // HTML des phases dans l'éditeur
+    renderPhasesEditorHTML(phases = []) {
+      if (!phases || phases.length === 0) {
+        return '<p class="text-[11px] text-slate-500 col-span-full py-2">Aucune phase définie. Cliquez sur « + Ajouter une Phase ».</p>';
+      }
+
+      return phases.map(p => `
+        <div class="p-3 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-2 relative group shadow-sm">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-1">
+              <span class="text-[9px] font-bold uppercase text-slate-400">Étape</span>
+              <select onchange="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'step', parseInt(this.value,10))" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-black text-amber-300">
+                ${[1, 2, 3, 4, 5].map(sNum => `
+                  <option value="${sNum}" ${(parseInt(p.step,10) || 1) === sNum ? 'selected' : ''}>Étape ${sNum}</option>
+                `).join('')}
+              </select>
+            </div>
+            <button type="button" onclick="window.ProtecScenariosManager.deletePhase('${p.id}')" class="text-slate-400 hover:text-rose-400 text-xs font-bold p-1" title="Supprimer la phase">✕</button>
+          </div>
+          
+          <div>
+            <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">Nom de la Phase :</label>
+            <input type="text" value="${p.name.replace(/"/g, '&quot;')}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'name', this.value)" class="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-bold text-white focus:ring-1 focus:ring-indigo-500" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-1.5 text-[10px]">
+            <div>
+              <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">Tendance :</label>
+              <select onchange="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'direction', this.value)" class="w-full px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-slate-300">
+                <option value="montante" ${p.direction === 'montante' ? 'selected' : ''}>🔺 Escalade</option>
+                <option value="stable" ${p.direction === 'stable' ? 'selected' : ''}>🔹 Maintien</option>
+                <option value="descendante" ${p.direction === 'descendante' ? 'selected' : ''}>🔻 Repli</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">Durée (min) :</label>
+              <input type="number" min="5" step="5" value="${p.durationMin || 45}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="w-full px-1.5 py-1 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-center text-white" />
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[8.5px] uppercase font-bold text-slate-400 mb-0.5">👥 Effectif requis (Secouristes) :</label>
+            <input type="number" min="1" max="50" value="${p.requiredVolunteers || 4}" oninput="window.ProtecScenariosManager.updatePhaseField('${p.id}', 'requiredVolunteers', parseInt(this.value,10))" class="w-full px-2 py-1 rounded bg-slate-900 border border-slate-700 text-[10px] text-center font-bold text-sky-300" />
+          </div>
+        </div>
+      `).join('');
+    },
+
+    // HTML des transitions dans l'éditeur
+    renderEvolutionsEditorHTML(phases = [], evolutions = []) {
+      if (!evolutions || evolutions.length === 0) {
+        return '<p class="text-[11px] text-slate-500 py-1.5">Aucune transition configurée. Cliquez sur « + Ajouter une Transition » pour créer un embranchement.</p>';
+      }
+
+      return evolutions.map((e, idx) => `
+        <div class="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 rounded-xl bg-slate-800/70 border border-slate-700/80 text-xs">
+          <!-- Phase Source -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-[9px] uppercase font-bold text-slate-400">De :</span>
+            <select onchange="window.ProtecScenariosManager.updateEvolutionField(${idx}, 'source', this.value)" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-indigo-300">
+              ${phases.map(p => `
+                <option value="${p.id}" ${e.source === p.id ? 'selected' : ''}>[Étape ${p.step || 1}] ${p.name.length > 18 ? p.name.slice(0, 16) + '…' : p.name}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <span class="text-slate-400 font-bold hidden sm:inline">➔</span>
+
+          <!-- Phase Cible -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-[9px] uppercase font-bold text-slate-400">Vers :</span>
+            <select onchange="window.ProtecScenariosManager.updateEvolutionField(${idx}, 'target', this.value)" class="px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs font-bold text-emerald-300">
+              ${phases.map(p => `
+                <option value="${p.id}" ${e.target === p.id ? 'selected' : ''}>[Étape ${p.step || 1}] ${p.name.length > 18 ? p.name.slice(0, 16) + '…' : p.name}</option>
+              `).join('')}
+            </select>
+          </div>
+
+          <!-- Libellé de la transition -->
+          <input type="text" value="${(e.label || '').replace(/"/g, '&quot;')}" placeholder="Condition / Intitulé de transition..." oninput="window.ProtecScenariosManager.updateEvolutionField(${idx}, 'label', this.value)" class="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white placeholder-slate-500 focus:ring-1 focus:ring-indigo-500" />
+
+          <!-- Probabilité -->
+          <div class="flex items-center gap-1.5 shrink-0">
+            <span class="text-[9px] uppercase font-bold text-slate-400">Proba :</span>
+            <input type="number" min="5" max="100" step="5" value="${e.probability || 50}" oninput="window.ProtecScenariosManager.updateEvolutionField(${idx}, 'probability', parseInt(this.value,10))" class="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-center font-black text-amber-300" />
+            <span class="text-[10px] text-slate-400 font-bold">%</span>
+          </div>
+
+          <button type="button" onclick="window.ProtecScenariosManager.deleteEvolution(${idx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs self-end sm:self-center" title="Supprimer">✕</button>
+        </div>
+      `).join('');
+    },
+
     getEmptyScenarioTemplate() {
       return {
         id: 'new',
         type: this.activeFilter !== 'all' ? this.activeFilter : 'crise',
         category: 'accident_collectif',
         timing: 'imprevisible',
-        anticipationDelay: 60,
+        anticipationDelays: [120],
+        anticipationDelay: 120,
         authority: 'prefecture',
         scalingMode: 'adaptive',
         scaleIntensity: 'moyenne',
@@ -1600,7 +1746,7 @@
         environment: 'ouvert_urbain',
         isEvolutive: true,
         phases: [
-          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'montante', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'stable', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
           { id: 'p2a', step: 2, name: 'Phase 2A : Escalade & Prise en Charge', direction: 'montante', durationMin: 120, requiredVolunteers: 8, color: '#f43f5e' },
           { id: 'p2b', step: 2, name: 'Phase 2B : Stabilisation & Maîtrise', direction: 'descendante', durationMin: 90, requiredVolunteers: 4, color: '#10b981' },
           { id: 'p3', step: 3, name: 'Phase 3 : Clôture & Repli', direction: 'descendante', durationMin: 45, requiredVolunteers: 4, color: '#8b5cf6' }
@@ -1615,6 +1761,48 @@
       };
     },
 
+    getCurrentEditingScenario() {
+      if (!this.editingScenarioId) return null;
+      if (!this.activeEditingScenario) {
+        const base = this.editingScenarioId === 'new' 
+          ? this.getEmptyScenarioTemplate() 
+          : (this.getScenarioById(this.editingScenarioId) || this.getEmptyScenarioTemplate());
+        this.activeEditingScenario = JSON.parse(JSON.stringify(base));
+      }
+      return this.activeEditingScenario;
+    },
+
+    toggleAnticipationBadge(labelEl) {
+      if (!labelEl) return;
+      const cb = labelEl.querySelector('input[type="checkbox"]');
+      if (!cb) return;
+      cb.checked = !cb.checked;
+      if (cb.checked) {
+        labelEl.classList.remove('bg-slate-800/60', 'border-slate-700/80', 'text-slate-400');
+        labelEl.classList.add('bg-amber-950/70', 'border-amber-500', 'text-amber-200', 'shadow-sm', 'ring-1', 'ring-amber-500/50');
+      } else {
+        labelEl.classList.add('bg-slate-800/60', 'border-slate-700/80', 'text-slate-400');
+        labelEl.classList.remove('bg-amber-950/70', 'border-amber-500', 'text-amber-200', 'shadow-sm', 'ring-1', 'ring-amber-500/50');
+      }
+    },
+
+    selectAllDelays(shouldSelect = true) {
+      const pills = document.querySelectorAll('.scen-delay-pill');
+      pills.forEach(pill => {
+        const cb = pill.querySelector('input[type="checkbox"]');
+        if (cb) {
+          cb.checked = shouldSelect;
+          if (shouldSelect) {
+            pill.classList.remove('bg-slate-800/60', 'border-slate-700/80', 'text-slate-400');
+            pill.classList.add('bg-amber-950/70', 'border-amber-500', 'text-amber-200', 'shadow-sm', 'ring-1', 'ring-amber-500/50');
+          } else {
+            pill.classList.add('bg-slate-800/60', 'border-slate-700/80', 'text-slate-400');
+            pill.classList.remove('bg-amber-950/70', 'border-amber-500', 'text-amber-200', 'shadow-sm', 'ring-1', 'ring-amber-500/50');
+          }
+        }
+      });
+    },
+
     // =========================================================================
     // GESTIONNAIRE INTERACTIF DE PHASES & DIAGRAMME SANKEY
     // =========================================================================
@@ -1624,7 +1812,7 @@
 
       if (presetKey === 'arbre_2_branches') {
         scen.phases = [
-          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'montante', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
+          { id: 'p1', step: 1, name: 'Phase 1 : Reconnaissance & Déploiement', direction: 'stable', durationMin: 45, requiredVolunteers: 4, color: '#38bdf8' },
           { id: 'p2a', step: 2, name: 'Phase 2A : Escalade & Afflux de Victimes', direction: 'montante', durationMin: 150, requiredVolunteers: 10, color: '#f43f5e' },
           { id: 'p2b', step: 2, name: 'Phase 2B : Stabilisation & Maîtrise rapide', direction: 'descendante', durationMin: 90, requiredVolunteers: 4, color: '#10b981' },
           { id: 'p3', step: 3, name: 'Phase 3 : Clôture Opérationnelle & Repli', direction: 'descendante', durationMin: 45, requiredVolunteers: 4, color: '#8b5cf6' }
@@ -1663,15 +1851,9 @@
       }
 
       this.refreshSankeyView();
-    },
-
-    getCurrentEditingScenario() {
-      if (!this.editingScenarioId) return null;
-      if (this.editingScenarioId === 'new') {
-        if (!this._tempNewScenario) this._tempNewScenario = this.getEmptyScenarioTemplate();
-        return this._tempNewScenario;
+      if (window.game?.showToast) {
+        window.game.showToast('Flux Appliqué', 'Le diagramme et les transitions ont été mis à jour.', 'indigo');
       }
-      return this.getScenarioById(this.editingScenarioId);
     },
 
     refreshSankeyView() {
@@ -1685,49 +1867,16 @@
 
       const phasesList = document.getElementById('scen-phases-editor-list');
       if (phasesList) {
-        phasesList.innerHTML = (scen.phases || []).map(p => `
-          <div class="p-2.5 rounded-2xl bg-slate-800/80 border border-slate-700 space-y-1.5 relative group">
-            <div class="flex items-center justify-between">
-              <span class="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-900" style="color: ${p.color || '#38bdf8'}">
-                Étape ${p.step || 1}
-              </span>
-              <button type="button" onclick="window.ProtecScenariosManager.removePhase('${p.id}')" class="text-slate-400 hover:text-rose-400 text-xs font-bold" title="Supprimer la phase">✕</button>
-            </div>
-            
-            <input type="text" value="${p.name.replace(/"/g, '&quot;')}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'name', this.value)" class="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-bold text-white" />
-
-            <div class="grid grid-cols-2 gap-1 text-[10px]">
-              <select onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'direction', this.value)" class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-slate-300">
-                <option value="montante" ${p.direction === 'montante' ? 'selected' : ''}>🔺 Escalade</option>
-                <option value="stable" ${p.direction === 'stable' ? 'selected' : ''}>🔹 Maintien</option>
-                <option value="descendante" ${p.direction === 'descendante' ? 'selected' : ''}>🔻 Repli</option>
-              </select>
-
-              <input type="number" value="${p.durationMin || 45}" onchange="window.ProtecScenariosManager.updatePhaseData('${p.id}', 'durationMin', parseInt(this.value,10))" placeholder="Min." class="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-[9.5px] text-center text-white" />
-            </div>
-          </div>
-        `).join('');
+        phasesList.innerHTML = this.renderPhasesEditorHTML(scen.phases || []);
       }
 
       const evoList = document.getElementById('scen-evolutions-editor-list');
       if (evoList) {
-        evoList.innerHTML = (scen.evolutions || []).map((e, idx) => `
-          <div class="flex items-center gap-2 p-2 rounded-xl bg-slate-800/60 border border-slate-700/80 text-xs">
-            <span class="text-indigo-400 font-mono text-[11px] font-bold shrink-0">
-              ${e.source} ➔ ${e.target}
-            </span>
-            <input type="text" value="${(e.label || '').replace(/"/g, '&quot;')}" placeholder="Condition / Intitulé de transition..." onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'label', this.value)" class="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-white" />
-            <div class="flex items-center gap-1 shrink-0">
-              <input type="number" min="5" max="100" step="5" value="${e.probability || 50}" onchange="window.ProtecScenariosManager.updateEvolutionData(${idx}, 'probability', parseInt(this.value,10))" class="w-16 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-xs text-center font-bold text-amber-300" />
-              <span class="text-[10px] text-slate-400">%</span>
-            </div>
-            <button type="button" onclick="window.ProtecScenariosManager.removeEvolution(${idx})" class="p-1 rounded text-slate-400 hover:text-rose-400 text-xs">✕</button>
-          </div>
-        `).join('');
+        evoList.innerHTML = this.renderEvolutionsEditorHTML(scen.phases || [], scen.evolutions || []);
       }
     },
 
-    updatePhaseData(phaseId, field, value) {
+    updatePhaseField(phaseId, field, value) {
       const scen = this.getCurrentEditingScenario();
       if (!scen || !scen.phases) return;
       const p = scen.phases.find(x => x.id === phaseId);
@@ -1736,15 +1885,30 @@
         if (field === 'direction') {
           p.color = value === 'montante' ? '#f43f5e' : (value === 'descendante' ? '#10b981' : '#38bdf8');
         }
-        this.refreshSankeyView();
+        // Mise à jour immédiate du SVG
+        const container = document.getElementById('sankey-diagram-container');
+        if (container) {
+          container.innerHTML = this.renderSankeyDiagram(scen.phases, scen.evolutions);
+        }
+        // Si l'étape ou le nom a changé, rafraîchir les sélecteurs des transitions
+        if (field === 'step' || field === 'name') {
+          const evoList = document.getElementById('scen-evolutions-editor-list');
+          if (evoList) {
+            evoList.innerHTML = this.renderEvolutionsEditorHTML(scen.phases || [], scen.evolutions || []);
+          }
+        }
       }
     },
 
-    updateEvolutionData(index, field, value) {
+    updateEvolutionField(index, field, value) {
       const scen = this.getCurrentEditingScenario();
       if (!scen || !scen.evolutions || !scen.evolutions[index]) return;
       scen.evolutions[index][field] = value;
-      this.refreshSankeyView();
+      // Mise à jour immédiate du SVG
+      const container = document.getElementById('sankey-diagram-container');
+      if (container) {
+        container.innerHTML = this.renderSankeyDiagram(scen.phases, scen.evolutions);
+      }
     },
 
     addNewPhasePrompt() {
@@ -1752,12 +1916,13 @@
       if (!scen) return;
       if (!scen.phases) scen.phases = [];
 
-      const newId = `p${scen.phases.length + 1}`;
+      const newId = 'phase_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 4);
       const maxStep = scen.phases.reduce((acc, p) => Math.max(acc, p.step || 1), 1);
+      const nextStep = maxStep + 1 <= 5 ? maxStep + 1 : maxStep;
 
       scen.phases.push({
         id: newId,
-        step: maxStep,
+        step: nextStep,
         name: `Phase ${scen.phases.length + 1} : Action`,
         direction: 'stable',
         durationMin: 45,
@@ -1768,7 +1933,7 @@
       this.refreshSankeyView();
     },
 
-    removePhase(phaseId) {
+    deletePhase(phaseId) {
       const scen = this.getCurrentEditingScenario();
       if (!scen || !scen.phases) return;
       scen.phases = scen.phases.filter(p => p.id !== phaseId);
@@ -1801,7 +1966,7 @@
       this.refreshSankeyView();
     },
 
-    removeEvolution(index) {
+    deleteEvolution(index) {
       const scen = this.getCurrentEditingScenario();
       if (!scen || !scen.evolutions) return;
       scen.evolutions.splice(index, 1);
@@ -1810,7 +1975,10 @@
 
     openEditor(scenarioId) {
       this.editingScenarioId = scenarioId;
-      this._tempNewScenario = null;
+      const base = scenarioId === 'new' 
+        ? this.getEmptyScenarioTemplate() 
+        : (this.getScenarioById(scenarioId) || this.getEmptyScenarioTemplate());
+      this.activeEditingScenario = JSON.parse(JSON.stringify(base));
       this.refreshAdminUI();
       setTimeout(() => {
         const box = document.getElementById('scenario-editor-box');
@@ -1820,7 +1988,7 @@
 
     closeEditor() {
       this.editingScenarioId = null;
-      this._tempNewScenario = null;
+      this.activeEditingScenario = null;
       this.refreshAdminUI();
     },
 
@@ -1856,10 +2024,10 @@
       if (box) {
         if (timing === 'anticipation') {
           box.classList.remove('hidden');
-          box.classList.add('grid');
+          box.classList.add('block');
         } else {
           box.classList.add('hidden');
-          box.classList.remove('grid');
+          box.classList.remove('block');
         }
       }
     },
@@ -1925,7 +2093,13 @@
       const timingNodes = document.querySelectorAll('input[name="scen-edit-timing"]:checked');
       const timing = timingNodes.length > 0 ? timingNodes[0].value : 'imprevisible';
 
-      const delay = parseInt(document.getElementById('scen-edit-anticipation-delay')?.value, 10) || 60;
+      // Récupérer la sélection multiple des délais d'anticipation
+      const checkedDelays = Array.from(document.querySelectorAll('input[name="scen-anticipation-delay"]:checked'))
+        .map(input => parseInt(input.value, 10))
+        .filter(v => !isNaN(v) && v > 0);
+      const anticipationDelays = checkedDelays.length > 0 ? checkedDelays : [120];
+      const anticipationDelay = anticipationDelays[0] || 120;
+
       const authority = document.getElementById('scen-edit-authority')?.value || 'prefecture';
 
       const scalingNodes = document.querySelectorAll('input[name="scen-edit-scaling-mode"]:checked');
@@ -1965,7 +2139,8 @@
         desc,
         scale,
         timing,
-        anticipationDelay: delay,
+        anticipationDelays,
+        anticipationDelay,
         authority,
         scalingMode,
         scaleIntensity,
@@ -1988,7 +2163,8 @@
 
       this.closeEditor();
       if (window.game?.showToast) {
-        window.game.showToast('Scénario Enregistré ✓', `« ${saved.title} » (${timing === 'anticipation' ? 'Pré-alerte' : 'Immédiat'}, ${phases.length} phases) sauvegardé.`, 'green');
+        const delaysText = timing === 'anticipation' ? `Pré-alerte (${this.formatDelaysSummary(anticipationDelays)})` : 'Immédiat';
+        window.game.showToast('Scénario Enregistré ✓', `« ${saved.title} » (${delaysText}, ${phases.length} phases) sauvegardé.`, 'green');
       }
       return saved;
     },
@@ -2004,7 +2180,7 @@
       const dup = this.duplicateScenario(id);
       this.refreshAdminUI();
       if (dup && window.game?.showToast) {
-        window.game.showToast('Scénario Dupliqué', `Copie créée : « ${dup.title} ».`, 'blue');
+        window.game.showToast('Scénario Dupliqué', `Copie créée : « ${dup.title} ». `, 'blue');
       }
     },
 
@@ -2029,6 +2205,7 @@
       if (confirm('Attention : réinitialiser l\'ensemble des scénarios par défaut et supprimer les scénarios personnalisés ?')) {
         this.resetAllToDefault();
         this.editingScenarioId = null;
+        this.activeEditingScenario = null;
         this.refreshAdminUI();
         if (window.game?.showToast) {
           window.game.showToast('Scénarios Réinitialisés', 'Le catalogue officiel a été restauré.', 'blue');
@@ -2042,7 +2219,7 @@
         this.renderAdminView(container, window.game);
       }
     },
-
+    
     openManager() {
       if (window.ProtecAdmin) {
         if (!window.ProtecAdmin.isCurrentUserAdmin() && !window.ProtecAdmin.isCurrentUserGestionnaireOnly()) {
