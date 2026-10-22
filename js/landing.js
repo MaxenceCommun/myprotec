@@ -656,7 +656,7 @@ window.MyProtecLanding = {
     if (img && (img.startsWith('images/') || img.startsWith('http') || img.startsWith('data:'))) {
       return img;
     }
-    return null;
+    return 'images/badges/ecusson_inconnu.png';
   },
 
   // Rendu visuel d'un écusson avec effet holographique foil STRICTEMENT CONFINÉ au visuel de l'écusson
@@ -688,7 +688,7 @@ window.MyProtecLanding = {
     if (imgSrc) {
       return `
         <div class="ecusson-visual-frame ${sizeClass} filter drop-shadow-md transition-transform">
-          <img src="${imgSrc}" alt="${name}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+          <img src="${imgSrc}" alt="${name}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.src='images/badges/ecusson_inconnu.png';" />
           <div class="hidden w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 items-center justify-center shadow-2xs">
             <i data-lucide="shield" class="w-5 h-5"></i>
           </div>

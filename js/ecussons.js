@@ -343,8 +343,20 @@ window.ProtecEcussons = {
     }, 4200);
   },
 
-  // --- RENDU VISUEL D'UN ÉCUSSON (SVG BRODÉ HAUTE FIDÉLITÉ OU IMAGE RÉELLE) ---
-  renderBadgeIconSvg(badge, size = 48) {
+  // --- RENDU VISUEL D'UN ÉCUSSON (IMAGE OFFICIELLE, CRÉATION OU ÉCUSSON MYSTÈRE PAR DÉFAUT) ---
+  renderBadgeIconSvg(badge, size = 48, isOwned = true) {
+    const unknownImg = 'images/badges/ecusson_inconnu.png';
+
+    // 1. Si l'écusson n'est pas encore découvert
+    if (isOwned === false) {
+      const h = Math.round(size * 1.28);
+      return `
+        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none opacity-85 hover:opacity-100" style="width: ${size}px; height: ${h}px;" title="Écusson non découvert">
+          <img src="${unknownImg}" alt="Écusson non découvert" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" />
+        </div>
+      `;
+    }
+
     let imgSrc = badge && (badge.imageUrl || (badge.badge_url && (badge.badge_url.includes('/') || badge.badge_url.includes('.')) ? badge.badge_url : null));
     if (!imgSrc && badge) {
       if (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))) {
@@ -371,64 +383,35 @@ window.ProtecEcussons = {
         imgSrc = 'images/ecusson_chat_noir.png';
       } else if (badge.code === 'badge_chat_blanc' || (badge.nom && badge.nom.toLowerCase().includes('chat blanc'))) {
         imgSrc = 'images/ecusson_chat_blanc.png';
+      } else {
+        // Écusson non créé : image mystère par défaut
+        imgSrc = unknownImg;
       }
     }
 
-    if (imgSrc) {
-      const isFondateur = imgSrc.includes('membre_fondateur') || (badge && (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))));
-      const h = isFondateur ? Math.round(size * (400 / 300)) : Math.round(size * 1.28);
+    if (!imgSrc) {
+      imgSrc = unknownImg;
+    }
 
-      if (isFondateur) {
-        return `
-          <div class="ecusson-fondateur-wrapper select-none" style="width: ${size}px; height: ${h}px;" title="${badge.nom || 'Membre Fondateur'}">
-            <img src="${imgSrc}" alt="${badge.nom || 'Membre Fondateur'}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
-            <div class="ecusson-fondateur-mask">
-              <div class="ecusson-fondateur-ambient"></div>
-              <div class="ecusson-fondateur-shimmer"></div>
-            </div>
-          </div>
-        `;
-      }
+    const isFondateur = imgSrc.includes('membre_fondateur') || (badge && (badge.code === 'renf_fondateur' || (badge.nom && (badge.nom.includes('Fondateur') || badge.nom.includes('Pionnier')))));
+    const h = isFondateur ? Math.round(size * (400 / 300)) : Math.round(size * 1.28);
 
+    if (isFondateur) {
       return `
-        <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;" title="${badge.nom || 'Écusson'}">
-          <img src="${imgSrc}" alt="${badge.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.parentElement.innerHTML='🛡️';" />
+        <div class="ecusson-fondateur-wrapper select-none" style="width: ${size}px; height: ${h}px;" title="${badge?.nom || 'Membre Fondateur'}">
+          <img src="${imgSrc}" alt="${badge?.nom || 'Membre Fondateur'}" class="w-full h-full object-contain pointer-events-none relative z-0" onerror="this.onerror=null; this.src='${unknownImg}';" />
+          <div class="ecusson-fondateur-mask">
+            <div class="ecusson-fondateur-ambient"></div>
+            <div class="ecusson-fondateur-shimmer"></div>
+          </div>
         </div>
       `;
     }
 
-    const rareteColors = {
-      commun: { stroke: '#94a3b8', glow: 'rgba(148, 163, 184, 0.2)' },
-      rare: { stroke: '#38bdf8', glow: 'rgba(56, 189, 248, 0.4)' },
-      epique: { stroke: '#c084fc', glow: 'rgba(192, 132, 252, 0.5)' },
-      historique: { stroke: '#fbbf24', glow: 'rgba(251, 191, 36, 0.7)' }
-    };
-    const c = rareteColors[badge.rarete] || rareteColors.commun;
-    const initial = (badge.nom || 'PC').substring(0, 2).toUpperCase();
-
     return `
-      <svg width="${size}" height="${size}" viewBox="0 0 100 100" class="filter drop-shadow-md transition transform hover:scale-105">
-        <defs>
-          <radialGradient id="grad-${badge.code}" cx="50%" cy="40%" r="60%">
-            <stop offset="0%" stop-color="#ffffff" stop-opacity="0.15" />
-            <stop offset="100%" stop-color="#000000" stop-opacity="0.35" />
-          </radialGradient>
-        </defs>
-        <!-- Forme Blason Écusson -->
-        <path d="M50 5 L88 18 C88 58 50 95 50 95 C50 95 12 58 12 18 Z" fill="#0f172a" stroke="${c.stroke}" stroke-width="4" stroke-dasharray="2 1" />
-        <path d="M50 8 L85 20 C85 56 50 90 50 90 C50 90 15 56 15 20 Z" fill="url(#grad-${badge.code})" />
-        
-        <!-- Triangle Bleu & Orange Officiel Protection Civile -->
-        <polygon points="50,22 76,70 24,70" fill="#f97316" stroke="#ffffff" stroke-width="1.5" />
-        <polygon points="50,28 70,66 30,66" fill="#1e3a8a" />
-        
-        <!-- Étoile ou Symbole central -->
-        <circle cx="50" cy="50" r="8" fill="#ffffff" opacity="0.9" />
-        <text x="50" y="53" font-size="7" font-weight="900" fill="#1e3a8a" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif">${initial}</text>
-        
-        <!-- Bordure cousue extérieure -->
-        <path d="M50 3 L90 17 C90 60 50 97 50 97 C50 97 10 60 10 17 Z" fill="none" stroke="${c.stroke}" stroke-width="1" opacity="0.6" />
-      </svg>
+      <div class="inline-flex items-center justify-center filter drop-shadow-md transition transform hover:scale-105 select-none" style="width: ${size}px; height: ${h}px;" title="${badge?.nom || 'Écusson'}">
+        <img src="${imgSrc}" alt="${badge?.nom || 'Écusson'}" class="w-full h-full object-contain drop-shadow-sm pointer-events-none" onerror="this.onerror=null; this.src='${unknownImg}';" />
+      </div>
     `;
   },
 
@@ -543,7 +526,7 @@ window.ProtecEcussons = {
                     
                     <!-- Visuel brodé du patch -->
                     <div class="relative p-1">
-                      ${this.renderBadgeIconSvg(badge, 68)}
+                      ${this.renderBadgeIconSvg(badge, 68, isOwned)}
                       
                       <!-- Badge de Doublon (quantite > 1) -->
                       ${hasDuplicate ? `
@@ -626,10 +609,10 @@ window.ProtecEcussons = {
 
         <div class="flex flex-col items-center text-center space-y-2">
           <div class="p-3 rounded-2xl bg-slate-50 border border-slate-100 shadow-inner">
-            ${this.renderBadgeIconSvg(badge, 88)}
+            ${this.renderBadgeIconSvg(badge, 88, isOwned)}
           </div>
-          <h3 class="text-base font-black text-slate-900">${badge.nom}</h3>
-          <p class="text-xs text-slate-600 leading-relaxed">${badge.description}</p>
+          <h3 class="text-base font-black text-slate-900">${isOwned ? badge.nom : 'Écusson Mystère (Non découvert)'}</h3>
+          <p class="text-xs text-slate-600 leading-relaxed">${isOwned ? badge.description : 'Cet écusson n’a pas encore été débloqué ou découvert par votre antenne. Participez aux missions, gardes et dispositifs correspondants pour l’obtenir !'}</p>
         </div>
 
         <!-- Statut d'acquisition -->
