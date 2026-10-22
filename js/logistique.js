@@ -243,6 +243,8 @@ window.ProtecLogistique = {
     'images/equipements/rangers3.png',
     'images/equipements/telephone_garde.png',
     'images/equipements/phones.png',
+    'images/equipements/moniteur_t7.png',
+    'images/equipements/kit_pedago_extincteur.png',
   ]),
 
   hasRealImage(path) {
