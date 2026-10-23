@@ -3412,7 +3412,11 @@ class ProtecGame {
       });
 
       const marker = L.marker([station.lat, station.lng], { icon }).addTo(this.map);
-      marker.on('click', () => this.openStationDetails(station.id));
+      // Clic sur sa propre antenne : ouverture de la vue plein écran « Ma base » (scène 2.5D vivante)
+      marker.on('click', () => {
+        if (window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') window.ProtecBaseLive.openBaseView(station.id);
+        else this.openStationDetails(station.id);
+      });
       this.markers.stations[station.id] = marker;
     });
 

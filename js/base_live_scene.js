@@ -65,12 +65,15 @@
     vestiaire: 'LOCKER', douche: 'SANITARY', wc: 'SANITARY', libre: 'FREE'
   };
 
+  const WALL_H = 2.5;        // Hauteur réelle sous plafond (m)
+  const WALL_CUT = 1.1;      // Hauteur de coupe des cloisons et façades avant (m)
+  const SILL_H = 0.9;        // Allège des fenêtres (m)
+  const DOOR_H = 2.04;       // Hauteur de passage des portes (m)
   const CELL = 0.2;          // Taille de cellule de navigation (m)
   const AGENT_R = 0.16;      // Rayon de collision d'un avatar (m)
   const HZ = 1.05;           // Facteur d'échelle verticale de la projection
   const S_FLOOR = 20;        // Échelle virtuelle (px/m) pour réutiliser les routines de dessin 2D existantes
   const MAX_AGENTS = 22;
-  const MAX_IDLE = 6;
   const MAX_CIVILIANS = 6;
 
   // =========================================================================
@@ -377,8 +380,9 @@
   };
 
   class WorldModel {
-    constructor(model, vehicles) {
+    constructor(model, vehicles, inventory) {
       this.model = model || {};
+      this.inventory = inventory || { floor: [] };
       this.rooms = (this.model.rooms || []).map(r => ({ ...r, role: roleOfRoom(r), altRoles: [] }));
       this.assignFallbackRoles();
       this.walls = this.model.walls || [];
@@ -391,6 +395,116 @@
       this.buildWallPieces();
       this.buildNav();
       this.buildPOIs();
+      this.buildShelfItems();
+      this.buildFloorStock();
+    }
+
+    // Contenu réel des étagères (storedInventory) posé niveau par niveau
+    buildShelfItems() {
+      const LEVELS = { etagere_lots: [0.08, 0.6, 1.15, 1.7], rack_palettes_lourd: [0.1, 0.85, 1.6] };
+      this.furniture.forEach(f => {
+        f._items = null;
+        f._contents = Object.entries(f.storedInventory || {}).filter(([, q]) => q > 0);
+        const levels = LEVELS[f.type];
+        if (!levels || !f._contents.length) return;
+        const longIsW = f.w >= f.d;
+        const L = longIsW ? f.w : f.d, D = longIsW ? f.d : f.w;
+        const units = [];
+        f._contents.forEach(([id, q]) => { for (let i = 0; i < Math.min(q, 24); i++) units.push(id); });
+        const items = [];
+        let li = 0, cursor = 0.04, hidden = 0;
+        for (const id of units) {
+          if (li >= levels.length) { hidden++; continue; }
+          const m = itemModelFor(id);
+          const gap = (levels[li + 1] !== undefined ? levels[li + 1] : levels[li] + 0.6) - levels[li] - 0.08;
+          const sc = Math.min(1, gap / m.h, (D - 0.08) / Math.min(m.d, m.w));
+          let len = Math.max(m.w, m.d) * sc, dep = Math.min(m.w, m.d) * sc;
+          if (len > L - 0.08) { const r = (L - 0.08) / len; len *= r; dep *= r; }
+          if (cursor + len > L - 0.04) { li++; cursor = 0.04; if (li >= levels.length) { hidden++; continue; } }
+          const z = levels[li] + 0.04;
+          const off = (D - dep) / 2;
+          const it = longIsW
+            ? { m, id, x: f.x + cursor, y: f.y + off, z, w: len, d: dep, h: m.h * sc }
+            : { m, id, x: f.x + off, y: f.y + cursor, z, w: dep, d: len, h: m.h * sc };
+          items.push(it);
+          cursor += len + 0.03;
+        }
+        f._items = items;
+        f._hidden = hidden;
+      });
+    }
+
+    // Matériel non rangé (stock de l'antenne, lots) : déposé le long des murs de la réserve
+    buildFloorStock() {
+      this.floorStacks = [];
+      const list = (this.inventory.floor || []).filter(e => e.qty > 0);
+      if (!list.length) return;
+      const pickRooms = (role) => this.rooms.filter(r => this.roomHasRole(r, role));
+      let rooms = pickRooms('STORAGE');
+      if (!rooms.length) rooms = pickRooms('GARAGE');
+      if (!rooms.length) rooms = this.rooms.slice().sort((a, b) => b.w * b.h - a.w * a.h).slice(0, 1);
+      const doorPts = this.doors.map(d => { const r = doorRect(d, 0); return [(r.x0 + r.x1) / 2, (r.y0 + r.y1) / 2]; });
+      const hardPois = this.pois.filter(p => !['wander', 'yard'].includes(p.kind));
+      const slots = [];
+      rooms.forEach(room => {
+        const inset = 0.42, step = 0.85;
+        const sides = [
+          { a: [room.x + inset, room.y + inset], dir: [1, 0], len: room.w - 2 * inset, along: 'x' },
+          { a: [room.x + inset, room.y + room.h - inset], dir: [1, 0], len: room.w - 2 * inset, along: 'x' },
+          { a: [room.x + inset, room.y + inset + step], dir: [0, 1], len: room.h - 2 * inset - step, along: 'y' },
+          { a: [room.x + room.w - inset, room.y + inset + step], dir: [0, 1], len: room.h - 2 * inset - step, along: 'y' }
+        ];
+        sides.forEach(sd => {
+          for (let t = 0; t <= sd.len; t += step) {
+            const x = sd.a[0] + sd.dir[0] * t, y = sd.a[1] + sd.dir[1] * t;
+            if (!this.nav.isWalkable(x, y)) continue;
+            if (doorPts.some(([dx, dy]) => Math.hypot(dx - x, dy - y) < 1.2)) continue;
+            if (hardPois.some(p => Math.hypot(p.x - x, p.y - y) < 0.65)) continue;
+            if (slots.some(s2 => Math.hypot(s2.x - x, s2.y - y) < 0.7)) continue;
+            slots.push({ x, y, along: sd.along });
+          }
+        });
+      });
+      // Zone de dépôt complémentaire : îlots au centre de la réserve (allées de 1 m conservées)
+      rooms.forEach(room => {
+        for (let y = room.y + 1.6; y < room.y + room.h - 1.4; y += 1.0) {
+          for (let x = room.x + 1.6; x < room.x + room.w - 1.4; x += 1.7) {
+            if (!this.nav.isWalkable(x, y)) continue;
+            if (doorPts.some(([dx, dy]) => Math.hypot(dx - x, dy - y) < 1.4)) continue;
+            if (hardPois.some(p => Math.hypot(p.x - x, p.y - y) < 0.9)) continue;
+            if (slots.some(s2 => Math.hypot(s2.x - x, s2.y - y) < 0.8)) continue;
+            slots.push({ x, y, along: 'x', island: true });
+          }
+        }
+      });
+      // Gros matériel d'abord, petits articles empilés (3 maximum)
+      const entries = list.map(e => ({ ...e, m: itemModelFor(e.id) })).sort((a, b) => (b.m.w * b.m.d * b.m.h) - (a.m.w * a.m.d * a.m.h));
+      entries.forEach(e => {
+        let si = 0;
+        const m = e.m;
+        const small = m.h <= 0.45 && Math.max(m.w, m.d) <= 0.9;
+        const perStack = small ? Math.max(1, Math.min(4, Math.floor(1.1 / m.h))) : 1;
+        let remaining = Math.min(e.qty, small ? 12 : 4);
+        const sc = Math.min(1, 0.8 / Math.max(m.w, m.d) * (Math.max(m.w, m.d) > 1.3 ? 1.6 : 1));
+        const len = Math.max(m.w, m.d) * Math.min(1, sc), dep = Math.min(m.w, m.d) * Math.min(1, sc);
+        const fits = (sl) => {
+          const w = sl.along === 'x' ? len : dep, d = sl.along === 'x' ? dep : len;
+          // L'emprise complète doit être libre (pas de mobilier, pas de mur)
+          for (let yy = sl.y - d / 2; yy <= sl.y + d / 2 + 1e-6; yy += 0.15) for (let xx = sl.x - w / 2; xx <= sl.x + w / 2 + 1e-6; xx += 0.15) if (!this.nav.isWalkable(xx, yy)) return false;
+          return true;
+        };
+        while (remaining > 0 && si < slots.length) {
+          const sl = slots[si++];
+          if (sl.used || !fits(sl)) continue;
+          sl.used = true;
+          const n = Math.min(perStack, remaining);
+          remaining -= n;
+          const w = sl.along === 'x' ? len : dep, d = sl.along === 'x' ? dep : len;
+          const st = { id: e.id, name: e.name, qty: e.qty, m, n, x: sl.x - w / 2, y: sl.y - d / 2, w, d, h: m.h * Math.min(1, sc) };
+          this.floorStacks.push(st);
+          this.nav.fillRect(st.x - 0.04, st.y - 0.04, st.x + w + 0.04, st.y + d + 0.04, 0);
+        }
+      });
     }
 
     computeBounds() {
@@ -523,11 +637,12 @@
           if (hl.kind === 'door') {
             const dType = hl.it.type || 'door';
             if (!PASSABLE_DOOR(hl.it)) mk(hl.a, hl.b, { glass: true });
-            else mk(hl.a, hl.b, { door: dType, lintel: true });
+            else mk(hl.a, hl.b, { door: dType, lintel: true, doorRef: hl.it, vertical });
           } else {
             mk(hl.a, hl.b, { windowPane: true });
           }
           cur = Math.max(cur, hl.b);
+          void 0;
         });
         if (cur < hi) mk(cur, hi, {});
       });
@@ -626,7 +741,7 @@
                 x = sideKey === 'A' ? f.x - 0.38 : f.x + f.w + 0.38;
                 face = sideKey === 'A' ? 0 : Math.PI;
               }
-              if (this.nav.isWalkable(x, y)) add({ ...base, x, y, face, kind, pose: 'sit', stool: true });
+              if (this.nav.isWalkable(x, y)) add({ ...base, x, y, face, kind, pose: 'sit', stool: true, mealTable: t === 'table_repas_equipe' });
             }
           });
         } else if (t === 'canape_detente') {
@@ -791,6 +906,242 @@
   }
 
   // =========================================================================
+  // 3bis. BIBLIOTHÈQUE DE MODÈLES DU MATÉRIEL (rendu isométrique procédural)
+  // =========================================================================
+  // shape : forme de base, w/d/h : dimensions réelles (m), color : teinte principale, mark : croix / logo
+  const ITEM_MODELS = {
+    lot_secours_a:               { shape: 'duffel', w: 1.0, d: 0.5, h: 0.45, color: '#f97316', label: 'Lot A' },
+    lot_secours_b:               { shape: 'backpack', w: 0.45, d: 0.3, h: 0.6, color: '#dc2626', mark: true },
+    lot_secours_c:               { shape: 'board', w: 1.85, d: 0.45, h: 0.12, color: '#facc15' },
+    lot_tronconnage:             { shape: 'case', w: 0.95, d: 0.4, h: 0.38, color: '#ea580c', stripe: '#111827' },
+    lot_pompage:                 { shape: 'pump', w: 0.7, d: 0.55, h: 0.6, color: '#dc2626' },
+    lot_eclairage:               { shape: 'light', w: 0.5, d: 0.5, h: 1.3, color: '#facc15' },
+    lot_bachage:                 { shape: 'roll', w: 1.1, d: 0.35, h: 0.35, color: '#2563eb' },
+    lot_hebergement:             { shape: 'cots', w: 1.0, d: 0.6, h: 0.5, color: '#4d7c0f' },
+    lot_ravitaillement:          { shape: 'water', w: 0.8, d: 0.6, h: 0.45, color: '#38bdf8' },
+    lot_soutien_psy:             { shape: 'case', w: 0.6, d: 0.4, h: 0.35, color: '#7c3aed', mark: true, markColor: '#ffffff' },
+    lot_poste_commandement_mobile:{ shape: 'case', w: 0.9, d: 0.5, h: 0.45, color: '#1e3a8a', antenna: true },
+    remorque_groupe_electro:     { shape: 'generator', w: 0.9, d: 0.6, h: 0.65, color: '#dc2626' },
+    groupe_electrogene:          { shape: 'generator', w: 0.9, d: 0.6, h: 0.65, color: '#dc2626' },
+    remorque_motopompe:          { shape: 'pump', w: 0.8, d: 0.6, h: 0.65, color: '#b91c1c' },
+    lot_drone_reco:              { shape: 'drone', w: 0.7, d: 0.5, h: 0.3, color: '#111827' },
+    lot_drone_thermique:         { shape: 'drone', w: 0.7, d: 0.5, h: 0.3, color: '#1f2937', accent: '#f97316' },
+    caisse_rearmement:           { shape: 'crate', w: 0.6, d: 0.4, h: 0.35, color: '#64748b', mark: true, markColor: '#dc2626' },
+    oxygenBottles:               { shape: 'bottle', w: 0.16, d: 0.16, h: 0.75, color: '#f8fafc', cap: '#16a34a' },
+    aedPads:                     { shape: 'box', w: 0.3, d: 0.2, h: 0.12, color: '#16a34a', mark: true },
+    woundKits:                   { shape: 'box', w: 0.35, d: 0.25, h: 0.18, color: '#f8fafc', mark: true, markColor: '#dc2626' },
+    cervicalCollars:             { shape: 'box', w: 0.4, d: 0.3, h: 0.2, color: '#fb923c' },
+    telephone_garde:             { shape: 'radio', w: 0.3, d: 0.15, h: 0.12, color: '#111827' },
+    phones:                      { shape: 'radio', w: 0.3, d: 0.15, h: 0.12, color: '#111827' },
+    tablette:                    { shape: 'box', w: 0.28, d: 0.2, h: 0.03, color: '#0f172a' },
+    lit_picot:                   { shape: 'cots', w: 0.9, d: 0.25, h: 0.25, color: '#15803d' }
+  };
+  const ITEM_RULES = [
+    [/oxyg|o2|bouteille/i, { shape: 'bottle', w: 0.16, d: 0.16, h: 0.75, color: '#f8fafc', cap: '#16a34a' }],
+    [/radio|talkie|antares|tpx|tph|relais/i, { shape: 'radio', w: 0.4, d: 0.15, h: 0.25, color: '#111827' }],
+    [/telephone|phone|smartphone/i, { shape: 'radio', w: 0.3, d: 0.15, h: 0.12, color: '#111827' }],
+    [/dae|dsa|defib|aed|schiller/i, { shape: 'box', w: 0.32, d: 0.22, h: 0.3, color: '#16a34a', mark: true }],
+    [/moniteur|t7|tensio|param|ecg|scope/i, { shape: 'case', w: 0.45, d: 0.3, h: 0.3, color: '#475569', screen: true }],
+    [/mannequin/i, { shape: 'duffel', w: 0.8, d: 0.35, h: 0.3, color: '#1d4ed8' }],
+    [/tenue|vetement|parka|f1|eup|uniform|gilet/i, { shape: 'clothes', w: 0.4, d: 0.3, h: 0.25, color: '#1d3c8c' }],
+    [/ranger|chaussure|botte/i, { shape: 'boots', w: 0.35, d: 0.3, h: 0.3, color: '#111827' }],
+    [/casque/i, { shape: 'box', w: 0.3, d: 0.3, h: 0.22, color: '#f8fafc' }],
+    [/drone/i, { shape: 'drone', w: 0.7, d: 0.5, h: 0.3, color: '#111827' }],
+    [/groupe|electro|generat/i, { shape: 'generator', w: 0.9, d: 0.6, h: 0.65, color: '#dc2626' }],
+    [/pomp/i, { shape: 'pump', w: 0.7, d: 0.55, h: 0.6, color: '#dc2626' }],
+    [/eclair|lumi|projecteur|lampe/i, { shape: 'light', w: 0.5, d: 0.5, h: 1.3, color: '#facc15' }],
+    [/bach|tarp/i, { shape: 'roll', w: 1.1, d: 0.35, h: 0.35, color: '#2563eb' }],
+    [/tente|abri|barnum/i, { shape: 'duffel', w: 1.2, d: 0.45, h: 0.45, color: '#f97316' }],
+    [/lit|couchage|picot|hebergement/i, { shape: 'cots', w: 1.0, d: 0.6, h: 0.5, color: '#4d7c0f' }],
+    [/eau|ravitaill|repas|ration/i, { shape: 'water', w: 0.8, d: 0.6, h: 0.45, color: '#38bdf8' }],
+    [/tronc|scie|chainsaw/i, { shape: 'case', w: 0.95, d: 0.4, h: 0.38, color: '#ea580c' }],
+    [/brancard|immobil|attelle|matelas|plan_dur|cuillere/i, { shape: 'board', w: 1.85, d: 0.45, h: 0.12, color: '#facc15' }],
+    [/collier|minerve/i, { shape: 'box', w: 0.4, d: 0.3, h: 0.2, color: '#fb923c' }],
+    [/pansement|compresse|wound|soin|consommable|reassort|pharma/i, { shape: 'box', w: 0.35, d: 0.25, h: 0.18, color: '#f8fafc', mark: true, markColor: '#dc2626' }],
+    [/sac|lot_b|kit_secours|psc|gqs|sst/i, { shape: 'backpack', w: 0.45, d: 0.3, h: 0.55, color: '#dc2626', mark: true }],
+    [/pedago|formation|kit/i, { shape: 'case', w: 0.55, d: 0.35, h: 0.3, color: '#2563eb' }],
+    [/caisse|rearm/i, { shape: 'crate', w: 0.6, d: 0.4, h: 0.35, color: '#64748b', mark: true, markColor: '#dc2626' }],
+    [/vtt|velo|bike/i, { shape: 'bike', w: 1.7, d: 0.5, h: 1.0, color: '#ef4444' }]
+  ];
+  const ITEM_MODEL_CACHE = new Map();
+  function itemModelFor(id) {
+    const key = String(id || '');
+    if (ITEM_MODEL_CACHE.has(key)) return ITEM_MODEL_CACHE.get(key);
+    let m = ITEM_MODELS[key];
+    if (!m) { const rule = ITEM_RULES.find(([rx]) => rx.test(key)); m = rule ? rule[1] : { shape: 'box', w: 0.45, d: 0.35, h: 0.3, color: '#c08a4b', tape: true }; }
+    m = { ...m, id: key };
+    ITEM_MODEL_CACHE.set(key, m);
+    return m;
+  }
+  function itemName(id) {
+    try {
+      if (window.ProtecLocaux && typeof window.ProtecLocaux.getItemDisplayName === 'function') return window.ProtecLocaux.getItemDisplayName(id);
+    } catch (e) { /* nom par défaut */ }
+    return String(id).replace(/_/g, ' ');
+  }
+
+  // Dessin d'un matériel : (x0,y0,z0) coin inférieur, emprise w×d (déjà orientée), hauteur h
+  function drawItemModel(ctx, iso, m, x0, y0, z0, w, d, h) {
+    const x1 = x0 + w, y1 = y0 + d, z1 = z0 + h;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const P = (x, y, z) => iso.p(x, y, z);
+    const k = iso.k;
+    const cross = (col, z) => {
+      const [sx, sy] = P(cx, cy, z);
+      const s = Math.max(1.5, Math.min(w, d) * k * 0.28);
+      ctx.fillStyle = col;
+      ctx.fillRect(sx - s, sy - s * 0.18, s * 2, s * 0.36);
+      ctx.fillRect(sx - s * 0.18, sy - s * 0.6, s * 0.36, s * 1.2);
+    };
+    switch (m.shape) {
+      case 'duffel': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1 - h * 0.12, m.color);
+        drawBox(ctx, iso, x0 + w * 0.06, y0 + d * 0.06, x1 - w * 0.06, y1 - d * 0.06, z1 - h * 0.12, z1, shade(m.color, 0.1));
+        const along = w >= d;
+        [0.3, 0.7].forEach(u => {
+          if (along) drawBox(ctx, iso, x0 + w * u - 0.025, y0 - 0.005, x0 + w * u + 0.025, y1 + 0.005, z0, z1 + 0.005, '#1f2937', { edge: null });
+          else drawBox(ctx, iso, x0 - 0.005, y0 + d * u - 0.025, x1 + 0.005, y0 + d * u + 0.025, z0, z1 + 0.005, '#1f2937', { edge: null });
+        });
+        break;
+      }
+      case 'backpack': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color);
+        drawBox(ctx, iso, x0 + w * 0.15, y1 - 0.02, x1 - w * 0.15, y1 + 0.05, z0 + h * 0.15, z0 + h * 0.6, shade(m.color, -0.15));
+        if (m.mark) { const [sx, sy] = P(cx, y1 + 0.05, z0 + h * 0.75); ctx.fillStyle = '#fff'; const s = k * 0.05; ctx.fillRect(sx - s, sy - s * 0.3, s * 2, s * 0.6); ctx.fillRect(sx - s * 0.3, sy - s, s * 0.6, s * 2); }
+        break;
+      }
+      case 'case': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color);
+        drawBox(ctx, iso, x0, y0, x1, y1, z0 + h * 0.62, z0 + h * 0.66, shade(m.color, -0.35), { edge: null });
+        const along = w >= d;
+        if (along) drawBox(ctx, iso, cx - 0.09, cy - 0.025, cx + 0.09, cy + 0.025, z1, z1 + 0.04, '#111827', { edge: null });
+        else drawBox(ctx, iso, cx - 0.025, cy - 0.09, cx + 0.025, cy + 0.09, z1, z1 + 0.04, '#111827', { edge: null });
+        if (m.stripe) drawBox(ctx, iso, x0, y0, x1, y1, z0 + h * 0.2, z0 + h * 0.28, m.stripe, { edge: null });
+        if (m.mark) cross(m.markColor || '#fff', z1 + 0.001);
+        if (m.screen) { const [ax, ay] = P(x0 + w * 0.2, y1, z0 + h * 0.75); const [bx, by] = P(x1 - w * 0.2, y1, z0 + h * 0.3); ctx.fillStyle = '#0ea5e9'; ctx.fillRect(Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)); }
+        if (m.antenna) { const [ax, ay] = P(x1 - 0.08, y0 + 0.08, z1); ctx.strokeStyle = '#111827'; ctx.lineWidth = Math.max(1, k * 0.015); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay - k * 0.45); ctx.stroke(); }
+        break;
+      }
+      case 'crate': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1 - 0.05, m.color);
+        drawBox(ctx, iso, x0 - 0.01, y0 - 0.01, x1 + 0.01, y1 + 0.01, z1 - 0.05, z1, shade(m.color, -0.25));
+        if (m.mark) cross(m.markColor || '#dc2626', z1 + 0.001);
+        break;
+      }
+      case 'bottle': {
+        const [bx, by] = P(cx, cy, z0), [tx, ty] = P(cx, cy, z1 - 0.08);
+        const r = Math.max(1.5, w * k * 0.55);
+        ctx.fillStyle = m.color; ctx.fillRect(bx - r, ty, r * 2, by - ty);
+        ctx.fillStyle = 'rgba(15,23,42,0.18)'; ctx.fillRect(bx + r * 0.2, ty, r * 0.8, by - ty);
+        ctx.beginPath(); ctx.ellipse(bx, by, r, r * 0.5, 0, 0, Math.PI * 2); ctx.fillStyle = shade(m.color, -0.2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(tx, ty, r, r * 0.5, 0, 0, Math.PI * 2); ctx.fillStyle = m.color; ctx.fill();
+        const [cx2, cy2] = P(cx, cy, z1);
+        ctx.fillStyle = m.cap || '#16a34a'; ctx.fillRect(cx2 - r * 0.5, cy2, r, ty - cy2);
+        break;
+      }
+      case 'generator': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z0 + 0.06, '#1f2937', { edge: null });
+        drawBox(ctx, iso, x0 + 0.08, y0 + 0.08, x1 - 0.08, y1 - 0.08, z0 + 0.06, z1 - 0.12, m.color);
+        drawBox(ctx, iso, x0 + w * 0.15, y0 + d * 0.15, x1 - w * 0.15, y1 - d * 0.15, z1 - 0.12, z1, '#facc15');
+        [[x0, y0], [x1 - 0.04, y0], [x0, y1 - 0.04], [x1 - 0.04, y1 - 0.04]].forEach(([px, py]) => drawBox(ctx, iso, px, py, px + 0.04, py + 0.04, z0, z1, '#111827', { edge: null }));
+        break;
+      }
+      case 'pump': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z0 + 0.05, '#1f2937', { edge: null });
+        drawBox(ctx, iso, x0 + 0.05, y0 + 0.05, cx + 0.05, y1 - 0.05, z0 + 0.05, z1, m.color);
+        const [hx, hy] = P(cx + w * 0.22, cy, z0 + h * 0.35);
+        ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(1.5, k * 0.05);
+        ctx.beginPath(); ctx.ellipse(hx, hy, w * k * 0.22, w * k * 0.12, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(hx, hy, w * k * 0.13, w * k * 0.07, 0, 0, Math.PI * 2); ctx.stroke();
+        break;
+      }
+      case 'light': {
+        const [bx, by] = P(cx, cy, z0), [tx, ty] = P(cx, cy, z1 - 0.15);
+        ctx.strokeStyle = '#111827'; ctx.lineWidth = Math.max(1, k * 0.03);
+        [[-0.2, 0.1], [0.2, 0.1], [0, -0.22]].forEach(([dx, dy]) => { const [fx, fy] = P(cx + dx, cy + dy, z0); ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(tx, ty + (by - ty) * 0.55); ctx.stroke(); });
+        ctx.beginPath(); ctx.moveTo(bx, by - (by - ty) * 0.45); ctx.lineTo(tx, ty); ctx.stroke();
+        drawBox(ctx, iso, cx - 0.18, cy - 0.06, cx + 0.18, cy + 0.06, z1 - 0.2, z1, '#111827', { top: '#374151' });
+        poly(ctx, [P(cx - 0.16, cy + 0.061, z1 - 0.18), P(cx + 0.16, cy + 0.061, z1 - 0.18), P(cx + 0.16, cy + 0.061, z1 - 0.02), P(cx - 0.16, cy + 0.061, z1 - 0.02)], m.color);
+        break;
+      }
+      case 'roll': {
+        const along = w >= d;
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color);
+        if (along) { poly(ctx, [P(x1, y0 + 0.03, z0 + 0.03), P(x1, y1 - 0.03, z0 + 0.03), P(x1, y1 - 0.03, z1 - 0.03), P(x1, y0 + 0.03, z1 - 0.03)], shade(m.color, 0.25)); }
+        else { poly(ctx, [P(x0 + 0.03, y1, z0 + 0.03), P(x1 - 0.03, y1, z0 + 0.03), P(x1 - 0.03, y1, z1 - 0.03), P(x0 + 0.03, y1, z1 - 0.03)], shade(m.color, 0.25)); }
+        break;
+      }
+      case 'cots': {
+        const n = 4, lh = h / n;
+        for (let i = 0; i < n; i++) drawBox(ctx, iso, x0, y0, x1, y1, z0 + i * lh, z0 + i * lh + lh * 0.75, i % 2 ? shade(m.color, 0.12) : m.color);
+        break;
+      }
+      case 'water': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color, { top: '#e0f2fe' });
+        const nx = Math.max(2, Math.round(w / 0.13)), ny = Math.max(2, Math.round(d / 0.13));
+        ctx.fillStyle = '#1d4ed8';
+        for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) { const [sx, sy] = P(x0 + (i + 0.5) * w / nx, y0 + (j + 0.5) * d / ny, z1 + 0.01); ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.8, k * 0.025), 0, Math.PI * 2); ctx.fill(); }
+        break;
+      }
+      case 'drone': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z0 + h * 0.65, m.color);
+        const zt = z0 + h * 0.65;
+        ctx.strokeStyle = '#374151'; ctx.lineWidth = Math.max(1, k * 0.025);
+        const arms = [[x0 + 0.1, y0 + 0.1], [x1 - 0.1, y0 + 0.1], [x0 + 0.1, y1 - 0.1], [x1 - 0.1, y1 - 0.1]];
+        const [c0x, c0y] = P(cx, cy, zt + 0.05);
+        arms.forEach(([ax, ay]) => { const [sx, sy] = P(ax, ay, zt + 0.05); ctx.beginPath(); ctx.moveTo(c0x, c0y); ctx.lineTo(sx, sy); ctx.stroke(); ctx.beginPath(); ctx.ellipse(sx, sy, k * 0.08, k * 0.04, 0, 0, Math.PI * 2); ctx.stroke(); });
+        drawBox(ctx, iso, cx - 0.07, cy - 0.07, cx + 0.07, cy + 0.07, zt, zt + 0.08, m.accent || '#e5e7eb');
+        break;
+      }
+      case 'clothes': {
+        const n = 3, lh = h / n;
+        for (let i = 0; i < n; i++) {
+          drawBox(ctx, iso, x0, y0, x1, y1, z0 + i * lh, z0 + (i + 1) * lh - 0.01, m.color);
+          drawBox(ctx, iso, x0, y0, x1, y1, z0 + (i + 1) * lh - 0.04, z0 + (i + 1) * lh - 0.01, '#f7941d', { edge: null });
+        }
+        break;
+      }
+      case 'boots': {
+        drawBox(ctx, iso, x0, y0, x0 + w * 0.45, y1, z0, z1, m.color);
+        drawBox(ctx, iso, x0 + w * 0.55, y0, x1, y1, z0, z1, m.color);
+        break;
+      }
+      case 'radio': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z0 + h * 0.35, '#374151');
+        const n = Math.max(2, Math.round(w / 0.07));
+        for (let i = 0; i < n; i++) {
+          const px = x0 + (i + 0.2) * w / n;
+          drawBox(ctx, iso, px, cy - 0.025, px + w / n * 0.6, cy + 0.025, z0 + h * 0.35, z1, m.color, { edge: null });
+          const [ax, ay] = P(px + w / n * 0.3, cy, z1); ctx.strokeStyle = '#111827'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax, ay - k * 0.08); ctx.stroke();
+        }
+        break;
+      }
+      case 'board': {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color);
+        ctx.fillStyle = '#111827';
+        const along = w >= d;
+        for (let i = 1; i < 6; i++) { const u = i / 6; const [sx, sy] = along ? P(x0 + w * u, cy, z1 + 0.002) : P(cx, y0 + d * u, z1 + 0.002); ctx.beginPath(); ctx.ellipse(sx, sy, k * 0.05, k * 0.025, 0, 0, Math.PI * 2); ctx.fill(); }
+        break;
+      }
+      case 'bike': {
+        const along = w >= d;
+        const P2 = (u, z) => along ? P(x0 + w * u, cy, z0 + z) : P(cx, y0 + d * u, z0 + z);
+        ctx.strokeStyle = '#111827'; ctx.lineWidth = Math.max(1, k * 0.03);
+        [0.2, 0.8].forEach(u => { const [sx, sy] = P2(u, 0.33); ctx.beginPath(); ctx.ellipse(sx, sy, k * 0.3, k * 0.33, 0, 0, Math.PI * 2); ctx.stroke(); });
+        ctx.strokeStyle = m.color; ctx.lineWidth = Math.max(1.5, k * 0.04);
+        const a = P2(0.2, 0.33), b = P2(0.5, 0.35), c = P2(0.8, 0.33), d2 = P2(0.45, 0.8), e = P2(0.72, 0.85);
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(d2[0], d2[1]); ctx.lineTo(a[0], a[1]); ctx.moveTo(b[0], b[1]); ctx.lineTo(e[0], e[1]); ctx.lineTo(c[0], c[1]); ctx.moveTo(d2[0], d2[1]); ctx.lineTo(e[0], e[1]); ctx.stroke();
+        break;
+      }
+      default: {
+        drawBox(ctx, iso, x0, y0, x1, y1, z0, z1, m.color);
+        if (m.tape) { const along = w >= d; if (along) drawBox(ctx, iso, x0, cy - 0.03, x1, cy + 0.03, z1, z1 + 0.003, '#e7c48a', { edge: null }); else drawBox(ctx, iso, cx - 0.03, y0, cx + 0.03, y1, z1, z1 + 0.003, '#e7c48a', { edge: null }); }
+        if (m.mark) cross(m.markColor || '#ffffff', z1 + 0.002);
+      }
+    }
+  }
+
+  // =========================================================================
   // 4. DIRECTOR : LIEN AVEC L'ÉTAT DU JEU (lecture seule)
   // =========================================================================
 
@@ -812,25 +1163,6 @@
       if (!st) return vols;
       const multi = (game.stations || []).length > 1;
       return vols.filter(v => !multi || !v.stationId || v.stationId === st.id || (st.volunteers || []).includes(v.id));
-    },
-
-    isPresenceSlot(vol, game, now) {
-      const d = new Date(now);
-      const h = d.getHours();
-      const dow = d.getDay();
-      const weekend = dow === 0 || dow === 6;
-      const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-      const staff = ['salarie', 'service_civique'].includes(vol.contractType) || ['salarie', 'service_civique'].includes(vol.dispoType);
-      let p;
-      if (h < 7 || h >= 23) p = 0.02;
-      else if (staff && !weekend && h >= 8 && h < 18) p = 0.85;
-      else if (weekend) p = h >= 9 && h < 20 ? 0.32 : 0.12;
-      else if (h >= 18) p = 0.3;
-      else p = 0.08;
-      if (Array.isArray(vol.dispoJours) && vol.dispoJours.length) p *= vol.dispoJours.includes(days[dow]) ? 1.25 : 0.45;
-      if (typeof vol.energy === 'number' && vol.energy < 25) p *= 0.4;
-      const slot = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}-${Math.floor(h / 2)}`;
-      return (hashStr(`${vol.id}|${slot}`) / 4294967296) < Math.min(0.95, p);
     },
 
     /**
@@ -941,19 +1273,39 @@
         set(vid, { state: AgentState.ON_DUTY_WAIT, priority: PRIORITY.ON_DUTY_WAIT, guardType: gType, label: guardLabel || 'Garde active' });
       });
 
-      // --- 6. Vie de caserne : bénévoles disponibles présents à la base (créneau horaire)
-      const idleCands = vols.filter(v => !out.assignments.has(v.id) && (!v.status || v.status === 'dispo' || v.status === 'disponible' || v.status === 'base'));
-      let present = idleCands.filter(v => this.isPresenceSlot(v, game, now));
-      const h = new Date(now).getHours();
-      if (present.length < 2 && h >= 7 && h < 23) {
-        // Une base n'est jamais complètement vide en journée : les plus motivés passent
-        const extra = idleCands.filter(v => !present.includes(v)).sort((a, b) => (b.motivation || 0) - (a.motivation || 0) || hashStr(a.id) - hashStr(b.id));
-        present = present.concat(extra.slice(0, 2 - present.length));
-      }
-      present.slice(0, MAX_IDLE).forEach(v => set(v.id, { state: AgentState.IDLE, priority: PRIORITY.IDLE, label: 'Vie de caserne' }));
-
-      // --- 7. Opérations logistiques véhicules (chargement/déchargement/réarmement) sans atelier dédié
+      // --- 6. Armement / désarmement de véhicules : bénévoles affectés au garage par le module Logistique
       const vehs = this.stationVehicles(game, st);
+      vehs.forEach(veh => {
+        const queue = Array.isArray(veh.armingQueue) ? veh.armingQueue : [];
+        if (!queue.length) return;
+        const op = queue[0];
+        const label = `${op.type === 'unload' ? 'Déchargement' : 'Armement'} ${veh.name || ''}${op.itemName ? ' · ' + op.itemName : ''}`;
+        (veh.assignedArmingVolunteerIds || []).forEach(vid => set(vid, { state: AgentState.LOGISTICS, priority: PRIORITY.LOGISTICS + 2, vehicleId: veh.id, label, itemId: op.itemId || (op.itemData && op.itemData.id) || null }));
+      });
+
+      // --- 7. Personne ne vient à la base sans raison. Exceptions :
+      //   a) salariés / services civiques pendant leurs heures de travail (lun-ven 8h-18h)
+      //   b) moment de cohésion organisé (repas, jeux) pendant sa durée
+      const free = (v) => !out.assignments.has(v.id) && (!v.status || v.status === 'dispo' || v.status === 'disponible' || v.status === 'base');
+      const d = new Date(now);
+      const workHours = d.getDay() >= 1 && d.getDay() <= 5 && d.getHours() >= 8 && d.getHours() < 18;
+      if (workHours) {
+        vols.filter(v => free(v) && (['salarie', 'service_civique'].includes(v.contractType) || ['salarie', 'service_civique'].includes(v.dispoType)))
+          .forEach(v => set(v.id, { state: AgentState.IDLE, priority: PRIORITY.IDLE + 1, role: 'staff', label: v.contractType === 'service_civique' ? 'Mission de service civique' : 'Poste salarié à l’antenne' }));
+      }
+      let events = Array.isArray(game.baseEvents) ? game.baseEvents : [];
+      if (!events.length) {
+        // Événements de base non sauvegardés côté serveur : relecture du stockage local (survit à un rechargement)
+        try { const ls = JSON.parse(localStorage.getItem('protec_base_events') || '[]'); if (Array.isArray(ls)) events = ls; } catch (e) { /* stockage indisponible */ }
+      }
+      const cohesion = events.find(e => e && e.type === 'cohesion' && now >= e.start && now < e.end && (!e.stationId || !st || e.stationId === st.id));
+      out.cohesion = cohesion || null;
+      if (cohesion) {
+        vols.filter(free).sort((a, b) => hashStr(a.id + cohesion.id) - hashStr(b.id + cohesion.id)).slice(0, 12)
+          .forEach(v => set(v.id, { state: AgentState.IDLE, priority: PRIORITY.IDLE, role: 'cohesion', label: cohesion.label || 'Moment de cohésion' }));
+      }
+
+      // --- 8. Chargement / déchargement de lots de crise (sans affectation explicite) : 2 manutentionnaires viennent
       vehs.forEach(veh => {
         const busy = veh.logOperation || veh.status === 'chargement' || veh.status === 'dechargement';
         if (!busy) return;
@@ -961,11 +1313,8 @@
         if (already >= 2) return;
         const label = (veh.logOperation && veh.logOperation.label) || `Logistique ${veh.name || ''}`;
         let pool = [...out.assignments.entries()].filter(([, a]) => a.state === AgentState.IDLE).map(([id]) => id);
-        if (pool.length < 2 - already) {
-          // Des manutentionnaires viennent exprès si personne n'est sur place
-          pool = pool.concat(idleCands.filter(v => !out.assignments.has(v.id)).map(v => v.id));
-        }
-        pool.slice(0, 2 - already).forEach(vid => set(vid, { state: AgentState.LOGISTICS, priority: PRIORITY.LOGISTICS, vehicleId: veh.id, label }));
+        if (pool.length < 2 - already) pool = pool.concat(vols.filter(free).map(v => v.id));
+        pool.slice(0, 2 - already).forEach(vid => set(vid, { state: AgentState.LOGISTICS, priority: PRIORITY.LOGISTICS, vehicleId: veh.id, label, itemId: veh.logOperation && veh.logOperation.kitId }));
       });
 
       // Limite globale d'avatars (les priorités hautes d'abord)
@@ -1094,6 +1443,7 @@
 
     arrive() {
       this.path = null;
+      this.curSpeed = 0;
       const target = this.nextState || AgentState.IDLE;
       this.state = target;
       this.nextState = null;
@@ -1106,6 +1456,7 @@
       if (this.poi) {
         if (this.poi.face !== null && this.poi.face !== undefined) this.dir = this.poi.face;
         this.pose = this.poi.pose || 'stand';
+        if (this.mealing && this.poi.mealTable && this.pose === 'sit') this.pose = 'eat_sit';
         this.seatOn = this.poi.seatOn || null;
       } else {
         this.pose = 'stand';
@@ -1181,7 +1532,7 @@
           this.dressed = true;
         }
         const veh = sc.vehicleById(a.vehicleId) || sc.firstPresentVehicle();
-        const poi = veh ? sc.pickPOI(this, ['gather', 'board'], null, { vehicleId: veh.id }) : null;
+        const poi = veh ? sc.pickPOI(this, ['gather', 'board'], null, { vehicleId: veh.id, preferFront: true }) : null;
         const fallback = poi || sc.pickPOI(this, ['gather_yard', 'yard'], null, {});
         if (fallback) { this.goToPOI(fallback, S); this.dur(600); return; }
         return this.wanderIn(['GARAGE', 'LOCKER'], S);
@@ -1212,27 +1563,37 @@
         return this.wanderIn(['LOUNGE', 'RADIO', 'OFFICE'], S);
       }
 
-      // IDLE : vie de caserne
+      // IDLE : uniquement salariés au travail ou moment de cohésion
+      if (a.role === 'staff') {
+        const choice = pickWeighted(r, [{ v: 'desk', w: 6 }, { v: 'coffee', w: 1.2 }, { v: 'storage', w: 1 }, { v: 'wander', w: 0.8 }]);
+        let poi = null;
+        if (choice === 'desk') poi = sc.pickPOI(this, ['desk', 'radio_desk'], ['OFFICE', 'RADIO'], { anyRoom: true, keep: true });
+        else if (choice === 'coffee') poi = sc.pickPOI(this, ['coffee'], null, { anyRoom: true });
+        else if (choice === 'storage') poi = sc.pickPOI(this, ['storage'], ['STORAGE', 'GARAGE'], { anyRoom: true });
+        if (poi) { this.goToPOI(poi, AgentState.IDLE); this.dur(choice === 'desk' ? 40 + r() * 50 : 8 + r() * 6); return; }
+        return this.wanderIn(['OFFICE', 'RADIO', 'STORAGE'], AgentState.IDLE);
+      }
+      // Moment de cohésion : repas en commun, jeux, discussions
       const choice = pickWeighted(r, [
-        { v: 'coffee', w: 2.4 },
-        { v: 'sit', w: 3 },
-        { v: 'wander', w: 2.2 },
-        { v: 'game', w: 1.2 },
-        { v: 'chat', w: 1.6 },
-        { v: 'yard', w: 0.6 }
+        { v: 'meal', w: 4 },
+        { v: 'coffee', w: 1.5 },
+        { v: 'sit', w: 2 },
+        { v: 'game', w: 1.6 },
+        { v: 'chat', w: 2 }
       ]);
       let poi = null;
-      if (choice === 'coffee') poi = sc.pickPOI(this, ['coffee'], null, { anyRoom: true });
-      else if (choice === 'sit') poi = sc.pickPOI(this, ['lounge_seat', 'seat'], ['LOUNGE', 'OFFICE', 'FREE'], { anyRoom: true });
+      if (choice === 'meal') poi = sc.pickPOI(this, ['lounge_seat'], ['LOUNGE'], { anyRoom: true, mealOnly: true }) || sc.pickPOI(this, ['lounge_seat', 'seat'], ['LOUNGE'], { anyRoom: true });
+      else if (choice === 'coffee') poi = sc.pickPOI(this, ['coffee'], null, { anyRoom: true });
+      else if (choice === 'sit') poi = sc.pickPOI(this, ['lounge_seat', 'seat'], ['LOUNGE', 'FREE'], { anyRoom: true });
       else if (choice === 'game') poi = sc.pickPOI(this, ['game', 'lounge_spot'], ['LOUNGE'], { anyRoom: true });
-      else if (choice === 'chat') poi = sc.pickChatSpot(this);
-      else if (choice === 'yard') poi = sc.pickPOI(this, ['yard', 'gather_yard'], null, {});
+      else if (choice === 'chat') poi = sc.pickChatSpot(this) || sc.pickPOI(this, ['lounge_spot'], ['LOUNGE'], { anyRoom: true });
       if (poi) {
         this.goToPOI(poi, AgentState.IDLE);
-        this.dur((choice === 'coffee' ? 7 : 14) + r() * 16);
+        if (choice === 'meal') this.mealing = true; else this.mealing = false;
+        this.dur(choice === 'meal' ? 50 + r() * 40 : 14 + r() * 16);
         return;
       }
-      return this.wanderIn(['LOUNGE', 'FREE', 'OFFICE', 'TRAINING', 'STORAGE', 'GARAGE', 'RADIO'], AgentState.IDLE);
+      return this.wanderIn(['LOUNGE', 'FREE'], AgentState.IDLE);
     }
 
     wanderIn(roles, nextState) {
@@ -1246,7 +1607,7 @@
     onArrive() {
       const S = this.state;
       if (S === AgentState.LOGISTICS && this.poi) {
-        if (this.poi.kind === 'storage') { this.carryNext = true; }
+        if (this.poi.kind === 'storage') { this.carryNext = true; this.carryItemNext = this.scene.pickCarryItem(this); }
         else if (this.poi.kind === 'load') { this.carry = false; this.say('📦', 1.6); }
         else if (this.poi.kind === 'bagcheck') { this.carry = false; this.say('🎒', 2.2); }
       }
@@ -1292,7 +1653,7 @@
         if (!this.boardVehicleId) this.removed = true;
         return;
       }
-      if (this.carryNext && this.t > this.activityUntil - 0.6) { this.carry = true; this.carryNext = false; }
+      if (this.carryNext && this.t > this.activityUntil - 0.6) { this.carry = true; this.carryItem = this.carryItemNext || null; this.carryNext = false; }
       if (this.dressNext && this.t > this.activityUntil - 0.3) { this.dressed = true; this.dressNext = false; }
 
       // Animations d'attente contextuelles
@@ -1323,7 +1684,12 @@
         const od = Math.hypot(ox, oy);
         if (od < 0.42 && od > 0.001 && (ox * dx + oy * dy) > 0 && o.state !== AgentState.MOVING) { spd *= 0.55; break; }
       }
-      const step = spd * dt;
+      // Accélération au départ, décélération à l'approche de la destination
+      const end = this.path[this.path.length - 1];
+      const remain = Math.hypot(end[0] - this.x, end[1] - this.y);
+      const target = spd * Math.min(1, 0.35 + remain * 0.9);
+      this.curSpeed = (this.curSpeed || 0) + (target - (this.curSpeed || 0)) * Math.min(1, dt * 5);
+      const step = Math.max(0.05, this.curSpeed) * dt;
       if (d <= step) {
         this.x = p[0]; this.y = p[1];
         this.pathIdx++;
@@ -1337,7 +1703,7 @@
         while (diff < -Math.PI) diff += Math.PI * 2;
         this.dir += diff * Math.min(1, dt * 12);
       }
-      this.walkPhase += step * 7.2;
+      this.walkPhase += step * (this.speed > 1.9 ? 5.6 : 6.6);
     }
   }
 
@@ -1477,6 +1843,25 @@
             }
           }
           if (x1 > x0 && y1 > y0) e.trim = { x: x0, y: y0, w: x1 - x0 + 2, h: y1 - y0 + 2 };
+          // Suppression du liseré blanc "autocollant" des illustrations (remplissage depuis l'extérieur, 12 px max)
+          const img = cx.getImageData(0, 0, w, h);
+          const px = img.data;
+          const depth = new Int16Array(w * h).fill(-1);
+          const q = [];
+          for (let i = 0; i < w * h; i++) if (px[i * 4 + 3] < 30) { depth[i] = 0; q.push(i); }
+          const whiteish = (i) => { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; return px[i * 4 + 3] >= 30 && ((r > 200 && g > 200 && b > 200 && Math.max(r, g, b) - Math.min(r, g, b) < 28) || px[i * 4 + 3] < 140); };
+          for (let qi = 0; qi < q.length; qi++) {
+            const i = q[qi], d = depth[i];
+            if (d >= 14) continue;
+            const xx = i % w, yy = (i / w) | 0;
+            const nb = [xx > 0 ? i - 1 : -1, xx < w - 1 ? i + 1 : -1, yy > 0 ? i - w : -1, yy < h - 1 ? i + w : -1];
+            for (const j of nb) {
+              if (j < 0 || depth[j] !== -1) continue;
+              if (whiteish(j)) { depth[j] = d + 1; px[j * 4 + 3] = 0; q.push(j); }
+            }
+          }
+          cx.putImageData(img, 0, 0);
+          e.canvas = c;
         } catch (err) { /* image d'une autre origine : pas de rognage */ }
         e.ready = true;
       };
@@ -1545,14 +1930,17 @@
       let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
       (m.rooms || []).forEach(o => { bx0 = Math.min(bx0, o.x); by0 = Math.min(by0, o.y); bx1 = Math.max(bx1, o.x + o.w); by1 = Math.max(by1, o.y + o.h); });
       if (!isFinite(bx0)) return 0;
-      const score = (pk.x + pk.w / 2 + pk.y + pk.h / 2) - ((bx0 + bx1) / 2 + (by0 + by1) / 2) - r * 0.01;
+      const horiz = (pk.spots || []).filter(sp => sp.w >= sp.d).length >= Math.max(1, (pk.spots || []).length / 2);
+      const eastward = (pk.x + pk.w / 2) - (bx0 + bx1) / 2 > 0;
+      const score = (pk.x + pk.w / 2 + pk.y + pk.h / 2) - ((bx0 + bx1) / 2 + (by0 + by1) / 2) + (horiz && eastward ? 2.5 : 0) - r * 0.01;
       if (score > bestScore) { bestScore = score; best = r; }
     }
     return best;
   }
 
   class LiveScene {
-    constructor(canvas, locaux) {
+    constructor(canvas, locaux, slot = 'locaux') {
+      this.slot = slot;
       this.canvas = canvas;
       this.ctx = canvas.getContext('2d');
       this.locaux = locaux;
@@ -1659,6 +2047,8 @@
       if (!model) return false;
       this._lastModel = model;
       const vehLayout = this.vehicleLayout(game, model);
+      const nowT = performance.now();
+      if (!this._inv || nowT - (this._invAt || 0) > 1000) { this._inv = this.inventorySnapshot(game, model, vehLayout); this._invAt = nowT; }
       const sig = JSON.stringify({
         r: (model.rooms || []).map(r => [r.id, r.type, r.x, r.y, r.w, r.h, r.name]),
         w: (model.walls || []).length,
@@ -1667,12 +2057,13 @@
         f: (model.furniture || []).map(f => [f.id, f.type, +f.x.toFixed(2), +f.y.toFixed(2), f.w, f.d]),
         p: model.parking ? [model.parking.x, model.parking.y, model.parking.w, model.parking.h, (model.parking.spots || []).length] : null,
         rot: model._rot,
+        inv: this._inv ? this._inv.sig : '',
         v: vehLayout.map(v => [v.id, v.present, v.spriteSig])
       });
       if (sig === this.worldSig && this.world) return false;
       this.worldSig = sig;
       const oldPois = this.world ? this.world.pois : null;
-      this.world = new WorldModel(model, vehLayout);
+      this.world = new WorldModel(model, vehLayout, this._inv);
       this.groundCache = null;
       // Les avatars relâchent leurs anciens POI et repartent proprement
       if (oldPois) {
@@ -1698,6 +2089,179 @@
       return true;
     }
 
+    // Inventaire de l'antenne : stock non rangé + lots possédés non embarqués ni rangés
+    inventorySnapshot(game, model, vehLayout) {
+      const floor = [];
+      const st = Director.stationOf(game, this.locaux);
+      if (!st) return { floor, sig: '' };
+      const stock = st.stock || {};
+      const stored = {}, loaded = {};
+      (model.furniture || []).forEach(f => Object.entries(f.storedInventory || {}).forEach(([id, q]) => { stored[id] = (stored[id] || 0) + (q || 0); }));
+      (vehLayout || []).forEach(v => (v.veh.loadedItems || []).forEach(it => { if (it && it.id) loaded[it.id] = (loaded[it.id] || 0) + 1; }));
+      Object.entries(stock).forEach(([id, q]) => { if (typeof q === 'number' && q >= 1) floor.push({ id, qty: Math.floor(q), name: itemName(id) }); });
+      const E = window.ProtecEquipements;
+      const we = (game && game.workplaceEquipment) || {};
+      if (E && Array.isArray(E.LOTS_CATALOG)) {
+        E.LOTS_CATALOG.forEach(l => {
+          const owned = we[l.id] || 0;
+          if (!owned) return;
+          const rest = owned - (stored[l.id] || 0) - (loaded[l.id] || 0) - (stock[l.id] || 0);
+          if (rest > 0) floor.push({ id: l.id, qty: rest, name: l.name });
+        });
+      }
+      const sig = floor.map(e => e.id + ':' + e.qty).join('|') + '#' + Object.entries(stored).map(([k, q]) => k + ':' + q).join('|');
+      return { floor, sig, stored, loaded };
+    }
+
+    pickCarryItem(agent) {
+      const a = agent.assignment || {};
+      if (a.itemId) return a.itemId;
+      const W = this.world;
+      const f = agent.poi && agent.poi.furnitureId ? W.furniture.find(x => x.id === agent.poi.furnitureId) : null;
+      const pool = f && f._contents && f._contents.length ? f._contents.map(([id]) => id) : (W.floorStacks || []).map(sk => sk.id);
+      return pool.length ? pool[Math.floor(agent.rng() * pool.length)] : null;
+    }
+
+    queueVehLabel(v, x, y) { (this._vehLabels = this._vehLabels || []).push({ v, x, y }); }
+
+    // Statut lisible d'un véhicule (pour l'étiquette et la fiche)
+    vehicleStatus(veh) {
+      const q = Array.isArray(veh.armingQueue) ? veh.armingQueue : [];
+      const arm = veh.armementLevel !== undefined ? veh.armementLevel : (veh.consumables !== undefined ? veh.consumables : (veh.consumablesPercent !== undefined ? veh.consumablesPercent : 100));
+      if (q.length) {
+        const tot = q.reduce((s2, op) => s2 + (op.totalSec || 180), 0), rem = q.reduce((s2, op) => s2 + Math.max(0, op.remainingSec || 0), 0);
+        return { text: `🔧 ${q[0].type === 'unload' ? 'Déchargement' : 'Armement'} ${Math.round((1 - rem / Math.max(1, tot)) * 100)} %`, color: '#d97706', arm };
+      }
+      if (veh.logOperation || veh.status === 'chargement' || veh.status === 'dechargement') return { text: '📦 ' + ((veh.logOperation && veh.logOperation.label) || 'Chargement'), color: '#d97706', arm };
+      if (veh.status === 'samu_garde') return { text: '🚑 Garde SAMU 15', color: '#2563eb', arm };
+      if (veh.status === 'sdis_caserne') return { text: '🚒 Garde CODIS', color: '#dc2626', arm };
+      if (VEH_AWAY.includes(veh.status)) return { text: '🚨 En intervention', color: '#dc2626', arm };
+      if (veh.status === 'indispo' || veh.status === 'maintenance' || veh.status === 'garage') return { text: '🛠️ Indisponible', color: '#64748b', arm };
+      if (veh.needsRearming || arm < 85) return { text: `⚠️ À réarmer`, color: '#ea580c', arm };
+      return { text: '✅ Disponible', color: '#16a34a', arm };
+    }
+
+    drawVehicleLabels(ctx) {
+      const dpr = window.devicePixelRatio || 1;
+      (this._vehLabels || []).forEach(({ v, x, y }) => {
+        const veh = v.veh;
+        const stt = this.vehicleStatus(veh);
+        this.chip(ctx, x, y - 16 * dpr, veh.name || veh.type || 'Véhicule', '#0f172a', '#ffffff');
+        this.chip(ctx, x, y + 4 * dpr, stt.text, stt.color, '#ffffff');
+        // Jauges armement / carburant
+        const bw = 70 * dpr, bh = 4 * dpr, bx = x - bw / 2;
+        const bar = (yy, val, col) => {
+          ctx.fillStyle = 'rgba(15,23,42,0.55)'; ctx.fillRect(bx, yy, bw, bh);
+          ctx.fillStyle = col; ctx.fillRect(bx, yy, bw * clamp(val / 100, 0, 1), bh);
+        };
+        const arm = clamp(Number(stt.arm) || 0, 0, 100);
+        bar(y + 7 * dpr, arm, arm >= 85 ? '#22c55e' : (arm >= 50 ? '#f59e0b' : '#ef4444'));
+        if (typeof veh.fuel === 'number') bar(y + 13 * dpr, veh.fuel, '#38bdf8');
+      });
+      this._vehLabels = [];
+    }
+
+    // Emplacements vides : véhicule parti en intervention
+    drawAwayVehicles(ctx) {
+      const iso = this.iso;
+      const dpr = window.devicePixelRatio || 1;
+      const game = window.game;
+      (this.world.vehicles || []).forEach(v => {
+        const vs = this.vehStates.get(v.id);
+        if (!vs || vs.anim !== 'away') return;
+        const sp = v.spot;
+        ctx.save();
+        ctx.setLineDash([6 * dpr, 5 * dpr]);
+        poly(ctx, [iso.p(sp.x + 0.2, sp.y + 0.2), iso.p(sp.x + sp.w - 0.2, sp.y + 0.2), iso.p(sp.x + sp.w - 0.2, sp.y + sp.d - 0.2), iso.p(sp.x + 0.2, sp.y + sp.d - 0.2)], 'rgba(220,38,38,0.08)', 'rgba(220,38,38,0.7)', 2 * dpr);
+        ctx.restore();
+        const m = (game && game.missions || []).find(mi => mi.status !== 'completed' && ((mi.assignedVehicleIds || []).includes(v.id) || mi.vehicleId === v.id));
+        if (this.showLabels || (this.hover && this.hover.veh === v)) {
+          const [tx, ty] = iso.p(sp.x + sp.w / 2, sp.y + sp.d / 2, 0.3);
+          this.chip(ctx, tx, ty, `${v.veh.name || 'Véhicule'} · ${m ? String(m.title || 'intervention').replace(/^\[[^\]]*\]\s*/, '').slice(0, 34) : 'en intervention'}`, '#b91c1c', '#ffffff');
+        }
+      });
+    }
+
+    // Infobulle des objets survolés (matériel, mobilier de stockage, véhicule)
+    drawHoverInfo(ctx) {
+      const h = this.hover;
+      if (!h) return;
+      const iso = this.iso;
+      const dpr = window.devicePixelRatio || 1;
+      if (h.stack) {
+        const sk = h.stack;
+        const [x, y] = iso.p(sk.x + sk.w / 2, sk.y + sk.d / 2, sk.h * sk.n + 0.35);
+        this.chip(ctx, x, y, `📦 ${sk.name || itemName(sk.id)} × ${sk.qty} · en réserve (clic : inventaire)`, '#0f172a', '#ffffff');
+      } else if (h.furn && h.furn._contents && (h.furn._contents.length || /etagere|rack|armoire|casier/.test(h.furn.type))) {
+        const f = h.furn;
+        const st = FURN_STYLE[f.type] || { h: 1 };
+        const [x, y] = iso.p(f.x + f.w / 2, f.y + f.d / 2, (st.h || 1) + 0.35);
+        const items = f._contents.slice(0, 3).map(([id, q]) => `${itemName(id)} ×${q}`).join(' · ');
+        const label = f._contents.length ? `${f.label || 'Rangement'} : ${items}${f._contents.length > 3 ? ' …' : ''}` : `${f.label || f.type} · vide`;
+        this.chip(ctx, x, y, label, '#0f172a', '#ffffff');
+      } else if (h.room || h.parking) {
+        const act = this.zoneAction(h);
+        if (!act) return;
+        let pts, cxy;
+        if (h.room) { const r = h.room; pts = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]]; cxy = [r.x + r.w / 2, r.y + r.h / 2]; }
+        else { const pk = this.world.parking; pts = [[pk.x, pk.y], [pk.x + pk.w, pk.y], [pk.x + pk.w, pk.y + pk.h], [pk.x, pk.y + pk.h]]; cxy = [pk.x + pk.w / 2, pk.y + pk.h / 2]; }
+        ctx.save();
+        ctx.globalAlpha = 0.18 + Math.sin(this.time * 4) * 0.05;
+        poly(ctx, pts.map(([x, y]) => iso.p(x, y, 0.01)), '#38bdf8');
+        ctx.globalAlpha = 0.9;
+        poly(ctx, pts.map(([x, y]) => iso.p(x, y, 0.01)), null, '#0284c7', 2 * dpr);
+        ctx.restore();
+        const [x, y] = iso.p(cxy[0], cxy[1], 1.4);
+        this.chip(ctx, x, y, `${act.icon} ${act.label} — ${act.action}`, '#002E6D', '#ffffff');
+      } else if (h.veh) {
+        const veh = h.veh.veh;
+        const loaded = (veh.loadedItems || []).map(it => it.name || itemName(it.id));
+        const [x, y] = iso.p(h.veh.cx, h.veh.cy, 0.2);
+        const parts = [];
+        if (veh.logKit) parts.push('Kit : ' + veh.logKit.replace(/_/g, ' '));
+        if (loaded.length) parts.push('À bord : ' + loaded.slice(0, 3).join(', ') + (loaded.length > 3 ? ` +${loaded.length - 3}` : ''));
+        if (typeof veh.kilometrage === 'number') parts.push(`${Math.round(veh.kilometrage).toLocaleString('fr-FR')} km`);
+        if (parts.length) this.chip(ctx, x, y + 26 * dpr, parts.join(' · '), '#334155', '#ffffff');
+      }
+    }
+
+    // Menu associé à chaque zone de la base
+    zoneAction(hit) {
+      if (hit.parking) return { icon: '🚐', label: 'Parking', action: 'Ouvrir la flotte', module: 'flotte' };
+      const room = hit.room;
+      if (!room) return null;
+      const roles = [room.role].concat(room.altRoles || []);
+      const guard = this.directorOut && this.directorOut.guardLabel;
+      const MAP = {
+        TRAINING: { icon: '🎓', label: 'Salle de formation', action: 'Ouvrir les formations', module: 'formation' },
+        RADIO: guard ? { icon: '📻', label: 'PC radio', action: 'Ouvrir la garde SAMU', module: 'samu' } : { icon: '📻', label: 'PC radio', action: 'Ouvrir le planning', module: 'planning' },
+        OFFICE: { icon: '💼', label: 'Bureau', action: 'Ouvrir les finances', module: 'finances' },
+        LOUNGE: { icon: '🛋️', label: 'Foyer', action: 'Ouvrir les bénévoles', module: 'recrutement' },
+        STORAGE: { icon: '📦', label: 'Réserve', action: 'Ouvrir le stock', module: 'logistique', opts: { tab: 'stock' } },
+        GARAGE: { icon: '🚐', label: 'Garage', action: 'Ouvrir la flotte', module: 'flotte' },
+        LOCKER: { icon: '🦺', label: 'Vestiaires', action: 'Ouvrir la logistique', module: 'logistique' },
+        DORM: { icon: '🛏️', label: 'Salle de garde', action: 'Ouvrir la garde SAMU', module: 'samu' }
+      };
+      const role = roles.find(r => MAP[r]);
+      const base = role ? MAP[role] : { icon: '✏️', label: String(room.name || 'Pièce').split('\n')[0], action: 'Aménager les locaux', module: 'locaux' };
+      return { ...base, label: room.type && room.type !== 'libre' ? base.label : (String(room.name || base.label).split('\n')[0] || base.label) };
+    }
+
+    // Ouverture d'un module du jeu depuis la scène
+    openModule(key, opts = {}) {
+      const game = window.game;
+      if (!game || typeof game.openModule !== 'function') return;
+      try {
+        if (key === 'logistique' && window.ProtecLogistique) {
+          const st = Director.stationOf(game, this.locaux);
+          if (st) window.ProtecLogistique.selectedStationId = st.id;
+          if (opts.tab) window.ProtecLogistique.activeTab = opts.tab;
+        }
+        if (key === 'planning' && typeof game.setPlanningTab === 'function') { game.setPlanningTab('calendar'); return; }
+        game.openModule(key);
+      } catch (e) { console.warn('[ProtecBaseLive] module', key, e); }
+    }
+
     vehicleById(id) {
       if (!id || !this.world) return null;
       return this.world.vehicles.find(v => v.id === id && v.present) || null;
@@ -1713,7 +2277,7 @@
       const pois = this.world.pois;
       const free = (p) => opts.allowTaken || !p.occupant || p.occupant === agent.id;
       for (const kind of kinds) {
-        let cands = pois.filter(p => p.kind === kind && free(p) && (!opts.vehicleId || p.vehicleId === opts.vehicleId));
+        let cands = pois.filter(p => p.kind === kind && free(p) && (!opts.vehicleId || p.vehicleId === opts.vehicleId) && (!opts.mealOnly || p.mealTable));
         if (opts.vehicleId === undefined) cands = cands.filter(p => !p.vehicleId || p.kind === 'load' || p.kind === 'bagcheck');
         if (opts.keep && agent.poi && agent.poi.kind === kind) return agent.poi;
         if (!cands.length) continue;
@@ -1730,6 +2294,11 @@
     }
 
     choose(agent, cands, opts) {
+      if (opts.preferFront) {
+        // Côté caméra d'abord (le rassemblement doit rester visible)
+        const sorted = cands.slice().sort((a, b) => (b.x + b.y) - (a.x + a.y));
+        return sorted[Math.floor(agent.rng() * Math.min(2, sorted.length))];
+      }
       if (opts.near) {
         cands = cands.slice().sort((a, b) => dist(a.x, a.y, opts.near[0], opts.near[1]) - dist(b.x, b.y, opts.near[0], opts.near[1]));
         return cands[Math.floor(agent.rng() * Math.min(2, cands.length))];
@@ -1917,7 +2486,8 @@
       if (!document.hidden) {
         try {
           this.step(this.paused ? 0 : dt);
-          this.render();
+          const covered = this.slot === 'base' && (() => { const m = document.getElementById('main-modal'); return m && !m.classList.contains('hidden'); })();
+          if (!covered) this.render();
         } catch (e) {
           if (!this._errLogged) { console.error('[ProtecBaseLive]', e); this._errLogged = true; }
         }
@@ -1939,6 +2509,7 @@
         this.runDirector(game);
       }
       this.updateVehicles(dt);
+      this.updateDoors(dt);
       this.agents.forEach(a => a.update(dt));
       const before = this.agents.length;
       this.agents = this.agents.filter(a => {
@@ -1959,7 +2530,8 @@
       const proj = corners.map(([x, y]) => [(x - y), (x + y) * 0.5]);
       const minSX = Math.min(...proj.map(p => p[0])), maxSX = Math.max(...proj.map(p => p[0]));
       const minSY = Math.min(...proj.map(p => p[1])) - 2.6 * HZ, maxSY = Math.max(...proj.map(p => p[1]));
-      const k = Math.min((w * 0.92) / (maxSX - minSX), (h * 0.84) / (maxSY - minSY));
+      let k = Math.min((w * 0.92) / (maxSX - minSX), (h * 0.84) / (maxSY - minSY));
+      if (h > w * 1.15) k *= 1.3; // écran vertical (mobile) : on rapproche la caméra, le joueur peut dézoomer
       this.iso.k = clamp(k, 8, 200);
       this.iso.ox = w / 2 - ((minSX + maxSX) / 2) * this.iso.k;
       this.iso.oy = h / 2 - ((minSY + maxSY) / 2) * this.iso.k + h * 0.02;
@@ -2135,6 +2707,7 @@
       const items = [];
       W.wallPieces.forEach(p => items.push({ kind: 'wall', x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1, ref: p }));
       W.furniture.forEach(f => items.push({ kind: 'furn', x0: f.x, y0: f.y, x1: f.x + f.w, y1: f.y + f.d, ref: f }));
+      (W.floorStacks || []).forEach(sk => items.push({ kind: 'stock', x0: sk.x, y0: sk.y, x1: sk.x + sk.w, y1: sk.y + sk.d, ref: sk }));
       // Tri topologique : A devant B si séparé sur un axe avec A du côté +x ou +y
       const n = items.length;
       const behind = items.map(() => []);
@@ -2195,6 +2768,7 @@
 
       if (this.staticSig !== this.worldSig || !this.staticItems) this.buildStaticDrawables();
 
+      this.drawAwayVehicles(ctx);
       // Ombres des avatars (au sol, sous tout le reste)
       this.agents.forEach(a => {
         if (a.pose === 'sleep') return;
@@ -2222,23 +2796,49 @@
           const si = statics.findIndex(s => s.kind === 'furn' && s.ref.id === item.agent.seatOn);
           if (si > idx) idx = si;
         }
-        if (!buckets.has(idx)) buckets.set(idx, []);
-        buckets.get(idx).push(item);
+        item.idx = idx;
+        pending.push(item);
       };
+      const pending = [];
       // Véhicules
       this.world.vehicles.forEach(v => {
         const vs = this.vehStates.get(v.id) || { anim: v.present ? 'parked' : 'away', offset: 0 };
         if (vs.anim === 'away') return;
         const [dx, dy] = this.vehicleOffset(v, vs.offset || 0);
         const b = v.box;
-        insert({ veh: v, vs, dx, dy, depth: (b.x1 + dx) + (b.y1 + dy) }, b.x0 + dx, b.y0 + dy, b.x1 + dx, b.y1 + dy);
+        insert({ veh: v, vs, dx, dy, depth: (b.x1 + dx) + (b.y1 + dy), box: { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy } }, b.x0 + dx, b.y0 + dy, b.x1 + dx, b.y1 + dy);
       });
       this.agents.forEach(a => insert({ agent: a, depth: a.x + a.y }, a.x, a.y, a.x, a.y));
+      // Avatars proches d'un véhicule : même groupe de dessin que lui (ordre relatif garanti)
+      const vehItems = pending.filter(it => it.veh);
+      pending.forEach(it => {
+        if (!it.agent) return;
+        vehItems.forEach(vi => {
+          const b = vi.box;
+          if (it.agent.x > b.x0 - 1.5 && it.agent.x < b.x1 + 1.5 && it.agent.y > b.y0 - 1.5 && it.agent.y < b.y1 + 1.5) {
+            const m = Math.max(it.idx, vi.idx);
+            it.idx = m; vi.idx = m;
+          }
+        });
+      });
+      pending.forEach(it => { if (!buckets.has(it.idx)) buckets.set(it.idx, []); buckets.get(it.idx).push(it); });
 
       const drawBucket = (idx) => {
         const list = buckets.get(idx);
         if (!list) return;
+        // Avatar devant un véhicule s'il le dépasse côté +x ou +y ; sinon ordre de profondeur
+        const before = (p, q) => {
+          if (p.agent && q.veh) { const b = q.box; return !(p.agent.x >= b.x1 || p.agent.y >= b.y1); }
+          if (p.veh && q.agent) { const b = p.box; return (q.agent.x >= b.x1 || q.agent.y >= b.y1); }
+          return p.depth < q.depth;
+        };
         list.sort((p, q) => p.depth - q.depth);
+        for (let i = 1; i < list.length; i++) {
+          const cur = list[i];
+          let j = i - 1;
+          while (j >= 0 && before(cur, list[j]) && !before(list[j], cur)) { list[j + 1] = list[j]; j--; }
+          list[j + 1] = cur;
+        }
         list.forEach(it => {
           if (it.agent) this.drawAgent(ctx, it.agent);
           else this.drawVehicle(ctx, it.veh, it.vs, it.dx, it.dy);
@@ -2247,6 +2847,7 @@
       drawBucket(-1);
       statics.forEach((s, i) => {
         if (s.kind === 'wall') this.drawWall(ctx, s.ref);
+        else if (s.kind === 'stock') this.drawStack(ctx, s.ref);
         else this.drawFurniture(ctx, s.ref);
         drawBucket(i);
       });
@@ -2272,6 +2873,8 @@
       // Overlays : étiquettes de pièces, bulles, compteurs d'équipage, HUD
       if (this.showLabels) this.drawRoomLabels(ctx);
       this.agents.forEach(a => this.drawAgentOverlay(ctx, a));
+      this.drawVehicleLabels(ctx);
+      this.drawHoverInfo(ctx);
       this.drawCrewCounters(ctx);
       this.drawHUD(ctx, dpr);
       this.updateCursor();
@@ -2298,48 +2901,124 @@
       }
     }
 
+    // Murs : fond à 2,50 m, cloisons et façades avant coupées à 1,10 m (ou tout à 2,50 m via le bouton Murs)
     drawWall(ctx, p) {
       const iso = this.iso;
       const night = this.isNight;
-      const H = p.tall || this.wallsUp ? 2.5 : (p.outer ? 0.45 : 1.0);
+      const H = (p.tall || this.wallsUp) ? WALL_H : WALL_CUT;
       const base = night ? '#334155' : (p.outer ? '#e7e5e4' : '#f5f5f4');
-      const capCol = night ? '#475569' : (p.outer ? '#b45309' : '#d6d3d1');
-      if (p.door) {
-        if (H > 2.2) drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 2.15, H, base, { top: capCol });
-        // Montants de porte
-        const vertical = (p.y1 - p.y0) > (p.x1 - p.x0);
-        const fc = p.door === 'garage_shutter' ? '#facc15' : (night ? '#64748b' : '#78716c');
-        const fh = Math.min(H, 2.15);
-        if (vertical) {
-          drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y0 + 0.05, 0, fh, fc, { edge: null });
-          drawBox(ctx, iso, p.x0, p.y1 - 0.05, p.x1, p.y1, 0, fh, fc, { edge: null });
-        } else {
-          drawBox(ctx, iso, p.x0, p.y0, p.x0 + 0.05, p.y1, 0, fh, fc, { edge: null });
-          drawBox(ctx, iso, p.x1 - 0.05, p.y0, p.x1, p.y1, 0, fh, fc, { edge: null });
+      const capCol = night ? '#475569' : (p.tall || this.wallsUp ? (p.outer ? '#b45309' : '#a8a29e') : '#57534e');
+      const cut = { top: capCol };
+      if (p.door) { this.drawDoor(ctx, p, H, base, capCol); return; }
+      if (p.glass) {
+        ctx.globalAlpha = 0.5;
+        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, H, '#7dd3fc', { top: '#bae6fd' });
+        ctx.globalAlpha = 1;
+        return;
+      }
+      if (p.windowPane) {
+        // Allège pleine jusqu'à 0,90 m, vitrage au-dessus (jusqu'à 2,10 m), linteau si mur pleine hauteur
+        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, SILL_H, base, { top: '#d6d3d1' });
+        const gTop = Math.min(H, 2.1);
+        ctx.globalAlpha = 0.55;
+        drawBox(ctx, iso, p.x0 + 0.03, p.y0 + 0.03, p.x1 - 0.03, p.y1 - 0.03, SILL_H, gTop, night ? '#fde68a' : '#7dd3fc', { top: '#e0f2fe', edge: 'rgba(14,116,144,0.6)' });
+        ctx.globalAlpha = 1;
+        if (H > 2.1) drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 2.1, H, base, cut);
+        else { const [ax, ay] = iso.p(p.x0, p.y1, H), [bx, by] = iso.p(p.x1, p.y1, H); ctx.strokeStyle = capCol; ctx.lineWidth = Math.max(1, iso.k * 0.03); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
+        return;
+      }
+      drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, H, base, cut);
+    }
+
+    // Ouvrants : bâti, battant(s) qui pivotent à l'approche d'un avatar, rideau métallique qui remonte
+    drawDoor(ctx, p, H, base, capCol) {
+      const iso = this.iso;
+      const night = this.isNight;
+      const d = p.doorRef || {};
+      const vertical = p.vertical !== undefined ? p.vertical : (p.y1 - p.y0) > (p.x1 - p.x0);
+      const st = this.doorState && this.doorState.get(this.doorKey(p));
+      const open = st ? st.open : 0;
+      const frameH = Math.min(H, DOOR_H + 0.06);
+      const fc = night ? '#64748b' : '#57534e';
+      // Linteau (mur pleine hauteur)
+      if (H > DOOR_H + 0.06) drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, DOOR_H + 0.06, H, base, { top: capCol });
+      // Montants
+      const ft = 0.06;
+      if (vertical) {
+        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y0 + ft, 0, frameH, fc, { edge: null });
+        drawBox(ctx, iso, p.x0, p.y1 - ft, p.x1, p.y1, 0, frameH, fc, { edge: null });
+      } else {
+        drawBox(ctx, iso, p.x0, p.y0, p.x0 + ft, p.y1, 0, frameH, fc, { edge: null });
+        drawBox(ctx, iso, p.x1 - ft, p.y0, p.x1, p.y1, 0, frameH, fc, { edge: null });
+      }
+      const cx = (p.x0 + p.x1) / 2, cy = (p.y0 + p.y1) / 2;
+      const a0 = vertical ? p.y0 + ft : p.x0 + ft, a1 = vertical ? p.y1 - ft : p.x1 - ft;
+      const leafH = Math.min(H, DOOR_H);
+      if (p.door === 'garage_shutter') {
+        // Rideau métallique : remonte avec l'ouverture
+        const zb = leafH * open;
+        if (zb < leafH - 0.02) {
+          const P = (u, z) => vertical ? iso.p(cx, u, z) : iso.p(u, cy, z);
+          poly(ctx, [P(a0, zb), P(a1, zb), P(a1, leafH), P(a0, leafH)], night ? '#475569' : '#cbd5e1', 'rgba(51,65,85,0.7)', 0.8);
+          ctx.strokeStyle = 'rgba(71,85,105,0.55)'; ctx.lineWidth = Math.max(0.6, iso.k * 0.012);
+          for (let z = zb + 0.12; z < leafH; z += 0.14) { const [x1, y1] = P(a0, z), [x2, y2] = P(a1, z); ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
         }
         return;
       }
-      if (p.glass) {
-        ctx.globalAlpha = 0.55;
-        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, Math.max(H, 1.0), '#7dd3fc', { top: '#bae6fd' });
-        ctx.globalAlpha = 1;
-        return;
+      // Sens d'ouverture : vers l'intérieur du bâtiment pour une porte extérieure, sinon vers +x / +y
+      const W = this.world;
+      const n = 0.5;
+      const sideA = vertical ? W.roomAt(cx + n, cy) : W.roomAt(cx, cy + n);
+      const sideB = vertical ? W.roomAt(cx - n, cy) : W.roomAt(cx, cy - n);
+      const swing = sideA ? 1 : (sideB ? -1 : 1);
+      const ang = open * 1.48;
+      const leafCol = night ? '#94a3b8' : '#f1f5f9';
+      const drawLeaf = (hingeU, dirU, len) => {
+        const ux = vertical ? 0 : dirU, uy = vertical ? dirU : 0;
+        const nx = vertical ? swing : 0, ny = vertical ? 0 : swing;
+        const hx = vertical ? cx : hingeU, hy = vertical ? hingeU : cy;
+        const ex = hx + len * (Math.cos(ang) * ux + Math.sin(ang) * nx);
+        const ey = hy + len * (Math.cos(ang) * uy + Math.sin(ang) * ny);
+        const pts = [iso.p(hx, hy, 0.02), iso.p(ex, ey, 0.02), iso.p(ex, ey, leafH), iso.p(hx, hy, leafH)];
+        poly(ctx, pts, leafCol, 'rgba(51,65,85,0.75)', Math.max(0.8, iso.k * 0.015));
+        // Poignée
+        const hxp = hx + (len - 0.08) * (Math.cos(ang) * ux + Math.sin(ang) * nx), hyp = hy + (len - 0.08) * (Math.cos(ang) * uy + Math.sin(ang) * ny);
+        if (leafH > 1.0) { const [qx, qy] = iso.p(hxp, hyp, Math.min(1.05, leafH - 0.05)); ctx.fillStyle = '#334155'; ctx.fillRect(qx - iso.k * 0.03, qy - iso.k * 0.02, iso.k * 0.06, iso.k * 0.04); }
+      };
+      if (p.door === 'double_door') {
+        const half = (a1 - a0) / 2;
+        drawLeaf(a0, 1, half);
+        drawLeaf(a1, -1, half);
+      } else {
+        drawLeaf(a0, 1, a1 - a0);
       }
-      if (p.windowPane && H > 1.5) {
-        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, 0.95, base, { top: capCol });
-        ctx.globalAlpha = 0.6;
-        drawBox(ctx, iso, p.x0 + 0.02, p.y0 + 0.02, p.x1 - 0.02, p.y1 - 0.02, 0.95, 2.05, night ? '#fde68a' : '#7dd3fc', { top: '#e0f2fe', edge: null });
-        ctx.globalAlpha = 1;
-        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 2.05, H, base, { top: capCol });
-        return;
-      }
-      drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, H, base, { top: capCol });
-      if (p.windowPane) {
-        // Mur bas avec fenêtre : simple liseré cyan
-        const [ax, ay] = iso.p(p.x0, p.y1, H), [bx, by] = iso.p(p.x1, p.y1, H);
-        ctx.strokeStyle = '#38bdf8'; ctx.lineWidth = Math.max(1.5, iso.k * 0.05);
-        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
-      }
+    }
+
+    doorKey(p) { return (p.doorRef && p.doorRef.id) || `${p.x0.toFixed(2)}_${p.y0.toFixed(2)}`; }
+
+    // Ouverture automatique des portes à l'approche des avatars / véhicules
+    updateDoors(dt) {
+      if (!this.world) return;
+      if (!this.doorState) this.doorState = new Map();
+      const vehMoving = [...this.vehStates.values()].some(v => v.anim === 'leaving' || v.anim === 'arriving');
+      this.world.wallPieces.forEach(p => {
+        if (!p.door) return;
+        const key = this.doorKey(p);
+        let st = this.doorState.get(key);
+        if (!st) { st = { open: 0, hold: 0 }; this.doorState.set(key, st); }
+        const cx = (p.x0 + p.x1) / 2, cy = (p.y0 + p.y1) / 2;
+        let near = false;
+        for (const a of this.agents) {
+          if (a.removed) continue;
+          const dd = Math.hypot(a.x - cx, a.y - cy);
+          if (dd < 1.15 && (a.state === AgentState.MOVING || dd < 0.6)) { near = true; break; }
+        }
+        if (p.door === 'garage_shutter' && vehMoving) near = true;
+        if (near) st.hold = 1.4; else st.hold = Math.max(0, st.hold - dt);
+        const target = st.hold > 0 ? 1 : 0;
+        const speed = p.door === 'garage_shutter' ? 0.9 : 3.2;
+        st.open += Math.sign(target - st.open) * Math.min(Math.abs(target - st.open), dt * speed);
+      });
     }
 
     drawFurniture(ctx, f) {
@@ -2405,21 +3084,12 @@
           const posts = [[x0, y0], [x1 - 0.05, y0], [x0, y1 - 0.05], [x1 - 0.05, y1 - 0.05]];
           const levels = [0.08, 0.6, 1.15, 1.7].filter(z => z < H);
           const rng = mulberry32(hashStr(f.id));
-          levels.forEach((z, li) => {
+          const lv = f.type === 'rack_palettes_lourd' ? [0.1, 0.85, 1.6] : [0.08, 0.6, 1.15, 1.7];
+          void levels; void rng;
+          // Étagère : le matériel réellement rangé (storedInventory) est posé sur les niveaux
+          lv.filter(z => z < H).forEach(z => {
             drawBox(ctx, iso, x0, y0, x1, y1, z, z + 0.04, col, { edge: null });
-            // Caisses / lots de secours colorés
-            const longIsW = f.w >= f.d;
-            const L = longIsW ? f.w : f.d;
-            const n = Math.max(1, Math.floor(L / 0.45));
-            for (let i = 0; i < n; i++) {
-              if (rng() < 0.22) continue;
-              const u0 = i / n + 0.02, u1 = (i + 1) / n - 0.02;
-              const bc = ['#ef4444', '#f97316', '#3b82f6', '#a3a3a3', '#16a34a'][Math.floor(rng() * 5)];
-              const bh = 0.28 + rng() * 0.16;
-              if (longIsW) drawBox(ctx, iso, x0 + u0 * f.w, y0 + 0.05, x0 + u1 * f.w, y1 - 0.05, z + 0.04, z + 0.04 + bh, bc);
-              else drawBox(ctx, iso, x0 + 0.05, y0 + u0 * f.d, x1 - 0.05, y0 + u1 * f.d, z + 0.04, z + 0.04 + bh, bc);
-            }
-            void li;
+            (f._items || []).filter(it => Math.abs(it.z - (z + 0.04)) < 0.01).forEach(it => drawItemModel(ctx, iso, it.m, it.x, it.y, it.z, it.w, it.d, it.h));
           });
           posts.forEach(([px, py]) => drawBox(ctx, iso, px, py, px + 0.05, py + 0.05, 0, H, shade(col, -0.2), { edge: null }));
           break;
@@ -2513,6 +3183,14 @@
       }
     }
 
+    drawStack(ctx, sk) {
+      for (let i = 0; i < sk.n; i++) drawItemModel(ctx, this.iso, sk.m, sk.x, sk.y, i * sk.h, sk.w, sk.d, sk.h * 0.98);
+      if (this.hover && this.hover.stack && this.hover.stack.id === sk.id) {
+        const iso = this.iso;
+        poly(ctx, [iso.p(sk.x, sk.y), iso.p(sk.x + sk.w, sk.y), iso.p(sk.x + sk.w, sk.y + sk.d), iso.p(sk.x, sk.y + sk.d)], null, '#38bdf8', Math.max(2, iso.k * 0.04));
+      }
+    }
+
     drawMannequinFlat(ctx, f) {
       const iso = this.iso;
       const ped = f.type === 'mannequin_pediatrique';
@@ -2533,8 +3211,8 @@
     }
 
     drawVehicle(ctx, v, vs, dx, dy = 0) {
-      if (this.drawVehicleSprite(ctx, v, vs, dx, dy)) return;
-      if (this.drawVehiclePhoto(ctx, v, vs, dx, dy)) return;
+      if (this.drawVehiclePhoto(ctx, v, vs, dx, dy)) return;   // illustrations réalistes du jeu
+      if (this.drawVehicleSprite(ctx, v, vs, dx, dy)) return;  // modèles générés (VL…)
       const iso = this.iso;
       const b = v.box;
       const x0 = b.x0 + dx, x1 = b.x1 + dx, y0 = b.y0 + dy, y1 = b.y1 + dy;
@@ -2619,7 +3297,7 @@
       // Nom du véhicule
       if (this.showLabels || (this.hover && this.hover.veh === v)) {
         const [tx, ty] = iso.p((x0 + x1) / 2, (y0 + y1) / 2, H + 0.6);
-        this.chip(ctx, tx, ty, veh.name || type || 'Véhicule', '#0f172a', '#ffffff');
+        this.queueVehLabel(v, tx, ty);
       }
     }
 
@@ -2658,7 +3336,7 @@
       }
       if (this.showLabels || (this.hover && this.hover.veh === v)) {
         const [tx, ty] = iso.p(v.cx + dx, v.cy + dy, meta.H * si.s + 0.55);
-        this.chip(ctx, tx, ty, v.veh.name || v.veh.type || 'Véhicule', '#0f172a', '#ffffff');
+        this.queueVehLabel(v, tx, ty);
       }
       return true;
     }
@@ -2667,11 +3345,12 @@
     drawVehiclePhoto(ctx, v, vs, dx, dy) {
       const iso = this.iso;
       const W = this.world;
-      // L'illustration montre le nez en bas à droite : cap +x (place horizontale, rue à l'est) ; miroir pour cap +y (rue au sud)
-      let mirror;
-      if (v.horizontal && W.roadSide === 'E') mirror = false;
-      else if (!v.horizontal && W.roadSide === 'S') mirror = true;
-      else return false;
+      // L'illustration montre l'avant en bas à droite : place horizontale = telle quelle, place verticale = miroir.
+      // L'avant est donc toujours tourné vers la caméra (si la rue est derrière, le véhicule sort en marche arrière).
+      const mirror = !v.horizontal;
+      void W;
+      // Image miroir = textes à l'envers : sur une place verticale on préfère le modèle généré (textes lisibles)
+      if (mirror && v.sprite && SPRITES.manifest) return false;
       const e = getIsoVehicleImage(v.veh);
       if (!e) return false;
       const b = v.box;
@@ -2693,7 +3372,7 @@
       if (mirror) ctx.scale(-1, 1);
       if (this.hover && this.hover.veh === v) { ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = iso.k * 0.6; }
       if (this.isNight) ctx.filter = 'brightness(0.72) saturate(0.85)';
-      ctx.drawImage(e.img, tr.x, tr.y, tr.w, tr.h, -dw / 2, 0, dw, dh);
+      ctx.drawImage(e.canvas || e.img, tr.x, tr.y, tr.w, tr.h, -dw / 2, 0, dw, dh);
       ctx.restore();
       // Gyrophares en alerte / en mouvement
       const moving = vs.anim === 'leaving' || vs.anim === 'waitingCrew' || vs.anim === 'arriving';
@@ -2712,7 +3391,7 @@
         ctx.restore();
       }
       if (this.showLabels || (this.hover && this.hover.veh === v)) {
-        this.chip(ctx, cx, bottom - dh - 4 * (window.devicePixelRatio || 1), v.veh.name || v.veh.type || 'Véhicule', '#0f172a', '#ffffff');
+        this.queueVehLabel(v, cx, bottom - dh * 0.9);
       }
       return true;
     }
@@ -2722,12 +3401,18 @@
     drawAgent(ctx, a) {
       const iso = this.iso;
       if (a.pose === 'sleep' && a.poi && a.poi.bed) { this.drawSleeper(ctx, a); return; }
-      const seated = a.state !== AgentState.MOVING && (a.pose === 'sit' || a.pose === 'desk');
+      const seated = a.state !== AgentState.MOVING && (a.pose === 'sit' || a.pose === 'desk' || a.pose === 'eat_sit');
       if (seated && !a.seatOn) {
         // Tabouret / chaise d'appoint
         const cs = 0.17, bx = a.x - Math.cos(a.dir) * 0.05, by = a.y - Math.sin(a.dir) * 0.05;
         drawBox(ctx, iso, bx - cs, by - cs, bx + cs, by + cs, 0.4, 0.45, '#0369a1');
         drawBox(ctx, iso, bx - 0.02, by - 0.02, bx + 0.02, by + 0.02, 0, 0.4, '#334155', { edge: null });
+      }
+      if (a.pose === 'eat_sit' && a.state !== AgentState.MOVING) {
+        // Assiette et verre posés sur la table devant le convive
+        const px = a.x + Math.cos(a.dir) * 0.42, py = a.y + Math.sin(a.dir) * 0.42;
+        drawBox(ctx, iso, px - 0.12, py - 0.12, px + 0.12, py + 0.12, 0.745, 0.76, '#ffffff', { edge: 'rgba(15,23,42,0.25)' });
+        drawBox(ctx, iso, px + 0.16, py - 0.03, px + 0.21, py + 0.02, 0.745, 0.86, '#bae6fd', { edge: null });
       }
       const [sx, sy] = iso.p(a.x, a.y, 0);
       const u = iso.k * HZ / 40;           // 40 unités sprite = 1 m
@@ -2735,6 +3420,8 @@
       const sdx = cosd - sind, sdy = (cosd + sind) / 2;
       const front = sdy >= -0.05;
       const flip = sdx < 0;
+      const sl = Math.hypot(sdx, sdy) || 1;
+      a._sdir = [Math.abs(sdx) / sl, sdy / sl];
       ctx.save();
       ctx.globalAlpha = a.alpha;
       ctx.translate(sx, sy);
@@ -2775,96 +3462,143 @@
       ctx.globalAlpha = 1;
     }
 
-    // Avatar style illustration isométrique Protection Civile (combinaison marine, empiècement orange, bandes blanches)
+    // Avatar style illustration isométrique Protection Civile
+    // Tenue : veste et pantalon bleu marine, empiècement orange épaules/poitrine, bande blanche de séparation,
+    // liseré orange sur la jambe jusqu'en bas (sous la bande blanche basse), pantalon rentré dans des rangers montantes.
     drawPersonSprite(ctx, a, front) {
       const t = a.t;
-      const pose = a.state === AgentState.MOVING ? 'walk' : a.pose;
+      const moving = a.state === AgentState.MOVING && a.path;
+      const pose = moving ? 'walk' : a.pose;
       const civil = a.outfit === 'civil';
       const gear = a.gear || {};
-      const NAVY = '#1d3c8c', NAVY_D = '#152c69', ORANGE = '#f7941d', ORANGE_D = '#e07a0c', WHITE = '#eef2f7';
+      const NAVY = '#1d3c8c', NAVY_D = '#152c69', ORANGE = '#f7941d', ORANGE_D = '#e07a0c', WHITE = '#eef2f7', BOOT = '#14171f', BOOT_L = '#2a2f3a';
       const pal = civil
-        ? { top: a.tee, topD: shade(a.tee, -0.22), pants: a.jeans, pantsD: shade(a.jeans, -0.25), shoe: a.shoe, sleeveShort: a.shortSleeve }
-        : { top: NAVY, topD: NAVY_D, pants: NAVY, pantsD: NAVY_D, shoe: '#1f2933', sleeveShort: false };
+        ? { top: a.tee, topD: shade(a.tee, -0.22), pants: a.jeans, pantsD: shade(a.jeans, -0.25), sleeveShort: a.shortSleeve }
+        : { top: NAVY, topD: NAVY_D, pants: NAVY, pantsD: NAVY_D, sleeveShort: false };
+
+      // --- Mélange doux entre poses (assis <-> debout, accroupi…)
+      const poseHip = (p) => (p === 'sit' || p === 'desk' || p === 'eat_sit') ? 19 : ((p === 'cpr' || p === 'kneel') ? 14 : 34);
+      if (a._lastPose !== pose) { a._prevPose = a._lastPose || pose; a._poseAt = t; a._lastPose = pose; }
+      const bl = Math.min(1, Math.max(0, (t - (a._poseAt || 0)) / 0.32));
+      const ease = bl * bl * (3 - 2 * bl);
+      let hip = lerp(poseHip(a._prevPose || pose), poseHip(pose), ease);
 
       const walk = pose === 'walk';
+      const run = walk && a.speed > 1.9;
       const ph = a.walkPhase;
-      const swing = walk ? Math.sin(ph) : 0;
-      const sitting = pose === 'sit' || pose === 'desk';
+      const sw = walk ? Math.sin(ph) * Math.min(1, a.curSpeed / 0.6 || 1) : 0;
+      const dirX = a._sdir ? a._sdir[0] : 1, dirY = a._sdir ? a._sdir[1] : 0.3;
+      let bob = walk ? (1 - Math.abs(Math.cos(ph))) * (run ? 2.6 : 1.5) : Math.sin(t * 1.7 + a.hs % 7) * 0.35;
+      const sitting = pose === 'sit' || pose === 'desk' || pose === 'eat_sit';
       const kneeling = pose === 'cpr' || pose === 'kneel';
-      let hip = 34;
-      let bob = walk ? Math.abs(Math.cos(ph)) * 1.4 : Math.sin(t * 1.8) * 0.35;
-      if (sitting) { hip = 19; bob = 0; }
-      if (kneeling) { hip = 14; bob = 0; }
+      if (sitting || kneeling) bob = 0;
       if (pose === 'cpr') bob = -Math.max(0, Math.sin(t * 11.5)) * 2.4;
+      const lean = walk ? (run ? 2.4 : 1.0) : (pose === 'cpr' ? 3 : 0);  // inclinaison vers l'avant (décalage en x)
       const hipY = -hip - bob;
       const torsoH = 27;
       const topY = hipY - torsoH + (kneeling ? 3 : 0);
+      const leanX = lean * dirX, leanY = lean * Math.max(0, dirY) * 0.4;
 
-      // --- Sac de secours rouge (vu de face : dépasse derrière les épaules)
+      // --- Sac de secours (vu de face : dépasse derrière les épaules)
       if (gear.backpack && front) {
         ctx.fillStyle = '#b91c1c';
-        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-12, topY + 1, 24, 21, 4); else ctx.rect(-12, topY + 1, 24, 21); ctx.fill();
+        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(-12 + leanX, topY + 1, 24, 21, 4); else ctx.rect(-12 + leanX, topY + 1, 24, 21); ctx.fill();
       }
-      // --- Queue de cheval (vue de face : derrière la tête)
       const headCY = topY - 8.5;
       if (front && a.hairStyle === 1) {
         ctx.fillStyle = a.hair;
-        ctx.beginPath(); ctx.ellipse(-5.5, headCY + 3, 2.6, 6.5, 0.35, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(-5.5 + leanX * 1.3, headCY + 3 + Math.sin(t * 3) * 0.3, 2.6, 6.5, 0.35, 0, Math.PI * 2); ctx.fill();
       }
 
-      // --- Jambes
-      const drawLeg = (cx, y0, y1, lift, dark) => {
-        const w = 6.6;
+      // --- Jambes : hanche -> cheville, rangers montantes (pantalon rentré dedans)
+      const BOOT_H = civil ? 3.4 : 10;   // hauteur de tige (≈ 25 cm)
+      const drawLeg = (hx, fx, fy, dark, liftToe) => {
+        const top = hipY + 1;
+        const ankleY = fy - BOOT_H;
+        const wT = 6.6, wB = 5.6;
+        // Pantalon (trapèze hanche -> haut de tige)
         ctx.fillStyle = dark ? pal.pantsD : pal.pants;
-        ctx.fillRect(cx - w / 2, y0, w, (y1 - lift) - y0 - 2.5);
+        ctx.beginPath();
+        ctx.moveTo(hx - wT / 2, top); ctx.lineTo(hx + wT / 2, top);
+        ctx.lineTo(fx + wB / 2, ankleY + 0.8); ctx.lineTo(fx - wB / 2, ankleY + 0.8);
+        ctx.closePath(); ctx.fill();
         if (!civil) {
-          // Bande rétro-réfléchissante basse + liseré orange latéral
-          const len = (y1 - lift) - y0;
-          if (len > 14) {
-            ctx.fillStyle = WHITE; ctx.fillRect(cx - w / 2, y1 - lift - 10, w, 2.4);
-            ctx.fillStyle = ORANGE; ctx.fillRect(cx + (dark ? w / 2 - 1.1 : -w / 2), y0 + 2, 1.1, len - 13);
+          const len = ankleY - top;
+          // Liseré orange latéral sur toute la hauteur…
+          const side = dark ? 1 : -1;
+          ctx.strokeStyle = dark ? ORANGE_D : ORANGE; ctx.lineWidth = 1.1;
+          ctx.beginPath(); ctx.moveTo(hx + side * (wT / 2 - 0.6), top + 2); ctx.lineTo(fx + side * (wB / 2 - 0.6), ankleY + 0.5); ctx.stroke();
+          // …recouvert par la bande blanche rétro-réfléchissante basse
+          if (len > 12) {
+            const bY = ankleY - 6.5;
+            const k = (bY - top) / Math.max(1, len);
+            const bx = lerp(hx, fx, k), bw = lerp(wT, wB, k);
+            ctx.fillStyle = WHITE; ctx.fillRect(bx - bw / 2 - 0.1, bY, bw + 0.2, 2.4);
           }
         }
-        // Chaussure / ranger
-        ctx.fillStyle = pal.shoe;
-        ctx.beginPath(); if (ctx.roundRect) ctx.roundRect(cx - w / 2 - 0.6, y1 - lift - 3.2, w + 2.4, 3.6, 1.4); else ctx.rect(cx - w / 2, y1 - lift - 3.2, w + 2, 3.6); ctx.fill();
-        if (civil) { ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(cx - w / 2 - 0.6, y1 - lift - 0.6, w + 2.4, 0.9); }
+        // Ranger montante / basket
+        ctx.fillStyle = civil ? a.shoe : BOOT;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(fx - wB / 2 - 0.4, ankleY, wB + 0.8, BOOT_H, [1.2, 1.2, 0.6, 0.6]); else ctx.rect(fx - wB / 2 - 0.4, ankleY, wB + 0.8, BOOT_H);
+        ctx.fill();
+        // Avant-pied (pointe dans le sens du regard)
+        const toe = front ? 1.6 : 0.6;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(fx - wB / 2 - 0.6, fy - 3.4 - liftToe, wB + 1.6 + toe, 3.6, 1.6); else ctx.rect(fx - wB / 2 - 0.6, fy - 3.4, wB + 2, 3.6);
+        ctx.fill();
+        if (!civil) {
+          ctx.fillStyle = BOOT_L; ctx.fillRect(fx - wB / 2 - 0.4, ankleY, wB + 0.8, 1.1);      // col rembourré
+          ctx.fillStyle = '#0a0c11'; ctx.fillRect(fx - wB / 2 - 0.6, fy - 0.9 - liftToe, wB + 1.6 + toe, 0.9); // semelle crantée
+          ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 0.5;
+          for (let yy = ankleY + 2.5; yy < fy - 3.5; yy += 1.8) { ctx.beginPath(); ctx.moveTo(fx - 1.2, yy); ctx.lineTo(fx + 1.2, yy); ctx.stroke(); } // lacets
+        } else {
+          ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.fillRect(fx - wB / 2 - 0.6, fy - 0.8, wB + 1.6 + toe, 0.8);
+        }
       };
       if (sitting) {
-        drawLeg(-3.6, hipY + 1, 0, 0, false); drawLeg(3.6, hipY + 1, 0, 0, true);
+        // Assis : cuisses vers l'avant, mollets verticaux
+        const kx = 3.5 * dirX, ky = 2.5 * Math.max(0, dirY);
+        drawLeg(-3.4, -3.6 + kx, 0 + ky * 0.2, false, 0);
+        drawLeg(3.4, 3.6 + kx, 0 + ky * 0.2, true, 0);
       } else if (kneeling) {
-        drawLeg(-4, hipY + 1, 0, 0, false); drawLeg(4, hipY + 1, 0, 0, true);
+        drawLeg(-4, -4.4 - dirX, 0, false, 0);
+        drawLeg(4, 4.4 + dirX * 2, 0, true, 0);
       } else {
-        const lift1 = walk ? Math.max(0, Math.sin(ph)) * 2.4 : 0;
-        const lift2 = walk ? Math.max(0, -Math.sin(ph)) * 2.4 : 0;
-        const tap = pose === 'wait' ? Math.max(0, Math.sin(t * 7)) * 1.4 : 0;
-        drawLeg(-3.6 + swing * 2.2, hipY + 1, 0, lift1, false);
-        drawLeg(3.6 - swing * 2.2, hipY + 1, 0, lift2 + tap, true);
+        // Marche : pied avant / pied arrière le long de la direction de déplacement à l'écran
+        const stride = run ? 7 : 5;
+        const f1 = sw * stride, f2 = -sw * stride;
+        const lift1 = walk ? Math.max(0, -Math.cos(ph)) * (run ? 3 : 2) * (sw > 0 ? 1 : 0.4) : 0;
+        const lift2 = walk ? Math.max(0, Math.cos(ph)) * (run ? 3 : 2) * (sw < 0 ? 1 : 0.4) : 0;
+        const tap = pose === 'wait' ? Math.max(0, Math.sin(t * 7)) * 1.2 : 0;
+        const shift = pose === 'stand' || pose === 'wait' || pose === 'chat' ? Math.sin(t * 0.5 + a.hs % 5) * 0.6 : 0; // report du poids
+        drawLeg(-3.4 + leanX * 0.3, -3.6 + f1 * dirX + shift, f1 * dirY * 0.5 - lift1, false, 0);
+        drawLeg(3.4 + leanX * 0.3, 3.6 + f2 * dirX + shift, f2 * dirY * 0.5 - lift2 - tap, true, 0);
       }
 
       // --- Bras
-      let armL = swing * 0.45, armR = -swing * 0.45, armLen = 24;
+      let armL = -sw * 0.55 * dirX, armR = sw * 0.55 * dirX, armLen = 24;
+      if (!walk) { armL = 0.06 + Math.sin(t * 1.7) * 0.02; armR = -0.06 - Math.sin(t * 1.7) * 0.02; }
       if (pose === 'teach') { armR = -2.3 + Math.sin(t * 2.2) * 0.3; armL = 0.12; }
       else if (pose === 'cpr') { armL = -0.3; armR = 0.3; armLen = 20 + bob * 0.5; }
       else if (pose === 'kneel') { armL = -0.6; armR = 0.5 + Math.sin(t * 3) * 0.2; }
       else if (pose === 'desk') { armL = -0.9 + Math.sin(t * 13) * 0.05; armR = 0.9 + Math.cos(t * 11) * 0.05; }
-      else if (pose === 'shelf' || pose === 'locker') { armL = -2.6 + Math.sin(t * 3) * 0.25; armR = 2.4 + Math.cos(t * 3) * 0.25; }
+      else if (pose === 'shelf' || pose === 'locker') { const c = Math.sin(t * 2.4); armL = -2.4 + c * 0.35; armR = 2.3 - c * 0.35; }
       else if (pose === 'play') { armL = -1.1 + Math.sin(t * 6) * 0.3; armR = 1.1 + Math.sin(t * 6) * 0.3; }
-      else if (pose === 'coffee') { armR = Math.sin(t * 0.9) > 0.6 ? -2.5 : -0.9; }
-      else if (pose === 'chat') { armR = -0.5 + Math.sin(t * 2.7) * 0.5; armL = 0.15; }
+      else if (pose === 'coffee') { const sip = Math.max(0, Math.sin(t * 0.9) - 0.4) / 0.6; armR = lerp(-0.9, -2.5, sip); }
+      else if (pose === 'eat' || pose === 'eat_sit') { const b = Math.max(0, Math.sin(t * 1.6)); armR = lerp(-0.7, -2.3, b); armL = -0.6; }
+      else if (pose === 'chat') { armR = -0.5 + Math.sin(t * 2.7) * 0.5; armL = 0.15 + Math.sin(t * 1.3) * 0.1; }
       else if (pose === 'wait') { const watch = Math.sin(t * 0.7) > 0.75; armL = watch ? -1.6 : 0.05; armR = gear.radio ? -0.7 : -0.05; }
       else if (pose === 'stand_radio') { armR = -2.6; }
       if (a.carry) { armL = -1.15; armR = 1.15; }
       const holding = (side) => {
         if (a.carry) return null;
         if (side > 0 && gear.radio && (pose === 'wait' || pose === 'stand' || pose === 'stand_radio' || walk)) return 'radio';
-        if (side < 0 && gear.dae && !walk && pose !== 'cpr') return 'dae';
-        if (side < 0 && gear.dae && walk) return 'dae';
+        if (side < 0 && gear.dae && pose !== 'cpr') return 'dae';
         return null;
       };
       const drawArm = (side, angle, dark) => {
         ctx.save();
-        ctx.translate(side * 8.6, topY + 3.2);
+        ctx.translate(side * 8.6 + leanX, topY + 3.2);
         ctx.rotate(angle);
         const sleeve = dark ? pal.topD : pal.top;
         if (civil && pal.sleeveShort) {
@@ -2872,7 +3606,7 @@
           ctx.fillStyle = shade(a.skin, dark ? -0.12 : 0); ctx.fillRect(-2.1, armLen * 0.34, 4.2, armLen * 0.62);
         } else {
           ctx.fillStyle = sleeve; ctx.fillRect(-2.7, -1, 5.4, armLen * 0.92);
-          if (!civil) { ctx.fillStyle = dark ? ORANGE_D : ORANGE; ctx.fillRect(-2.7, -1, 5.4, 5.5); ctx.fillStyle = WHITE; ctx.fillRect(-2.7, armLen * 0.62, 5.4, 1.6); }
+          if (!civil) { ctx.fillStyle = dark ? ORANGE_D : ORANGE; ctx.fillRect(-2.7, -1, 5.4, 5.5); }
         }
         ctx.fillStyle = shade(a.skin, dark ? -0.12 : 0);
         ctx.beginPath(); ctx.arc(0, armLen, 2.5, 0, Math.PI * 2); ctx.fill();
@@ -2881,15 +3615,16 @@
           ctx.fillStyle = '#111827'; ctx.fillRect(-1.6, armLen - 1, 3.2, 6.5);
           ctx.fillRect(-0.5, armLen - 4, 1, 3.5);
         } else if (item === 'dae') {
-          ctx.fillStyle = '#dc2626'; ctx.fillRect(-4, armLen + 1, 8, 7);
+          ctx.fillStyle = '#16a34a'; ctx.fillRect(-4, armLen + 1, 8, 7);
           ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(-0.9, armLen + 4, 1.2, 0, Math.PI * 2); ctx.arc(0.9, armLen + 4, 1.2, 0, Math.PI * 2); ctx.fill();
         }
         ctx.restore();
       };
-      // Bras arrière (dessiné avant le buste)
       if (front) drawArm(1, armR, true); else { drawArm(-1, armL, false); drawArm(1, armR, true); }
 
-      // --- Buste (trapèze épaules > taille) avec ombrage latéral
+      // --- Buste
+      ctx.save();
+      ctx.translate(leanX, leanY);
       const torso = () => {
         ctx.beginPath();
         ctx.moveTo(-7.4, hipY + 1.5);
@@ -2905,21 +3640,19 @@
       ctx.fillStyle = pal.top; ctx.fill();
       ctx.clip();
       if (!civil) {
-        // Empiècement orange haute visibilité + bande blanche
+        // Empiècement orange + bande blanche de séparation (seule bande blanche du buste, devant comme dans le dos)
         ctx.fillStyle = ORANGE; ctx.fillRect(-11, topY - 1, 22, 11.5);
         ctx.fillStyle = WHITE; ctx.fillRect(-11, topY + 10.5, 22, 2.6);
+        if (front) { ctx.fillStyle = '#0f1f4d'; ctx.fillRect(-0.5, topY + 13, 1, torsoH - 14); } // fermeture éclair
       } else if (a.hoodie) {
         ctx.fillStyle = shade(a.tee, 0.15); ctx.fillRect(-3, topY + 2, 6, torsoH - 6);
       }
-      // Ceinture
       ctx.fillStyle = civil ? 'rgba(0,0,0,0.18)' : '#0f1f4d';
       ctx.fillRect(-11, hipY - 1, 22, 2.5);
-      // Ombre du côté opposé à la lumière
       ctx.fillStyle = 'rgba(8,15,40,0.18)';
       ctx.fillRect(1.5, topY - 2, 12, torsoH + 6);
       ctx.restore();
 
-      // Bretelles du sac (vue de face) / sac complet (vue de dos)
       if (gear.backpack) {
         if (front) {
           ctx.fillStyle = '#111827';
@@ -2931,59 +3664,64 @@
           ctx.fillStyle = '#ffffff'; ctx.fillRect(-1.8, topY + 12, 3.6, 1.2); ctx.fillRect(-0.6, topY + 10.8, 1.2, 3.6);
         }
       }
-      if (!front && !civil && !gear.backpack) {
-        // Marquage dorsal
-        ctx.fillStyle = WHITE; ctx.fillRect(-6, topY + 15, 12, 2.2);
-      }
-      // Grade (CE / CD) : galon jaune sur la poitrine
       if (front && !civil && ['CE', 'CD', 'Cadre', 'Formateur'].includes(a.rank)) {
-        ctx.fillStyle = '#facc15'; ctx.fillRect(-6.5, topY + 14.5, 4, 1.4);
+        ctx.fillStyle = '#facc15'; ctx.fillRect(-6.5, topY + 15, 4, 1.4);
       }
+      if (a.carry) this.drawCarriedItem(ctx, a, topY);
+      ctx.restore();
 
-      // Carton porté (logistique)
-      if (a.carry) {
-        ctx.fillStyle = '#b7791f';
-        ctx.fillRect(-9, topY + 9, 18, 13);
-        ctx.fillStyle = '#d69e2e'; ctx.fillRect(-9, topY + 9, 18, 3);
-        ctx.fillStyle = '#dc2626'; ctx.fillRect(-2, topY + 14, 4, 1.3); ctx.fillRect(-0.65, topY + 12.6, 1.3, 4);
-      }
-      // Bras avant
       if (front) drawArm(-1, armL, false);
-      if (pose === 'coffee' && front) {
-        ctx.save(); ctx.translate(8.6, topY + 3.2); ctx.rotate(armR);
+      if ((pose === 'coffee' || pose === 'eat' || pose === 'eat_sit') && front) {
+        ctx.save(); ctx.translate(8.6 + leanX, topY + 3.2); ctx.rotate(armR);
         ctx.fillStyle = '#ffffff'; ctx.fillRect(-2.4, armLen + 0.5, 4.8, 4.8); ctx.restore();
       }
 
-      // --- Tête (style illustration : visage sans traits)
-      const nod = pose === 'wait' ? Math.sin(t * 1.3) * 1 : (pose === 'chat' ? Math.sin(t * 3.1) * 0.7 : 0);
-      const hx = nod * 0.4;
+      // --- Tête (sans traits, style illustration)
+      const look = (pose === 'wait' || pose === 'stand') ? Math.sin(t * 0.45 + a.hs % 9) * 1.1 : (pose === 'chat' ? Math.sin(t * 3.1) * 0.7 : 0);
+      const hx = look * 0.5 + leanX * 1.4;
+      const hy = headCY + leanY;
       ctx.fillStyle = shade(a.skin, -0.1);
-      ctx.fillRect(-2.2, topY - 3.5, 4.4, 4.5);
+      ctx.fillRect(-2.2 + leanX * 1.2, topY - 3.5 + leanY, 4.4, 4.5);
       ctx.fillStyle = a.skin;
-      ctx.beginPath(); ctx.ellipse(hx, headCY, 5.6, 6.6, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hx, hy, 5.6, 6.6, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = 'rgba(0,0,0,0.08)';
-      ctx.beginPath(); ctx.ellipse(hx + 2.2, headCY + 0.5, 3, 6, 0, -Math.PI / 2, Math.PI / 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(hx + 2.2, hy + 0.5, 3, 6, 0, -Math.PI / 2, Math.PI / 2); ctx.fill();
       ctx.fillStyle = a.hair;
       const hs = a.hairStyle;
       if (front) {
-        if (hs === 2) { // très court
-          ctx.beginPath(); ctx.ellipse(hx, headCY - 3.2, 5.7, 3.6, 0, Math.PI, Math.PI * 2); ctx.fill();
+        if (hs === 2) {
+          ctx.beginPath(); ctx.ellipse(hx, hy - 3.2, 5.7, 3.6, 0, Math.PI, Math.PI * 2); ctx.fill();
         } else {
-          ctx.beginPath(); ctx.ellipse(hx, headCY - 2.4, 6, 4.8, 0, Math.PI * 1.02, Math.PI * 1.98); ctx.fill();
-          ctx.beginPath(); ctx.ellipse(hx - 4.4, headCY - 0.5, 1.8, 3.6, 0, 0, Math.PI * 2); ctx.fill();
-          if (hs === 3) { ctx.fillRect(hx - 6, headCY - 2, 2.4, 9); ctx.fillRect(hx + 3.6, headCY - 2, 2.4, 9); }
+          ctx.beginPath(); ctx.ellipse(hx, hy - 2.4, 6, 4.8, 0, Math.PI * 1.02, Math.PI * 1.98); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(hx - 4.4, hy - 0.5, 1.8, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+          if (hs === 3) { ctx.fillRect(hx - 6, hy - 2, 2.4, 9); ctx.fillRect(hx + 3.6, hy - 2, 2.4, 9); }
         }
       } else {
-        ctx.beginPath(); ctx.ellipse(hx, headCY - 0.6, 6, 6.8, 0, 0, Math.PI * 2); ctx.fill();
-        if (hs === 1) { ctx.beginPath(); ctx.ellipse(hx, headCY + 7, 2.4, 5, 0, 0, Math.PI * 2); ctx.fill(); }
-        if (hs === 3) ctx.fillRect(hx - 5.5, headCY, 11, 9);
+        ctx.beginPath(); ctx.ellipse(hx, hy - 0.6, 6, 6.8, 0, 0, Math.PI * 2); ctx.fill();
+        if (hs === 1) { ctx.beginPath(); ctx.ellipse(hx, hy + 7, 2.4, 5, Math.sin(t * 3) * 0.08, 0, Math.PI * 2); ctx.fill(); }
+        if (hs === 3) ctx.fillRect(hx - 5.5, hy, 11, 9);
+      }
+    }
+
+    // Objet porté (le vrai matériel manipulé quand il est connu, sinon un carton)
+    drawCarriedItem(ctx, a, topY) {
+      const m = a.carryItem ? itemModelFor(a.carryItem) : null;
+      const c = m ? m.color : '#b7791f';
+      ctx.fillStyle = c;
+      ctx.fillRect(-9, topY + 9, 18, 13);
+      ctx.fillStyle = shade(c, 0.18); ctx.fillRect(-9, topY + 9, 18, 3);
+      if (m && m.mark) {
+        ctx.fillStyle = m.markColor || '#ffffff';
+        ctx.fillRect(-2, topY + 14.5, 4, 1.3); ctx.fillRect(-0.65, topY + 13.2, 1.3, 4);
+      } else if (!m) {
+        ctx.fillStyle = '#dc2626'; ctx.fillRect(-2, topY + 14, 4, 1.3); ctx.fillRect(-0.65, topY + 12.6, 1.3, 4);
       }
     }
 
     drawAgentOverlay(ctx, a) {
       const iso = this.iso;
       const dpr = window.devicePixelRatio || 1;
-      const sitting = a.pose === 'sit' || a.pose === 'desk';
+      const sitting = a.pose === 'sit' || a.pose === 'desk' || a.pose === 'eat_sit';
       const z = a.pose === 'sleep' ? 0.9 : (sitting ? 1.55 : (a.pose === 'cpr' || a.pose === 'kneel' ? 1.25 : 2.05));
       const [sx, sy] = iso.p(a.x, a.y, z);
       ctx.save();
@@ -3166,6 +3904,13 @@
           if (px >= b.x0 && px <= b.x1 && py >= b.y0 && py <= b.y1) return { veh: v };
         }
       }
+      // Matériel au sol (réserve)
+      for (const sk of (this.world.floorStacks || [])) {
+        for (let z = 0; z <= sk.h * sk.n; z += 0.15) {
+          const [px, py] = iso.unproject(sx, sy + z * iso.k * HZ);
+          if (px >= sk.x - 0.05 && px <= sk.x + sk.w + 0.05 && py >= sk.y - 0.05 && py <= sk.y + sk.d + 0.05) return { stack: sk };
+        }
+      }
       // Mobilier
       for (let i = this.world.furniture.length - 1; i >= 0; i--) {
         const f = this.world.furniture[i];
@@ -3175,7 +3920,11 @@
           if (px >= f.x && px <= f.x + f.w && py >= f.y && py <= f.y + f.d) return { furn: f };
         }
       }
-      void wx; void wy;
+      // Pièce ou parking (zones cliquables qui ouvrent les menus)
+      const room = this.world.roomAt(wx, wy);
+      if (room) return { room };
+      const pk = this.world.parking;
+      if (pk && wx >= pk.x && wx <= pk.x + pk.w && wy >= pk.y && wy <= pk.y + pk.h) return { parking: true };
       return null;
     }
 
@@ -3273,10 +4022,16 @@
       if (!hit) { this.closeCard(); return; }
       if (hit.agent) { this.openCard(hit.agent); return; }
       this.closeCard();
+      if (hit.room || hit.parking) {
+        const act = this.zoneAction(hit);
+        if (act) this.openModule(act.module, act.opts || {});
+        return;
+      }
       if (hit.veh && window.game && typeof window.game.openVehicleDetailsModal === 'function') {
         window.game.openVehicleDetailsModal(hit.veh.id);
         return;
       }
+      if (hit.stack) { this.openModule('logistique', { tab: 'stock' }); return; }
       if (hit.furn && typeof this.locaux.openFurnitureInteractionModal === 'function') {
         this.locaux.selectedFurnitureId = hit.furn.id;
         this.locaux.openFurnitureInteractionModal(hit.furn.id);
@@ -3297,17 +4052,17 @@
       const btn = (id, label, title) => `<button type="button" data-act="${id}" title="${title}" style="height:30px;padding:0 10px;border-radius:10px;border:1px solid rgba(148,163,184,.6);background:rgba(255,255,255,.92);font:700 11px 'Plus Jakarta Sans',system-ui,sans-serif;color:#0f172a;box-shadow:0 2px 6px rgba(15,23,42,.12);cursor:pointer;">${narrow ? label.split(' ')[0] : label}</button>`;
       bar.innerHTML = [
         `<span style="height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:10px;background:#dc2626;color:#fff;font:800 11px 'Plus Jakarta Sans',system-ui,sans-serif;box-shadow:0 2px 6px rgba(220,38,38,.35);"><span style="width:7px;height:7px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite"></span>LIVE</span>`,
-        btn('walls', '🧱 Murs', 'Murs hauts / coupés'),
+        btn('walls', this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 1,10 m', 'Basculer : murs à hauteur réelle (2,50 m) / cloisons coupées à 1,10 m'),
         btn('rotate', '🔄 Pivoter', 'Faire pivoter la vue d’un quart de tour'),
         btn('labels', '🏷️ Étiquettes', 'Afficher les noms des pièces et véhicules'),
         btn('pause', '⏸️', 'Mettre en pause la scène'),
-        btn('plan', '📐 Plan 2D', 'Revenir au plan d’architecte 2D')
+        this.slot === 'locaux' ? btn('plan', '📐 Plan 2D', 'Revenir au plan d’architecte 2D') : ''
       ].join('');
       bar.addEventListener('click', (e) => {
         const b = e.target.closest('button[data-act]');
         if (!b) return;
         const act = b.dataset.act;
-        if (act === 'walls') { this.wallsUp = !this.wallsUp; this.savePref('wallsUp', this.wallsUp); }
+        if (act === 'walls') { this.wallsUp = !this.wallsUp; this.savePref('wallsUp', this.wallsUp); b.textContent = this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 1,10 m'; }
         if (act === 'rotate') { this.rotate(); }
         if (act === 'labels') { this.showLabels = !this.showLabels; this.savePref('labels', this.showLabels); }
         if (act === 'pause') { this.paused = !this.paused; b.textContent = this.paused ? '▶️' : '⏸️'; }
@@ -3376,12 +4131,190 @@
       if (this.toolbar) this.toolbar.remove();
       this.closeCard();
       if (!keepAgents) this.agents.forEach(a => a.releasePOI());
-      if (window.ProtecBaseLive && window.ProtecBaseLive.scene === this) window.ProtecBaseLive.scene = null;
+      if (window.ProtecBaseLive) {
+        const P = window.ProtecBaseLive;
+        Object.keys(P.slots).forEach(k => { if (P.slots[k] === this) P.slots[k] = null; });
+        if (P.scene === this) P.scene = P.slots.base || P.slots.locaux || null;
+      }
     }
   }
 
   // =========================================================================
-  // 8. API PUBLIQUE
+  // 8. VUE PLEIN ÉCRAN « MA BASE » (page antenne : scène + infos + menus)
+  // =========================================================================
+
+  const BaseView = {
+    el: null,
+    stationId: null,
+    timer: null,
+
+    open(stationId) {
+      const game = window.game;
+      if (!game) return;
+      const L = window.ProtecLocaux;
+      if (!L) return;
+      const st = (game.stations || []).find(s => s.id === stationId) || (game.stations || [])[0];
+      if (!st) return;
+      this.stationId = st.id;
+      L.currentStationId = st.id;
+      if (typeof game.closeAllDockSubmenus === 'function') { try { game.closeAllDockSubmenus(); } catch (e) { /* ignoré */ } }
+      const drawer = document.getElementById('context-drawer');
+      if (drawer && !drawer.classList.contains('hidden') && typeof game.closeDrawer === 'function') { try { game.closeDrawer(); } catch (e) { /* ignoré */ } }
+      if (!this.el) this.build();
+      this.el.style.display = 'flex';
+      document.body.classList.add('protec-base-open');
+      const canvas = this.el.querySelector('#protec-base-canvas');
+      requestAnimationFrame(() => {
+        ProtecBaseLive.attach(canvas, L, 'base');
+        this.refresh();
+      });
+      clearInterval(this.timer);
+      this.timer = setInterval(() => this.refresh(), 1000);
+    },
+
+    close() {
+      if (!this.el) return;
+      this.el.style.display = 'none';
+      document.body.classList.remove('protec-base-open');
+      clearInterval(this.timer);
+      ProtecBaseLive.detach('base');
+    },
+
+    isOpen() { return !!(this.el && this.el.style.display !== 'none'); },
+
+    build() {
+      const el = document.createElement('div');
+      el.id = 'protec-base-view';
+      el.style.cssText = 'position:fixed;inset:0;z-index:45;display:none;flex-direction:column;background:#e8f5ec;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#0f172a;';
+      const B = (act, html, title, extra = '') => `<button type="button" data-act="${act}" title="${title}" style="height:36px;padding:0 12px;border-radius:12px;border:1px solid rgba(148,163,184,.55);background:rgba(255,255,255,.95);font:800 12px inherit;font-family:inherit;color:#0f172a;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;${extra}">${html}</button>`;
+      const M = (mod, icon, label) => `<button type="button" data-module="${mod}" style="flex:0 0 auto;min-width:66px;height:54px;padding:4px 8px;border-radius:14px;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:700 10px inherit;font-family:inherit;color:#334155;"><span style="font-size:19px;line-height:1">${icon}</span>${label}</button>`;
+      el.innerHTML = `
+        <header style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.92);border-bottom:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(15,23,42,.06);flex-wrap:wrap;">
+          ${B('close', '← Carte', 'Revenir à la carte des opérations')}
+          <div style="display:flex;flex-direction:column;min-width:0;margin-right:auto;">
+            <div data-ref="title" style="font-weight:900;font-size:15px;color:#002E6D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ma base</div>
+            <div data-ref="subtitle" style="font-size:11px;color:#64748b;font-weight:600;"></div>
+          </div>
+          <div data-ref="kpis" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          ${B('fiche', '📋<span class="pbv-lbl"> Fiche antenne</span>', 'Ouvrir la fiche détaillée de l’antenne')}
+          ${B('edit', '✏️<span class="pbv-lbl"> Aménager</span>', 'Modifier l’aménagement et le mobilier des locaux')}
+        </header>
+        <div style="position:relative;flex:1;min-height:0;display:flex;">
+          <aside data-ref="side" style="width:300px;max-width:42vw;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.6);border-right:1px solid #e2e8f0;"></aside>
+          <div style="position:relative;flex:1;min-width:0;">
+            <canvas id="protec-base-canvas" style="width:100%;height:100%;display:block;touch-action:none;"></canvas>
+            <button type="button" data-act="side" title="Afficher / masquer le panneau d’informations" style="position:absolute;right:10px;top:10px;z-index:24;height:32px;padding:0 10px;border-radius:10px;border:1px solid rgba(148,163,184,.6);background:rgba(255,255,255,.95);font:800 11px inherit;font-family:inherit;cursor:pointer;">📊 Infos</button>
+          </div>
+        </div>
+        <nav style="display:flex;gap:2px;justify-content:center;overflow-x:auto;padding:6px 8px;background:rgba(255,255,255,.95);border-top:1px solid #e2e8f0;">
+          ${M('planning', '📅', 'Planning')}${M('samu', '🚑', 'Garde SAMU')}${M('formation', '🎓', 'Formations')}${M('recrutement', '👥', 'Bénévoles')}${M('logistique', '📦', 'Logistique')}${M('flotte', '🚐', 'Flotte')}${M('boutiques', '🛒', 'Boutiques')}${M('finances', '💶', 'Finances')}${M('locaux', '🏢', 'Bâtiment')}
+        </nav>`;
+      if (!document.getElementById('protec-base-style')) {
+        const css = document.createElement('style');
+        css.id = 'protec-base-style';
+        css.textContent = '#protec-base-view nav>:first-child{margin-left:auto}#protec-base-view nav>:last-child{margin-right:auto}#protec-base-view nav button:hover{background:#eff6ff}' +
+          '@media (max-width:760px){#protec-base-view header{gap:6px!important;padding:8px 10px!important}#protec-base-view [data-ref=kpis]{order:9;width:100%;flex-wrap:nowrap!important;overflow-x:auto}#protec-base-view .pbv-lbl{display:none}#protec-base-view nav button{min-width:58px!important}#protec-base-view nav>:first-child{margin-left:0}#protec-base-view nav{justify-content:flex-start!important}}';
+        document.head.appendChild(css);
+      }
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-act],[data-module],[data-veh],[data-open]');
+        if (!b) return;
+        const game = window.game;
+        if (b.dataset.act === 'close') return this.close();
+        if (b.dataset.act === 'fiche' && game && typeof game.openStationDetails === 'function') return game.openStationDetails(this.stationId);
+        if (b.dataset.act === 'edit' && game) { const L = window.ProtecLocaux; if (L) { L.activeTab = 'plan'; } return game.openModule('locaux'); }
+        if (b.dataset.act === 'side') { const side = el.querySelector('[data-ref="side"]'); side.style.display = side.style.display === 'none' ? 'flex' : 'none'; return; }
+        if (b.dataset.veh && game && typeof game.openVehicleDetailsModal === 'function') return game.openVehicleDetailsModal(b.dataset.veh);
+        const mod = b.dataset.module || b.dataset.open;
+        if (mod) {
+          const sc = ProtecBaseLive.slots.base;
+          if (sc) sc.openModule(mod, { tab: b.dataset.tab });
+          else if (game) game.openModule(mod);
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !this.isOpen()) return;
+        const modal = document.getElementById('main-modal');
+        const drawer = document.getElementById('context-drawer');
+        if ((modal && !modal.classList.contains('hidden')) || (drawer && !drawer.classList.contains('hidden'))) return;
+        this.close();
+      });
+      if (window.innerWidth < 760) el.querySelector('[data-ref="side"]').style.display = 'none';
+      document.body.appendChild(el);
+      this.el = el;
+    },
+
+    // Panneau d'informations de l'antenne, mis à jour chaque seconde
+    refresh() {
+      if (!this.isOpen()) return;
+      const game = window.game;
+      const st = game && (game.stations || []).find(s => s.id === this.stationId);
+      if (!st) return;
+      const sc = ProtecBaseLive.slots.base;
+      const out = sc && sc.directorOut;
+      const esc = (x) => String(x == null ? '' : x).replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+      const q = (r) => this.el.querySelector(`[data-ref="${r}"]`);
+      const vols = Director.stationVolunteers(game, st);
+      const vehs = Director.stationVehicles(game, st);
+      const present = sc ? sc.agents.filter(a => !a.leaving).length : 0;
+      const onMission = vols.filter(v => MISSION_AWAY.includes(v.status)).length;
+      const dispo = vols.filter(v => !v.status || v.status === 'dispo').length;
+      const vehDispo = vehs.filter(v => sc ? sc.vehicleStatus(v).color === '#16a34a' : v.status === 'dispo').length;
+      const stockTotal = Object.values(st.stock || {}).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+      const money = game.resources && typeof game.resources.money === 'number' ? Math.round(game.resources.money).toLocaleString('fr-FR') + ' €' : '';
+      const clock = new Date(nowMs(game)).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+      q('title').textContent = st.name || 'Ma base';
+      q('subtitle').textContent = `${st.city || st.commune || 'Antenne'} · Niveau ${st.level || 1} · ${clock}`;
+      const kpi = (icon, val, label, mod) => `<button type="button" data-open="${mod}" title="${label}" style="height:36px;padding:0 10px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;font:800 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:#0f172a;">${icon} ${val}<span class="pbv-lbl" style="font-weight:600;color:#64748b;font-size:10px">${label}</span></button>`;
+      q('kpis').innerHTML = [
+        kpi('👥', present, 'à la base', 'recrutement'),
+        kpi('🚑', onMission, 'en mission', 'planning'),
+        kpi('🚐', `${vehDispo}/${vehs.length}`, 'véhicules dispo', 'flotte'),
+        kpi('📦', stockTotal, 'articles', 'logistique'),
+        money ? kpi('💶', money, '', 'finances') : ''
+      ].join('');
+
+      const card = (title, body, mod) => `<section style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:10px 12px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><span style="font-weight:900;font-size:12px;color:#002E6D;">${title}</span>${mod ? `<button type="button" data-open="${mod}" style="border:none;background:none;color:#2563eb;font:800 11px inherit;font-family:inherit;cursor:pointer;">Ouvrir →</button>` : ''}</div>${body}</section>`;
+      const row = (left, right, color) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;padding:3px 0;border-top:1px dashed #f1f5f9;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${left}</span><span style="flex:0 0 auto;font-weight:800;color:${color || '#334155'}">${right}</span></div>`;
+
+      // Activité en cours
+      const acts = [];
+      (out && out.alerts || []).forEach(al => acts.push(row(`🚨 ${esc(al.title)}`, `${al.arrived}/${al.required}${al.planned ? ' · ' + al.startsInMin + ' min' : ''}`, '#dc2626')));
+      const counts = {};
+      if (sc) sc.agents.forEach(a => { if (!a.leaving) counts[a.logicalState] = (counts[a.logicalState] || 0) + 1; });
+      if (counts.IN_TRAINING) { const lab = [...(out ? out.assignments.values() : [])].find(x => x.state === AgentState.IN_TRAINING); acts.push(row(`🎓 ${esc(lab && lab.label || 'Formation')}`, `${counts.IN_TRAINING} pers.`, '#2563eb')); }
+      if (counts.ON_DUTY_WAIT) acts.push(row(`📻 ${esc(out && out.guardLabel || 'Garde active')}`, `${counts.ON_DUTY_WAIT} pers.`, '#059669'));
+      if (counts.LOGISTICS) acts.push(row('📦 Préparation logistique', `${counts.LOGISTICS} pers.`, '#d97706'));
+      if (out && out.cohesion) acts.push(row(`🎉 ${esc(out.cohesion.label)}`, `jusqu’à ${new Date(out.cohesion.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, '#7c3aed'));
+      if (counts.IDLE && !(out && out.cohesion)) acts.push(row('💼 Personnel salarié au poste', `${counts.IDLE} pers.`, '#64748b'));
+      const actHtml = acts.length ? acts.join('') : `<div style="font-size:11.5px;color:#64748b;">Base calme : aucun bénévole sur place. ${dispo} disponible(s) à domicile.</div>`;
+
+      // Véhicules
+      const vehHtml = vehs.length ? vehs.map(v => {
+        const s2 = sc ? sc.vehicleStatus(v) : { text: v.status, color: '#334155', arm: v.armementLevel };
+        const arm = Math.round(Number(s2.arm) || 0);
+        return `<button type="button" data-veh="${esc(v.id)}" style="width:100%;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;">${row(`<strong>${esc(v.name || v.type)}</strong> <span style="color:#94a3b8">· ${arm}%${typeof v.fuel === 'number' ? ' · ⛽ ' + Math.round(v.fuel) + '%' : ''}</span>`, esc(s2.text), s2.color)}</button>`;
+      }).join('') : '<div style="font-size:11.5px;color:#64748b;">Aucun véhicule.</div>';
+
+      // Réserve
+      const inv = sc && sc._inv;
+      let stockRows = [];
+      if (inv) {
+        const all = {};
+        (inv.floor || []).forEach(e => { all[e.id] = (all[e.id] || 0) + e.qty; });
+        Object.entries(inv.stored || {}).forEach(([id, n]) => { all[id] = (all[id] || 0) + n; });
+        stockRows = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([id, n]) => row(`${esc(itemName(id))}`, `× ${n}`));
+      }
+      const stockHtml = stockRows.length ? stockRows.join('') : '<div style="font-size:11.5px;color:#64748b;">Réserve vide.</div>';
+
+      q('side').innerHTML = card('Activité à la base', actHtml, null) + card('Véhicules', vehHtml, 'flotte') + card('Réserve & matériel', stockHtml, 'logistique') +
+        `<div style="font-size:10.5px;color:#64748b;line-height:1.4;padding:0 4px;">Astuce : cliquez sur une pièce de la scène pour ouvrir le menu correspondant (formation, PC radio, réserve, foyer…), sur un véhicule pour sa fiche, sur un bénévole pour son activité.</div>`;
+    }
+  };
+
+  // =========================================================================
+  // 9. API PUBLIQUE
   // =========================================================================
 
   const ProtecBaseLive = {
@@ -3389,10 +4322,14 @@
     Director,
     NavGrid,
     WorldModel,
+    ITEM_MODELS,
+    itemModelFor,
+    BaseView,
+    slots: {},
     scene: null,
     liveMode: (function () { try { return localStorage.getItem('protec_live_mode') !== '0'; } catch (e) { return true; } })(),
 
-    // La scène vivante remplace le plan 2D hors mode Aménagement
+    // La scène vivante remplace le plan 2D du module Locaux hors mode Aménagement
     shouldRun(locaux, canvas) {
       if (!this.liveMode || !locaux || !canvas) return false;
       if (locaux.isEditing || locaux._currentSetupModel) return false;
@@ -3400,46 +4337,56 @@
       return true;
     },
 
+    // Sans argument : scène du module Locaux
     isActive(canvas) {
-      return !!(this.scene && this.scene.running && (!canvas || this.scene.canvas === canvas));
+      if (canvas) return Object.values(this.slots).some(s => s && s.running && s.canvas === canvas);
+      const s = this.slots.locaux;
+      return !!(s && s.running);
     },
 
-    attach(canvas, locaux) {
-      if (this.scene && this.scene.canvas === canvas && this.scene.running) return this.scene;
-      const old = this.scene;
-      this.scene = null;
-      const sc = new LiveScene(canvas, locaux);
-      if (old) {
+    attach(canvas, locaux, slot = 'locaux') {
+      const cur = this.slots[slot];
+      if (cur && cur.canvas === canvas && cur.running) return cur;
+      const sc = new LiveScene(canvas, locaux, slot);
+      if (cur) {
         // Même antenne : on conserve les avatars, la caméra et les animations en cours
-        const sameStation = old.locaux === locaux && (old.directorOut && old.directorOut.station ? old.directorOut.station.id : null) === ((Director.stationOf(window.game, locaux) || {}).id || null);
-        if (sameStation && old.world) sc.adopt(old);
-        old.destroy(sameStation);
+        const sameStation = cur.locaux === locaux && (cur.directorOut && cur.directorOut.station ? cur.directorOut.station.id : null) === ((Director.stationOf(window.game, locaux) || {}).id || null);
+        if (sameStation && cur.world) sc.adopt(cur);
+        cur.destroy(sameStation);
       }
+      this.slots[slot] = sc;
       this.scene = sc;
       sc.start();
       return sc;
     },
 
-    detach() {
-      if (this.scene) { const s = this.scene; this.scene = null; s.destroy(); }
+    detach(slot = 'locaux') {
+      const s = this.slots[slot];
+      if (s) { this.slots[slot] = null; s.destroy(); }
+      if (this.scene === s) this.scene = this.slots.base || this.slots.locaux || null;
     },
 
     toggleLiveMode(force) {
       this.liveMode = typeof force === 'boolean' ? force : !this.liveMode;
       try { localStorage.setItem('protec_live_mode', this.liveMode ? '1' : '0'); } catch (e) { /* stockage indisponible */ }
       const L = window.ProtecLocaux;
-      if (!this.liveMode) this.detach();
+      if (!this.liveMode) this.detach('locaux');
       if (L && typeof L.renderModal === 'function' && window.game) L.renderModal(window.game);
       else if (L) L.renderArchitectScene();
     },
 
-    zoom(factor) { if (this.scene) this.scene.zoomAt(factor); },
-    resetCamera() { if (this.scene) { this.scene.userMoved = false; this.scene.fitView(); } },
+    zoom(factor) { const s = this.slots.locaux; if (s) s.zoomAt(factor); },
+    resetCamera() { const s = this.slots.locaux; if (s) { s.userMoved = false; s.fitView(); } },
+
+    // Vue plein écran « Ma base »
+    openBaseView(stationId) { BaseView.open(stationId); },
+    closeBaseView() { BaseView.close(); },
 
     // Outil de debug : état courant des avatars
-    debug() {
-      if (!this.scene) return [];
-      return this.scene.agents.map(a => ({ id: a.id, name: a.name, state: a.state, logical: a.logicalState, pose: a.pose, x: +a.x.toFixed(2), y: +a.y.toFixed(2), poi: a.poi && a.poi.kind, leaving: a.leaving }));
+    debug(slot) {
+      const sc = slot ? this.slots[slot] : this.scene;
+      if (!sc) return [];
+      return sc.agents.map(a => ({ id: a.id, name: a.name, state: a.state, logical: a.logicalState, pose: a.pose, x: +a.x.toFixed(2), y: +a.y.toFixed(2), poi: a.poi && a.poi.kind, leaving: a.leaving }));
     }
   };
 

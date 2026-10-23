@@ -615,6 +615,21 @@ window.ProtecPersonnel = {
 
     let countReintegrated = 0;
 
+    // Événement visible dans la scène de la base (repas, jeux) pendant 2 heures
+    const nowTs = Date.now() + (game.serverTimeOffset || 0);
+    if (!Array.isArray(game.baseEvents)) game.baseEvents = [];
+    game.baseEvents = game.baseEvents.filter(e => e && e.end > nowTs);
+    game.baseEvents.push({
+      id: 'evt_cohesion_' + nowTs,
+      type: 'cohesion',
+      eventType: eventType,
+      label: 'Moment de cohésion : repas convivial au local',
+      stationId: game.stations && game.stations[0] ? game.stations[0].id : null,
+      start: nowTs,
+      end: nowTs + 2 * 3600 * 1000
+    });
+    try { localStorage.setItem('protec_base_events', JSON.stringify(game.baseEvents)); } catch (e) { /* stockage indisponible */ }
+
     game.volunteers.forEach(v => {
       // Réduit la fatigue collective et restaure le moral
       v.fatigue = Math.max(0, (v.fatigue || 20) - 25);

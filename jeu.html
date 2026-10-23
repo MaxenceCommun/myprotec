@@ -646,6 +646,12 @@
             <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">Antenne</span>
             <span class="text-[9px] font-bold text-slate-600">Moyens</span>
           </div>
+          <button onclick="window.ProtecBaseLive && window.ProtecBaseLive.openBaseView(window.game.stations && window.game.stations[0] && window.game.stations[0].id); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
+            <div class="flex items-center gap-2">
+              <i data-lucide="home" class="w-4 h-4 text-orange-500"></i>
+              <span>Ma base (vue 2.5D)</span>
+            </div>
+          </button>
           <button onclick="window.game.openModule('antenne_messages'); window.game.closeAllDockSubmenus();" class="dock-submenu-item group">
             <div class="flex items-center gap-2">
               <i data-lucide="message-square" class="w-4 h-4 text-pc-blue"></i>
@@ -1406,7 +1412,7 @@
   <script src="js/ads.js"></script>
   <script src="js/notifications.js?v=2.6.6"></script>
   <script src="js/incidents.js?v=2.7.0"></script>
-  <script src="js/personnel.js?v=2.0.9"></script>
+  <script src="js/personnel.js?v=2.1.0"></script>
   <script src="js/poles.js?v=3.0.0"></script>
   <script src="js/formations.js?v=2.6.4"></script>
   <script src="js/social.js?v=2.6.7"></script>
@@ -1419,7 +1425,7 @@
   <script src="js/scenarios_manager.js"></script>
   <script src="js/admin.js?v=2.6.5"></script>
   <script src="js/building_engine.js"></script>
-  <script src="js/base_live_scene.js?v=1.2.0"></script>
+  <script src="js/base_live_scene.js?v=2.0.0"></script>
   <script src="js/locaux.js?v=2.8.0"></script>
   <script src="js/logistique.js?v=2.7.9"></script>
   <script src="js/boutiques.js"></script>
@@ -1446,6 +1452,6 @@
   <script src="js/antenne_messages.js?v=2.5.4"></script>
   <script src="js/sms_mobilization.js?v=2.6.0"></script>
   <script src="js/api.js?v=2.6.0"></script>
-  <script src="js/app.js?v=2.7.6"></script>
+  <script src="js/app.js?v=2.7.7"></script>
 </body>
 </html>
