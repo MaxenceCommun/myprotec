@@ -4513,6 +4513,10 @@ window.ProtecLocaux = {
             <button onclick="window.ProtecLocaux.toggleEditMode(window.game)" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.isEditing ? 'bg-amber-500 text-white shadow-md animate-pulse' : 'text-slate-400 hover:text-slate-700 hover:bg-amber-50'}" title="${isOwner ? 'Réaménager cloisons' : 'Aménagement interdit en location'}">
               ✏️
             </button>
+            <!-- Bascule Scène vivante isométrique / Plan 2D -->
+            <button onclick="window.ProtecBaseLive && window.ProtecBaseLive.toggleLiveMode()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${(window.ProtecBaseLive && window.ProtecBaseLive.liveMode && !this.isEditing) ? 'bg-red-500 text-white shadow-md' : 'text-slate-400 hover:text-slate-700 hover:bg-red-50'}" title="Scène vivante (vue isométrique animée) / Plan 2D">
+              🎬
+            </button>
             <!-- Aimant Snap / Magnétisme -->
             <button onclick="window.ProtecLocaux.toggleMagnet()" class="w-8 h-8 rounded-xl flex items-center justify-center transition cursor-pointer ${this.snapToGrid ? 'bg-blue-500 text-white shadow-md ring-2 ring-blue-300' : 'text-slate-400 hover:text-slate-700 hover:bg-blue-50'}" title="Alignement automatique des meubles">
               🧲
@@ -4630,6 +4634,7 @@ window.ProtecLocaux = {
   },
 
   zoomCamera(factor) {
+    if (window.ProtecBaseLive && window.ProtecBaseLive.isActive()) { window.ProtecBaseLive.zoom(factor); return; }
     this.camera2D.zoom = Math.max(20, Math.min(100, this.camera2D.zoom * factor));
     this.renderArchitectScene();
   },
@@ -4660,6 +4665,7 @@ window.ProtecLocaux = {
   },
 
   resetCamera() {
+    if (window.ProtecBaseLive && window.ProtecBaseLive.isActive()) { window.ProtecBaseLive.resetCamera(); return; }
     this.fitView();
     this.renderArchitectScene();
   },
@@ -5166,6 +5172,15 @@ window.ProtecLocaux = {
   renderArchitectScene() {
     const canvas = document.getElementById('architect-canvas');
     if (!canvas) return;
+
+    // Scène vivante isométrique (hors mode Aménagement) : le moteur ProtecBaseLive prend la main sur le canvas
+    if (window.ProtecBaseLive) {
+      if (window.ProtecBaseLive.shouldRun(this, canvas)) {
+        window.ProtecBaseLive.attach(canvas, this);
+        return;
+      }
+      if (window.ProtecBaseLive.isActive()) window.ProtecBaseLive.detach();
+    }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 

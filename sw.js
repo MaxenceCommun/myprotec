@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v2.7.0';
+const CACHE_VERSION = 'myprotec-online-v2.8.0';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Tableau de suivi des minuteurs d'alerte en arrière-plan
@@ -74,6 +74,7 @@ const STATIC_ASSETS = [
   'js/communication.js',
   'js/messaging.js',
   'js/admin.js',
+  'js/base_live_scene.js',
   'js/locaux.js',
   'js/finances.js',
   'js/equipements.js',
