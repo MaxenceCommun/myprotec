@@ -1,4 +1,4 @@
-﻿
+
 if (typeof window !== 'undefined') {
   window.formatDurationMinutes = function(totalMinutes) {
     const mins = Math.round(Number(totalMinutes) || 0);
@@ -12461,6 +12461,15 @@ class ProtecGame {
       }
     }
 
+    // Vérification du statut d'armement / déchargement des engins logistiques (3 min/lot)
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.checkVehiclesArmamentReady === 'function') {
+      const armCheck = window.ProtecLogistique.checkVehiclesArmamentReady(mission, this);
+      if (!armCheck.valid) {
+        this.showToast('Armement en Cours ⏳', armCheck.reason, 'orange');
+        return;
+      }
+    }
+
     if (!hasRequiredSkills && mission.type === 'pompiers') {
       this.applyPrefectureSanction('Équipage déployé sans les qualifications obligatoires (Absence de Chef d’Équipe ou PSE)', 12);
     }
@@ -15523,6 +15532,16 @@ class ProtecGame {
       return;
     }
 
+    if (assignedVeh && window.ProtecLogistique && typeof window.ProtecLogistique.isVehicleArming === 'function' && window.ProtecLogistique.isVehicleArming(assignedVeh)) {
+      const rem = window.ProtecLogistique.getVehicleArmingRemainingSec(assignedVeh);
+      this.showToast(
+        'Armement / Déchargement en Cours ⏳',
+        `Le véhicule « ${assignedVeh.name} » est en cours d'armement / déchargement (${window.ProtecLogistique.formatArmingClock(rem)} restant). Départ bloqué jusqu'à la fin des opérations.`,
+        'orange'
+      );
+      return;
+    }
+
     // 3. Confirmer l'engagement de chaque bénévole de l'équipe et lancer son ralliement Domicile -> Base
     mission.engagedVolunteers = mission.engagedVolunteers || [];
     teamVols.forEach(v => {
@@ -15663,6 +15682,15 @@ class ProtecGame {
       const bikeCheck = window.ProtecLogistique.checkBicycleTransport(mission, this);
       if (!bikeCheck.valid) {
         this.showToast('Transport Vélo Requis 🚲', bikeCheck.reason, 'orange');
+        return;
+      }
+    }
+
+    // Vérification du statut d'armement / déchargement des engins logistiques (3 min/lot)
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.checkVehiclesArmamentReady === 'function') {
+      const armCheck = window.ProtecLogistique.checkVehiclesArmamentReady(mission, this);
+      if (!armCheck.valid) {
+        this.showToast('Armement en Cours ⏳', armCheck.reason, 'orange');
         return;
       }
     }
@@ -19513,6 +19541,10 @@ class ProtecGame {
       `;
     } else if (mission.status === 'declenche') {
       const canEchelon = registeredVols.length >= 3 && !isComplete;
+      let armCheck = { valid: true };
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.checkVehiclesArmamentReady === 'function') {
+        armCheck = window.ProtecLogistique.checkVehiclesArmamentReady(mission, this);
+      }
       footer.innerHTML = `
         <div class="flex items-center gap-1.5 flex-wrap w-full justify-between">
           <div class="flex items-center gap-1.5 flex-wrap">
@@ -19541,10 +19573,17 @@ class ProtecGame {
                 </button>
               `
             ) : (isComplete ? `
-              <button onclick="window.game.launchScheduledMission('${mission.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
-                <i data-lucide="siren" class="w-4 h-4"></i>
-                <span>Engager & Partir</span>
-              </button>
+              ${!armCheck.valid ? `
+                <button onclick="window.game.showToast('Armement en cours ⏳', '${(armCheck.reason || '').replace(/'/g, "\\'")}', 'orange')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-lg shadow-amber-500/30 transition flex items-center justify-center gap-1.5 animate-pulse cursor-pointer" title="${(armCheck.reason || '').replace(/"/g, '&quot;')}">
+                  <i data-lucide="loader" class="w-4 h-4 animate-spin"></i>
+                  <span id="mission-footer-arming-timer-${mission.id}">Armement (${window.ProtecLogistique && window.ProtecLogistique.formatArmingClock ? window.ProtecLogistique.formatArmingClock(armCheck.remainingSec) : `${armCheck.remainingSec}s`})</span>
+                </button>
+              ` : `
+                <button onclick="window.game.launchScheduledMission('${mission.id}')" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-red-600 to-pc-orange text-white shadow-lg shadow-red-600/30 hover:brightness-110 active:scale-95 transition flex items-center justify-center gap-1.5 animate-pulse">
+                  <i data-lucide="siren" class="w-4 h-4"></i>
+                  <span>Engager & Partir</span>
+                </button>
+              `}
             ` : `
               <div class="px-3 py-2 rounded-xl text-center text-[10px] font-black bg-red-100 text-red-900 border border-red-300 flex items-center justify-center">
                 Manque ${Math.max(1, mission.requiredVolunteers - (isUrgentOrPrealert ? operationalEngagedVols.length : operationalVols.length))} engagé(s) ${dispoDomicileVols.length > 0 ? `(${dispoDomicileVols.length} dispo domicile)` : ''}
@@ -19556,6 +19595,10 @@ class ProtecGame {
     } else if (mission.status === 'planifie') {
       const isComplete = registeredVols.length >= mission.requiredVolunteers;
       const canEchelon = registeredVols.length >= 3 && !isComplete;
+      let armCheckPlan = { valid: true };
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.checkVehiclesArmamentReady === 'function') {
+        armCheckPlan = window.ProtecLogistique.checkVehiclesArmamentReady(mission, this);
+      }
       footer.innerHTML = `
         <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
         ${(mission.isCrisis || mission.type === 'crise') ? `
@@ -19606,12 +19649,19 @@ class ProtecGame {
             </button>
           `
         ) : (
-          isComplete ? `
-            <div class="flex-1 min-w-[160px] px-3.5 py-2.5 rounded-xl text-center text-xs font-black ${departureDelayMinutes > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'} shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="${departureDelayMinutes > 0 ? `L'équipage est au complet mais en cours de ralliement. Départ du véhicule prévu à ${formatH(schedule.effectiveDepartureDate)} (+${departureDelayMinutes} min) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.` : `L'équipage est au complet. Le départ aura lieu automatiquement à l'heure du RDV Base (${formatH(schedule.effectiveDepartureDate)}) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.`}">
-              <i data-lucide="clock" class="w-4 h-4 ${departureDelayMinutes > 0 ? 'text-amber-600' : 'text-emerald-600'} shrink-0"></i>
-              <span>Équipe Complète • ${departureDelayMinutes > 0 ? `Départ retardé à ${formatH(schedule.effectiveDepartureDate)} (+${this.formatDurationMinutes(departureDelayMinutes)})` : `Départ auto à ${formatH(schedule.effectiveDepartureDate)}`}</span>
-            </div>
-          ` : `
+          isComplete ? (
+            !armCheckPlan.valid ? `
+              <div onclick="window.game.showToast('Armement / Déchargement en cours ⏳', '${(armCheckPlan.reason || '').replace(/'/g, "\\'")}', 'orange')" class="flex-1 min-w-[160px] px-3.5 py-2.5 rounded-xl text-center text-xs font-black bg-amber-500 text-white border border-amber-600 shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 animate-pulse cursor-pointer" title="${(armCheckPlan.reason || '').replace(/"/g, '&quot;')}">
+                <i data-lucide="loader" class="w-4 h-4 animate-spin shrink-0"></i>
+                <span id="mission-footer-arming-timer-${mission.id}">Armement (${window.ProtecLogistique && window.ProtecLogistique.formatArmingClock ? window.ProtecLogistique.formatArmingClock(armCheckPlan.remainingSec) : `${armCheckPlan.remainingSec}s`}) • Départ bloqué</span>
+              </div>
+            ` : `
+              <div class="flex-1 min-w-[160px] px-3.5 py-2.5 rounded-xl text-center text-xs font-black ${departureDelayMinutes > 0 ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-emerald-50 text-emerald-800 border border-emerald-300'} shadow-2xs flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0" title="${departureDelayMinutes > 0 ? `L'équipage est au complet mais en cours de ralliement. Départ du véhicule prévu à ${formatH(schedule.effectiveDepartureDate)} (+${departureDelayMinutes} min) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.` : `L'équipage est au complet. Le départ aura lieu automatiquement à l'heure du RDV Base (${formatH(schedule.effectiveDepartureDate)}) pour arriver sur site à ${formatH(schedule.effectiveStartDate)}.`}">
+                <i data-lucide="clock" class="w-4 h-4 ${departureDelayMinutes > 0 ? 'text-amber-600' : 'text-emerald-600'} shrink-0"></i>
+                <span>Équipe Complète • ${departureDelayMinutes > 0 ? `Départ retardé à ${formatH(schedule.effectiveDepartureDate)} (+${this.formatDurationMinutes(departureDelayMinutes)})` : `Départ auto à ${formatH(schedule.effectiveDepartureDate)}`}</span>
+              </div>
+            `
+          ) : `
             ${(mission.isRenfort || mission.isOptionalRenfort) && !mission.willProvideRenfort ? `
               <button onclick="window.game.confirmWillProvideRenfort('${mission.id}')" class="flex-1 min-w-[140px] px-3.5 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-md active:scale-95 transition flex items-center justify-center gap-1.5 whitespace-nowrap shrink-0 animate-pulse cursor-pointer" title="Confirmer au régulateur que vous mettez du renfort (+15 min accordées)">
                 <i data-lucide="shield-plus" class="w-4 h-4"></i>
@@ -27107,6 +27157,10 @@ class ProtecGame {
                 statusLabel = 'URGENCES CHU (S5)';
                 statusBadgeClass = 'bg-purple-50 text-purple-900 border-purple-300';
                 dotClass = 'bg-purple-500 animate-pulse';
+              } else if (v.status === 'chargement' || v.status === 'dechargement' || v.armamentOperation) {
+                statusLabel = (v.status === 'dechargement' || v.armamentOperation?.type === 'unload') ? 'DÉCHARGEMENT EN COURS ⏳' : 'CHARGEMENT EN COURS ⏳';
+                statusBadgeClass = 'bg-amber-100 text-amber-900 border-amber-300';
+                dotClass = 'bg-amber-500 animate-ping';
               } else if (v.status === 'a_rearme' || v.status === 'rearmement' || v.needsRearming) {
                 statusLabel = 'RÉARMEMENT REQUIS';
                 statusBadgeClass = 'bg-orange-50 text-orange-900 border-orange-300';
@@ -30150,6 +30204,14 @@ class ProtecGame {
         this.checkAutoLogisticsRearmament();
       }
 
+      // Progression de l'armement/déchargement logistique (1 min réelle par lot, bloquant avec bénévole)
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.tickArmamentOperations === 'function') {
+        window.ProtecLogistique.tickArmamentOperations(this);
+      }
+      if (window.ProtecLogistique && typeof window.ProtecLogistique.updateArmamentDomProgress === 'function') {
+        window.ProtecLogistique.updateArmamentDomProgress();
+      }
+
       this.missions.forEach(m => {
         if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit || m.type === 'crise' || m.isCrisis) {
           const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -30762,6 +30824,13 @@ class ProtecGame {
               if (isDepartureReached) {
                 const registered = m.registeredVolunteers?.length || 0;
                 if (registered >= m.requiredVolunteers && !m.autoLaunched) {
+                  // Bloquer le départ automatique si un véhicule logistique est en cours d'armement/déchargement
+                  if (window.ProtecLogistique && typeof window.ProtecLogistique.checkVehiclesArmamentReady === 'function') {
+                    const armCheck = window.ProtecLogistique.checkVehiclesArmamentReady(m, this);
+                    if (!armCheck.valid) {
+                      return; // Attendre la fin complète des opérations de chargement
+                    }
+                  }
                   m.autoLaunched = true;
                   this.launchScheduledMission(m.id);
                 } else if (registered < m.requiredVolunteers) {

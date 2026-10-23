@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PROTEC LIVE - MODULE LOGISTIQUE & CENTRALE D'ACHATS PROTECTION CIVILE
  * 
  * Fonctionne comme une véritable boutique en ligne e-commerce :
@@ -1201,7 +1201,11 @@ window.ProtecLogistique = {
   },
 
   updateDeliveriesClock(game) {
-    if (!game || !Array.isArray(game.deliveries)) return;
+    if (!game) return;
+    if (typeof this.processVehicleArmingTick === 'function') {
+      this.processVehicleArmingTick(game, 1);
+    }
+    if (!Array.isArray(game.deliveries)) return;
 
     let hasDelivered = false;
     const now = Date.now();
@@ -2355,8 +2359,12 @@ window.ProtecLogistique = {
             const isCtNeeded = v.needsControleTechnique || (v.controleTechniqueKm && (km - v.controleTechniqueKm > 25000));
 
             let statusBadge = '';
+            const isArmingNow = this.isVehicleArming(v);
             if (isBroken) {
               statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-600 text-white flex items-center gap-1 animate-pulse"><i data-lucide="alert-octagon" class="w-3 h-3"></i> EN PANNE</span>';
+            } else if (isArmingNow) {
+              const remSec = this.getVehicleArmingRemainingSec(v);
+              statusBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white flex items-center gap-1 animate-pulse"><i data-lucide="loader" class="w-3 h-3 animate-spin"></i> ARMEMENT / DÉCHARGEMENT (${this.formatArmingClock(remSec)})</span>`;
             } else if (isRearmNeeded) {
               statusBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-red-100 text-red-800 border border-red-300 flex items-center gap-1 animate-pulse"><i data-lucide="alert-triangle" class="w-3 h-3"></i> À RÉARMER</span>';
             } else if (v.status === 'dispo') {
@@ -2550,7 +2558,132 @@ window.ProtecLogistique = {
       veh.loadedItems = [];
     }
 
+    // 6. File d'attente temporisée d'armement / désarmement (3 min = 180s par lot) & personnel affecté au garage
+    if (!Array.isArray(veh.armingQueue)) {
+      veh.armingQueue = [];
+    }
+    if (!Array.isArray(veh.assignedArmingVolunteerIds)) {
+      veh.assignedArmingVolunteerIds = [];
+    }
+
     return veh;
+  },
+
+  // Durée fixe réglementaire : 3 minutes réelles (180 secondes) par lot armé ou désarmé
+  LOT_ARM_DURATION_SEC: 180,
+
+  isVehicleArming(veh) {
+    if (!veh) return false;
+    this.normalizeVehicle(veh);
+    return Array.isArray(veh.armingQueue) && veh.armingQueue.length > 0;
+  },
+
+  getVehicleArmingRemainingSec(veh) {
+    if (!veh || !Array.isArray(veh.armingQueue) || veh.armingQueue.length === 0) return 0;
+    return veh.armingQueue.reduce((sum, op) => sum + Math.max(0, Math.ceil(op.remainingSec || 0)), 0);
+  },
+
+  getVehicleArmingTotalSec(veh) {
+    if (!veh || !Array.isArray(veh.armingQueue) || veh.armingQueue.length === 0) return 0;
+    return veh.armingQueue.reduce((sum, op) => sum + (op.totalSec || this.LOT_ARM_DURATION_SEC), 0);
+  },
+
+  hasActivePersonnelForArming(veh, game) {
+    if (!game) game = window.game;
+    if (!veh || !game) return false;
+    this.normalizeVehicle(veh);
+
+    // 1. Le Responsable Logistique salarié en poste fait avancer les opérations au garage
+    if (typeof game.hasActiveLogisticsResponsible === 'function' && game.hasActiveLogisticsResponsible()) {
+      return true;
+    }
+
+    // 2. Sinon, vérifier qu'au moins 1 bénévole affecté au garage sur ce véhicule est présent
+    const validVols = (veh.assignedArmingVolunteerIds || []).map(id => (game.volunteers || []).find(v => v.id === id)).filter(Boolean);
+    return validVols.length > 0;
+  },
+
+  getAvailableGarageVolunteers(game, mission = null, veh = null) {
+    if (!game) game = window.game;
+    if (!game || !Array.isArray(game.volunteers)) return [];
+    const assignedIds = (veh && Array.isArray(veh.assignedArmingVolunteerIds)) ? veh.assignedArmingVolunteerIds : [];
+    const missionVolIds = (mission && Array.isArray(mission.registeredVolunteers)) ? mission.registeredVolunteers : [];
+
+    return game.volunteers.filter(v => {
+      if (!v) return false;
+      if (assignedIds.includes(v.id)) return false;
+      // Bénévole déjà mobilisé sur la mission (en attente de départ à la base) ou disponible à l'antenne
+      if (missionVolIds.includes(v.id) && v.status !== 'indispo') return true;
+      if (v.status === 'dispo' && (!v.armingVehicleId || v.armingVehicleId === veh?.id)) return true;
+      return false;
+    });
+  },
+
+  assignVolunteerToVehicleArming(missionId, vehicleId, volunteerId) {
+    const game = window.game;
+    if (!game) return;
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    this.normalizeVehicle(veh);
+
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    let vol = null;
+    if (volunteerId) {
+      vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    } else {
+      const candidates = this.getAvailableGarageVolunteers(game, mission, veh);
+      vol = candidates[0] || null;
+    }
+
+    if (!vol) {
+      game.showToast('Aucun bénévole disponible ⚠️', 'Aucun bénévole disponible au garage ou inscrit sur la mission pour manipuler les lots.', 'orange');
+      return;
+    }
+
+    if (!veh.assignedArmingVolunteerIds.includes(vol.id)) {
+      veh.assignedArmingVolunteerIds.push(vol.id);
+    }
+    vol.armingVehicleId = veh.id;
+
+    game.showToast('Personnel affecté au garage 👷', `${vol.name} prend en charge la manutention des lots sur ${veh.name}. Le chrono d'armement est actif !`, 'green');
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+
+    game.saveGame();
+    if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    }
+    this.refreshOpenLogisticsModalIfNeeded(game);
+  },
+
+  unassignVolunteerFromVehicleArming(missionId, vehicleId, volunteerId) {
+    const game = window.game;
+    if (!game) return;
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    this.normalizeVehicle(veh);
+
+    veh.assignedArmingVolunteerIds = (veh.assignedArmingVolunteerIds || []).filter(id => id !== volunteerId);
+    const vol = (game.volunteers || []).find(v => v.id === volunteerId);
+    if (vol && vol.armingVehicleId === veh.id) {
+      vol.armingVehicleId = null;
+    }
+
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    }
+    this.refreshOpenLogisticsModalIfNeeded(game);
+  },
+
+  refreshOpenLogisticsModalIfNeeded(game) {
+    if (typeof document === 'undefined') return;
+    const modalOpen = document.getElementById('main-modal');
+    const title = document.getElementById('modal-title');
+    if (modalOpen && !modalOpen.classList.contains('hidden') && title && (title.textContent.includes('Centrale d’Achats') || title.textContent.includes('Logistique'))) {
+      this.renderModal(game);
+    }
   },
 
   getVehicleTypes(veh) {
@@ -2566,8 +2699,13 @@ window.ProtecLogistique = {
   },
 
   getUsedLogSlots(veh) {
-    if (!veh || !Array.isArray(veh.loadedItems)) return 0;
-    return veh.loadedItems.reduce((sum, item) => sum + (item.slots || 1), 0);
+    if (!veh) return 0;
+    this.normalizeVehicle(veh);
+    const loadedSlots = (veh.loadedItems || []).reduce((sum, item) => sum + (item.slots || 1), 0);
+    const queuedLoadSlots = (veh.armingQueue || [])
+      .filter(op => op.type === 'load' || op.type === 'load_bike')
+      .reduce((sum, op) => sum + (op.slots || 1), 0);
+    return loadedSlots + queuedLoadSlots;
   },
 
   getFreeLogSlots(veh) {
@@ -2589,14 +2727,14 @@ window.ProtecLogistique = {
   },
 
   // =========================================================================
-  // 5. GESTION DES CHARGEMENTS DE LOTS, CAISSES & VÉLOS AVANT DÉPART
+  // 5. GESTION DES CHARGEMENTS DE LOTS, CAISSES & VÉLOS AVANT DÉPART (3 MIN / LOT)
   // =========================================================================
 
   loadItemToVehicle(missionId, vehicleId, itemId) {
     const game = window.game;
     if (!game) return;
     const mission = (game.missions || []).find(m => m.id === missionId);
-    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
     if (!veh) return;
 
     this.normalizeVehicle(veh);
@@ -2626,10 +2764,9 @@ window.ProtecLogistique = {
       return;
     }
 
-    // Déduire du stock local
+    // Réserver immédiatement l'unité du stock local
     station.stock[itemId] = Math.max(0, (station.stock[itemId] || 1) - 1);
 
-    // Embarquer l'item dans le véhicule LOG
     const initialConsumables = comp?.consumables !== undefined ? comp.consumables : (catItem?.consumables !== undefined ? catItem.consumables : 100);
     const maxCons = comp?.maxConsumables !== undefined ? comp.maxConsumables : (catItem?.maxConsumables !== undefined ? catItem.maxConsumables : 100);
 
@@ -2646,9 +2783,43 @@ window.ProtecLogistique = {
       itemsList: comp?.items || []
     };
 
-    veh.loadedItems.push(loadedEntry);
-    game.showToast('Matériel chargé 📦', `« ${loadedEntry.shortName} » (${loadedEntry.slots} slot(s)) embarqué dans ${veh.name}.`, 'green');
+    const durationSec = this.LOT_ARM_DURATION_SEC || 180;
+    const op = {
+      opId: `op_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      type: 'load',
+      missionId: mission ? mission.id : null,
+      stationId: station ? station.id : null,
+      itemId: itemId,
+      itemName: loadedEntry.shortName,
+      slots: itemSlots,
+      itemData: loadedEntry,
+      totalSec: durationSec,
+      remainingSec: durationSec,
+      queuedAt: Date.now()
+    };
+
+    veh.armingQueue.push(op);
+
+    const totalSecLeft = this.getVehicleArmingRemainingSec(veh);
+    const minLeft = Math.ceil(totalSecLeft / 60);
+    const hasPersonnel = this.hasActivePersonnelForArming(veh, game);
+
+    if (hasPersonnel) {
+      game.showToast(
+        'Armement en cours ⏳ (3 min/lot)',
+        `« ${loadedEntry.shortName} » ajouté à la file d'armement de ${veh.name} (${veh.armingQueue.length} lot(s) • ~${minLeft} min au total).`,
+        'blue'
+      );
+    } else {
+      game.showToast(
+        'Lot en file d\'attente 👷 (3 min/lot)',
+        `« ${loadedEntry.shortName} » prêt à être chargé dans ${veh.name}. Affectez un bénévole disponible au garage pour démarrer le chrono (${minLeft} min) !`,
+        'orange'
+      );
+    }
+
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    this.ensureArmingInterval(game);
 
     game.saveGame();
     if (mission) {
@@ -2658,23 +2829,70 @@ window.ProtecLogistique = {
         game.openMissionDetails(mission.id);
       }
     }
+    this.refreshOpenLogisticsModalIfNeeded(game);
   },
 
   unloadItemFromVehicle(missionId, vehicleId, itemIndex) {
     const game = window.game;
     if (!game) return;
     const mission = (game.missions || []).find(m => m.id === missionId);
-    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
     if (!veh || !Array.isArray(veh.loadedItems) || !veh.loadedItems[itemIndex]) return;
+
+    this.normalizeVehicle(veh);
+    const item = veh.loadedItems[itemIndex];
+    if (item.isVehicle) {
+      return this.unloadBicycleFromVehicle(missionId, vehicleId, item.id);
+    }
+
+    // Éviter de mettre deux fois le même lot en file de déchargement
+    if (item.pendingUnloadOpId && veh.armingQueue.some(op => op.opId === item.pendingUnloadOpId)) {
+      game.showToast('Déchargement déjà en cours ⏳', `« ${item.shortName || item.name} » est déjà dans la file de désarmement.`, 'orange');
+      return;
+    }
 
     const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
     this.ensureStationStock(station, game);
 
-    const item = veh.loadedItems.splice(itemIndex, 1)[0];
-    station.stock[item.id] = (station.stock[item.id] || 0) + 1;
+    const durationSec = this.LOT_ARM_DURATION_SEC || 180;
+    const opId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    item.pendingUnloadOpId = opId;
 
-    game.showToast('Matériel déchargé 🧹', `« ${item.name} » restitué au stock du local de ${station.name}.`, 'teal');
+    const op = {
+      opId: opId,
+      type: 'unload',
+      missionId: mission ? mission.id : null,
+      stationId: station ? station.id : null,
+      itemId: item.id,
+      itemName: item.shortName || item.name,
+      slots: item.slots || 1,
+      totalSec: durationSec,
+      remainingSec: durationSec,
+      queuedAt: Date.now()
+    };
+
+    veh.armingQueue.push(op);
+
+    const totalSecLeft = this.getVehicleArmingRemainingSec(veh);
+    const minLeft = Math.ceil(totalSecLeft / 60);
+    const hasPersonnel = this.hasActivePersonnelForArming(veh, game);
+
+    if (hasPersonnel) {
+      game.showToast(
+        'Désarmement en cours ⏳ (3 min/lot)',
+        `Déchargement de « ${item.shortName || item.name} » programmé sur ${veh.name} (${veh.armingQueue.length} opération(s) • ~${minLeft} min au total).`,
+        'teal'
+      );
+    } else {
+      game.showToast(
+        'Désarmement en attente 👷 (3 min/lot)',
+        `« ${item.shortName || item.name} » mis en file de déchargement. Affectez un bénévole disponible au garage pour démarrer le chrono (${minLeft} min) !`,
+        'orange'
+      );
+    }
+
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    this.ensureArmingInterval(game);
 
     game.saveGame();
     if (mission) {
@@ -2684,18 +2902,24 @@ window.ProtecLogistique = {
         game.openMissionDetails(mission.id);
       }
     }
+    this.refreshOpenLogisticsModalIfNeeded(game);
   },
 
   loadBicycleToVehicle(missionId, vehicleId, bikeId) {
     const game = window.game;
     if (!game) return;
     const mission = (game.missions || []).find(m => m.id === missionId);
-    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
-    const bike = (game.vehicles || []).find(v => v.id === bikeId);
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    const bike = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === bikeId);
     if (!veh || !bike) return;
 
     this.normalizeVehicle(veh);
     this.normalizeVehicle(bike);
+
+    if (veh.armingQueue.some(op => op.type === 'load_bike' && op.bikeId === bike.id)) {
+      game.showToast('Embarquement VTT déjà en cours ⏳', `${bike.name} est déjà dans la file d'armement.`, 'orange');
+      return;
+    }
 
     const check = this.canLoadInVehicle(veh, { slots: 1 });
     if (!check.can) {
@@ -2703,19 +2927,43 @@ window.ProtecLogistique = {
       return;
     }
 
-    bike.transportedBy = veh.id;
-    veh.loadedItems.push({
-      id: bike.id,
-      name: bike.name || 'VTT Secours',
-      shortName: 'VTT Secours (Vélo)',
+    bike.pendingTransportedBy = veh.id;
+    const durationSec = this.LOT_ARM_DURATION_SEC || 180;
+    const op = {
+      opId: `op_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      type: 'load_bike',
+      missionId: mission ? mission.id : null,
+      bikeId: bike.id,
+      itemName: `${bike.name || 'VTT Secours'} (Vélo)`,
       slots: 1,
-      isVehicle: true,
-      types: ['PS'],
-      consumables: bike.consumables || 100
-    });
+      itemData: {
+        id: bike.id,
+        name: bike.name || 'VTT Secours',
+        shortName: 'VTT Secours (Vélo)',
+        slots: 1,
+        isVehicle: true,
+        types: ['PS'],
+        consumables: bike.consumables || 100
+      },
+      totalSec: durationSec,
+      remainingSec: durationSec,
+      queuedAt: Date.now()
+    };
 
-    game.showToast('VTT Embarqué 🚲', `${bike.name} est chargé dans ${veh.name} (1 slot LOG). Transport routier sécurisé !`, 'green');
+    veh.armingQueue.push(op);
+
+    const totalSecLeft = this.getVehicleArmingRemainingSec(veh);
+    const minLeft = Math.ceil(totalSecLeft / 60);
+    const hasPersonnel = this.hasActivePersonnelForArming(veh, game);
+
+    if (hasPersonnel) {
+      game.showToast('Arrimage VTT en cours 🚲 (3 min)', `${bike.name} est en cours d'embarquement dans ${veh.name} (~${minLeft} min au total).`, 'blue');
+    } else {
+      game.showToast('Arrimage VTT en attente 👷 (3 min)', `Affectez un bénévole au garage pour embarquer ${bike.name} dans ${veh.name} !`, 'orange');
+    }
+
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    this.ensureArmingInterval(game);
 
     game.saveGame();
     if (mission) {
@@ -2725,23 +2973,47 @@ window.ProtecLogistique = {
         game.openMissionDetails(mission.id);
       }
     }
+    this.refreshOpenLogisticsModalIfNeeded(game);
   },
 
   unloadBicycleFromVehicle(missionId, vehicleId, bikeId) {
     const game = window.game;
     if (!game) return;
     const mission = (game.missions || []).find(m => m.id === missionId);
-    const veh = (game.vehicles || []).find(v => v.id === vehicleId);
-    const bike = (game.vehicles || []).find(v => v.id === bikeId);
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    const bike = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === bikeId);
     if (!veh) return;
 
-    if (Array.isArray(veh.loadedItems)) {
-      veh.loadedItems = veh.loadedItems.filter(it => it.id !== bikeId);
-    }
-    if (bike) bike.transportedBy = null;
+    this.normalizeVehicle(veh);
+    const bikeEntry = (veh.loadedItems || []).find(it => it.id === bikeId);
+    if (!bikeEntry) return;
 
-    game.showToast('VTT Déchargé', `${bike ? bike.name : 'VTT'} retiré du véhicule porteur.`, 'slate');
+    if (bikeEntry.pendingUnloadOpId && veh.armingQueue.some(op => op.opId === bikeEntry.pendingUnloadOpId)) {
+      game.showToast('Déchargement VTT déjà en cours ⏳', `${bike ? bike.name : 'VTT'} est déjà en file de déchargement.`, 'orange');
+      return;
+    }
+
+    const durationSec = this.LOT_ARM_DURATION_SEC || 180;
+    const opId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    bikeEntry.pendingUnloadOpId = opId;
+
+    veh.armingQueue.push({
+      opId: opId,
+      type: 'unload_bike',
+      missionId: mission ? mission.id : null,
+      bikeId: bikeId,
+      itemName: `${bike ? bike.name : 'VTT Secours'} (Vélo)`,
+      slots: 1,
+      totalSec: durationSec,
+      remainingSec: durationSec,
+      queuedAt: Date.now()
+    });
+
+    const totalSecLeft = this.getVehicleArmingRemainingSec(veh);
+    const minLeft = Math.ceil(totalSecLeft / 60);
+    game.showToast('Déchargement VTT en cours 🚲 (3 min)', `Désarrimage de ${bike ? bike.name : 'VTT'} programmé (~${minLeft} min au total).`, 'slate');
     if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    this.ensureArmingInterval(game);
 
     if (typeof game.saveGame === 'function') game.saveGame();
     if (mission) {
@@ -2751,6 +3023,292 @@ window.ProtecLogistique = {
         game.openMissionDetails(mission.id);
       }
     }
+    this.refreshOpenLogisticsModalIfNeeded(game);
+  },
+
+  cancelArmingOperation(missionId, vehicleId, opId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = (game.missions || []).find(m => m.id === missionId);
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    this.normalizeVehicle(veh);
+
+    const opIdx = (veh.armingQueue || []).findIndex(o => o.opId === opId);
+    if (opIdx === -1) return;
+
+    const op = veh.armingQueue.splice(opIdx, 1)[0];
+    const station = (game.stations || []).find(s => s.id === (op.stationId || veh.stationId)) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    if (op.type === 'load') {
+      // Restituer immédiatement au stock local puisque l'embarquement est annulé
+      station.stock[op.itemId] = (station.stock[op.itemId] || 0) + 1;
+      game.showToast('Embarquement annulé ↩️', `« ${op.itemName} » a été retiré de la file et remis au stock de l'antenne.`, 'slate');
+    } else if (op.type === 'unload') {
+      const targetItem = (veh.loadedItems || []).find(it => it.pendingUnloadOpId === op.opId);
+      if (targetItem) delete targetItem.pendingUnloadOpId;
+      game.showToast('Déchargement annulé ↩️', `« ${op.itemName} » reste embarqué à bord de ${veh.name}.`, 'slate');
+    } else if (op.type === 'load_bike') {
+      const bike = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === op.bikeId);
+      if (bike) bike.pendingTransportedBy = null;
+      game.showToast('Arrimage VTT annulé ↩️', `L'embarquement de ${op.itemName} a été annulé.`, 'slate');
+    } else if (op.type === 'unload_bike') {
+      const targetBike = (veh.loadedItems || []).find(it => it.pendingUnloadOpId === op.opId);
+      if (targetBike) delete targetBike.pendingUnloadOpId;
+      game.showToast('Déchargement VTT annulé ↩️', `${op.itemName} reste à bord de ${veh.name}.`, 'slate');
+    }
+
+    // Si la file est désormais vide, libérer les bénévoles affectés au garage sur ce véhicule
+    if (veh.armingQueue.length === 0) {
+      this.releaseVehicleArmingVolunteers(veh, game);
+    }
+
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    game.saveGame();
+    if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    }
+    this.refreshOpenLogisticsModalIfNeeded(game);
+  },
+
+  releaseVehicleArmingVolunteers(veh, game) {
+    if (!veh) return;
+    if (!game) game = window.game;
+    const ids = Array.isArray(veh.assignedArmingVolunteerIds) ? [...veh.assignedArmingVolunteerIds] : [];
+    ids.forEach(id => {
+      const vol = (game?.volunteers || []).find(v => v.id === id);
+      if (vol && vol.armingVehicleId === veh.id) {
+        vol.armingVehicleId = null;
+      }
+    });
+    veh.assignedArmingVolunteerIds = [];
+  },
+
+  ensureArmingInterval(game) {
+    if (this._armingIntervalId) return;
+    this._lastArmingTickAt = Date.now();
+    this._armingIntervalId = setInterval(() => {
+      const g = window.game || game;
+      if (!g) return;
+      const now = Date.now();
+      const elapsedSec = Math.max(1, Math.round((now - (this._lastArmingTickAt || now - 1000)) / 1000));
+      this._lastArmingTickAt = now;
+      this.processVehicleArmingTick(g, elapsedSec);
+    }, 1000);
+  },
+
+  formatArmingClock(sec) {
+    const sTotal = Math.max(0, Math.ceil(sec || 0));
+    const m = Math.floor(sTotal / 60);
+    const s = sTotal % 60;
+    return `${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+  },
+
+  processVehicleArmingTick(game, deltaSec = 1) {
+    if (!game) game = window.game;
+    if (!game) return;
+
+    const now = Date.now();
+    // Anti-doublon si appelé à la fois par updateDeliveriesClock et setInterval dans la même seconde
+    if (this._lastProcessedArmingTimestamp && (now - this._lastProcessedArmingTimestamp) < 750) {
+      return;
+    }
+    this._lastProcessedArmingTimestamp = now;
+
+    const allVehs = [];
+    const seenIds = new Set();
+    (game.vehicles || []).concat(game.allVehicles || []).forEach(v => {
+      if (v && v.id && !seenIds.has(v.id)) {
+        seenIds.add(v.id);
+        allVehs.push(v);
+      }
+    });
+
+    let anyCompleted = false;
+    let anyActive = false;
+    const affectedMissionIds = new Set();
+
+    allVehs.forEach(veh => {
+      if (!Array.isArray(veh.armingQueue) || veh.armingQueue.length === 0) return;
+      anyActive = true;
+
+      const hasPersonnel = this.hasActivePersonnelForArming(veh, game);
+      if (!hasPersonnel) {
+        // Mettre à jour l'affichage DOM en mode "En pause - Attente bénévole"
+        this.updateVehicleArmingDOM(veh, game, false);
+        return;
+      }
+
+      // Le chrono avance sur la première opération de la file (séquentiel : les lots s'additionnent)
+      let remainingStep = deltaSec;
+      while (remainingStep > 0 && veh.armingQueue.length > 0) {
+        const currentOp = veh.armingQueue[0];
+        if (currentOp.missionId) affectedMissionIds.add(currentOp.missionId);
+
+        if (currentOp.remainingSec > remainingStep) {
+          currentOp.remainingSec -= remainingStep;
+          remainingStep = 0;
+        } else {
+          remainingStep -= currentOp.remainingSec;
+          currentOp.remainingSec = 0;
+
+          // Opération de 3 minutes terminée ! Exécuter le transfert effectif
+          const finishedOp = veh.armingQueue.shift();
+          anyCompleted = true;
+          this.completeSingleArmingOperation(veh, finishedOp, game);
+        }
+      }
+
+      // Si toute la file d'attente du véhicule est terminée
+      if (veh.armingQueue.length === 0) {
+        this.releaseVehicleArmingVolunteers(veh, game);
+        game.showToast(
+          'Armement Véhicule Terminé ✅',
+          `Toutes les opérations logistiques sur ${veh.name} sont terminées. Le véhicule est prêt au départ !`,
+          'green'
+        );
+        if (window.ProtecAudio && typeof window.ProtecAudio.playSuccessChime === 'function') {
+          window.ProtecAudio.playSuccessChime();
+        }
+      } else {
+        this.updateVehicleArmingDOM(veh, game, true);
+      }
+    });
+
+    if (!anyActive && this._armingIntervalId) {
+      clearInterval(this._armingIntervalId);
+      this._armingIntervalId = null;
+    }
+
+    if (anyCompleted) {
+      game.saveGame();
+      // Rafraîchir le tiroir de mission ouvert s'il est concerné
+      if (game.selectedMissionId && typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(game.selectedMissionId);
+      } else {
+        affectedMissionIds.forEach(mId => {
+          if (typeof game.refreshMissionDetailsIfOpen === 'function') {
+            game.refreshMissionDetailsIfOpen(mId);
+          }
+        });
+      }
+      this.refreshOpenLogisticsModalIfNeeded(game);
+    } else if (anyActive && game.selectedMissionId && typeof document !== 'undefined') {
+      // Mettre à jour le bouton de pied de page du tiroir de mission en temps réel
+      const footerBtnSpan = document.getElementById(`mission-footer-arming-timer-${game.selectedMissionId}`);
+      if (footerBtnSpan) {
+        const m = (game.missions || []).find(mi => mi.id === game.selectedMissionId);
+        if (m) {
+          const check = this.checkVehiclesArmamentReady(m, game);
+          if (!check.valid) {
+            footerBtnSpan.textContent = `Armement (${this.formatArmingClock(check.remainingSec)})`;
+          }
+        }
+      }
+    }
+  },
+
+  completeSingleArmingOperation(veh, op, game) {
+    const station = (game.stations || []).find(s => s.id === (op.stationId || veh.stationId)) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    if (op.type === 'load') {
+      if (op.itemData) {
+        veh.loadedItems.push(op.itemData);
+      }
+      game.showToast('Lot embarqué 📦', `« ${op.itemName} » est maintenant chargé et arrimé à bord de ${veh.name}.`, 'green');
+    } else if (op.type === 'unload') {
+      const idx = (veh.loadedItems || []).findIndex(it => it.pendingUnloadOpId === op.opId || it.id === op.itemId);
+      if (idx !== -1) {
+        const removed = veh.loadedItems.splice(idx, 1)[0];
+        station.stock[removed.id] = (station.stock[removed.id] || 0) + 1;
+      } else {
+        station.stock[op.itemId] = (station.stock[op.itemId] || 0) + 1;
+      }
+      game.showToast('Lot déchargé 🧹', `« ${op.itemName} » a été déchargé de ${veh.name} et rangé au stock de ${station.name}.`, 'teal');
+    } else if (op.type === 'load_bike') {
+      const bike = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === op.bikeId);
+      if (bike) {
+        bike.transportedBy = veh.id;
+        bike.pendingTransportedBy = null;
+      }
+      if (op.itemData && !veh.loadedItems.some(it => it.id === op.bikeId)) {
+        veh.loadedItems.push(op.itemData);
+      }
+      game.showToast('VTT Embarqué 🚲', `${op.itemName} est arrimé à bord de ${veh.name}.`, 'green');
+    } else if (op.type === 'unload_bike') {
+      const bike = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === op.bikeId);
+      if (bike) {
+        bike.transportedBy = null;
+        bike.pendingTransportedBy = null;
+      }
+      veh.loadedItems = (veh.loadedItems || []).filter(it => it.id !== op.bikeId);
+      game.showToast('VTT Déchargé 🚲', `${op.itemName} a été descendu de ${veh.name}.`, 'slate');
+    }
+  },
+
+  updateVehicleArmingDOM(veh, game, hasPersonnel) {
+    if (typeof document === 'undefined' || !veh) return;
+    const remSec = this.getVehicleArmingRemainingSec(veh);
+    const totSec = Math.max(1, this.getVehicleArmingTotalSec(veh));
+    const pct = Math.min(100, Math.max(0, Math.round(((totSec - remSec) / totSec) * 100)));
+    const currentOp = veh.armingQueue[0];
+    const currentOpRem = currentOp ? Math.max(0, Math.ceil(currentOp.remainingSec || 0)) : 0;
+    const currentOpTot = currentOp ? (currentOp.totalSec || this.LOT_ARM_DURATION_SEC) : 180;
+    const currentPct = Math.min(100, Math.max(0, Math.round(((currentOpTot - currentOpRem) / currentOpTot) * 100)));
+
+    const timerEl = document.getElementById(`veh-arming-total-timer-${veh.id}`);
+    if (timerEl) {
+      timerEl.textContent = `${this.formatArmingClock(remSec)} / ${this.formatArmingClock(totSec)}`;
+    }
+    const barEl = document.getElementById(`veh-arming-total-bar-${veh.id}`);
+    if (barEl) {
+      barEl.style.width = `${pct}%`;
+    }
+    const curTimerEl = document.getElementById(`veh-arming-current-timer-${veh.id}`);
+    if (curTimerEl && currentOp) {
+      curTimerEl.textContent = this.formatArmingClock(currentOpRem);
+    }
+    const curBarEl = document.getElementById(`veh-arming-current-bar-${veh.id}`);
+    if (curBarEl) {
+      curBarEl.style.width = `${currentPct}%`;
+    }
+  },
+
+  // Vérification bloquante avant départ en mission : aucun véhicule de la mission ne doit avoir d'opération en cours dans armingQueue
+  checkVehiclesArmamentReady(mission, game) {
+    if (!mission) return { valid: true, remainingSec: 0 };
+    if (!game) game = window.game;
+    const assignedVehs = this.getMissionVehicles(mission, game);
+
+    let totalRemainingSec = 0;
+    const armingVehNames = [];
+    let missingPersonnel = false;
+
+    assignedVehs.forEach(v => {
+      this.normalizeVehicle(v);
+      if (Array.isArray(v.armingQueue) && v.armingQueue.length > 0) {
+        const rem = this.getVehicleArmingRemainingSec(v);
+        totalRemainingSec = Math.max(totalRemainingSec, rem);
+        const hasStaff = this.hasActivePersonnelForArming(v, game);
+        if (!hasStaff) missingPersonnel = true;
+        armingVehNames.push(`${v.name} (${v.armingQueue.length} lot(s), ${this.formatArmingClock(rem)} restant${!hasStaff ? ' - EN PAUSE sans bénévole' : ''})`);
+      }
+    });
+
+    if (armingVehNames.length > 0) {
+      return {
+        valid: false,
+        remainingSec: totalRemainingSec,
+        missingPersonnel,
+        reason: missingPersonnel
+          ? `Départ bloqué : ${armingVehNames.join(', ')} est en attente d'un bénévole au garage pour terminer son armement/déchargement (3 min/lot).`
+          : `Départ bloqué : ${armingVehNames.join(', ')} est en cours d'armement / déchargement au garage. Attendez la fin des opérations (${this.formatArmingClock(totalRemainingSec)}).`
+      };
+    }
+
+    return { valid: true, remainingSec: 0 };
   },
 
   getMissionVehicles(mission, game) {
@@ -2805,29 +3363,17 @@ window.ProtecLogistique = {
       };
     }
 
-    // Vérifier que chaque vélo est bien transporté ou qu'il y a assez de slots LOG
+    // Vérifier que chaque vélo est bien transporté (ou en file d'embarquement) dans un véhicule LOG
     for (const bike of bicycles) {
-      const isExplicitlyCarried = logVehicles.some(lv => Array.isArray(lv.loadedItems) && lv.loadedItems.some(it => it.id === bike.id));
+      const isExplicitlyCarried = logVehicles.some(lv =>
+        (Array.isArray(lv.loadedItems) && lv.loadedItems.some(it => it.id === bike.id)) ||
+        (Array.isArray(lv.armingQueue) && lv.armingQueue.some(op => op.type === 'load_bike' && op.bikeId === bike.id))
+      );
       if (!isExplicitlyCarried) {
-        // Tenter l'attribution automatique dans un slot libre
-        const candidate = logVehicles.find(lv => this.getFreeLogSlots(lv) >= 1);
-        if (candidate) {
-          candidate.loadedItems.push({
-            id: bike.id,
-            name: bike.name || 'VTT Secours',
-            shortName: 'VTT Secours',
-            slots: 1,
-            isVehicle: true,
-            types: ['PS'],
-            consumables: bike.consumables || 100
-          });
-          bike.transportedBy = candidate.id;
-        } else {
-          return {
-            valid: false,
-            reason: `Espace logistique insuffisant : aucun véhicule LOG n'a de slot libre pour transporter le ${bike.name || 'vélo'}. Libérez 1 slot de transport.`
-          };
-        }
+        return {
+          valid: false,
+          reason: `Le ${bike.name || 'VTT Secours'} doit d'abord être embarqué dans un véhicule LOG (1 slot, 3 min d'armement) avant le départ.`
+        };
       }
     }
 
@@ -3900,7 +4446,147 @@ window.ProtecLogistique = {
                   </div>
                 </div>
 
-                ${isLog ? `
+                ${isLog ? (() => {
+                  const queue = Array.isArray(veh.armingQueue) ? veh.armingQueue : [];
+                  const isArming = queue.length > 0;
+                  const remSec = this.getVehicleArmingRemainingSec(veh);
+                  const totSec = Math.max(1, this.getVehicleArmingTotalSec(veh));
+                  const pct = isArming ? Math.min(100, Math.max(0, Math.round(((totSec - remSec) / totSec) * 100))) : 0;
+                  const currentOp = queue[0] || null;
+                  const currentOpRem = currentOp ? Math.max(0, Math.ceil(currentOp.remainingSec || 0)) : 0;
+                  const currentOpTot = currentOp ? (currentOp.totalSec || this.LOT_ARM_DURATION_SEC) : 180;
+                  const currentPct = currentOp ? Math.min(100, Math.max(0, Math.round(((currentOpTot - currentOpRem) / currentOpTot) * 100))) : 0;
+
+                  const hasLogResp = typeof game.hasActiveLogisticsResponsible === 'function' && game.hasActiveLogisticsResponsible();
+                  const assignedVols = (veh.assignedArmingVolunteerIds || []).map(id => (game.volunteers || []).find(v => v.id === id)).filter(Boolean);
+                  const hasPersonnel = hasLogResp || assignedVols.length > 0;
+                  const candidateVols = this.getAvailableGarageVolunteers(game, mission, veh).slice(0, 5);
+
+                  return `
+                  <!-- 0. PANNEAU PERSONNEL DE GARAGE & CHRONO D'ARMEMENT / DÉCHARGEMENT (3 MIN / LOT) -->
+                  <div class="p-3.5 rounded-2xl border-2 ${isArming ? (hasPersonnel ? 'border-amber-400 bg-amber-50/90 dark:bg-amber-950/40 dark:border-amber-500/80' : 'border-rose-400 bg-rose-50/90 dark:bg-rose-950/40 dark:border-rose-500/80') : 'border-slate-200 dark:border-slate-700/80 bg-white/90 dark:bg-slate-800/80'} space-y-3 shadow-2xs">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2.5 py-1 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 ${isArming ? (hasPersonnel ? 'bg-amber-500 text-white animate-pulse shadow-xs' : 'bg-rose-600 text-white animate-pulse shadow-xs') : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700'}">
+                          ${isArming
+                            ? (hasPersonnel
+                              ? `<i data-lucide="loader" class="w-3.5 h-3.5 animate-spin"></i><span>En cours d'armement / déchargement (${queue.length} lot${queue.length > 1 ? 's' : ''})</span>`
+                              : `<i data-lucide="pause-circle" class="w-3.5 h-3.5"></i><span>En pause : Attente bénévole au garage</span>`)
+                            : `<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i><span>Prêt au départ (3 min / lot ajouté ou retiré)</span>`
+                          }
+                        </span>
+                        <span class="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                          ⏱️ Durée réglementaire : <strong class="text-slate-900 dark:text-white">3 min par lot</strong> (cumulatif)
+                        </span>
+                      </div>
+
+                      ${isArming ? `
+                        <div class="flex items-center gap-2 self-end sm:self-auto">
+                          <span class="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">Temps total restant :</span>
+                          <span id="veh-arming-total-timer-${veh.id}" class="px-2.5 py-1 rounded-lg font-mono text-xs font-black ${hasPersonnel ? 'bg-amber-900 text-amber-100' : 'bg-rose-900 text-rose-100'}">
+                            ${this.formatArmingClock(remSec)} / ${this.formatArmingClock(totSec)}
+                          </span>
+                        </div>
+                      ` : ''}
+                    </div>
+
+                    <!-- Affectation obligatoire d'au moins 1 bénévole au garage (ou Responsable Logistique) -->
+                    <div class="p-2.5 rounded-xl bg-white dark:bg-slate-900/90 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div class="space-y-1">
+                        <div class="text-[10.5px] font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <span>👷 Personnel affecté à la manutention au garage :</span>
+                          ${hasLogResp ? `
+                            <span class="px-2 py-0.5 rounded-md text-[9.5px] font-black bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200 border border-indigo-300 dark:border-indigo-700">
+                              ✓ Responsable Logistique en poste (Actif)
+                            </span>
+                          ` : ''}
+                        </div>
+                        ${assignedVols.length > 0 ? `
+                          <div class="flex flex-wrap gap-1.5 pt-0.5">
+                            ${assignedVols.map(v => `
+                              <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-100 text-emerald-900 dark:bg-emerald-950/70 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-700">
+                                <span>👷 ${v.name}</span>
+                                <button type="button" onclick="window.ProtecLogistique.unassignVolunteerFromVehicleArming('${mission.id}', '${veh.id}', '${v.id}')" class="text-rose-600 hover:text-rose-800 font-black ml-0.5 cursor-pointer" title="Retirer ce bénévole de la manutention">✕</button>
+                              </span>
+                            `).join('')}
+                          </div>
+                        ` : (!hasLogResp ? `
+                          <p class="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                            ⚠️ Aucun bénévole affecté au garage : affectez au moins 1 bénévole ci-contre pour faire avancer l'armement / désarmement !
+                          </p>
+                        ` : `
+                          <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                            Le Responsable Logistique supervise et assure automatiquement le chargement/déchargement des lots.
+                          </p>
+                        `)}
+                      </div>
+
+                      <!-- Boutons d'affectation rapide d'un bénévole dispo -->
+                      <div class="flex items-center gap-1.5 flex-wrap">
+                        ${candidateVols.length > 0 ? `
+                          ${candidateVols.slice(0, 2).map(cv => `
+                            <button
+                              type="button"
+                              onclick="window.ProtecLogistique.assignVolunteerToVehicleArming('${mission.id}', '${veh.id}', '${cv.id}')"
+                              class="px-2.5 py-1.5 rounded-xl text-[10px] font-black bg-pc-blue hover:bg-pc-blue-light text-white shadow-2xs transition cursor-pointer flex items-center gap-1">
+                              <span>+ Affecter ${cv.name}</span>
+                            </button>
+                          `).join('')}
+                        ` : (!hasPersonnel ? `
+                          <span class="text-[10px] font-bold text-amber-700 dark:text-amber-300 px-2 py-1 rounded-lg bg-amber-100/70 dark:bg-amber-950/40">
+                            Aucun bénévole disponible au garage
+                          </span>
+                        ` : '')}
+                      </div>
+                    </div>
+
+                    ${isArming ? `
+                      <!-- Barres de progression et file d'attente détaillée -->
+                      <div class="space-y-2 pt-1">
+                        <div class="space-y-1">
+                          <div class="flex items-center justify-between text-[10px] font-black text-amber-950 dark:text-amber-200">
+                            <span>Opération en cours : <strong class="underline">${currentOp.type.startsWith('unload') ? 'Déchargement' : 'Embarquement'} — ${currentOp.itemName}</strong></span>
+                            <span id="veh-arming-current-timer-${veh.id}" class="font-mono">${this.formatArmingClock(currentOpRem)}</span>
+                          </div>
+                          <div class="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border border-slate-300 dark:border-slate-600">
+                            <div id="veh-arming-current-bar-${veh.id}" class="h-full ${hasPersonnel ? 'bg-gradient-to-r from-amber-500 to-emerald-500' : 'bg-rose-500'} transition-all duration-500" style="width: ${currentPct}%"></div>
+                          </div>
+                        </div>
+
+                        <div class="space-y-1">
+                          <div class="flex items-center justify-between text-[9.5px] font-bold text-slate-600 dark:text-slate-400">
+                            <span>Progression totale de la file (${queue.length} opération${queue.length > 1 ? 's' : ''} • ${queue.length * 3} min cumulées)</span>
+                            <span>Départ bloqué jusqu'à la fin</span>
+                          </div>
+                          <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                            <div id="veh-arming-total-bar-${veh.id}" class="h-full bg-pc-blue transition-all duration-500" style="width: ${pct}%"></div>
+                          </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
+                          ${queue.map((op, qIdx) => `
+                            <div class="px-2.5 py-1.5 rounded-xl bg-white dark:bg-slate-900 border ${qIdx === 0 ? 'border-amber-400 dark:border-amber-500 ring-1 ring-amber-300/50' : 'border-slate-200 dark:border-slate-700'} flex items-center justify-between gap-2 text-[10px]">
+                              <div class="flex items-center gap-1.5 min-w-0">
+                                <span class="font-mono font-black px-1.5 py-0.2 rounded ${op.type.startsWith('unload') ? 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200'}">
+                                  #${qIdx + 1} ${op.type.startsWith('unload') ? 'DÉCHARGEMENT' : 'ARMEMENT'}
+                                </span>
+                                <strong class="truncate text-slate-900 dark:text-white">${op.itemName}</strong>
+                                <span class="text-slate-400 font-mono shrink-0">(${this.formatArmingClock(op.remainingSec)})</span>
+                              </div>
+                              <button
+                                type="button"
+                                onclick="window.ProtecLogistique.cancelArmingOperation('${mission.id}', '${veh.id}', '${op.opId}')"
+                                class="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-rose-100 text-slate-600 hover:text-rose-700 font-black transition cursor-pointer shrink-0"
+                                title="Annuler cette opération">
+                                ✕ Annuler
+                              </button>
+                            </div>
+                          `).join('')}
+                        </div>
+                      </div>
+                    ` : ''}
+                  </div>
+
                   <!-- 1. MATÉRIELS ET LOTS ACTUELLEMENT EMBARQUÉS À BORD -->
                   <div class="space-y-2">
                     <div class="flex items-center justify-between text-[11px]">
@@ -3918,9 +4604,10 @@ window.ProtecLogistique = {
                         ${veh.loadedItems.map((it, idx) => {
                           const comp = this.getLotComposition(it.id);
                           const itemsList = it.itemsList || comp?.items || [];
+                          const pendingUnloadOp = it.pendingUnloadOpId ? queue.find(o => o.opId === it.pendingUnloadOpId) : null;
 
                           return `
-                            <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border border-amber-300/80 dark:border-amber-600/40 shadow-2xs space-y-2 text-left">
+                            <div class="p-3 rounded-xl bg-white dark:bg-slate-800/90 border ${pendingUnloadOp ? 'border-rose-400 dark:border-rose-500 bg-rose-50/30' : 'border-amber-300/80 dark:border-amber-600/40'} shadow-2xs space-y-2 text-left">
                               <div class="flex items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-700/60 pb-1.5">
                                 <div class="flex items-center gap-2 min-w-0">
                                   <span class="text-base">${it.isVehicle ? '🚲' : (it.isCaisseRearm ? '📦' : '🧰')}</span>
@@ -3929,17 +4616,27 @@ window.ProtecLogistique = {
                                       ${it.shortName || it.name}
                                     </div>
                                     <div class="text-[10px] text-slate-500 dark:text-slate-400 font-bold">
-                                      Encombrement : <strong class="text-amber-900 dark:text-amber-300">${it.slots} slot(s)</strong> • Prêt à l'emploi (100%)
+                                      Encombrement : <strong class="text-amber-900 dark:text-amber-300">${it.slots} slot(s)</strong> • ${pendingUnloadOp ? `<span class="text-rose-600 font-black">Déchargement en cours (${this.formatArmingClock(pendingUnloadOp.remainingSec)})</span>` : 'Prêt à l\'emploi (100%)'}
                                     </div>
                                   </div>
                                 </div>
-                                <button 
-                                  type="button" 
-                                  onclick="window.ProtecLogistique.unloadItemFromVehicle('${mission.id}', '${veh.id}', ${idx})" 
-                                  class="px-2 py-1 rounded-lg text-[10px] font-black bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition cursor-pointer flex items-center gap-1 shrink-0" 
-                                  title="Décharger ce lot et le restituer au local de l'antenne">
-                                  <span>✕ Décharger</span>
-                                </button>
+                                ${pendingUnloadOp ? `
+                                  <button 
+                                    type="button" 
+                                    onclick="window.ProtecLogistique.cancelArmingOperation('${mission.id}', '${veh.id}', '${pendingUnloadOp.opId}')" 
+                                    class="px-2 py-1 rounded-lg text-[10px] font-black bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition cursor-pointer flex items-center gap-1 shrink-0" 
+                                    title="Annuler le déchargement en cours">
+                                    <span>↩️ Garder à bord</span>
+                                  </button>
+                                ` : `
+                                  <button 
+                                    type="button" 
+                                    onclick="window.ProtecLogistique.unloadItemFromVehicle('${mission.id}', '${veh.id}', ${idx})" 
+                                    class="px-2 py-1 rounded-lg text-[10px] font-black bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-800 transition cursor-pointer flex items-center gap-1 shrink-0" 
+                                    title="Programmer le déchargement de ce lot (3 min)">
+                                    <span>✕ Décharger (3 min)</span>
+                                  </button>
+                                `}
                               </div>
 
                               <!-- Visuel détaillé des quantités de chaque élément embarqué -->
@@ -3963,7 +4660,7 @@ window.ProtecLogistique = {
                       </div>
                     ` : `
                       <div class="text-xs text-slate-500 dark:text-slate-400 italic p-3 bg-white/70 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 text-center">
-                        Aucun lot ni caisse chargée dans le véhicule. Sélectionnez ci-dessous les dotations de la Protection Civile à embarquer.
+                        Aucun lot ni caisse actuellement à bord. Sélectionnez ci-dessous les dotations de la Protection Civile à armer (3 min par lot).
                       </div>
                     `}
                   </div>
@@ -3976,7 +4673,7 @@ window.ProtecLogistique = {
                         <span>Matériels & Lots Opérationnels Disponibles au Local d'Antenne :</span>
                       </span>
                       <span class="text-[10px] text-slate-500 dark:text-slate-400">
-                        Cliquez pour embarquer selon vos besoins terrain
+                        ⏱️ +3 min d'armement par lot ajouté à la file
                       </span>
                     </div>
 
@@ -4005,7 +4702,7 @@ window.ProtecLogistique = {
                                   </div>
                                 </div>
                                 <span class="px-2 py-0.5 rounded-lg text-[9.5px] font-black uppercase tracking-wider bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 shrink-0">
-                                  ${lot.slots} slot${lot.slots > 1 ? 's' : ''}
+                                  ${lot.slots} slot${lot.slots > 1 ? 's' : ''} • 3 min
                                 </span>
                               </div>
 
@@ -4041,7 +4738,7 @@ window.ProtecLogistique = {
                                   onclick="window.ProtecLogistique.loadItemToVehicle('${mission.id}', '${veh.id}', '${lotKey}')"
                                   class="w-full py-1.5 px-3 rounded-xl text-xs font-black ${inStock > 0 ? 'bg-pc-blue hover:bg-pc-blue-light text-white shadow-xs' : 'bg-teal-600 hover:bg-teal-700 text-white shadow-xs'} transition flex items-center justify-center gap-1.5 cursor-pointer">
                                   <i data-lucide="plus" class="w-3.5 h-3.5"></i>
-                                  <span>${inStock > 0 ? `Embarquer dans ${veh.name} (${lot.slots} slot${lot.slots > 1 ? 's' : ''})` : `Acheter & Embarquer (${lot.price} €)`}</span>
+                                  <span>${inStock > 0 ? `Armer dans ${veh.name} (${lot.slots} slot${lot.slots > 1 ? 's' : ''} • 3 min)` : `Acheter & Armer (${lot.price} € • 3 min)`}</span>
                                 </button>
                               ` : `
                                 <button 
@@ -4057,17 +4754,17 @@ window.ProtecLogistique = {
                       }).join('')}
 
                       <!-- Vélos VTT secours si concerné -->
-                      ${bicycles.filter(b => !b.transportedBy).map(b => `
+                      ${bicycles.filter(b => !b.transportedBy && !b.pendingTransportedBy).map(b => `
                         <div class="p-3.5 rounded-2xl bg-teal-50/60 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800 shadow-2xs space-y-2 text-left flex flex-col justify-between">
                           <div class="flex items-center justify-between">
                             <div class="flex items-center gap-2">
                               <span class="text-xl">🚲</span>
                               <div>
                                 <h5 class="text-xs font-black text-slate-900 dark:text-white">${b.name}</h5>
-                                <div class="text-[10px] text-teal-800 dark:text-teal-300 font-bold">VTT d'Intervention Rapide • 1 slot LOG</div>
+                                <div class="text-[10px] text-teal-800 dark:text-teal-300 font-bold">VTT d'Intervention Rapide • 1 slot LOG • 3 min</div>
                               </div>
                             </div>
-                            <span class="px-2 py-0.5 rounded text-[9px] font-black bg-teal-600 text-white">1 slot</span>
+                            <span class="px-2 py-0.5 rounded text-[9px] font-black bg-teal-600 text-white">1 slot • 3 min</span>
                           </div>
                           <div class="p-2 rounded-xl bg-white dark:bg-slate-900 text-[10px] text-slate-600 dark:text-slate-300">
                             Equipé d'une sacoche de premiers secours et d'un DAE compact pour progression rapide en milieu piétonnier.
@@ -4077,7 +4774,7 @@ window.ProtecLogistique = {
                               type="button" 
                               onclick="window.ProtecLogistique.loadBicycleToVehicle('${mission.id}', '${veh.id}', '${b.id}')"
                               class="w-full py-1.5 px-3 rounded-xl text-xs font-black bg-teal-600 hover:bg-teal-700 text-white shadow-xs transition cursor-pointer flex items-center justify-center gap-1">
-                              <span>+ Embarquer ${b.name} (1 slot)</span>
+                              <span>+ Embarquer ${b.name} (1 slot • 3 min)</span>
                             </button>
                           ` : `
                             <button disabled class="w-full py-1.5 px-3 rounded-xl text-xs font-bold bg-slate-100 text-slate-400 cursor-not-allowed">
@@ -4088,7 +4785,8 @@ window.ProtecLogistique = {
                       `).join('')}
                     </div>
                   </div>
-                ` : ''}
+                `;
+                })() : ''}
               </div>
             `;
           }).join('')}
