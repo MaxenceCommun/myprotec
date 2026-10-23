@@ -1,495 +1,796 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>Vehicle forge</title>
-<style>body{margin:0;background:#ccc}canvas{display:block}</style></head>
+<html><head><meta charset="utf-8"><title>Vehicle forge v2</title>
+<style>body{margin:0;background:#cbd5e1}canvas{display:block}</style></head>
 <body>
 <script>
 /*
- * Générateur de sprites isométriques des véhicules Protection Civile
+ * ===========================================================================
+ * GÉNÉRATEUR DE SPRITES VÉHICULES PROTECTION CIVILE — v2 (formes réalistes)
+ * ===========================================================================
  * Projection identique au moteur ProtecBaseLive : sx = (X - Y)*k ; sy = (X + Y)*k/2 - Z*k*HZ
- * Chaque modèle est rendu dans 4 caps : se (+X, nez en bas à droite), sw (+Y), nw (-X), ne (-Y).
+ * Carrosseries construites par sections successives (loft) : nez arrondi en plan, capot incliné,
+ * pare-brise bombé, rentrée de caisse (tumblehome), arrondis de pavillon. Éclairage par facette,
+ * vitrages et livrée appliqués sur des plans locaux avec découpe, roues en cylindres, contour encré.
+ * Sortie : 4 caps par modèle — se (+X), sw (+Y), nw (-X), ne (-Y) — + manifest.json.
  */
 const HZ = 1.05;
-const K = 84; // px par mètre dans les sprites
+const K = 84;          // px/m du sprite final
+const SS = 2;          // sur-échantillonnage (anticrénelage)
+const KS = K * SS;
 
-const NAVY = '#1d3c8c', ORANGE = '#f7941d', YELLOW = '#facc15', RED = '#dc2626', GLASS = '#1e293b', DARK = '#111827';
+const NAVY = '#1d3c8c', ORANGE = '#f7941d', YELLOW = '#ffd21f', RED = '#d62828', GLASS = '#1b2a41', PLASTIC = '#22262e', CHROME = '#cbd5e1';
 
 // ---------- algèbre ----------
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const mul = (a, s) => [a[0] * s, a[1] * s, a[2] * s];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
-const VIEW = norm([1, 1, 1.25]); // vers la caméra
+const lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const VIEW = norm([1, 1, 1.25]);              // vers la caméra
+const LIGHT = norm([-0.45, 0.75, 1.1]);       // lumière en haut à gauche de l'écran
+
+function hexRgb(h) { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbStr(c) { return `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`; }
+function litColor(hex, nW, spec = 0.25) {
+  const c = hexRgb(hex);
+  const lam = Math.max(0, dot(nW, LIGHT));
+  const amb = 0.62 + 0.12 * nW[2];
+  let k = amb + 0.42 * lam;
+  const h = norm(add3(LIGHT, VIEW));
+  const s = Math.pow(Math.max(0, dot(nW, h)), 24) * spec;
+  return rgbStr(c.map(v => clamp(v * k + 255 * s, 0, 255)));
+}
 
 function makeCam(theta) {
   const c = Math.round(Math.cos(theta)), s = Math.round(Math.sin(theta));
   const toWorld = (p) => [p[0] * c - p[1] * s, p[0] * s + p[1] * c, p[2]];
-  const proj = (p) => { const w = toWorld(p); return [(w[0] - w[1]) * K, (w[0] + w[1]) * K / 2 - w[2] * K * HZ]; };
-  return { toWorld, proj };
+  const proj = (p) => { const w = toWorld(p); return [(w[0] - w[1]) * KS, (w[0] + w[1]) * KS / 2 - w[2] * KS * HZ]; };
+  return { toWorld, proj, theta };
 }
+const visible = (cam, n) => dot(cam.toWorld(n), VIEW) > 0.0;
 
-// Une face plane : origine o, axes eu (droite du spectateur) et ev, normale sortante n (repère local)
-function faceTransform(ctx, cam, o, eu, ev, ox, oy) {
-  const p0 = cam.proj(o), pu = cam.proj([o[0] + eu[0], o[1] + eu[1], o[2] + eu[2]]), pv = cam.proj([o[0] + ev[0], o[1] + ev[1], o[2] + ev[2]]);
+// Repère d'un plan local (origine o, axes eu/ev en coordonnées véhicule) → transformation canvas
+function planeTransform(ctx, cam, o, eu, ev, ox, oy) {
+  const p0 = cam.proj(o), pu = cam.proj(add3(o, eu)), pv = cam.proj(add3(o, ev));
   ctx.setTransform(pu[0] - p0[0], pu[1] - p0[1], pv[0] - p0[0], pv[1] - p0[1], p0[0] + ox, p0[1] + oy);
 }
-function visible(cam, n) { return dot(cam.toWorld(n), VIEW) > 0.02; }
-function shadeOf(cam, n) {
-  const w = cam.toWorld(n);
-  if (w[2] > 0.85) return 0.0;
-  return Math.max(0, 0.16 * w[0] - 0.02 * w[1]) + 0.05 * (1 - Math.abs(w[2]));
+
+// ---------- Carrosserie par sections ----------
+// sectionAt(x) → { zb, zt, hw, hwTop, belt, topR, botR }
+function buildSection(p, nWall = 5, nArc = 7, nTop = 7) {
+  // Demi-section droite (y >= 0) de bas en haut, puis miroir. Points (y,z).
+  const pts = [];
+  const { zb, zt, hw, hwTop, belt, topR, botR } = p;
+  const beltZ = clamp(belt, zb + botR + 0.02, zt - topR - 0.02);
+  // bas
+  pts.push([0, zb]);
+  for (let i = 1; i <= 3; i++) { const a = -Math.PI / 2 + (i / 3) * (Math.PI / 2); pts.push([hw - botR + Math.cos(a) * botR, zb + botR + Math.sin(a) * botR]); }
+  // flanc bas (vertical) jusqu'à la ceinture
+  pts.push([hw, beltZ]);
+  // flanc haut (rentrée de caisse) jusqu'au départ d'arrondi
+  const zTopWall = zt - topR;
+  for (let i = 1; i <= nWall; i++) { const t = i / nWall; pts.push([lerp(hw, hwTop, t), lerp(beltZ, zTopWall, t)]); }
+  // arrondi de pavillon
+  for (let i = 1; i <= nArc; i++) { const a = (i / nArc) * (Math.PI / 2); pts.push([hwTop - topR + Math.cos(a) * topR, zTopWall + Math.sin(a) * topR]); }
+  // dessus vers l'axe
+  const yTopEnd = hwTop - topR;
+  for (let i = 1; i <= nTop; i++) { const t = i / nTop; pts.push([lerp(yTopEnd, 0, t), zt]); }
+  // Miroir : on part du bas gauche et on remonte → contour fermé (y négatifs puis positifs)
+  const left = pts.slice().reverse().map(([y, z]) => [-y, z]);
+  // contour : sommet gauche ... on veut un ordre continu autour : bas-centre → droite → haut-centre → gauche → bas-centre
+  const right = pts;               // bas-centre → haut-centre (côté droit)
+  const leftDown = left.slice(1);  // haut-centre → bas-centre (côté gauche) sans doublon
+  return right.concat(leftDown.slice(0, -1));
 }
 
-// Texte dans le repère d'une face (v vers le haut)
-function faceText(ctx, txt, u, v, size, color, align = 'center', weight = 900, maxW) {
+function loftMesh(xs, sectionAt) {
+  const secs = xs.map(x => ({ x, p: sectionAt(x), pts: buildSection(sectionAt(x)) }));
+  const n = secs[0].pts.length;
+  const faces = [];
+  for (let i = 0; i < secs.length - 1; i++) {
+    const A = secs[i], B = secs[i + 1];
+    for (let j = 0; j < n; j++) {
+      const j2 = (j + 1) % n;
+      const p00 = [A.x, A.pts[j][0], A.pts[j][1]], p01 = [A.x, A.pts[j2][0], A.pts[j2][1]];
+      const p10 = [B.x, B.pts[j][0], B.pts[j][1]], p11 = [B.x, B.pts[j2][0], B.pts[j2][1]];
+      const c = mul(add3(add3(p00, p01), add3(p10, p11)), 0.25);
+      let nrm = norm(cross(sub(p10, p00), sub(p01, p00)));
+      // orientation sortante : comparée au centre de la section
+      const zc = (A.p.zb + A.p.zt) / 2;
+      const out = norm([0, c[1], c[2] - zc]);
+      if (dot(nrm, out) < 0) nrm = mul(nrm, -1);
+      if (Math.hypot(...sub(p10, p00)) < 1e-6 && Math.hypot(...sub(p01, p00)) < 1e-6) continue;
+      faces.push({ pts: [p00, p10, p11, p01], c, n: nrm });
+    }
+  }
+  // Capots avant / arrière
+  const capOf = (S, sign) => ({ pts: S.pts.map(([y, z]) => [S.x, y, z]), c: [S.x, 0, (S.p.zb + S.p.zt) / 2], n: [sign, 0, 0], cap: sign > 0 ? 'front' : 'rear' });
+  faces.push(capOf(secs[secs.length - 1], 1));
+  faces.push(capOf(secs[0], -1));
+  return { faces, secs };
+}
+
+// Peinture d'un maillage : tri arrière→avant, couleur par région, éclairage par facette
+function paintMesh(ctx, cam, mesh, regionOf, ox, oy, opts = {}) {
+  const list = [];
+  mesh.faces.forEach(f => {
+    if (!visible(cam, f.n)) return;
+    const w = cam.toWorld(f.c);
+    list.push({ f, depth: dot(w, VIEW) });
+  });
+  list.sort((a, b) => a.depth - b.depth);
+  const byRegion = {};
+  list.forEach(({ f }) => {
+    const reg = f.cap ? f.cap : regionOf(f);
+    f.region = reg.name || reg;
+    const col = reg.color || '#f8fafc';
+    const nW = cam.toWorld(f.n);
+    ctx.beginPath();
+    f.pts.forEach((p, i) => { const s = cam.proj(p); if (i) ctx.lineTo(s[0] + ox, s[1] + oy); else ctx.moveTo(s[0] + ox, s[1] + oy); });
+    ctx.closePath();
+    ctx.fillStyle = litColor(col, nW, reg.spec !== undefined ? reg.spec : 0.25);
+    ctx.fill();
+    // joint anti-fissures
+    ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 1.1; ctx.stroke();
+    (byRegion[f.region] = byRegion[f.region] || []).push(f);
+  });
+  return byRegion;
+}
+
+// Chemin de découpe : union des facettes visibles d'une région
+function clipToFaces(ctx, cam, faces, ox, oy) {
+  ctx.beginPath();
+  faces.forEach(f => {
+    f.pts.forEach((p, i) => { const s = cam.proj(p); if (i) ctx.lineTo(s[0] + ox, s[1] + oy); else ctx.moveTo(s[0] + ox, s[1] + oy); });
+    ctx.closePath();
+  });
+  ctx.clip('nonzero');
+}
+
+// ---------- Décors 2D sur plans ----------
+function faceText(ctx, txt, u, v, size, color, opts = {}) {
   ctx.save();
   ctx.translate(u, v);
   ctx.scale(0.01, -0.01);
-  ctx.font = `${weight} ${size * 100}px "Arial Black", Arial, sans-serif`;
-  ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = 'middle';
-  if (maxW) ctx.fillText(txt, 0, 0, maxW * 100); else ctx.fillText(txt, 0, 0);
+  if (opts.italic) ctx.transform(1, 0, -0.18, 1, 0, 0);
+  ctx.font = `${opts.weight || 900} ${size * 100}px "Arial Black", "Arial", sans-serif`;
+  ctx.fillStyle = color; ctx.textAlign = opts.align || 'center'; ctx.textBaseline = 'middle';
+  if (opts.maxW) ctx.fillText(txt, 0, 0, opts.maxW * 100); else ctx.fillText(txt, 0, 0);
   ctx.restore();
 }
 function rect(ctx, x, y, w, h, c) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
-function chevrons(ctx, x0, y0, w, h, colA = RED, colB = YELLOW, step = 0.16) {
+function rrect(ctx, x, y, w, h, r, c) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fillStyle = c; ctx.fill(); }
+function chevrons(ctx, x0, y0, w, h, step = 0.13, colA = RED, colB = YELLOW, dir = 1) {
   ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip();
   rect(ctx, x0, y0, w, h, colB);
   ctx.fillStyle = colA;
-  for (let x = x0 - h; x < x0 + w + h; x += step * 2) {
-    ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x + step, y0); ctx.lineTo(x + step + h, y0 + h); ctx.lineTo(x + h, y0 + h); ctx.closePath(); ctx.fill();
+  for (let x = x0 - h * 2; x < x0 + w + h * 2; x += step * 2) {
+    ctx.beginPath();
+    ctx.moveTo(x, y0); ctx.lineTo(x + step, y0); ctx.lineTo(x + step + dir * h, y0 + h); ctx.lineTo(x + dir * h, y0 + h);
+    ctx.closePath(); ctx.fill();
   }
   ctx.restore();
 }
 function logo(ctx, u, v, r) {
   ctx.fillStyle = ORANGE; ctx.beginPath(); ctx.arc(u, v, r, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(u, v, r * 0.78, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = NAVY; ctx.beginPath(); ctx.moveTo(u, v + r * 0.55); ctx.lineTo(u - r * 0.5, v - r * 0.32); ctx.lineTo(u + r * 0.5, v - r * 0.32); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(u, v, r * 0.8, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = NAVY; ctx.beginPath(); ctx.moveTo(u, v + r * 0.56); ctx.lineTo(u - r * 0.52, v - r * 0.34); ctx.lineTo(u + r * 0.52, v - r * 0.34); ctx.closePath(); ctx.fill();
 }
-function glass(ctx, pts, refl = true) {
-  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.closePath();
-  ctx.fillStyle = GLASS; ctx.fill();
-  if (refl) {
-    ctx.save(); ctx.clip();
-    const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    ctx.fillStyle = 'rgba(148,197,255,0.28)';
-    ctx.beginPath(); ctx.moveTo(x0 + (x1 - x0) * 0.15, y0); ctx.lineTo(x0 + (x1 - x0) * 0.35, y0); ctx.lineTo(x0 + (x1 - x0) * 0.6, y1); ctx.lineTo(x0 + (x1 - x0) * 0.4, y1); ctx.closePath(); ctx.fill();
-    ctx.restore();
-  }
-  ctx.strokeStyle = '#0b1220'; ctx.lineWidth = 0.03; ctx.stroke();
-}
-
-// ---------- Prisme extrudé : profil (x,z) CCW, largeur W ----------
-// faces de profil taguées pour la décoration
-function prism(profile, W, tags, yOff = 0) {
-  return { profile, W, tags, yOff };
-}
-
-function drawPrism(ctx, cam, pr, deco, ox, oy, base = '#f8fafc') {
-  const { profile, W } = pr;
-  const faces = [];
-  // flancs y = ±W/2
-  [1, -1].forEach(side => {
-    const n = [0, side, 0];
-    if (!visible(cam, n)) return;
-    // eu tel que eu × ev = n avec ev = +z  →  eu = [side, 0, 0] ?  [1,0,0]×[0,0,1] = [0,-1,0]
-    // Repère écran "gaucher" (y vers le bas) : u = droite du spectateur quand eu × ev = -n
-    const eu = [side, 0, 0];
-    faces.push({ kind: 'side', side, n, o: [0, side * W / 2 + pr.yOff, 0], eu, ev: [0, 0, 1], poly: profile.map(([x, z]) => [side * x, z]) });
-  });
-  // faces de bord de profil
-  for (let i = 0; i < profile.length; i++) {
-    const a = profile[i], b = profile[(i + 1) % profile.length];
-    const tag = pr.tags[i];
-    if (!tag || tag === 'skip') continue;
-    const ex = b[0] - a[0], ez = b[1] - a[1];
-    const len = Math.hypot(ex, ez);
-    const n = norm([ez, 0, -ex]);
-    if (!visible(cam, n)) continue;
-    // Les faces qui descendent (arrière, hayon) sont paramétrées de bas en haut pour garder textes et logos à l'endroit
-    const down = ez < -1e-6;
-    const ev = down ? [-ex / len, 0, -ez / len] : [ex / len, 0, ez / len];
-    const fo = down ? b : a;
-    let eu = [0, 1, 0];
-    if (dot(cross(eu, ev), n) > 0) eu = [0, -1, 0];
-    faces.push({ kind: tag, n, o: [fo[0], pr.yOff, fo[1]], eu, ev, len, poly: [[-W / 2, 0], [W / 2, 0], [W / 2, len], [-W / 2, len]] });
-  }
-  faces.forEach(f => {
-    faceTransform(ctx, cam, f.o, f.eu, f.ev, ox, oy);
-    ctx.beginPath(); ctx.moveTo(f.poly[0][0], f.poly[0][1]); f.poly.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.closePath();
-    ctx.fillStyle = base; ctx.fill();
-    ctx.save(); ctx.clip();
-    if (deco[f.kind]) deco[f.kind](ctx, f, f.kind === 'side' ? (x) => f.side * x : null);
-    const sh = shadeOf(cam, f.n);
-    if (sh > 0) { ctx.fillStyle = `rgba(15,23,50,${sh})`; ctx.fillRect(-20, -20, 40, 40); }
-    ctx.restore();
-    ctx.beginPath(); ctx.moveTo(f.poly[0][0], f.poly[0][1]); f.poly.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.closePath();
-    ctx.strokeStyle = 'rgba(30,41,59,0.75)'; ctx.lineWidth = 0.022; ctx.stroke();
-  });
-}
-
-// Pavé simple (gyrophares, rétroviseurs, châssis)
-function drawBox(ctx, cam, x0, x1, y0, y1, z0, z1, cols, ox, oy) {
-  const P = [x0, x1, y0, y1, z0, z1];
-  const faces = [
-    { n: [0, 0, 1], o: [x0, y0, z1], eu: [1, 0, 0], ev: [0, 1, 0], w: x1 - x0, h: y1 - y0, c: cols.top },
-    { n: [1, 0, 0], o: [x1, y0, z0], eu: [0, 1, 0], ev: [0, 0, 1], w: y1 - y0, h: z1 - z0, c: cols.side },
-    { n: [-1, 0, 0], o: [x0, y1, z0], eu: [0, -1, 0], ev: [0, 0, 1], w: y1 - y0, h: z1 - z0, c: cols.side },
-    { n: [0, 1, 0], o: [x1, y1, z0], eu: [-1, 0, 0], ev: [0, 0, 1], w: x1 - x0, h: z1 - z0, c: cols.side },
-    { n: [0, -1, 0], o: [x0, y0, z0], eu: [1, 0, 0], ev: [0, 0, 1], w: x1 - x0, h: z1 - z0, c: cols.side }
-  ];
-  void P;
-  faces.forEach(f => {
-    if (!visible(cam, f.n)) return;
-    faceTransform(ctx, cam, f.o, f.eu, f.ev, ox, oy);
-    ctx.fillStyle = f.c; ctx.fillRect(0, 0, f.w, f.h);
-    const sh = shadeOf(cam, f.n);
-    if (sh > 0) { ctx.fillStyle = `rgba(15,23,50,${sh * 1.4})`; ctx.fillRect(0, 0, f.w, f.h); }
-    ctx.strokeStyle = 'rgba(15,23,42,0.7)'; ctx.lineWidth = 0.015; ctx.strokeRect(0, 0, f.w, f.h);
-  });
-}
-
-// Roue : disque dans le plan latéral
-function drawWheel(ctx, cam, x, y, r, ox, oy, side, wide = 0.22) {
-  // flanc extérieur + bande de roulement simplifiée
-  const yIn = y - side * wide;
-  [yIn, y].forEach((yy, i) => {
-    faceTransform(ctx, cam, [x, yy, r], [1, 0, 0], [0, 0, 1], ox, oy);
-    ctx.fillStyle = i === 0 ? '#0b0f17' : '#161b26';
-    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
-    if (i === 1) {
-      ctx.fillStyle = '#9ca3af'; ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#4b5563'; ctx.beginPath(); ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#6b7280'; ctx.lineWidth = 0.025;
-      for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; ctx.beginPath(); ctx.moveTo(Math.cos(a) * r * 0.22, Math.sin(a) * r * 0.22); ctx.lineTo(Math.cos(a) * r * 0.52, Math.sin(a) * r * 0.52); ctx.stroke(); }
-    }
-  });
-}
-
-// ---------- Décors communs ----------
-function sideLivery(ctx, f, X, M, opts) {
-  // X(x) convertit x local -> u du flanc ; M = modèle
-  const L = M.L, zb = M.zb;
-  const u = (x) => X(x);
-  const urect = (xa, xb, z0, z1, c) => { const a = u(xa), b = u(xb); rect(ctx, Math.min(a, b), z0, Math.abs(b - a), z1 - z0, c); };
-  // bas de caisse sombre
-  urect(-L / 2, L / 2, zb - 0.02, zb + 0.07, '#374151');
-  // damier bleu/orange (battenburg)
-  const sq = 0.17, z0 = opts.checkZ || 0.5;
-  for (let x = -L / 2 + 0.05, i = 0; x < (opts.checkEnd ?? L / 2 - 0.25); x += sq, i++) {
-    urect(x, x + sq, z0, z0 + sq, i % 2 ? NAVY : ORANGE);
-    urect(x, x + sq, z0 + sq, z0 + 2 * sq, i % 2 ? ORANGE : NAVY);
-  }
-  // vague orange (arrière vers milieu)
-  const sw0 = opts.swooshFrom ?? -L / 2, sw1 = opts.swooshTo ?? 0.3;
-  const zs = z0 + 2 * sq;
-  ctx.beginPath();
-  ctx.moveTo(u(sw0), zs); ctx.lineTo(u(sw1 + 0.6), zs);
-  ctx.quadraticCurveTo(u(sw1), zs + 0.1, u(sw0 + 0.4), (opts.swooshTop ?? 1.25));
-  ctx.lineTo(u(sw0), (opts.swooshTop ?? 1.25));
-  ctx.closePath();
-  const g = ctx.createLinearGradient(u(sw0), 0, u(sw1 + 0.6), 0);
-  g.addColorStop(0, ORANGE); g.addColorStop(0.75, 'rgba(247,148,29,0.65)'); g.addColorStop(1, 'rgba(247,148,29,0)');
+function glassFill(ctx, pts, opts = {}) {
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+  const ys = pts.map(p => p[1]), xs = pts.map(p => p[0]);
+  const y0 = Math.min(...ys), y1 = Math.max(...ys), x0 = Math.min(...xs), x1 = Math.max(...xs);
+  const g = ctx.createLinearGradient(0, y0, 0, y1);
+  g.addColorStop(0, opts.frosted ? '#c7d2de' : '#2c3e57'); g.addColorStop(1, opts.frosted ? '#e2e8f0' : '#16202f');
   ctx.fillStyle = g; ctx.fill();
-  // filet jaune haut
-  if (opts.yellowZ) urect(-L / 2, opts.yellowEnd ?? L / 2 - 1.4, opts.yellowZ, opts.yellowZ + 0.045, YELLOW);
-  // arches de roues
-  M.axles.forEach(ax => { ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(u(ax), 0, M.r + 0.07, 0, Math.PI); ctx.fill(); });
+  ctx.save(); ctx.clip();
+  ctx.fillStyle = opts.frosted ? 'rgba(255,255,255,0.35)' : 'rgba(186,220,255,0.22)';
+  const w = x1 - x0;
+  ctx.beginPath(); ctx.moveTo(x0 + w * 0.12, y1); ctx.lineTo(x0 + w * 0.34, y1); ctx.lineTo(x0 + w * 0.6, y0); ctx.lineTo(x0 + w * 0.38, y0); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(186,220,255,0.12)';
+  ctx.beginPath(); ctx.moveTo(x0 + w * 0.42, y1); ctx.lineTo(x0 + w * 0.48, y1); ctx.lineTo(x0 + w * 0.74, y0); ctx.lineTo(x0 + w * 0.68, y0); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  ctx.strokeStyle = '#0b1220'; ctx.lineWidth = 0.025; ctx.lineJoin = 'round';
+  ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke();
+}
+function seam(ctx, pts, w = 0.012, c = 'rgba(30,41,59,0.55)') {
+  ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.stroke();
 }
 
-function sideTexts(ctx, X, M, main, top, opts = {}) {
-  const u = (x) => X(x);
-  faceText(ctx, 'PROTECTION CIVILE', u(opts.mainX ?? -0.3), opts.mainZ ?? 1.02, opts.mainSize ?? 0.2, NAVY, 'center', 900, opts.mainW ?? 2.6);
-  if (top) faceText(ctx, top, u(opts.topX ?? -0.5), opts.topZ ?? (M.H - 0.48), opts.topSize ?? 0.1, NAVY, 'center', 800, opts.topW ?? 2.8);
-  if (opts.logoX !== undefined) logo(ctx, u(opts.logoX), opts.logoZ ?? 1.0, opts.logoR ?? 0.2);
+// ---------- Pièces rapportées ----------
+function drawWheel(ctx, cam, x, ySide, r, wid, ox, oy, opts = {}) {
+  // pneu : enveloppe des deux flancs + flanc extérieur + jante
+  const yIn = ySide - Math.sign(ySide) * wid;
+  const ring = (yy, rr) => { const pts = []; for (let i = 0; i < 28; i++) { const a = i / 28 * Math.PI * 2; pts.push(cam.proj([x + Math.cos(a) * rr, yy, r + Math.sin(a) * rr])); } return pts; };
+  const a = ring(yIn, r), b = ring(ySide, r);
+  const all = a.concat(b).map(p => [p[0] + ox, p[1] + oy]);
+  const hull = convexHull(all);
+  ctx.beginPath(); hull.forEach(([px, py], i) => i ? ctx.lineTo(px, py) : ctx.moveTo(px, py)); ctx.closePath();
+  ctx.fillStyle = '#121418'; ctx.fill();
+  const outVis = visible(cam, [0, Math.sign(ySide), 0]);
+  if (!outVis) return;
+  planeTransform(ctx, cam, [x, ySide, r], [1, 0, 0], [0, 0, 1], ox, oy);
+  ctx.fillStyle = '#1c1f26'; ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#2b2f38'; ctx.lineWidth = 0.02; ctx.beginPath(); ctx.arc(0, 0, r * 0.86, 0, Math.PI * 2); ctx.stroke();
+  const rim = opts.rim || '#9aa3af';
+  const g = ctx.createRadialGradient(-r * 0.15, r * 0.15, 0, 0, 0, r * 0.6);
+  g.addColorStop(0, '#e5e7eb'); g.addColorStop(1, rim);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#4b5563';
+  for (let i = 0; i < (opts.holes || 6); i++) { const an = i / (opts.holes || 6) * Math.PI * 2; ctx.beginPath(); ctx.ellipse(Math.cos(an) * r * 0.38, Math.sin(an) * r * 0.38, r * 0.09, r * 0.12, an, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = '#374151'; ctx.beginPath(); ctx.arc(0, 0, r * 0.14, 0, Math.PI * 2); ctx.fill();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+function convexHull(pts) {
+  const p = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  up.pop(); lo.pop(); return lo.concat(up);
+}
+// Pavé arrondi simple (rétroviseurs, gyrophares, galerie)
+function drawBlock(ctx, cam, x0, x1, y0, y1, z0, z1, col, ox, oy, spec = 0.2) {
+  const F = [
+    { n: [0, 0, 1], q: [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]] },
+    { n: [1, 0, 0], q: [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]] },
+    { n: [-1, 0, 0], q: [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]] },
+    { n: [0, 1, 0], q: [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]] },
+    { n: [0, -1, 0], q: [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]] }
+  ];
+  F.forEach(f => {
+    if (!visible(cam, f.n)) return;
+    ctx.beginPath(); f.q.forEach((p, i) => { const s = cam.proj(p); if (i) ctx.lineTo(s[0] + ox, s[1] + oy); else ctx.moveTo(s[0] + ox, s[1] + oy); }); ctx.closePath();
+    ctx.fillStyle = litColor(col, cam.toWorld(f.n), spec); ctx.fill();
+    ctx.strokeStyle = 'rgba(10,14,22,0.5)'; ctx.lineWidth = 1.2; ctx.stroke();
+  });
+}
+// Dôme de gyrophare (bleu translucide)
+function drawBeacon(ctx, cam, x, y, z, rx, ry, h, ox, oy) {
+  drawBlock(ctx, cam, x - rx, x + rx, y - ry, y + ry, z, z + h, '#2f6fe0', ox, oy, 0.7);
+  const s = cam.proj([x, y, z + h]);
+  const g = ctx.createRadialGradient(s[0] + ox, s[1] + oy, 0, s[0] + ox, s[1] + oy, rx * KS * 1.1);
+  g.addColorStop(0, 'rgba(191,219,254,0.9)'); g.addColorStop(1, 'rgba(59,130,246,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(s[0] + ox, s[1] + oy, rx * KS * 1.1, 0, Math.PI * 2); ctx.fill();
 }
 
-function cabWindow(ctx, X, x0, x1, z0, z1, slope = 0.55) {
-  glass(ctx, [[X(x0), z0], [X(x1), z0], [X(x1 - slope), z1], [X(x0), z1]]);
-}
-
-function frontFace(ctx, f, M, h) {
-  // u : largeur, v : hauteur depuis le bas de caisse
-  const W = M.W;
-  rect(ctx, -W / 2, 0, W, 0.2, '#1f2937');                         // pare-chocs
-  chevrons(ctx, -W / 2 + 0.06, 0.04, W - 0.12, 0.12);               // chevrons pare-chocs
-  rect(ctx, -0.55, 0.26, 1.1, Math.min(0.3, h - 0.3), '#111827');   // calandre
-  logo(ctx, 0, 0.26 + Math.min(0.3, h - 0.3) / 2, 0.08);
-  rect(ctx, -W / 2 + 0.08, h - 0.2, 0.34, 0.12, '#e5e7eb');          // phares
-  rect(ctx, W / 2 - 0.42, h - 0.2, 0.34, 0.12, '#e5e7eb');
-  rect(ctx, -W / 2 + 0.08, h - 0.22, 0.34, 0.03, '#60a5fa');
-  rect(ctx, W / 2 - 0.42, h - 0.22, 0.34, 0.03, '#60a5fa');
-  rect(ctx, -W / 2 + 0.1, 0.24, 0.16, 0.06, '#3b82f6');             // feux bleus de calandre
-  rect(ctx, W / 2 - 0.26, 0.24, 0.16, 0.06, '#3b82f6');
-}
-
-function hoodFace(ctx, f, M) {
-  chevrons(ctx, -M.W / 2, 0, M.W, Math.min(0.22, f.len * 0.5));
-}
-
-function windshieldFace(ctx, f, M) {
-  glass(ctx, [[-M.W / 2 + 0.08, 0.06], [M.W / 2 - 0.08, 0.06], [M.W / 2 - 0.12, f.len - 0.06], [-M.W / 2 + 0.12, f.len - 0.06]]);
-  rect(ctx, -0.5, f.len - 0.18, 1.0, 0.1, '#0b1220');
-  faceText(ctx, 'PREMIERS SECOURS', 0, f.len - 0.13, 0.07, '#e5e7eb', 'center', 800, 0.95);
-}
-
-function rearFace(ctx, f, M, opts = {}) {
-  const W = M.W, h = f.len;
-  rect(ctx, -0.008, 0.05, 0.016, h - 0.1, '#475569');               // séparation des portes
-  if (!opts.noWindows) {
-    glass(ctx, [[-W / 2 + 0.12, h - 0.75], [-0.06, h - 0.75], [-0.06, h - 0.22], [-W / 2 + 0.12, h - 0.22]], false);
-    glass(ctx, [[0.06, h - 0.75], [W / 2 - 0.12, h - 0.75], [W / 2 - 0.12, h - 0.22], [0.06, h - 0.22]], false);
+// ---------- Livrée latérale Protection Civile (plan du flanc) ----------
+// X(x) : x véhicule → u du plan (sens de lecture du spectateur) ; M : dimensions
+function liveryPC(ctx, X, M, o) {
+  const ur = (xa, xb, z0, z1, c) => { const a = X(xa), b = X(xb); rect(ctx, Math.min(a, b), z0, Math.abs(b - a), z1 - z0, c); };
+  const L = M.L;
+  const xr = -L / 2, xf = L / 2;
+  // damier rétro-réfléchissant bleu / orange (2 rangées)
+  const sq = o.sq || 0.15, zc = o.checkZ;
+  for (let x = xr + 0.04, i = 0; x < (o.checkEnd ?? xf - 0.25); x += sq, i++) {
+    ur(x, x + sq, zc, zc + sq, i % 2 ? NAVY : ORANGE);
+    ur(x, x + sq, zc + sq, zc + 2 * sq, i % 2 ? ORANGE : NAVY);
   }
-  chevrons(ctx, -W / 2 + 0.06, 0.18, W - 0.12, opts.chevH ?? 0.55);
-  rect(ctx, -W / 2 + 0.02, 0.1, 0.1, h * 0.55, RED);                // feux arrière
-  rect(ctx, W / 2 - 0.12, 0.1, 0.1, h * 0.55, RED);
-  rect(ctx, -W / 2, -0.02, W, 0.12, '#1f2937');
-  if (opts.label) faceText(ctx, opts.label, 0, (opts.labelZ ?? h - 0.95), 0.09, NAVY, 'center', 900, W - 0.3);
+  // flamme orange dégradée depuis l'avant (portière / aile)
+  if (o.flame !== false) {
+    const zf0 = zc + 2 * sq, zf1 = o.flameTop;
+    const fx0 = o.flameFrom ?? xf, fx1 = o.flameTo ?? (xf - 2.6);
+    const g = ctx.createLinearGradient(X(fx0), 0, X(fx1), 0);
+    g.addColorStop(0, 'rgba(247,148,29,0.95)'); g.addColorStop(0.45, 'rgba(247,148,29,0.75)'); g.addColorStop(1, 'rgba(247,148,29,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.moveTo(X(fx0), zf0); ctx.lineTo(X(fx1), zf0);
+    ctx.quadraticCurveTo(X(lerp(fx1, fx0, 0.45)), zf0 + 0.05, X(lerp(fx1, fx0, 0.7)), zf1);
+    ctx.lineTo(X(fx0), zf1); ctx.closePath(); ctx.fill();
+    // trame de points (halftone) sur la flamme
+    ctx.fillStyle = 'rgba(234,88,12,0.35)';
+    for (let x = fx0 - 0.1; x > fx1 + 0.4; x -= 0.06) for (let z = zf0 + 0.03; z < zf1 - 0.02; z += 0.06) {
+      const t = (fx0 - x) / (fx0 - fx1);
+      const r = 0.02 * (1 - t);
+      if (r > 0.004) { ctx.beginPath(); ctx.arc(X(x), z, r, 0, Math.PI * 2); ctx.fill(); }
+    }
+  }
+  // liserés jaunes
+  if (o.yellowBelt) ur(o.yellowFrom ?? xr, o.yellowTo ?? xf - 1.2, o.yellowBelt, o.yellowBelt + 0.035, YELLOW);
+  if (o.yellowTop) ur(o.yellowFrom ?? xr, o.yellowTopTo ?? xf - 1.9, o.yellowTop, o.yellowTop + 0.04, YELLOW);
 }
 
-function roofFace(ctx, f, M) {
-  // trappe de toit
-  rect(ctx, -0.35, f.len * 0.45, 0.7, 0.5, '#e2e8f0');
-}
+// ===========================================================================
+// MODÈLES
+// ===========================================================================
 
-// ---------- Modèles ----------
+// --- Fourgon type Renault Master III (L2H2) : VPSP / VTU / VTP
 function vanModel(cfg) {
-  const L = cfg.L ?? 5.5, W = cfg.W ?? 2.05, H = cfg.H ?? 2.48, zb = 0.36;
-  const M = { L, W, H, zb, r: 0.36, axles: [L / 2 - 0.95, -L / 2 + 1.2] };
-  const prof = [[-L / 2, zb], [L / 2, zb], [L / 2, 0.95], [L / 2 - 0.55, 1.18], [L / 2 - 1.42, H - 0.06], [L / 2 - 1.7, H], [-L / 2, H]];
-  const tags = ['skip', 'front', 'hood', 'windshield', 'skip', 'roof', 'rear'];
-  const pr = prism(prof, W, tags);
-  const deco = {
-    side: (ctx, f, X) => {
-      sideLivery(ctx, f, X, M, { yellowZ: H - 0.32, yellowEnd: L / 2 - 1.75, swooshTop: 1.3 });
-      cabWindow(ctx, X, L / 2 - 2.3, L / 2 - 0.62, 1.3, H - 0.26, 0.82);
-      // portes
-      ctx.strokeStyle = '#64748b'; ctx.lineWidth = 0.018;
-      [L / 2 - 2.35, L / 2 - 0.6].forEach(x => { ctx.beginPath(); ctx.moveTo(X(x), zb + 0.1); ctx.lineTo(X(x), H - 0.2); ctx.stroke(); });
-      if (cfg.sideWindows) cfg.sideWindows(ctx, X, M);
-      sideTexts(ctx, X, M, true, cfg.topText, { mainX: cfg.mainX ?? -0.55, logoX: L / 2 - 1.45, logoZ: 0.98, logoR: 0.17, topX: cfg.topX ?? -0.7 });
-      // rétro-poignée
-      rect(ctx, Math.min(X(L / 2 - 2.2), X(L / 2 - 2.05)), 1.1, 0.15, 0.04, '#334155');
-    },
-    front: (ctx, f) => frontFace(ctx, f, M, f.len),
-    hood: (ctx, f) => hoodFace(ctx, f, M),
-    windshield: (ctx, f) => windshieldFace(ctx, f, M),
-    rear: (ctx, f) => rearFace(ctx, f, M, { noWindows: cfg.rearNoWindows, label: cfg.rearLabel }),
-    roof: (ctx, f) => roofFace(ctx, f, M)
+  const L = 5.55, W = 2.07, H = cfg.H || 2.49, zb = 0.34, r = 0.36;
+  const hw0 = W / 2;
+  const axF = L / 2 - 0.92, axR = axF - 3.68;
+  const M = { L, W, H, zb, r, axles: [axF, axR] };
+  const d2x = (d) => L / 2 - d;
+  // hauteur du dessus selon la distance à l'avant
+  const ztAt = (d) => {
+    if (d < 0.1) return lerp(0.9, 1.0, smooth(d / 0.1));
+    if (d < 0.78) return lerp(1.0, 1.17, Math.sin((d - 0.1) / 0.68 * Math.PI / 2));
+    if (d < 1.62) { const t = (d - 0.78) / 0.84; return lerp(1.17, H - 0.07, Math.pow(t, 0.85)); }
+    if (d < 1.85) return lerp(H - 0.07, H, smooth((d - 1.62) / 0.23));
+    if (d > L - 0.06) return H - 0.03;
+    return H;
+  };
+  const hwAt = (d) => {
+    let w = hw0;
+    if (d < 0.45) w -= 0.16 * Math.pow(1 - d / 0.45, 2);
+    if (d > L - 0.08) w -= 0.03 * ((d - (L - 0.08)) / 0.08);
+    return w;
+  };
+  const sectionAt = (x) => {
+    const d = L / 2 - x;
+    const zt = ztAt(d), hw = hwAt(d);
+    const cab = d < 1.9;
+    return { zb, zt, hw, hwTop: hw - (cab ? 0.1 : 0.07), belt: cab ? 0.98 : 1.2, topR: d < 0.8 ? 0.2 : (cab ? 0.2 : 0.16), botR: 0.06 };
+  };
+  const ds = [];
+  for (let d = 0; d <= 1.95; d += 0.05) ds.push(d);
+  for (let d = 2.1; d < L - 0.1; d += 0.3) ds.push(d);
+  ds.push(L - 0.06, L);
+  const xs = ds.map(d2x).sort((a, b) => a - b);
+  const mesh = loftMesh(xs, sectionAt);
+  const xWsB = d2x(0.8), xWsT = d2x(1.6);
+  const regionOf = (f) => {
+    const [x, y, z] = f.c; const d = L / 2 - x;
+    if (z < zb + 0.12) return { name: 'sill', color: PLASTIC, spec: 0.05 };
+    if (d < 0.32 && z < 0.6) return { name: 'bumper', color: PLASTIC, spec: 0.1 };
+    if (d > L - 0.1 && z < 0.52) return { name: 'bumper', color: PLASTIC, spec: 0.1 };
+    if (d >= 0.8 && d <= 1.6 && f.n[2] > 0.15 && Math.abs(y) < sectionAt(x).hwTop - 0.07) return { name: 'windshield', color: GLASS, spec: 0.45 };
+    if (d >= 0.06 && d < 0.8 && f.n[2] > 0.3) return { name: 'hood', color: '#f6f8fb' };
+    if (f.n[2] > 0.8) return { name: 'roof', color: '#f4f6f9', spec: 0.15 };
+    if (Math.abs(f.n[1]) > 0.55) return { name: 'side', color: '#f7f9fc' };
+    return { name: 'body', color: '#f3f5f8' };
+  };
+  const sideDecals = (ctx, X, side) => {
+    // vitres de cabine (suivent la ligne du pare-brise)
+    const cabWin = [[X(d2x(2.25)), 1.33], [X(d2x(1.12)), 1.33], [X(d2x(1.3)), 1.62], [X(d2x(1.55)), H - 0.28], [X(d2x(2.25)), H - 0.28]];
+    liveryPC(ctx, X, M, { checkZ: 0.46, flameTop: 1.24, flameFrom: d2x(0.05), flameTo: d2x(2.9), yellowBelt: 1.27, yellowTop: H - 0.33, yellowTopTo: d2x(1.85), yellowTo: d2x(0.95) });
+    // montant de pare-brise noir
+    ctx.fillStyle = '#1c2330';
+    ctx.beginPath(); ctx.moveTo(X(d2x(1.06)), 1.2); ctx.lineTo(X(d2x(0.98)), 1.2); ctx.lineTo(X(d2x(1.56)), H - 0.06); ctx.lineTo(X(d2x(1.66)), H - 0.08); ctx.closePath(); ctx.fill();
+    glassFill(ctx, cabWin);
+    // portière avant + poignée
+    seam(ctx, [[X(d2x(2.28)), zb + 0.12], [X(d2x(2.28)), H - 0.22]]);
+    seam(ctx, [[X(d2x(1.02)), 1.0], [X(d2x(1.02)), zb + 0.14]]);
+    rrect(ctx, Math.min(X(d2x(2.12)), X(d2x(1.98))), 1.12, 0.14, 0.04, 0.015, '#3a4150');
+    // répétiteur latéral orange
+    rrect(ctx, Math.min(X(d2x(0.62)), X(d2x(0.55))), 0.82, 0.07, 0.03, 0.01, '#f59e0b');
+    if (cfg.slidingDoor !== false && side > 0 === (cfg.slideRight !== false)) {
+      // porte latérale coulissante (rail + jointures)
+      seam(ctx, [[X(d2x(2.3)), zb + 0.12], [X(d2x(2.3)), H - 0.22]]);
+      seam(ctx, [[X(d2x(3.55)), zb + 0.12], [X(d2x(3.55)), H - 0.22]]);
+      seam(ctx, [[X(d2x(3.55)), H - 0.62], [X(d2x(-0.2)), H - 0.62]], 0.02, 'rgba(30,41,59,0.35)');
+      rrect(ctx, Math.min(X(d2x(2.42)), X(d2x(2.56))), 1.12, 0.14, 0.04, 0.015, '#3a4150');
+    }
+    if (cfg.windows) cfg.windows(ctx, X, M, d2x);
+    // textes
+    faceText(ctx, 'PROTECTION CIVILE', X(cfg.textX ?? d2x(3.15)), 0.98, 0.19, NAVY, { italic: true, maxW: 2.5 });
+    if (cfg.topText) faceText(ctx, cfg.topText, X(cfg.topTextX ?? d2x(3.3)), H - 0.47, cfg.topTextSize || 0.095, NAVY, { italic: true, weight: 800, maxW: 2.6 });
+    logo(ctx, X(d2x(1.7)), 0.97, 0.16);
+    // feux arrière de gabarit
+    rect(ctx, Math.min(X(d2x(L - 0.02)), X(d2x(L - 0.08))), 0.55, 0.06, 0.55, '#c81e1e');
+  };
+  const frontDecals = (ctx, hwF) => {
+    // u : -hw..+hw (droite du spectateur), v : hauteur z
+    rrect(ctx, -hwF + 0.04, zb + 0.02, hwF * 2 - 0.08, 0.22, 0.05, '#1b1f27');                        // pare-chocs bas
+    chevrons(ctx, -hwF + 0.12, zb + 0.06, hwF * 2 - 0.24, 0.1, 0.11);                                  // chevrons pare-chocs
+    rrect(ctx, -0.62, 0.6, 1.24, 0.27, 0.06, '#0f1218');                                               // calandre
+    for (let i = 0; i < 4; i++) rect(ctx, -0.56, 0.64 + i * 0.06, 1.12, 0.012, '#2b313c');
+    rect(ctx, -0.1, 0.72, 0.2, 0.05, CHROME);                                                         // barre chromée
+    [[-0.5, '#3b82f6'], [0.38, '#3b82f6']].forEach(([u, c]) => rrect(ctx, u, 0.62, 0.12, 0.05, 0.02, c)); // feux bleus de calandre
+    // phares
+    [-1, 1].forEach(sg => {
+      ctx.fillStyle = '#e8edf3';
+      ctx.beginPath(); ctx.moveTo(sg * 0.66, 0.66); ctx.lineTo(sg * (hwF - 0.05), 0.7); ctx.lineTo(sg * (hwF - 0.03), 0.86); ctx.lineTo(sg * 0.66, 0.84); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.015; ctx.stroke();
+      rect(ctx, Math.min(sg * 0.7, sg * (hwF - 0.08)), 0.68, Math.abs(hwF - 0.78), 0.02, '#60a5fa');
+    });
+    rect(ctx, -hwF, 0.47, hwF * 2, 0.012, '#0b0d12');
+  };
+  const hoodDecals = (ctx, wHood, len) => { chevrons(ctx, -wHood, len - 0.3, wHood * 2, 0.3, 0.13, RED, YELLOW); };
+  const rearDecals = (ctx, hwR) => {
+    seam(ctx, [[0, zb + 0.1], [0, H - 0.1]], 0.016, '#475569');
+    if (!cfg.rearNoWindows) {
+      glassFill(ctx, [[-hwR + 0.12, H - 0.78], [-0.05, H - 0.78], [-0.05, H - 0.2], [-hwR + 0.12, H - 0.2]], { frosted: !!cfg.frostedRear });
+      glassFill(ctx, [[0.05, H - 0.78], [hwR - 0.12, H - 0.78], [hwR - 0.12, H - 0.2], [0.05, H - 0.2]], { frosted: !!cfg.frostedRear });
+    }
+    chevrons(ctx, -hwR + 0.08, zb + 0.24, hwR * 2 - 0.16, 0.62, 0.13, RED, YELLOW);
+    [-1, 1].forEach(sg => rrect(ctx, sg > 0 ? hwR - 0.13 : -hwR + 0.03, 0.55, 0.1, 0.62, 0.03, '#c81e1e'));
+    if (cfg.rearLabel) faceText(ctx, cfg.rearLabel, 0, H - 0.98, 0.085, NAVY, { maxW: hwR * 2 - 0.3 });
+    rrect(ctx, -0.18, 1.18, 0.36, 0.06, 0.02, '#3a4150');
   };
   return {
-    M,
-    parts: [{ type: 'prism', pr, deco, cx: 0 }],
-    lightbar: { x0: L / 2 - 2.05, x1: L / 2 - 1.75, z: H, w: 1.5 },
-    rearLights: { x: -L / 2 + 0.08, z: H },
-    mirrors: [L / 2 - 0.62, 1.25]
+    key: cfg.key, M, mesh, regionOf, sideDecals, frontDecals, hoodDecals, rearDecals,
+    hood: { d0: 0.1, d1: 0.78, z0: 1.0, z1: 1.17 },
+    sideFlat: { xFrom: d2x(L - 0.08), xTo: d2x(0.5), zFrom: zb + 0.02, zTo: H - 0.16, cabCut: true },
+    windshield: { x0: xWsB, x1: xWsT },
+    mirrors: { x: d2x(1.0), z: 1.32, h: 0.38 },
+    lightbar: { x: d2x(1.95), w: 1.55, z: H },
+    rearBeacons: cfg.rearBeacons !== false ? { x: d2x(L - 0.12), z: H } : null,
+    roofUnit: cfg.roofUnit ? { x0: d2x(3.6), x1: d2x(2.7), z: H } : null,
+    roofRails: cfg.roofRails,
+    wheelRim: '#a3acb8'
   };
 }
 
+// --- Camion cellule type Renault Midlum : PC / PL soutien aux populations
 function truckModel(cfg) {
-  const L = cfg.L ?? 7.2, W = cfg.W ?? 2.4, Hc = 2.85, Hb = cfg.Hb ?? 3.45, zb = 0.6;
-  const M = { L, W, H: Hb, zb, r: 0.5, axles: [L / 2 - 1.05, -L / 2 + 1.9] };
-  const cabL = 1.95, xc0 = L / 2 - cabL;
-  const cab = prism([[xc0, zb], [L / 2, zb], [L / 2, 1.45], [L / 2 - 0.18, Hc - 0.12], [L / 2 - 0.35, Hc], [xc0, Hc]], W, ['skip', 'front', 'windshield', 'skip', 'roof', 'skip']);
-  const boxL = L - cabL - 0.15;
-  const bx1 = xc0 - 0.12, bx0 = -L / 2;
-  const boxP = prism([[bx0, 1.0], [bx1, 1.0], [bx1, Hb], [bx0, Hb]], W, ['skip', 'boxfront', 'roof', 'rear']);
-  const Mc = { ...M, W };
-  const cabDeco = {
-    side: (ctx, f, X) => {
-      rect(ctx, -10, zb - 0.02, 20, 0.12, '#374151');
-      chevrons(ctx, Math.min(X(xc0), X(L / 2)), zb + 0.12, cabL, 0.14);
-      glass(ctx, [[X(xc0 + 0.35), 1.65], [X(L / 2 - 0.2), 1.65], [X(L / 2 - 0.3), Hc - 0.25], [X(xc0 + 0.35), Hc - 0.25]]);
-      logo(ctx, X(xc0 + 0.95), 1.18, 0.2);
-      rect(ctx, -10, Hc - 0.12, 20, 0.04, YELLOW);
-      ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(X(M.axles[0]), 0, M.r + 0.08, 0, Math.PI); ctx.fill();
-    },
-    front: (ctx, f) => {
-      const h = f.len;
-      rect(ctx, -W / 2, 0, W, 0.28, '#1f2937');
-      chevrons(ctx, -W / 2 + 0.06, 0.05, W - 0.12, 0.16);
-      rect(ctx, -0.6, 0.38, 1.2, 0.36, '#111827');
-      faceText(ctx, 'PROTECTION CIVILE', 0, 0.56, 0.1, '#ffffff', 'center', 900, 1.1);
-      rect(ctx, -W / 2 + 0.06, 0.34, 0.32, 0.16, '#e5e7eb'); rect(ctx, W / 2 - 0.38, 0.34, 0.32, 0.16, '#e5e7eb');
-      rect(ctx, -W / 2, h - 0.08, W, 0.08, '#e5e7eb');
-    },
-    windshield: (ctx, f) => {
-      glass(ctx, [[-W / 2 + 0.1, 0.05], [W / 2 - 0.1, 0.05], [W / 2 - 0.1, f.len - 0.08], [-W / 2 + 0.1, f.len - 0.08]]);
-    },
-    roof: () => {}
+  const L = 7.3, W = 2.4, zb = 0.62, r = 0.5;
+  const cabLen = 1.9;
+  const Hc = 2.95, Hb = cfg.Hb || 3.5;
+  const axF = L / 2 - 1.05, axR = axF - 4.0;
+  const M = { L, W, H: Hb, zb, r, axles: [axF, axR] };
+  const d2x = (d) => L / 2 - d;
+  // cabine (section par section)
+  const ztAt = (d) => {
+    if (d < 0.06) return lerp(1.58, 1.68, d / 0.06);
+    if (d < 0.32) return lerp(1.68, Hc - 0.12, smooth((d - 0.06) / 0.26) * 0.25 + (d - 0.06) / 0.26 * 0.75);
+    if (d < 0.5) return lerp(Hc - 0.12, Hc, smooth((d - 0.32) / 0.18));
+    return Hc;
   };
-  const boxDeco = {
-    side: (ctx, f, X) => {
-      sideLivery(ctx, f, X, { ...M, L: boxL * 2, zb: 1.0, axles: [] }, { checkZ: 1.06, checkEnd: bx1 - 0.05, swooshFrom: bx0, swooshTo: bx0 + 2.4, swooshTop: 2.2, yellowZ: Hb - 0.18, yellowEnd: bx1 });
-      if (cfg.boxWindows) cfg.boxWindows(ctx, X, M, bx0, bx1);
-      faceText(ctx, 'PROTECTION CIVILE', X((bx0 + bx1) / 2 + 0.4), 1.95, 0.27, NAVY, 'center', 900, boxL - 1.2);
-      if (cfg.topText) faceText(ctx, cfg.topText, X((bx0 + bx1) / 2 + 0.4), Hb - 0.48, 0.15, NAVY, 'center', 900, boxL - 1.4);
-      logo(ctx, X(bx1 - 0.55), 2.6, 0.3);
-      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.02;
-      ctx.strokeRect(Math.min(X(bx0 + 0.05), X(bx1 - 0.05)), 1.03, Math.abs(X(bx1 - 0.05) - X(bx0 + 0.05)), Hb - 1.08);
-    },
-    rear: (ctx, f) => {
-      const h = f.len;
-      if (cfg.shutter) { ctx.fillStyle = '#e2e8f0'; ctx.fillRect(-W / 2 + 0.1, 0.1, W - 0.2, h - 0.25); ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.015; for (let z = 0.2; z < h - 0.2; z += 0.12) { ctx.beginPath(); ctx.moveTo(-W / 2 + 0.1, z); ctx.lineTo(W / 2 - 0.1, z); ctx.stroke(); } }
-      else rect(ctx, -0.008, 0.05, 0.016, h - 0.1, '#475569');
-      chevrons(ctx, -W / 2 + 0.06, 0.02, W - 0.12, 0.3);
-      rect(ctx, -W / 2 + 0.02, 0.05, 0.1, 0.5, RED); rect(ctx, W / 2 - 0.12, 0.05, 0.1, 0.5, RED);
-      logo(ctx, 0, h - 0.5, 0.25);
-    },
-    boxfront: () => {},
-    roof: () => {}
+  const hwAt = (d) => W / 2 - (d < 0.25 ? 0.1 * Math.pow(1 - d / 0.25, 2) : 0);
+  const sectionAt = (x) => {
+    const d = L / 2 - x;
+    return { zb, zt: ztAt(d), hw: hwAt(d), hwTop: hwAt(d) - 0.08, belt: 1.55, topR: 0.16, botR: 0.05 };
   };
-  const chassis = { x0: -L / 2 + 0.3, x1: L / 2 - 0.3, y: W / 2 - 0.3, z0: zb - 0.05, z1: 1.0 };
+  const ds = []; for (let d = 0; d <= 0.55; d += 0.04) ds.push(d); ds.push(1.0, 1.5, cabLen);
+  const mesh = loftMesh(ds.map(d2x).sort((a, b) => a - b), sectionAt);
+  // cellule : boîte à arêtes arrondies
+  const bx1 = d2x(cabLen + 0.12), bx0 = -L / 2;
+  const boxSec = () => ({ zb: 1.02, zt: Hb, hw: W / 2 + 0.02, hwTop: W / 2 + 0.02, belt: 1.5, topR: 0.07, botR: 0.03 });
+  const boxXs = [bx0, bx0 + 0.04, bx0 + 1.2, bx0 + 2.4, bx0 + 3.6, bx1 - 0.04, bx1];
+  const boxMesh = loftMesh(boxXs, boxSec);
+  const regionOf = (f) => {
+    const [x, y, z] = f.c; const d = L / 2 - x;
+    if (z < zb + 0.25 && d < 0.3) return { name: 'bumper', color: PLASTIC, spec: 0.1 };
+    if (d < 0.36 && z > 1.72 && f.n[0] > 0.3 && Math.abs(y) < W / 2 - 0.12) return { name: 'windshield', color: GLASS, spec: 0.45 };
+    if (f.n[2] > 0.8) return { name: 'roof', color: '#f4f6f9', spec: 0.15 };
+    if (Math.abs(f.n[1]) > 0.55) return { name: 'side', color: '#f7f9fc' };
+    return { name: 'body', color: '#f3f5f8' };
+  };
+  const boxRegion = (f) => (f.n[2] > 0.8 ? { name: 'boxroof', color: '#eef1f5', spec: 0.1 } : { name: 'boxside', color: '#f7f9fc' });
+  const sideDecals = (ctx, X) => {
+    // cabine
+    rect(ctx, Math.min(X(d2x(cabLen)), X(d2x(0))), zb, cabLen, 0.18, PLASTIC);
+    chevrons(ctx, Math.min(X(d2x(cabLen)), X(d2x(0))), zb + 0.2, cabLen, 0.12, 0.11);
+    glassFill(ctx, [[X(d2x(1.55)), 1.7], [X(d2x(0.36)), 1.7], [X(d2x(0.45)), Hc - 0.22], [X(d2x(1.55)), Hc - 0.22]]);
+    seam(ctx, [[X(d2x(1.62)), zb + 0.2], [X(d2x(1.62)), Hc - 0.15]]);
+    seam(ctx, [[X(d2x(0.3)), zb + 0.2], [X(d2x(0.3)), 1.55]]);
+    logo(ctx, X(d2x(0.95)), 1.25, 0.2);
+    rrect(ctx, Math.min(X(d2x(1.45)), X(d2x(1.3))), 1.5, 0.15, 0.04, 0.015, '#3a4150');
+    // marchepied
+    rect(ctx, Math.min(X(d2x(1.5)), X(d2x(0.5))), zb - 0.18, 1.0, 0.06, '#475569');
+  };
+  const boxDecals = (ctx, X) => {
+    const BL = bx1 - bx0;
+    liveryPC(ctx, X, { L: L }, { checkZ: 1.08, checkEnd: bx1 - 0.05, sq: 0.15, flameTop: 2.15, flameFrom: bx1, flameTo: bx1 - 3.2, yellowTop: Hb - 0.16, yellowFrom: bx0, yellowTopTo: bx1 });
+    if (cfg.boxWindows) cfg.boxWindows(ctx, X, bx0, bx1);
+    if (cfg.shutterSide) { ctx.strokeStyle = 'rgba(100,116,139,0.45)'; ctx.lineWidth = 0.012; for (let z = 1.45; z < Hb - 0.3; z += 0.09) seam(ctx, [[X(bx0 + 1.5), z], [X(bx0 + 3.2), z]], 0.01, 'rgba(100,116,139,0.45)'); }
+    faceText(ctx, 'PROTECTION CIVILE', X((bx0 + bx1) / 2 + 0.25), 1.98, 0.27, NAVY, { italic: true, maxW: BL - 1.1 });
+    if (cfg.topText) faceText(ctx, cfg.topText, X((bx0 + bx1) / 2 + 0.25), Hb - 0.48, 0.16, NAVY, { italic: true, maxW: BL - 1.3 });
+    logo(ctx, X(bx1 - 0.55), 2.7, 0.3);
+    seam(ctx, [[X(bx0 + 0.04), 1.05], [X(bx1 - 0.04), 1.05]], 0.02, 'rgba(71,85,105,0.5)');
+  };
+  const frontDecals = (ctx, hwF) => {
+    rrect(ctx, -hwF + 0.03, zb + 0.02, hwF * 2 - 0.06, 0.34, 0.05, '#1b1f27');
+    chevrons(ctx, -hwF + 0.1, zb + 0.07, hwF * 2 - 0.2, 0.15, 0.12);
+    rrect(ctx, -0.7, 0.98, 1.4, 0.5, 0.06, '#10131a');
+    for (let i = 0; i < 5; i++) rect(ctx, -0.64, 1.03 + i * 0.09, 1.28, 0.02, '#2b313c');
+    faceText(ctx, 'PROTECTION CIVILE', 0, 1.25, 0.085, '#ffffff', { maxW: 1.2 });
+    [-1, 1].forEach(sg => { rrect(ctx, sg > 0 ? hwF - 0.42 : -hwF + 0.06, 1.02, 0.36, 0.2, 0.04, '#e8edf3'); rect(ctx, sg > 0 ? hwF - 0.4 : -hwF + 0.08, 1.04, 0.32, 0.03, '#60a5fa'); });
+  };
+  const rearBoxDecals = (ctx, hwR, h) => {
+    if (cfg.shutter) { rect(ctx, -hwR + 0.08, 1.12, hwR * 2 - 0.16, h - 1.32, '#e5e9ef'); for (let z = 1.2; z < h - 0.25; z += 0.1) rect(ctx, -hwR + 0.08, z, hwR * 2 - 0.16, 0.012, '#94a3b8'); }
+    else { seam(ctx, [[0, 1.1], [0, h - 0.1]], 0.016, '#475569'); rrect(ctx, -0.2, 1.9, 0.4, 0.06, 0.02, '#3a4150'); }
+    chevrons(ctx, -hwR + 0.06, 1.06, hwR * 2 - 0.12, 0.32, 0.14, RED, YELLOW);
+    logo(ctx, 0, h - 0.5, 0.26);
+    [-1, 1].forEach(sg => rrect(ctx, sg > 0 ? hwR - 0.12 : -hwR + 0.03, 1.1, 0.09, 0.5, 0.03, '#c81e1e'));
+  };
   return {
-    M,
-    parts: [
-      { type: 'chassis', ...chassis, cx: 0 },
-      { type: 'prism', pr: boxP, deco: boxDeco, cx: (bx0 + bx1) / 2 },
-      { type: 'prism', pr: cab, deco: cabDeco, cx: (xc0 + L / 2) / 2 }
-    ],
-    lightbar: { x0: L / 2 - 0.75, x1: L / 2 - 0.5, z: Hc, w: 1.6 },
-    rearLights: { x: bx0 + 0.08, z: Hb },
-    mirrors: [L / 2 - 0.05, 1.9],
-    dualRear: true,
-    extra: cfg.mast
+    key: cfg.key, M, mesh, boxMesh, regionOf, boxRegion, sideDecals, boxDecals, frontDecals, rearBoxDecals,
+    sideFlat: { xFrom: d2x(cabLen), xTo: d2x(0.3), zFrom: zb + 0.02, zTo: Hc - 0.14 },
+    box: { x0: bx0, x1: bx1, z0: 1.02, z1: Hb, hw: W / 2 + 0.02 },
+    mirrors: { x: d2x(0.1), z: 1.85, h: 0.48 },
+    lightbar: { x: d2x(0.62), w: 1.7, z: Hc },
+    rearBeacons: { x: bx0 + 0.12, z: Hb },
+    chassis: { x0: bx0 + 0.3, x1: d2x(0.4), z0: zb - 0.04, z1: 1.02, hw: W / 2 - 0.35 },
+    dualRear: true, wheelRim: '#b0b8c4', mast: cfg.mast
   };
 }
 
+// --- Véhicule léger (SUV compact type Dacia Duster)
 function carModel(cfg) {
-  const L = 4.05, W = 1.74, H = 1.46, zb = 0.3;
-  const M = { L, W, H, zb, r: 0.31, axles: [L / 2 - 0.8, -L / 2 + 0.78] };
-  const prof = [[-L / 2, zb], [L / 2, zb], [L / 2, 0.72], [L / 2 - 0.95, 0.9], [L / 2 - 1.62, H - 0.03], [-L / 2 + 0.55, H], [-L / 2 + 0.05, 1.0], [-L / 2, 0.98]];
-  const tags = ['skip', 'front', 'hood', 'windshield', 'roof', 'hatch', 'skip', 'rear'];
-  const pr = prism(prof, W, tags);
-  const deco = {
-    side: (ctx, f, X) => {
-      rect(ctx, -10, zb - 0.02, 20, 0.08, '#374151');
-      // vitres
-      glass(ctx, [[X(-L / 2 + 0.45), 0.98], [X(L / 2 - 1.0), 0.98], [X(L / 2 - 1.55), H - 0.08], [X(-L / 2 + 0.62), H - 0.08]]);
-      ctx.fillStyle = '#f8fafc'; const px = X(-0.15); rect(ctx, px - 0.05, 0.95, 0.1, H - 0.95, '#f8fafc');
-      // bandes
-      ctx.save();
-      const a = X(-L / 2), b = X(L / 2 - 0.3);
-      for (let x = -L / 2 + 0.05, i = 0; x < L / 2 - 0.3; x += 0.14, i++) { const u0 = X(x), u1 = X(x + 0.14); rect(ctx, Math.min(u0, u1), 0.42, Math.abs(u1 - u0), 0.14, i % 2 ? NAVY : ORANGE); }
-      void a; void b;
-      rect(ctx, Math.min(X(-L / 2), X(L / 2)), 0.6, L, 0.05, ORANGE);
-      ctx.restore();
-      faceText(ctx, 'PROTECTION CIVILE', X(0.1), 0.78, 0.13, NAVY, 'center', 900, 2.2);
-      logo(ctx, X(L / 2 - 0.55), 0.78, 0.11);
-      M.axles.forEach(ax => { ctx.fillStyle = '#1f2937'; ctx.beginPath(); ctx.arc(X(ax), 0, M.r + 0.06, 0, Math.PI); ctx.fill(); });
-      ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 0.015; [-0.15, L / 2 - 1.0].forEach(x => { ctx.beginPath(); ctx.moveTo(X(x), zb + 0.08); ctx.lineTo(X(x), 0.98); ctx.stroke(); });
-    },
-    front: (ctx, f) => {
-      rect(ctx, -W / 2, 0, W, 0.15, '#1f2937');
-      chevrons(ctx, -W / 2 + 0.05, 0.03, W - 0.1, 0.09);
-      rect(ctx, -0.4, 0.18, 0.8, 0.16, '#111827');
-      rect(ctx, -W / 2 + 0.06, f.len - 0.15, 0.32, 0.1, '#e5e7eb'); rect(ctx, W / 2 - 0.38, f.len - 0.15, 0.32, 0.1, '#e5e7eb');
-    },
-    hood: (ctx, f) => { chevrons(ctx, -W / 2, 0, W, 0.12); },
-    windshield: (ctx, f) => glass(ctx, [[-W / 2 + 0.1, 0.05], [W / 2 - 0.1, 0.05], [W / 2 - 0.15, f.len - 0.05], [-W / 2 + 0.15, f.len - 0.05]]),
-    hatch: (ctx, f) => { glass(ctx, [[-W / 2 + 0.15, 0.1], [W / 2 - 0.15, 0.1], [W / 2 - 0.18, f.len - 0.06], [-W / 2 + 0.18, f.len - 0.06]], false); },
-    rear: (ctx, f) => {
-      chevrons(ctx, -W / 2 + 0.05, 0.12, W - 0.1, f.len - 0.25);
-      rect(ctx, -W / 2 + 0.02, f.len - 0.25, 0.2, 0.15, RED); rect(ctx, W / 2 - 0.22, f.len - 0.25, 0.2, 0.15, RED);
-      rect(ctx, -W / 2, -0.02, W, 0.1, '#1f2937');
-    },
-    roof: () => {}
+  const L = 4.34, W = 1.8, zb = 0.3, r = 0.34;
+  const axF = L / 2 - 0.86, axR = axF - 2.67;
+  const M = { L, W, H: 1.66, zb, r, axles: [axF, axR] };
+  const d2x = (d) => L / 2 - d;
+  const ztAt = (d) => {
+    if (d < 0.08) return lerp(0.72, 0.86, smooth(d / 0.08));
+    if (d < 0.95) return lerp(0.86, 1.0, Math.sin((d - 0.08) / 0.87 * Math.PI / 2));
+    if (d < 1.7) return lerp(1.0, 1.6, Math.pow((d - 0.95) / 0.75, 0.8));
+    if (d < 1.9) return lerp(1.6, 1.66, smooth((d - 1.7) / 0.2));
+    if (d < 3.75) return 1.66 - (d - 1.9) * 0.012;
+    if (d < 4.22) return lerp(1.64, 1.12, smooth((d - 3.75) / 0.47));
+    return lerp(1.12, 1.05, (d - 4.22) / 0.12);
   };
-  return { M, parts: [{ type: 'prism', pr, deco, cx: 0 }], lightbar: { x0: -0.35, x1: -0.1, z: H, w: 1.1 }, mirrors: [L / 2 - 1.05, 0.95] };
+  const hwAt = (d) => { let w = W / 2; if (d < 0.4) w -= 0.13 * Math.pow(1 - d / 0.4, 2); if (d > L - 0.25) w -= 0.06 * Math.pow((d - (L - 0.25)) / 0.25, 2); return w; };
+  const sectionAt = (x) => { const d = L / 2 - x; const hw = hwAt(d); return { zb, zt: ztAt(d), hw, hwTop: hw - 0.2, belt: 1.0, topR: 0.14, botR: 0.08 }; };
+  const ds = []; for (let d = 0; d <= L + 1e-6; d += 0.06) ds.push(Math.min(d, L));
+  const mesh = loftMesh(ds.map(d2x).sort((a, b) => a - b), sectionAt);
+  const regionOf = (f) => {
+    const [x, y, z] = f.c; const d = L / 2 - x; const S = sectionAt(x);
+    if (z < zb + 0.14) return { name: 'sill', color: PLASTIC, spec: 0.05 };
+    if ((d < 0.25 || d > L - 0.2) && z < 0.62) return { name: 'bumper', color: PLASTIC, spec: 0.1 };
+    if (d >= 0.95 && d <= 1.7 && f.n[2] > 0.15 && Math.abs(y) < S.hwTop - 0.05) return { name: 'windshield', color: GLASS, spec: 0.45 };
+    if (d > 3.8 && d < 4.2 && f.n[2] > 0.15 && Math.abs(y) < S.hwTop - 0.06) return { name: 'windshield', color: GLASS, spec: 0.45 };
+    if (z > 1.03 && z < S.zt - 0.06 && Math.abs(f.n[1]) > 0.3 && d > 1.0 && d < 4.15) {
+      if (Math.abs(d - 2.55) < 0.06) return { name: 'pillar', color: '#1c2330' };
+      return { name: 'sideglass', color: GLASS, spec: 0.4 };
+    }
+    if (d > 0.06 && d < 0.95 && f.n[2] > 0.3) return { name: 'hood', color: '#f6f8fb' };
+    if (f.n[2] > 0.8) return { name: 'roof', color: '#f4f6f9', spec: 0.15 };
+    if (Math.abs(f.n[1]) > 0.55) return { name: 'side', color: '#f7f9fc' };
+    return { name: 'body', color: '#f3f5f8' };
+  };
+  const sideDecals = (ctx, X) => {
+    const sq = 0.12;
+    for (let x = -L / 2 + 0.1, i = 0; x < L / 2 - 0.3; x += sq, i++) {
+      const a = X(x), b = X(x + sq);
+      rect(ctx, Math.min(a, b), 0.47, sq, sq, i % 2 ? NAVY : ORANGE);
+      rect(ctx, Math.min(a, b), 0.47 + sq, sq, sq, i % 2 ? ORANGE : NAVY);
+    }
+    rect(ctx, Math.min(X(-L / 2), X(L / 2)), 0.72, L, 0.04, YELLOW);
+    faceText(ctx, 'PROTECTION CIVILE', X(d2x(2.3)), 0.87, 0.11, NAVY, { italic: true, maxW: 1.6 });
+    logo(ctx, X(d2x(1.35)), 0.86, 0.1);
+    seam(ctx, [[X(d2x(1.0)), zb + 0.15], [X(d2x(1.0)), 0.98]]);
+    seam(ctx, [[X(d2x(2.55)), zb + 0.15], [X(d2x(2.55)), 0.98]]);
+    seam(ctx, [[X(d2x(3.7)), zb + 0.15], [X(d2x(3.7)), 0.98]]);
+    rrect(ctx, Math.min(X(d2x(2.4)), X(d2x(2.28))), 0.93, 0.12, 0.035, 0.012, '#3a4150');
+    rrect(ctx, Math.min(X(d2x(3.55)), X(d2x(3.43))), 0.93, 0.12, 0.035, 0.012, '#3a4150');
+  };
+  const frontDecals = (ctx, hwF) => {
+    rrect(ctx, -hwF + 0.03, zb + 0.02, hwF * 2 - 0.06, 0.2, 0.05, '#1b1f27');
+    chevrons(ctx, -hwF + 0.1, zb + 0.06, hwF * 2 - 0.2, 0.08, 0.09);
+    rrect(ctx, -0.48, 0.55, 0.96, 0.16, 0.04, '#0f1218');
+    rect(ctx, -0.08, 0.6, 0.16, 0.04, CHROME);
+    [-1, 1].forEach(sg => { rrect(ctx, sg > 0 ? hwF - 0.36 : -hwF + 0.05, 0.6, 0.31, 0.11, 0.03, '#e8edf3'); rect(ctx, sg > 0 ? hwF - 0.34 : -hwF + 0.07, 0.61, 0.27, 0.02, '#60a5fa'); });
+  };
+  const hoodDecals = (ctx, wHood, len) => chevrons(ctx, -wHood, len - 0.2, wHood * 2, 0.2, 0.1);
+  const rearDecals = (ctx, hwR) => {
+    chevrons(ctx, -hwR + 0.08, zb + 0.24, hwR * 2 - 0.16, 0.4, 0.1);
+    [-1, 1].forEach(sg => rrect(ctx, sg > 0 ? hwR - 0.3 : -hwR + 0.05, 0.85, 0.25, 0.12, 0.03, '#c81e1e'));
+  };
+  return {
+    key: cfg.key, M, mesh, regionOf, sideDecals, frontDecals, hoodDecals, rearDecals,
+    hood: { d0: 0.08, d1: 0.95, z0: 0.86, z1: 1.0 },
+    sideFlat: { xFrom: d2x(L - 0.25), xTo: d2x(0.4), zFrom: zb + 0.02, zTo: 0.99 },
+    mirrors: { x: d2x(1.05), z: 1.0, h: 0.2 },
+    lightbar: { x: d2x(2.15), w: 1.2, z: 1.64 },
+    wheelRim: '#b8c0cc', roofRails: false
+  };
 }
 
-const vpspWindows = (ctx, X, M) => {
-  // vitre dépolie arrière + porte latérale coulissante
-  glass(ctx, [[X(-0.55), 1.35], [X(0.6), 1.35], [X(0.6), M.H - 0.62], [X(-0.55), M.H - 0.62]], false);
-  ctx.fillStyle = 'rgba(255,255,255,0.55)'; ctx.fillRect(Math.min(X(-0.55), X(0.6)), 1.35, 1.15, 0.5);
+// Fenêtres spécifiques
+const vpspWindows = (ctx, X, M, d2x) => {
+  glassFill(ctx, [[X(d2x(3.5)), 1.38], [X(d2x(2.45)), 1.38], [X(d2x(2.45)), M.H - 0.66], [X(d2x(3.5)), M.H - 0.66]], { frosted: true });
+  faceText(ctx, 'VPSP', X(d2x(2.98)), 1.62, 0.17, NAVY, { weight: 900 });
 };
-const vtpWindows = (ctx, X, M) => {
-  [[-2.45, -1.5], [-1.38, -0.42], [-0.3, 0.62]].forEach(([a, b]) => glass(ctx, [[X(a), 1.32], [X(b), 1.32], [X(b), M.H - 0.42], [X(a), M.H - 0.42]]));
+const vtpWindows = (ctx, X, M, d2x) => {
+  [[2.42, 3.32], [3.42, 4.32], [4.42, 5.25]].forEach(([a, b]) => glassFill(ctx, [[X(d2x(b)), 1.36], [X(d2x(a)), 1.36], [X(d2x(a)), M.H - 0.4], [X(d2x(b)), M.H - 0.4]]));
 };
-const pcWindows = (ctx, X, M, bx0, bx1) => {
-  [bx0 + 0.6, bx0 + 2.0].forEach(a => glass(ctx, [[X(a), 2.35], [X(a + 0.8), 2.35], [X(a + 0.8), 2.95], [X(a), 2.95]]));
+const pcWindows = (ctx, X, bx0) => {
+  [bx0 + 0.55, bx0 + 1.75].forEach(a => glassFill(ctx, [[X(a), 2.4], [X(a + 0.85), 2.4], [X(a + 0.85), 3.0], [X(a), 3.0]]));
 };
 
 const MODELS = {
-  vpsp: () => vanModel({ topText: 'VÉHICULE DE PREMIERS SECOURS À PERSONNES', sideWindows: vpspWindows, mainX: -0.9, rearLabel: 'PREMIERS SECOURS' }),
-  vtu_pop: () => vanModel({ topText: 'SOUTIEN AUX POPULATIONS', rearNoWindows: true }),
-  vtu_log: () => vanModel({ topText: 'LOGISTIQUE', rearNoWindows: true }),
-  vtp: () => vanModel({ topText: 'TRANSPORT DE PERSONNES', sideWindows: vtpWindows, H: 2.42, mainX: -0.9 }),
-  vl: () => carModel({}),
-  pc: () => truckModel({ topText: 'POSTE DE COMMANDEMENT', boxWindows: pcWindows }),
-  pl_pop: () => truckModel({ topText: 'SOUTIEN AUX POPULATIONS', shutter: true })
+  vpsp: () => vanModel({ key: 'vpsp', topText: 'VÉHICULE DE PREMIERS SECOURS À PERSONNES', windows: vpspWindows, roofUnit: true, rearLabel: 'PREMIERS SECOURS', frostedRear: true }),
+  vtu_pop: () => vanModel({ key: 'vtu_pop', topText: 'SOUTIEN AUX POPULATIONS', rearNoWindows: true, textX: L2(3.0), roofRails: true }),
+  vtu_log: () => vanModel({ key: 'vtu_log', topText: 'LOGISTIQUE', topTextSize: 0.13, rearNoWindows: true, textX: L2(3.0), roofRails: true }),
+  vtp: () => vanModel({ key: 'vtp', topText: 'TRANSPORT DE PERSONNES', windows: vtpWindows, H: 2.45, textX: L2(3.85), topTextX: L2(3.85) }),
+  vl: () => carModel({ key: 'vl' }),
+  pc: () => truckModel({ key: 'pc', topText: 'POSTE DE COMMANDEMENT', boxWindows: pcWindows, mast: true }),
+  pl_pop: () => truckModel({ key: 'pl_pop', topText: 'SOUTIEN AUX POPULATIONS', shutter: true, shutterSide: true })
 };
+function L2(d) { return 5.55 / 2 - d; }
 
+// ===========================================================================
+// RENDU D'UN MODÈLE DANS UN CAP
+// ===========================================================================
 const DIRS = { se: 0, sw: Math.PI / 2, nw: Math.PI, ne: -Math.PI / 2 };
+
+function sideClip(ctx, mdl, cam, side, ox, oy) {
+  // découpe : facettes latérales visibles du côté demandé
+  const faces = mdl.mesh.faces.filter(f => !f.cap && Math.sign(f.n[1]) === side && Math.abs(f.n[1]) > 0.35 && visible(cam, f.n));
+  clipToFaces(ctx, cam, faces, ox, oy);
+}
 
 function render(key, dir) {
   const mdl = MODELS[key]();
   const M = mdl.M;
   const cam = makeCam(DIRS[dir]);
-  // Bornes écran
+  // bornes
   const pts = [];
-  for (const x of [-M.L / 2 - 0.3, M.L / 2 + 0.3]) for (const y of [-M.W / 2 - 0.3, M.W / 2 + 0.3]) for (const z of [0, M.H + 0.35]) pts.push(cam.proj([x, y, z]));
+  for (const x of [-M.L / 2 - 0.4, M.L / 2 + 0.4]) for (const y of [-M.W / 2 - 0.4, M.W / 2 + 0.4]) for (const z of [0, M.H + 0.5]) pts.push(cam.proj([x, y, z]));
   const minX = Math.min(...pts.map(p => p[0])), maxX = Math.max(...pts.map(p => p[0]));
   const minY = Math.min(...pts.map(p => p[1])), maxY = Math.max(...pts.map(p => p[1]));
-  const cw = Math.ceil(maxX - minX) + 8, ch = Math.ceil(maxY - minY) + 8;
-  const ox = -minX + 4, oy = -minY + 4;
+  const pad = 8 * SS;
+  const cw = Math.ceil(maxX - minX) + pad * 2, ch = Math.ceil(maxY - minY) + pad * 2;
+  const ox = -minX + pad, oy = -minY + pad;
   const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
   const ctx = cv.getContext('2d');
   ctx.lineJoin = 'round';
+  const sideVis = visible(cam, [0, 1, 0]) ? 1 : -1;
+  const wy = (M.W / 2) - 0.1;
 
-  const sideVisible = visible(cam, [0, 1, 0]) ? 1 : -1;   // flanc visible (y local)
-  const wy = M.W / 2 - 0.12;
-  const wheelsAt = (side) => M.axles.forEach((ax, i) => {
-    const r = M.r;
-    drawWheel(ctx, cam, ax, side * (wy + (mdl.dualRear && i === 1 ? 0.04 : 0)), r, ox, oy, side, mdl.dualRear && i === 1 ? 0.42 : 0.24);
-  });
-  // Ombre douce au sol
+  // Ombre de contact au sol
+  planeTransform(ctx, cam, [0, 0, 0], [1, 0, 0], [0, 1, 0], ox, oy);
+  const g = ctx.createRadialGradient(0, 0, 0.2, 0, 0, M.L * 0.6);
+  g.addColorStop(0, 'rgba(15,23,42,0.32)'); g.addColorStop(1, 'rgba(15,23,42,0)');
+  ctx.fillStyle = 'rgba(15,23,42,0.22)'; ctx.beginPath(); ctx.roundRect(-M.L / 2 - 0.05, -M.W / 2 - 0.02, M.L + 0.15, M.W + 0.12, 0.3); ctx.fill();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  faceTransform(ctx, cam, [0, 0, 0], [1, 0, 0], [0, 1, 0], ox, oy);
-  ctx.fillStyle = 'rgba(15,23,42,0.18)';
-  ctx.beginPath(); ctx.rect(-M.L / 2 - 0.05, -M.W / 2 - 0.05, M.L + 0.25, M.W + 0.25); ctx.fill();
 
-  // Roues côté caché, rétroviseur caché
-  wheelsAt(-sideVisible);
-  if (mdl.mirrors) drawBox(ctx, cam, mdl.mirrors[0] - 0.12, mdl.mirrors[0], -sideVisible * (M.W / 2 + 0.22) - 0.04, -sideVisible * (M.W / 2 + 0.22) + 0.04, mdl.mirrors[1], mdl.mirrors[1] + 0.32, { top: '#1f2937', side: '#111827' }, ox, oy);
-
-  // Parties (tri arrière -> avant selon le cap)
-  const parts = mdl.parts.slice().sort((a, b) => {
-    const wa = cam.toWorld([a.cx, 0, 0]), wb = cam.toWorld([b.cx, 0, 0]);
-    return (wa[0] + wa[1]) - (wb[0] + wb[1]);
+  const wheels = (side) => M.axles.forEach((ax, i) => {
+    const dual = mdl.dualRear && i === 1;
+    drawWheel(ctx, cam, ax, side * (wy + (dual ? 0.05 : 0)), M.r, dual ? 0.46 : 0.26, ox, oy, { rim: mdl.wheelRim, holes: dual ? 8 : 6 });
   });
-  // le châssis toujours en premier
-  parts.sort((a, b) => (a.type === 'chassis' ? -1 : 0) - (b.type === 'chassis' ? -1 : 0));
-  parts.forEach(p => {
-    if (p.type === 'chassis') drawBox(ctx, cam, p.x0, p.x1, -p.y, p.y, p.z0, p.z1, { top: '#374151', side: '#1f2937' }, ox, oy);
-    else drawPrism(ctx, cam, p.pr, p.deco, ox, oy);
+  const mirror = (side) => {
+    if (!mdl.mirrors) return;
+    const m = mdl.mirrors, yS = side * (M.W / 2 + 0.2);
+    drawBlock(ctx, cam, m.x - 0.05, m.x, side > 0 ? M.W / 2 - 0.02 : -(M.W / 2 + 0.2), side > 0 ? M.W / 2 + 0.2 : -(M.W / 2 - 0.02), m.z + m.h * 0.5, m.z + m.h * 0.5 + 0.04, '#1f2430', ox, oy);
+    drawBlock(ctx, cam, m.x - 0.1, m.x, yS - 0.05, yS + 0.05, m.z, m.z + m.h, '#1f2430', ox, oy);
+  };
+
+  // 1. Roues et rétro du côté caché, châssis
+  wheels(-sideVis);
+  mirror(-sideVis);
+  if (mdl.chassis) { const c = mdl.chassis; drawBlock(ctx, cam, c.x0, c.x1, -c.hw, c.hw, c.z0, c.z1, '#2a2f38', ox, oy, 0.05); }
+
+  // 2. Carrosserie(s) : la plus éloignée d'abord
+  const parts = [{ mesh: mdl.mesh, region: mdl.regionOf, kind: 'body', cx: mdl.box ? (mdl.sideFlat.xFrom + M.L / 2) / 2 : 0 }];
+  if (mdl.boxMesh) parts.push({ mesh: mdl.boxMesh, region: mdl.boxRegion, kind: 'box', cx: (mdl.box.x0 + mdl.box.x1) / 2 });
+  parts.sort((a, b) => { const wa = cam.toWorld([a.cx, 0, 0]), wb = cam.toWorld([b.cx, 0, 0]); return (wa[0] + wa[1]) - (wb[0] + wb[1]); });
+
+  parts.forEach(part => {
+    const reg = paintMesh(ctx, cam, part.mesh, part.region, ox, oy);
+    if (part.kind === 'body') decorateBody(ctx, cam, mdl, reg, sideVis, ox, oy);
+    else decorateBox(ctx, cam, mdl, reg, sideVis, ox, oy);
   });
 
-  // Rampe de gyrophares bleus
-  const lb = mdl.lightbar;
+  // 3. Équipements de toit
+  if (mdl.roofRails) {
+    const z = M.H;
+    [-1, 1].forEach(sg => { const y = sg * (M.W / 2 - 0.16); drawBlock(ctx, cam, -M.L / 2 + 0.4, mdl.lightbar.x - 0.35, y - 0.025, y + 0.025, z, z + 0.06, '#2a2f38', ox, oy); });
+  }
+  if (mdl.roofUnit) { const u = mdl.roofUnit; drawBlock(ctx, cam, u.x0, u.x1, -0.45, 0.45, u.z, u.z + 0.16, '#e6eaf0', ox, oy, 0.15); }
+  if (mdl.mast) { drawBlock(ctx, cam, mdl.box.x0 + 0.5, mdl.box.x0 + 0.62, -0.06, 0.06, M.H, M.H + 0.9, '#334155', ox, oy); drawBlock(ctx, cam, mdl.box.x0 + 0.3, mdl.box.x0 + 0.82, -0.22, 0.22, M.H + 0.9, M.H + 1.0, '#facc15', ox, oy); }
   const lights = [];
-  if (lb) {
-    drawBox(ctx, cam, lb.x0, lb.x1, -lb.w / 2, lb.w / 2, lb.z, lb.z + 0.05, { top: '#334155', side: '#1f2937' }, ox, oy);
-    drawBox(ctx, cam, lb.x0 + 0.02, lb.x1 - 0.02, -lb.w / 2 + 0.02, -0.06, lb.z + 0.05, lb.z + 0.17, { top: '#60a5fa', side: '#2563eb' }, ox, oy);
-    drawBox(ctx, cam, lb.x0 + 0.02, lb.x1 - 0.02, 0.06, lb.w / 2 - 0.02, lb.z + 0.05, lb.z + 0.17, { top: '#60a5fa', side: '#2563eb' }, ox, oy);
-    [-lb.w / 4, lb.w / 4].forEach(y => { const p = cam.proj([(lb.x0 + lb.x1) / 2, y, lb.z + 0.12]); lights.push([Math.round(p[0] + ox), Math.round(p[1] + oy)]); });
+  if (mdl.lightbar) {
+    const lb = mdl.lightbar, x0 = lb.x - 0.13, x1 = lb.x + 0.13, w2 = lb.w / 2;
+    drawBlock(ctx, cam, x0, x1, -w2, w2, lb.z, lb.z + 0.05, '#2a2f38', ox, oy);
+    drawBeacon(ctx, cam, lb.x, -w2 * 0.55, lb.z + 0.05, 0.11, w2 * 0.38, 0.11, ox, oy);
+    drawBeacon(ctx, cam, lb.x, w2 * 0.55, lb.z + 0.05, 0.11, w2 * 0.38, 0.11, ox, oy);
+    drawBlock(ctx, cam, x0 + 0.02, x1 - 0.02, -0.12, 0.12, lb.z + 0.05, lb.z + 0.13, '#e5e7eb', ox, oy);
+    [-w2 * 0.55, w2 * 0.55].forEach(y => { const p = cam.proj([lb.x, y, lb.z + 0.12]); lights.push([Math.round((p[0] + ox) / SS), Math.round((p[1] + oy) / SS)]); });
   }
-  if (mdl.rearLights) {
-    const rl = mdl.rearLights;
-    [-M.W / 2 + 0.12, M.W / 2 - 0.22].forEach(y => drawBox(ctx, cam, rl.x - 0.06, rl.x + 0.06, y, y + 0.1, rl.z, rl.z + 0.09, { top: '#60a5fa', side: '#2563eb' }, ox, oy));
-  }
-  if (mdl.extra === 'mast') {}
+  if (mdl.rearBeacons) { const rb = mdl.rearBeacons; [-1, 1].forEach(sg => drawBeacon(ctx, cam, rb.x, sg * (M.W / 2 - 0.16), rb.z, 0.06, 0.06, 0.08, ox, oy)); }
 
-  // Roues côté visible, rétroviseur visible
-  wheelsAt(sideVisible);
-  if (mdl.mirrors) drawBox(ctx, cam, mdl.mirrors[0] - 0.12, mdl.mirrors[0], sideVisible * (M.W / 2 + 0.22) - 0.04, sideVisible * (M.W / 2 + 0.22) + 0.04, mdl.mirrors[1], mdl.mirrors[1] + 0.32, { top: '#1f2937', side: '#111827' }, ox, oy);
+  // 4. Roues et rétro du côté visible
+  wheels(sideVis);
+  mirror(sideVis);
 
+  // 5. Contour encré (style illustration) + réduction anticrénelée
+  const out = document.createElement('canvas');
+  out.width = Math.ceil(cw / SS); out.height = Math.ceil(ch / SS);
+  const o2 = out.getContext('2d');
+  const sil = document.createElement('canvas'); sil.width = cw; sil.height = ch;
+  const sc = sil.getContext('2d');
+  sc.drawImage(cv, 0, 0); sc.globalCompositeOperation = 'source-in'; sc.fillStyle = '#141a26'; sc.fillRect(0, 0, cw, ch);
+  o2.imageSmoothingEnabled = true; o2.imageSmoothingQuality = 'high';
+  const t = 1.3;
+  [[t, 0], [-t, 0], [0, t], [0, -t], [t * 0.7, t * 0.7], [-t * 0.7, t * 0.7], [t * 0.7, -t * 0.7], [-t * 0.7, -t * 0.7]].forEach(([dx, dy]) => o2.drawImage(sil, dx, dy, out.width, out.height));
+  o2.drawImage(cv, 0, 0, out.width, out.height);
+
+  return {
+    url: out.toDataURL('image/png'),
+    meta: { file: `${key}_${dir}.png`, ax: Math.round(ox / SS), ay: Math.round(oy / SS), k: K, L: M.L, W: M.W, H: M.H, lights, w: out.width, h: out.height }
+  };
+}
+
+// Décors de la carrosserie principale
+function decorateBody(ctx, cam, mdl, reg, sideVis, ox, oy) {
+  const M = mdl.M;
+  // Flanc visible
+  const sf = mdl.sideFlat;
+  ctx.save();
+  sideClip(ctx, mdl, cam, sideVis, ox, oy);
+  // plan du flanc : u = droite du spectateur (repère écran "gaucher")
+  const yPlane = sideVis * (M.W / 2);
+  planeTransform(ctx, cam, [0, yPlane, 0], [sideVis, 0, 0], [0, 0, 1], ox, oy);
+  const X = (x) => sideVis * x;
+  mdl.sideDecals(ctx, X, sideVis);
+  // passages de roue
+  M.axles.forEach((ax, i) => {
+    const rr = M.r + (mdl.dualRear && i === 1 ? 0.09 : 0.07);
+    ctx.fillStyle = '#0e1116'; ctx.beginPath(); ctx.arc(X(ax), M.r, rr, Math.PI, 0); ctx.lineTo(X(ax) + rr, 0); ctx.lineTo(X(ax) - rr, 0); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#2b303b'; ctx.lineWidth = 0.05; ctx.beginPath(); ctx.arc(X(ax), M.r, rr + 0.02, Math.PI, 0); ctx.stroke();
+  });
+  void sf;
+  ctx.restore();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  return { url: cv.toDataURL('image/png'), meta: { file: `${key}_${dir}.png`, ax: Math.round(ox), ay: Math.round(oy), k: K, L: M.L, W: M.W, H: M.H, lights, w: cw, h: ch } };
+
+  // Face avant (calandre)
+  const front = (reg.front || [])[0];
+  if (front) {
+    ctx.save(); clipToFaces(ctx, cam, [front], ox, oy);
+    const x = front.c[0];
+    planeTransform(ctx, cam, [x, 0, 0], [0, 1, 0].map(v => v), [0, 0, 1], ox, oy);
+    // u doit être la droite du spectateur : face +x vue de l'extérieur → droite = -y
+    planeTransform(ctx, cam, [x, 0, 0], [0, -1, 0], [0, 0, 1], ox, oy);
+    const hwF = Math.max(...front.pts.map(p => Math.abs(p[1])));
+    mdl.frontDecals(ctx, hwF);
+    ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // Capot (chevrons) : plan incliné approché
+  if (mdl.hood && reg.hood && mdl.hoodDecals) {
+    const h = mdl.hood, L = M.L;
+    const xa = L / 2 - h.d0, xb = L / 2 - h.d1;
+    const o = [xa, 0, h.z0], ev = norm(sub([xb, 0, h.z1], o));
+    const len = Math.hypot(xa - xb, h.z1 - h.z0);
+    ctx.save(); clipToFaces(ctx, cam, reg.hood, ox, oy);
+    // u = droite (-y vu de l'avant), v le long du capot vers le pare-brise : on veut les chevrons au bord avant (v≈0)
+    planeTransform(ctx, cam, add3(o, mul(ev, len)), [0, -1, 0], mul(ev, -1), ox, oy);
+    mdl.hoodDecals(ctx, M.W / 2, len);
+    ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // Pare-brise : reflets
+  if (reg.windshield) {
+    ctx.save(); clipToFaces(ctx, cam, reg.windshield, ox, oy);
+    const b = reg.windshield.map(f => cam.proj(f.c));
+    const xs = b.map(p => p[0] + ox), ys = b.map(p => p[1] + oy);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    ctx.fillStyle = 'rgba(190,225,255,0.18)';
+    ctx.beginPath(); ctx.moveTo(x0, y1); ctx.lineTo(x0 + (x1 - x0) * 0.3, y1); ctx.lineTo(x0 + (x1 - x0) * 0.75, y0); ctx.lineTo(x0 + (x1 - x0) * 0.45, y0); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(190,225,255,0.1)';
+    ctx.beginPath(); ctx.moveTo(x0 + (x1 - x0) * 0.4, y1); ctx.lineTo(x0 + (x1 - x0) * 0.48, y1); ctx.lineTo(x0 + (x1 - x0) * 0.9, y0); ctx.lineTo(x0 + (x1 - x0) * 0.82, y0); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // Face arrière
+  const rear = (reg.rear || [])[0];
+  if (rear && mdl.rearDecals) {
+    ctx.save(); clipToFaces(ctx, cam, [rear], ox, oy);
+    planeTransform(ctx, cam, [rear.c[0], 0, 0], [0, 1, 0], [0, 0, 1], ox, oy);
+    const hwR = Math.max(...rear.pts.map(p => Math.abs(p[1])));
+    mdl.rearDecals(ctx, hwR);
+    ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+}
+
+// Décors de la cellule (camions)
+function decorateBox(ctx, cam, mdl, reg, sideVis, ox, oy) {
+  const M = mdl.M, B = mdl.box;
+  ctx.save();
+  const faces = mdl.boxMesh.faces.filter(f => !f.cap && Math.sign(f.n[1]) === sideVis && Math.abs(f.n[1]) > 0.5 && visible(cam, f.n));
+  clipToFaces(ctx, cam, faces, ox, oy);
+  planeTransform(ctx, cam, [0, sideVis * B.hw, 0], [sideVis, 0, 0], [0, 0, 1], ox, oy);
+  const X = (x) => sideVis * x;
+  mdl.boxDecals(ctx, X);
+  ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const rear = (reg.rear || [])[0];
+  if (rear) {
+    ctx.save(); clipToFaces(ctx, cam, [rear], ox, oy);
+    planeTransform(ctx, cam, [rear.c[0], 0, 0], [0, 1, 0], [0, 0, 1], ox, oy);
+    mdl.rearBoxDecals(ctx, B.hw, B.z1);
+    ctx.restore(); ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  // Pied de cellule côté cabine visible ? (face avant de la cellule : pas de décor)
+  void M;
 }
 
 window.renderAll = function () {
-  const out = {};
-  const files = {};
+  const out = {}, files = {};
   Object.keys(MODELS).forEach(key => {
     out[key] = {};
     Object.keys(DIRS).forEach(dir => {
@@ -498,7 +799,7 @@ window.renderAll = function () {
       files[r.meta.file] = r.url;
     });
   });
-  return { manifest: { version: 1, hz: HZ, k: K, models: out }, files };
+  return { manifest: { version: 2, hz: HZ, k: K, models: out }, files };
 };
 </script>
 </body></html>

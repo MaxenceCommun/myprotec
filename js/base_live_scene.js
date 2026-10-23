@@ -1754,10 +1754,9 @@
   // =========================================================================
 
   // =========================================================================
-  // 6ter. VÉHICULES : ILLUSTRATIONS 3/4 DU DOSSIER images/vehicles
+  // 6ter. VÉHICULES : SPRITES ISOMÉTRIQUES GÉNÉRÉS (images/vehicles/iso)
   // =========================================================================
 
-  const ISO_IMG_CACHE = new Map();
 
   // Sprites générés à l'angle exact de la caméra (images/vehicles/iso, 4 caps par modèle)
   const SPRITES = { manifest: null, loading: false, imgs: new Map() };
@@ -1799,76 +1798,6 @@
       SPRITES.imgs.set(file, e);
     }
     return e.ready ? e.img : null;
-  }
-  const ISO_FILE_RX = /(master\d|trafic|trm_|pl_pop|midlum|flit_pop|midliners)/i;
-
-  function isoImagePath(veh) {
-    if (!veh) return null;
-    const base = String(veh.image || veh.imageIso || '').split('/').pop().replace(/^top_/, '');
-    if (base && ISO_FILE_RX.test(base)) return 'images/vehicles/' + base;
-    const variant = String(veh.variant || veh.model || '').toLowerCase().replace(/^top_/, '');
-    if (variant && ISO_FILE_RX.test(variant)) return `images/vehicles/${variant.replace(/\.png$/, '')}.png`;
-    const type = String(veh.type || veh.vehicleType || '').toUpperCase();
-    const name = String(veh.name || '').toLowerCase();
-    if (type.includes('VPSP') || type === 'ASSU') return 'images/vehicles/master3_vpsp.png';
-    if (type.includes('VTU')) return (veh.capacity_log > 0 || name.includes('log')) ? 'images/vehicles/master3_vtu_log.png' : 'images/vehicles/master3_vtu_pop.png';
-    if (type.includes('VTP')) return 'images/vehicles/master3_vtp.png';
-    if (type.includes('PCM') || type.includes('VPC') || type === 'PC') return 'images/vehicles/midlum_pc.png';
-    if (type.includes('FLIT')) return 'images/vehicles/flit_pop.png';
-    if (type.includes('VTD') || type.includes('VST') || type.includes('PL')) return 'images/vehicles/pl_pop.png';
-    return null;
-  }
-
-  // Charge l'image et calcule sa zone utile (rognage des marges transparentes)
-  function getIsoVehicleImage(veh) {
-    const path = isoImagePath(veh);
-    if (!path) return null;
-    let e = ISO_IMG_CACHE.get(path);
-    if (!e) {
-      e = { img: new Image(), ready: false, failed: false, trim: null };
-      ISO_IMG_CACHE.set(path, e);
-      e.img.onload = () => {
-        const w = e.img.naturalWidth, h = e.img.naturalHeight;
-        e.trim = { x: 0, y: 0, w, h };
-        try {
-          const c = document.createElement('canvas');
-          c.width = w; c.height = h;
-          const cx = c.getContext('2d');
-          cx.drawImage(e.img, 0, 0);
-          const d = cx.getImageData(0, 0, w, h).data;
-          let x0 = w, y0 = h, x1 = 0, y1 = 0;
-          for (let y = 0; y < h; y += 2) {
-            for (let x = 0; x < w; x += 2) {
-              if (d[(y * w + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-            }
-          }
-          if (x1 > x0 && y1 > y0) e.trim = { x: x0, y: y0, w: x1 - x0 + 2, h: y1 - y0 + 2 };
-          // Suppression du liseré blanc "autocollant" des illustrations (remplissage depuis l'extérieur, 12 px max)
-          const img = cx.getImageData(0, 0, w, h);
-          const px = img.data;
-          const depth = new Int16Array(w * h).fill(-1);
-          const q = [];
-          for (let i = 0; i < w * h; i++) if (px[i * 4 + 3] < 30) { depth[i] = 0; q.push(i); }
-          const whiteish = (i) => { const r = px[i * 4], g = px[i * 4 + 1], b = px[i * 4 + 2]; return px[i * 4 + 3] >= 30 && ((r > 200 && g > 200 && b > 200 && Math.max(r, g, b) - Math.min(r, g, b) < 28) || px[i * 4 + 3] < 140); };
-          for (let qi = 0; qi < q.length; qi++) {
-            const i = q[qi], d = depth[i];
-            if (d >= 14) continue;
-            const xx = i % w, yy = (i / w) | 0;
-            const nb = [xx > 0 ? i - 1 : -1, xx < w - 1 ? i + 1 : -1, yy > 0 ? i - w : -1, yy < h - 1 ? i + w : -1];
-            for (const j of nb) {
-              if (j < 0 || depth[j] !== -1) continue;
-              if (whiteish(j)) { depth[j] = d + 1; px[j * 4 + 3] = 0; q.push(j); }
-            }
-          }
-          cx.putImageData(img, 0, 0);
-          e.canvas = c;
-        } catch (err) { /* image d'une autre origine : pas de rognage */ }
-        e.ready = true;
-      };
-      e.img.onerror = () => { e.failed = true; };
-      e.img.src = path;
-    }
-    return e.ready ? e : null;
   }
 
   // =========================================================================
@@ -3211,8 +3140,9 @@
     }
 
     drawVehicle(ctx, v, vs, dx, dy = 0) {
-      if (this.drawVehiclePhoto(ctx, v, vs, dx, dy)) return;   // illustrations réalistes du jeu
-      if (this.drawVehicleSprite(ctx, v, vs, dx, dy)) return;  // modèles générés (VL…)
+      // Modèles isométriques générés (images/vehicles/iso), justes dans les 4 orientations.
+      // Les illustrations de la boutique ne sont plus utilisées dans la scène.
+      if (this.drawVehicleSprite(ctx, v, vs, dx, dy)) return;
       const iso = this.iso;
       const b = v.box;
       const x0 = b.x0 + dx, x1 = b.x1 + dx, y0 = b.y0 + dy, y1 = b.y1 + dy;
@@ -3337,61 +3267,6 @@
       if (this.showLabels || (this.hover && this.hover.veh === v)) {
         const [tx, ty] = iso.p(v.cx + dx, v.cy + dy, meta.H * si.s + 0.55);
         this.queueVehLabel(v, tx, ty);
-      }
-      return true;
-    }
-
-    // Véhicule rendu avec l'illustration 3/4 du jeu (nez vers la rue, côté visible face caméra)
-    drawVehiclePhoto(ctx, v, vs, dx, dy) {
-      const iso = this.iso;
-      const W = this.world;
-      // L'illustration montre l'avant en bas à droite : place horizontale = telle quelle, place verticale = miroir.
-      // L'avant est donc toujours tourné vers la caméra (si la rue est derrière, le véhicule sort en marche arrière).
-      const mirror = !v.horizontal;
-      void W;
-      // Image miroir = textes à l'envers : sur une place verticale on préfère le modèle généré (textes lisibles)
-      if (mirror && v.sprite && SPRITES.manifest) return false;
-      const e = getIsoVehicleImage(v.veh);
-      if (!e) return false;
-      const b = v.box;
-      const x0 = b.x0 + dx, x1 = b.x1 + dx, y0 = b.y0 + dy, y1 = b.y1 + dy;
-      const pts = [iso.p(x0, y0), iso.p(x1, y0), iso.p(x1, y1), iso.p(x0, y1)];
-      const minX = Math.min(...pts.map(p => p[0])), maxX = Math.max(...pts.map(p => p[0]));
-      const maxY = Math.max(...pts.map(p => p[1]));
-      // Ombre portée au sol
-      ctx.globalAlpha = 0.22;
-      poly(ctx, [iso.p(x0 + 0.1, y0 + 0.15), iso.p(x1 + 0.3, y0 + 0.15), iso.p(x1 + 0.3, y1 + 0.35), iso.p(x0 + 0.1, y1 + 0.35)], '#0f172a');
-      ctx.globalAlpha = 1;
-      const tr = e.trim;
-      const dw = (maxX - minX) * 1.06;
-      const dh = dw * tr.h / tr.w;
-      const cx = (minX + maxX) / 2;
-      const bottom = maxY + iso.k * 0.08;
-      ctx.save();
-      ctx.translate(cx, bottom - dh);
-      if (mirror) ctx.scale(-1, 1);
-      if (this.hover && this.hover.veh === v) { ctx.shadowColor = '#38bdf8'; ctx.shadowBlur = iso.k * 0.6; }
-      if (this.isNight) ctx.filter = 'brightness(0.72) saturate(0.85)';
-      ctx.drawImage(e.canvas || e.img, tr.x, tr.y, tr.w, tr.h, -dw / 2, 0, dw, dh);
-      ctx.restore();
-      // Gyrophares en alerte / en mouvement
-      const moving = vs.anim === 'leaving' || vs.anim === 'waitingCrew' || vs.anim === 'arriving';
-      const alertMode = moving || (this.directorOut && this.directorOut.alerts.some(a => a.vehicleId === v.id));
-      if (alertMode) {
-        const blink = Math.floor(this.time * 6) % 2 === 0;
-        const gx = cx + (mirror ? -1 : 1) * dw * (blink ? 0.12 : 0.3);
-        const gy = bottom - dh * (blink ? 0.92 : 0.86);
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        const g = ctx.createRadialGradient(gx, gy, 0, gx, gy, iso.k * 1.5);
-        g.addColorStop(0, 'rgba(59,130,246,0.75)');
-        g.addColorStop(1, 'rgba(59,130,246,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(gx - iso.k * 1.5, gy - iso.k * 1.5, iso.k * 3, iso.k * 3);
-        ctx.restore();
-      }
-      if (this.showLabels || (this.hover && this.hover.veh === v)) {
-        this.queueVehLabel(v, cx, bottom - dh * 0.9);
       }
       return true;
     }
