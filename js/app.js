@@ -29716,8 +29716,8 @@ class ProtecGame {
           ` : ''}
 
           ${((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false || v.consumablesPercent < 100) ? (() => {
-            const caissesEnStock = st?.stock?.caisse_rearmement || 0;
-            const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+            const caissesEnStock = station?.stock?.caisse_rearmement || 0;
+            const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === station.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
             const isUsingTransit = (caissesEnStock === 0 && caissesEnRoute > 0);
             const badgeExtra = isUsingTransit ? ` • ${caissesEnRoute} en commande 📦` : '';
             return `
