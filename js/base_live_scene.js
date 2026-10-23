@@ -62,7 +62,7 @@
   const ROOM_ROLE_BY_TYPE = {
     formation: 'TRAINING', bureau: 'OFFICE', pc_radio: 'RADIO', stockage: 'STORAGE', reserve: 'STORAGE',
     garage: 'GARAGE', detente: 'LOUNGE', foyer: 'LOUNGE', dortoir: 'DORM', salle_garde: 'DORM',
-    vestiaire: 'LOCKER', douche: 'SANITARY', wc: 'SANITARY', libre: 'FREE'
+    vestiaire: 'LOCKER', douche: 'SANITARY', wc: 'SANITARY', couloir: 'CORRIDOR', libre: 'FREE'
   };
 
   const WALL_H = 2.5;        // Hauteur réelle sous plafond (m)
@@ -149,7 +149,8 @@
     const n = String(room.name || '').toLowerCase();
     if (n.includes('formation') || n.includes('cours')) return 'TRAINING';
     if (n.includes('radio') || n.includes('régulation') || n.includes('regulation') || n.includes('alerte')) return 'RADIO';
-    if (n.includes('foyer') || n.includes('détente') || n.includes('detente') || n.includes('repos')) return 'LOUNGE';
+    if (n.includes('foyer') || n.includes('détente') || n.includes('detente') || n.includes('repos') || n.includes('kitchenette') || n.includes('cuisine') || n.includes('pause')) return 'LOUNGE';
+    if (n.includes('couloir') || n.includes('dégagement') || n.includes('hall')) return 'CORRIDOR';
     if (n.includes('réserve') || n.includes('reserve') || n.includes('stock') || n.includes('magasin') || n.includes('logist')) return 'STORAGE';
     if (n.includes('garage') || n.includes('remise') || n.includes('hangar')) return 'GARAGE';
     if (n.includes('vestiaire')) return 'LOCKER';
@@ -2159,7 +2160,10 @@
       if (hit.parking) return { icon: '🚐', label: 'Parking', action: 'Ouvrir la flotte', module: 'flotte' };
       const room = hit.room;
       if (!room) return null;
-      const roles = [room.role].concat(room.altRoles || []);
+      // Une pièce sans vocation (libre, couloir, sanitaires) n'ouvre aucun menu
+      const t = String(room.type || 'libre').toLowerCase();
+      if (t === 'libre' || !ROOM_ROLE_BY_TYPE[t]) return null;
+      const roles = [ROOM_ROLE_BY_TYPE[t]];
       const guard = this.directorOut && this.directorOut.guardLabel;
       const MAP = {
         TRAINING: { icon: '🎓', label: 'Salle de formation', action: 'Ouvrir les formations', module: 'formation' },
@@ -2172,8 +2176,8 @@
         DORM: { icon: '🛏️', label: 'Salle de garde', action: 'Ouvrir la garde SAMU', module: 'samu' }
       };
       const role = roles.find(r => MAP[r]);
-      const base = role ? MAP[role] : { icon: '✏️', label: String(room.name || 'Pièce').split('\n')[0], action: 'Aménager les locaux', module: 'locaux' };
-      return { ...base, label: room.type && room.type !== 'libre' ? base.label : (String(room.name || base.label).split('\n')[0] || base.label) };
+      if (!role) return null;
+      return { ...MAP[role] };
     }
 
     // Ouverture d'un module du jeu depuis la scène
@@ -2606,6 +2610,15 @@
         ctx.lineWidth = 2;
         ctx.strokeRect(room.x * S_FLOOR + 1, room.y * S_FLOOR + 1, room.w * S_FLOOR - 2, room.h * S_FLOOR - 2);
       });
+      // Places de remisage intérieures (remise / garage) : marquage jaune au sol
+      if (W.parking) {
+        (W.parking.spots || []).forEach(sp => {
+          if (!sp.indoor) return;
+          ctx.strokeStyle = '#eab308';
+          ctx.lineWidth = 2.2;
+          ctx.strokeRect(sp.x * S_FLOOR, sp.y * S_FLOOR, sp.w * S_FLOOR, sp.d * S_FLOOR);
+        });
+      }
       // Seuils de portes
       W.doors.forEach(d => {
         if (!PASSABLE_DOOR(d)) return;
@@ -2677,7 +2690,9 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       // Fond
       const grad = ctx.createLinearGradient(0, 0, 0, c.height);
+      const darkTheme = document.documentElement.classList.contains('dark');
       if (night) { grad.addColorStop(0, '#0b1324'); grad.addColorStop(1, '#13261a'); }
+      else if (darkTheme) { grad.addColorStop(0, '#0b1120'); grad.addColorStop(1, '#14532d'); }
       else { grad.addColorStop(0, '#bbf7d0'); grad.addColorStop(1, '#4ade80'); }
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, c.width, c.height);
@@ -3654,7 +3669,7 @@
       const dpr = window.devicePixelRatio || 1;
       this.world.rooms.forEach(r => {
         const style = typeof this.locaux._getRoomStyle === 'function' ? this.locaux._getRoomStyle(r.type) : { name: r.type };
-        const label = r.type && r.type !== 'libre' ? (style.name || r.type) : String(r.name || '').split('\n')[0];
+        const label = String(r.name || '').split('\n')[0] || style.name || r.type;
         const [sx, sy] = iso.p(r.x + 0.25, r.y + r.h - 0.25, 0);
         ctx.save();
         ctx.font = `800 ${Math.round(9.5 * dpr)}px "Plus Jakarta Sans", system-ui, sans-serif`;
@@ -3888,7 +3903,9 @@
     }
 
     updateCursor() {
-      const cur = this.hover ? 'pointer' : 'grab';
+      const h = this.hover;
+      const clickable = h && !((h.room || h.parking) && !h.agent && !h.veh && !h.stack && !h.furn && !this.zoneAction(h));
+      const cur = clickable ? 'pointer' : 'grab';
       if (this.canvas.style.cursor !== cur) this.canvas.style.cursor = cur;
     }
 
@@ -3923,8 +3940,9 @@
       const bar = document.createElement('div');
       bar.className = 'protec-live-toolbar';
       bar.style.cssText = 'position:absolute;left:10px;top:46px;z-index:25;display:flex;gap:6px;flex-wrap:wrap;pointer-events:auto;';
+      injectBaseStyles();
       const narrow = parent.clientWidth > 0 && parent.clientWidth < 560;
-      const btn = (id, label, title) => `<button type="button" data-act="${id}" title="${title}" style="height:30px;padding:0 10px;border-radius:10px;border:1px solid rgba(148,163,184,.6);background:rgba(255,255,255,.92);font:700 11px 'Plus Jakarta Sans',system-ui,sans-serif;color:#0f172a;box-shadow:0 2px 6px rgba(15,23,42,.12);cursor:pointer;">${narrow ? label.split(' ')[0] : label}</button>`;
+      const btn = (id, label, title) => `<button type="button" data-act="${id}" title="${title}" class="plt-btn">${narrow ? label.split(' ')[0] : label}</button>`;
       bar.innerHTML = [
         `<span style="height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:10px;background:#dc2626;color:#fff;font:800 11px 'Plus Jakarta Sans',system-ui,sans-serif;box-shadow:0 2px 6px rgba(220,38,38,.35);"><span style="width:7px;height:7px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite"></span>LIVE</span>`,
         btn('walls', this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 1,10 m', 'Basculer : murs à hauteur réelle (2,50 m) / cloisons coupées à 1,10 m'),
@@ -3955,7 +3973,7 @@
       if (!card) {
         card = document.createElement('div');
         card.className = 'protec-live-card';
-        card.style.cssText = 'position:absolute;left:10px;bottom:72px;z-index:26;width:250px;max-width:calc(100% - 20px);padding:12px;border-radius:16px;background:rgba(255,255,255,.97);border:1px solid #e2e8f0;box-shadow:0 10px 30px rgba(15,23,42,.18);font:500 12px "Plus Jakarta Sans",system-ui,sans-serif;color:#0f172a;';
+        card.style.cssText = 'position:absolute;left:10px;bottom:72px;z-index:26;width:250px;max-width:calc(100% - 20px);';
         parent.appendChild(card);
         card.addEventListener('click', (e) => {
           const b = e.target.closest('[data-act]');
@@ -3973,12 +3991,12 @@
       card.innerHTML = `
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
           <div style="font-weight:800;font-size:13px;">${esc(v.avatar || (a.civilian ? '🧑' : '🦺'))} ${esc(a.name)}</div>
-          <button data-act="close" style="border:none;background:#f1f5f9;border-radius:8px;width:24px;height:24px;cursor:pointer;">✕</button>
+          <button data-act="close" class="plc-close">✕</button>
         </div>
-        <div style="color:#64748b;font-size:11px;margin-top:2px;">${esc(a.rank || '')}${v.role ? ' · ' + esc(v.role) : ''}</div>
+        <div class="plc-muted" style="font-size:11px;margin-top:2px;">${esc(a.rank || '')}${v.role ? ' · ' + esc(v.role) : ''}</div>
         <div style="margin-top:8px;display:inline-flex;align-items:center;gap:6px;padding:4px 8px;border-radius:999px;background:${meta.color}1a;color:${meta.color};font-weight:800;font-size:11px;">${meta.icon} ${meta.label}</div>
-        ${asg.label ? `<div style="margin-top:6px;font-size:11px;color:#334155;">${esc(asg.label)}</div>` : ''}
-        ${typeof v.energy === 'number' ? `<div style="margin-top:8px;font-size:10px;color:#64748b;">Énergie ${Math.round(v.energy)}% · Moral ${Math.round(v.humeur ?? v.motivation ?? 0)}%</div>` : ''}
+        ${asg.label ? `<div style="margin-top:6px;font-size:11px;">${esc(asg.label)}</div>` : ''}
+        ${typeof v.energy === 'number' ? `<div class="plc-muted" style="margin-top:8px;font-size:10px;">Énergie ${Math.round(v.energy)}% · Moral ${Math.round(v.humeur ?? v.motivation ?? 0)}%</div>` : ''}
         ${mod ? `<button data-act="module" data-module="${mod[0]}" style="margin-top:10px;width:100%;height:30px;border:none;border-radius:10px;background:#002E6D;color:#fff;font-weight:800;font-size:11px;cursor:pointer;">Ouvrir ${mod[1]}</button>` : ''}
       `;
     }
@@ -4017,6 +4035,60 @@
   // =========================================================================
   // 8. VUE PLEIN ÉCRAN « MA BASE » (page antenne : scène + infos + menus)
   // =========================================================================
+
+  // Styles de la vue « Ma base » et de l'overlay de la scène, alignés sur la charte du jeu (thème clair / sombre via html.dark)
+  function injectBaseStyles() {
+    if (document.getElementById('protec-base-style')) return;
+    const css = document.createElement('style');
+    css.id = 'protec-base-style';
+    css.textContent = `
+#protec-base-view,.protec-live-toolbar,.protec-live-card{--pbv-bg:#f1f5f9;--pbv-panel:rgba(255,255,255,.94);--pbv-border:#cbd5e1;--pbv-soft:#e2e8f0;--pbv-card:#ffffff;--pbv-chip:#f8fafc;--pbv-text:#0f172a;--pbv-muted:#64748b;--pbv-title:#002E6D;--pbv-hover:#eff6ff;--pbv-link:#0284c7;--pbv-shadow:0 8px 32px rgba(0,46,109,.10),0 1px 3px rgba(15,23,42,.05);}
+html.dark #protec-base-view,html.dark .protec-live-toolbar,html.dark .protec-live-card{--pbv-bg:#0b1120;--pbv-panel:rgba(15,23,42,.94);--pbv-border:#334155;--pbv-soft:#1e293b;--pbv-card:#1e293b;--pbv-chip:#0f172a;--pbv-text:#f8fafc;--pbv-muted:#94a3b8;--pbv-title:#7dd3fc;--pbv-hover:rgba(56,189,248,.14);--pbv-link:#38bdf8;--pbv-shadow:0 8px 32px rgba(0,0,0,.5);}
+#protec-base-view{position:fixed;inset:0;z-index:45;flex-direction:column;background:var(--pbv-bg);color:var(--pbv-text);font-family:'Plus Jakarta Sans',system-ui,sans-serif;}
+#protec-base-view *{box-sizing:border-box;font-family:inherit;}
+#protec-base-view .pbv-header{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--pbv-panel);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);border-bottom:1.5px solid var(--pbv-border);box-shadow:var(--pbv-shadow);flex-wrap:wrap;position:relative;z-index:2;}
+#protec-base-view .pbv-titles{display:flex;flex-direction:column;min-width:0;margin-right:auto;}
+#protec-base-view .pbv-title{font-weight:900;font-size:15px;color:var(--pbv-title);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+#protec-base-view .pbv-subtitle{font-size:11px;color:var(--pbv-muted);font-weight:600;}
+#protec-base-view .pbv-kpis{display:flex;gap:6px;flex-wrap:wrap;}
+#protec-base-view .pbv-btn,.protec-live-toolbar .plt-btn{height:36px;padding:0 12px;border-radius:14px;border:1.5px solid var(--pbv-border);background:var(--pbv-card);color:var(--pbv-text);font-weight:800;font-size:12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;box-shadow:0 1px 3px rgba(15,23,42,.06);transition:background .15s,border-color .15s;}
+#protec-base-view .pbv-btn:hover,.protec-live-toolbar .plt-btn:hover{background:var(--pbv-hover);border-color:var(--pbv-link);}
+#protec-base-view .pbv-btn-primary{background:#FF6600;border-color:#FF6600;color:#fff;}
+#protec-base-view .pbv-btn-primary:hover{background:#E65C00;border-color:#E65C00;color:#fff;}
+#protec-base-view .pbv-btn-sm{height:32px;padding:0 10px;font-size:11px;border-radius:12px;}
+#protec-base-view .pbv-kpi{height:36px;padding:0 10px;border-radius:14px;border:1.5px solid var(--pbv-soft);background:var(--pbv-chip);color:var(--pbv-text);font-size:12px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:6px;}
+#protec-base-view .pbv-kpi:hover{border-color:var(--pbv-link);}
+#protec-base-view .pbv-kpi strong{font-weight:900;font-family:'JetBrains Mono',ui-monospace,monospace;}
+#protec-base-view .pbv-kpi-lbl{font-weight:600;color:var(--pbv-muted);font-size:10px;}
+#protec-base-view .pbv-body{position:relative;flex:1;min-height:0;display:flex;}
+#protec-base-view .pbv-side{width:300px;max-width:42vw;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--pbv-panel);border-right:1.5px solid var(--pbv-border);}
+#protec-base-view .pbv-stage{position:relative;flex:1;min-width:0;}
+#protec-base-view .pbv-side-toggle{position:absolute;right:10px;top:10px;z-index:24;}
+#protec-base-view .pbv-card{background:var(--pbv-card);border:1.5px solid var(--pbv-border);border-radius:18px;padding:10px 12px;box-shadow:0 2px 8px rgba(15,23,42,.06);}
+#protec-base-view .pbv-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+#protec-base-view .pbv-card-title{font-weight:900;font-size:12px;color:var(--pbv-title);text-transform:uppercase;letter-spacing:.02em;}
+#protec-base-view .pbv-link{border:none;background:none;color:var(--pbv-link);font-weight:800;font-size:11px;cursor:pointer;}
+#protec-base-view .pbv-row{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;padding:4px 0;border-top:1px dashed var(--pbv-soft);}
+#protec-base-view .pbv-row-l{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#protec-base-view .pbv-row-r{flex:0 0 auto;font-weight:800;}
+#protec-base-view .pbv-veh{width:100%;text-align:left;border:none;background:none;padding:0;cursor:pointer;color:inherit;border-radius:8px;}
+#protec-base-view .pbv-veh:hover{background:var(--pbv-hover);}
+#protec-base-view .pbv-muted{font-size:11.5px;color:var(--pbv-muted);}
+#protec-base-view .pbv-dim{color:var(--pbv-muted);font-weight:600;}
+#protec-base-view .pbv-tip{font-size:10.5px;color:var(--pbv-muted);line-height:1.4;padding:0 4px;}
+#protec-base-view .pbv-nav{display:flex;gap:2px;justify-content:center;overflow-x:auto;padding:6px 8px;background:var(--pbv-panel);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1.5px solid var(--pbv-border);}
+#protec-base-view .pbv-nav-btn{flex:0 0 auto;min-width:70px;height:54px;padding:4px 8px;border-radius:14px;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-weight:700;font-size:10.5px;color:var(--pbv-text);opacity:.85;}
+#protec-base-view .pbv-nav-btn:hover{background:var(--pbv-hover);color:var(--pbv-link);opacity:1;}
+#protec-base-view .pbv-nav-ico{font-size:19px;line-height:1;}
+#protec-base-view .pbv-nav>:first-child{margin-left:auto}#protec-base-view .pbv-nav>:last-child{margin-right:auto}
+.protec-live-toolbar .plt-btn{height:30px;padding:0 10px;border-radius:12px;font-size:11px;box-shadow:0 2px 6px rgba(15,23,42,.12);}
+.protec-live-card{padding:12px;border-radius:18px;background:var(--pbv-card);border:1.5px solid var(--pbv-border);box-shadow:0 10px 30px rgba(15,23,42,.18);font:500 12px 'Plus Jakarta Sans',system-ui,sans-serif;color:var(--pbv-text);}
+.protec-live-card .plc-muted{color:var(--pbv-muted);}
+.protec-live-card .plc-close{border:none;background:var(--pbv-soft);color:var(--pbv-text);border-radius:8px;width:24px;height:24px;cursor:pointer;}
+@media (max-width:760px){#protec-base-view .pbv-header{gap:6px;padding:8px 10px}#protec-base-view .pbv-kpis{order:9;width:100%;flex-wrap:nowrap;overflow-x:auto}#protec-base-view .pbv-lbl{display:none}#protec-base-view .pbv-nav-btn{min-width:58px}#protec-base-view .pbv-nav>:first-child{margin-left:0}#protec-base-view .pbv-nav{justify-content:flex-start}}
+`;
+    document.head.appendChild(css);
+  }
 
   const BaseView = {
     el: null,
@@ -4060,37 +4132,31 @@
     build() {
       const el = document.createElement('div');
       el.id = 'protec-base-view';
-      el.style.cssText = 'position:fixed;inset:0;z-index:45;display:none;flex-direction:column;background:#e8f5ec;font-family:"Plus Jakarta Sans",system-ui,sans-serif;color:#0f172a;';
-      const B = (act, html, title, extra = '') => `<button type="button" data-act="${act}" title="${title}" style="height:36px;padding:0 12px;border-radius:12px;border:1px solid rgba(148,163,184,.55);background:rgba(255,255,255,.95);font:800 12px inherit;font-family:inherit;color:#0f172a;cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;${extra}">${html}</button>`;
-      const M = (mod, icon, label) => `<button type="button" data-module="${mod}" style="flex:0 0 auto;min-width:66px;height:54px;padding:4px 8px;border-radius:14px;border:none;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:700 10px inherit;font-family:inherit;color:#334155;"><span style="font-size:19px;line-height:1">${icon}</span>${label}</button>`;
+      el.style.display = 'none';
+      const B = (act, html, title, extra = '') => `<button type="button" data-act="${act}" title="${title}" class="pbv-btn ${extra}">${html}</button>`;
+      const M = (mod, icon, label) => `<button type="button" data-module="${mod}" class="pbv-nav-btn"><span class="pbv-nav-ico">${icon}</span>${label}</button>`;
       el.innerHTML = `
-        <header style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,.92);border-bottom:1px solid #e2e8f0;box-shadow:0 2px 12px rgba(15,23,42,.06);flex-wrap:wrap;">
+        <header class="pbv-header">
           ${B('close', '← Carte', 'Revenir à la carte des opérations')}
-          <div style="display:flex;flex-direction:column;min-width:0;margin-right:auto;">
-            <div data-ref="title" style="font-weight:900;font-size:15px;color:#002E6D;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Ma base</div>
-            <div data-ref="subtitle" style="font-size:11px;color:#64748b;font-weight:600;"></div>
+          <div class="pbv-titles">
+            <div data-ref="title" class="pbv-title">Ma base</div>
+            <div data-ref="subtitle" class="pbv-subtitle"></div>
           </div>
-          <div data-ref="kpis" style="display:flex;gap:6px;flex-wrap:wrap;"></div>
+          <div data-ref="kpis" class="pbv-kpis"></div>
           ${B('fiche', '📋<span class="pbv-lbl"> Fiche antenne</span>', 'Ouvrir la fiche détaillée de l’antenne')}
-          ${B('edit', '✏️<span class="pbv-lbl"> Aménager</span>', 'Modifier l’aménagement et le mobilier des locaux')}
+          ${B('edit', '✏️<span class="pbv-lbl"> Aménager</span>', 'Modifier l’aménagement et le mobilier des locaux', 'pbv-btn-primary')}
         </header>
-        <div style="position:relative;flex:1;min-height:0;display:flex;">
-          <aside data-ref="side" style="width:300px;max-width:42vw;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:rgba(255,255,255,.6);border-right:1px solid #e2e8f0;"></aside>
-          <div style="position:relative;flex:1;min-width:0;">
+        <div class="pbv-body">
+          <aside data-ref="side" class="pbv-side"></aside>
+          <div class="pbv-stage">
             <canvas id="protec-base-canvas" style="width:100%;height:100%;display:block;touch-action:none;"></canvas>
-            <button type="button" data-act="side" title="Afficher / masquer le panneau d’informations" style="position:absolute;right:10px;top:10px;z-index:24;height:32px;padding:0 10px;border-radius:10px;border:1px solid rgba(148,163,184,.6);background:rgba(255,255,255,.95);font:800 11px inherit;font-family:inherit;cursor:pointer;">📊 Infos</button>
+            <button type="button" data-act="side" title="Afficher / masquer le panneau d’informations" class="pbv-btn pbv-btn-sm pbv-side-toggle">📊 Infos</button>
           </div>
         </div>
-        <nav style="display:flex;gap:2px;justify-content:center;overflow-x:auto;padding:6px 8px;background:rgba(255,255,255,.95);border-top:1px solid #e2e8f0;">
+        <nav class="pbv-nav">
           ${M('planning', '📅', 'Planning')}${M('samu', '🚑', 'Garde SAMU')}${M('formation', '🎓', 'Formations')}${M('recrutement', '👥', 'Bénévoles')}${M('logistique', '📦', 'Logistique')}${M('flotte', '🚐', 'Flotte')}${M('boutiques', '🛒', 'Boutiques')}${M('finances', '💶', 'Finances')}${M('locaux', '🏢', 'Bâtiment')}
         </nav>`;
-      if (!document.getElementById('protec-base-style')) {
-        const css = document.createElement('style');
-        css.id = 'protec-base-style';
-        css.textContent = '#protec-base-view nav>:first-child{margin-left:auto}#protec-base-view nav>:last-child{margin-right:auto}#protec-base-view nav button:hover{background:#eff6ff}' +
-          '@media (max-width:760px){#protec-base-view header{gap:6px!important;padding:8px 10px!important}#protec-base-view [data-ref=kpis]{order:9;width:100%;flex-wrap:nowrap!important;overflow-x:auto}#protec-base-view .pbv-lbl{display:none}#protec-base-view nav button{min-width:58px!important}#protec-base-view nav>:first-child{margin-left:0}#protec-base-view nav{justify-content:flex-start!important}}';
-        document.head.appendChild(css);
-      }
+      injectBaseStyles();
       el.addEventListener('click', (e) => {
         const b = e.target.closest('[data-act],[data-module],[data-veh],[data-open]');
         if (!b) return;
@@ -4140,7 +4206,7 @@
       const clock = new Date(nowMs(game)).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
       q('title').textContent = st.name || 'Ma base';
       q('subtitle').textContent = `${st.city || st.commune || 'Antenne'} · Niveau ${st.level || 1} · ${clock}`;
-      const kpi = (icon, val, label, mod) => `<button type="button" data-open="${mod}" title="${label}" style="height:36px;padding:0 10px;border-radius:12px;border:1px solid #e2e8f0;background:#f8fafc;font:800 12px inherit;font-family:inherit;cursor:pointer;display:inline-flex;align-items:center;gap:6px;color:#0f172a;">${icon} ${val}<span class="pbv-lbl" style="font-weight:600;color:#64748b;font-size:10px">${label}</span></button>`;
+      const kpi = (icon, val, label, mod) => `<button type="button" data-open="${mod}" title="${label}" class="pbv-kpi">${icon} <strong>${val}</strong><span class="pbv-lbl pbv-kpi-lbl">${label}</span></button>`;
       q('kpis').innerHTML = [
         kpi('👥', present, 'à la base', 'recrutement'),
         kpi('🚑', onMission, 'en mission', 'planning'),
@@ -4149,9 +4215,9 @@
         money ? kpi('💶', money, '', 'finances') : ''
       ].join('');
 
-      const card = (title, body, mod) => `<section style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:10px 12px;box-shadow:0 1px 3px rgba(15,23,42,.05);">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><span style="font-weight:900;font-size:12px;color:#002E6D;">${title}</span>${mod ? `<button type="button" data-open="${mod}" style="border:none;background:none;color:#2563eb;font:800 11px inherit;font-family:inherit;cursor:pointer;">Ouvrir →</button>` : ''}</div>${body}</section>`;
-      const row = (left, right, color) => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;padding:3px 0;border-top:1px dashed #f1f5f9;"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${left}</span><span style="flex:0 0 auto;font-weight:800;color:${color || '#334155'}">${right}</span></div>`;
+      const card = (title, body, mod) => `<section class="pbv-card">
+          <div class="pbv-card-head"><span class="pbv-card-title">${title}</span>${mod ? `<button type="button" data-open="${mod}" class="pbv-link">Ouvrir →</button>` : ''}</div>${body}</section>`;
+      const row = (left, right, color) => `<div class="pbv-row"><span class="pbv-row-l">${left}</span><span class="pbv-row-r"${color ? ` style="color:${color}"` : ''}>${right}</span></div>`;
 
       // Activité en cours
       const acts = [];
@@ -4163,14 +4229,14 @@
       if (counts.LOGISTICS) acts.push(row('📦 Préparation logistique', `${counts.LOGISTICS} pers.`, '#d97706'));
       if (out && out.cohesion) acts.push(row(`🎉 ${esc(out.cohesion.label)}`, `jusqu’à ${new Date(out.cohesion.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`, '#7c3aed'));
       if (counts.IDLE && !(out && out.cohesion)) acts.push(row('💼 Personnel salarié au poste', `${counts.IDLE} pers.`, '#64748b'));
-      const actHtml = acts.length ? acts.join('') : `<div style="font-size:11.5px;color:#64748b;">Base calme : aucun bénévole sur place. ${dispo} disponible(s) à domicile.</div>`;
+      const actHtml = acts.length ? acts.join('') : `<div class="pbv-muted">Base calme : aucun bénévole sur place. ${dispo} disponible(s) à domicile.</div>`;
 
       // Véhicules
       const vehHtml = vehs.length ? vehs.map(v => {
         const s2 = sc ? sc.vehicleStatus(v) : { text: v.status, color: '#334155', arm: v.armementLevel };
         const arm = Math.round(Number(s2.arm) || 0);
-        return `<button type="button" data-veh="${esc(v.id)}" style="width:100%;text-align:left;border:none;background:none;padding:0;cursor:pointer;font-family:inherit;">${row(`<strong>${esc(v.name || v.type)}</strong> <span style="color:#94a3b8">· ${arm}%${typeof v.fuel === 'number' ? ' · ⛽ ' + Math.round(v.fuel) + '%' : ''}</span>`, esc(s2.text), s2.color)}</button>`;
-      }).join('') : '<div style="font-size:11.5px;color:#64748b;">Aucun véhicule.</div>';
+        return `<button type="button" data-veh="${esc(v.id)}" class="pbv-veh">${row(`<strong>${esc(v.name || v.type)}</strong> <span class="pbv-dim">· ${arm}%${typeof v.fuel === 'number' ? ' · ⛽ ' + Math.round(v.fuel) + '%' : ''}</span>`, esc(s2.text), s2.color)}</button>`;
+      }).join('') : '<div class="pbv-muted">Aucun véhicule.</div>';
 
       // Réserve
       const inv = sc && sc._inv;
@@ -4181,10 +4247,10 @@
         Object.entries(inv.stored || {}).forEach(([id, n]) => { all[id] = (all[id] || 0) + n; });
         stockRows = Object.entries(all).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([id, n]) => row(`${esc(itemName(id))}`, `× ${n}`));
       }
-      const stockHtml = stockRows.length ? stockRows.join('') : '<div style="font-size:11.5px;color:#64748b;">Réserve vide.</div>';
+      const stockHtml = stockRows.length ? stockRows.join('') : '<div class="pbv-muted">Réserve vide.</div>';
 
       q('side').innerHTML = card('Activité à la base', actHtml, null) + card('Véhicules', vehHtml, 'flotte') + card('Réserve & matériel', stockHtml, 'logistique') +
-        `<div style="font-size:10.5px;color:#64748b;line-height:1.4;padding:0 4px;">Astuce : cliquez sur une pièce de la scène pour ouvrir le menu correspondant (formation, PC radio, réserve, foyer…), sur un véhicule pour sa fiche, sur un bénévole pour son activité.</div>`;
+        `<div class="pbv-tip">Astuce : cliquez sur une pièce affectée (formation, PC radio, réserve, foyer…) pour ouvrir le menu correspondant, sur un véhicule pour sa fiche, sur un bénévole pour son activité. Les pièces sans vocation n’ouvrent rien.</div>`;
     }
   };
 

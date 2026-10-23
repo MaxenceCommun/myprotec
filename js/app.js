@@ -29205,8 +29205,8 @@ class ProtecGame {
                       ${hasPendingRearm ? `
                         <span class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">🛠️ Atelier Prévu</span>
                       ` : (() => {
-                        const caissesEnStock = st?.stock?.caisse_rearmement || 0;
-                        const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+                        const caissesEnStock = station?.stock?.caisse_rearmement || 0;
+                        const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === station.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
                         const label = (caissesEnStock === 0 && caissesEnRoute > 0)
                           ? `+ Réarmer (Mission Log • ${caissesEnRoute} en commande 📦)`
                           : `+ Réarmer (Mission Logistique)`;

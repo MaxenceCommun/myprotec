@@ -264,339 +264,556 @@ window.ProtecLocaux = {
   // GESTION DU MARCHÉ IMMOBILIER TERRITORIAL & PLANS D'ARCHITECTE DYNAMIQUES
   // =========================================================================
 
-  // Génération procédurale d'un modèle CAD d'architecte réaliste (pièces libres, murs, portes, parking)
-  generateProceduralArchitecture(surfaceM2, roomsCount, parkingSpots) {
-    const bldgX = 6.4;
-    const bldgY = 1.5;
-    const bW = Math.max(7.2, Math.round(Math.sqrt(surfaceM2 * 1.35) * 10) / 10);
-    const bH = Math.max(6.0, Math.round((surfaceM2 / (bW - 0.5)) * 10) / 10);
+  // =========================================================================
+  // GÉNÉRATEUR DE LOCAUX RÉALISTES (typologies de bâtiments existants)
+  // Couloirs, salles de tailles variées, sanitaires, remise à véhicules,
+  // murs extérieurs / cloisons calculés automatiquement, portes et fenêtres.
+  // =========================================================================
 
-    // 1. Parking extérieur avec places de stationnement délimitées
-    const parkingH = Math.max(8.0, parkingSpots * 2.2);
-    const spots = [];
-    for (let p = 0; p < parkingSpots; p++) {
-      spots.push({
-        id: `spot_${p + 1}`,
-        label: `🅿️ EMPLACEMENT LIBRE 0${p + 1}`,
-        x: 1.4,
-        y: 1.8 + p * 2.0,
-        w: 4.0,
-        d: 1.8
-      });
+  BUILDING_TYPOLOGIES: {
+    local: {
+      label: 'Local associatif de quartier', icon: '🏠',
+      names: ['Local associatif des Tilleuls', 'Ancien local paroissial', 'Rez-de-chaussée commercial', 'Local de l\'ancienne poste', 'Maison des associations (aile)'],
+      desc: 'Rez-de-chaussée compact : couloir d\'entrée desservant une grande salle, un bureau, une kitchenette, un WC et une réserve. Stationnement sur la cour.'
+    },
+    pavillon: {
+      label: 'Pavillon reconverti avec garage', icon: '🏡',
+      names: ['Pavillon des années 70', 'Maison de ville reconvertie', 'Ancien logement de fonction', 'Pavillon du gardien', 'Maison de l\'ancien garde-champêtre'],
+      desc: 'Ancienne maison réaménagée : garage fermé d\'une place avec porte sectionnelle, couloir central, séjour transformable en grande salle, cuisine, salle d\'eau et pièces plus petites.'
+    },
+    modulaire: {
+      label: 'Bâtiment modulaire', icon: '🏗️',
+      names: ['Bâtiment modulaire de chantier', 'Ensemble préfabriqué municipal', 'Modulaires de l\'ancien collège', 'Base vie modulaire', 'Bungalows reliés de la ZA'],
+      desc: 'Modules préfabriqués de 2,40 m alignés de part et d\'autre d\'un couloir central traversant (deux accès). Salles de 1, 2 ou 3 modules, sanitaires intégrés.'
+    },
+    atelier: {
+      label: 'Atelier communal avec remise', icon: '🏭',
+      names: ['Ancien atelier des services techniques', 'Dépôt de voirie communal', 'Atelier artisanal', 'Ancienne menuiserie', 'Garage municipal désaffecté'],
+      desc: 'Remise à véhicules à portes sectionnelles donnant sur la cour, couloir de service et aile de bureaux (bureau, salle de réunion, vestiaire, sanitaires).'
+    },
+    entrepot: {
+      label: 'Entrepôt logistique avec bureaux', icon: '🏬',
+      names: ['Entrepôt de la zone d\'activités', 'Plateforme logistique de secteur', 'Ancien négoce de matériaux', 'Hall de stockage rénové', 'Entrepôt avec bureaux d\'accueil'],
+      desc: 'Remise à véhicules et grande zone de stockage reliées par une double porte, couloir transversal et rangée de bureaux, vestiaires et sanitaires côté accueil.'
+    },
+    caserne: {
+      label: 'Ancien centre de secours', icon: '🚒',
+      names: ['Ancien centre d\'incendie et de secours', 'Caserne désaffectée du SDIS', 'Ancien centre de première intervention', 'Ex-centre de secours principal', 'Caserne des anciens pompiers volontaires'],
+      desc: 'Véritable centre de secours : remise multi-travées, couloirs en T, salle radio, bureau, grande salle de formation, vestiaires hommes / femmes, douches, pharmacie et dortoirs.'
     }
+  },
 
-    const parking = {
-      x: 1.0,
-      y: 1.5,
-      w: 4.8,
-      h: parkingH,
-      label: 'Parking Opérationnel Extérieur',
-      spots: spots
-    };
-
-    // 2. Découpage des pièces intérieures (toutes LIBRES par défaut)
-    const rooms = [];
-    const walls = [
-      // Murs extérieurs porteurs
-      { x1: bldgX, y1: bldgY, x2: bldgX + bW, y2: bldgY, th: 0.24, outer: true },
-      { x1: bldgX + bW, y1: bldgY, x2: bldgX + bW, y2: bldgY + bH, th: 0.24, outer: true },
-      { x1: bldgX + bW, y1: bldgY + bH, x2: bldgX, y2: bldgY + bH, th: 0.24, outer: true },
-      { x1: bldgX, y1: bldgY + bH, x2: bldgX, y2: bldgY, th: 0.24, outer: true }
-    ];
-    const doors = [
-      { id: 'd_entree', x: bldgX, y: bldgY + 1.2, len: 0.93, wall: 'W', label: 'Porte d’Entrée Principale (93cm)', isMain: true }
-    ];
-
-    if (roomsCount <= 2) {
-      // 2 pièces côte à côte
-      const w1 = Math.round(bW * 0.48 * 10) / 10;
-      const w2 = Math.round((bW - w1) * 10) / 10;
-      rooms.push({
-        id: 'room_1',
-        type: 'libre',
-        name: 'Salle 1 (Libre)\n(Non affectée)',
-        x: bldgX,
-        y: bldgY,
-        w: w1,
-        h: bH,
-        area: Math.round(w1 * bH * 10) / 10,
-        color: '#121722'
-      });
-      rooms.push({
-        id: 'room_2',
-        type: 'libre',
-        name: 'Salle 2 (Libre)\n(Non affectée)',
-        x: bldgX + w1,
-        y: bldgY,
-        w: w2,
-        h: bH,
-        area: Math.round(w2 * bH * 10) / 10,
-        color: '#121722'
-      });
-      walls.push({ x1: bldgX + w1, y1: bldgY, x2: bldgX + w1, y2: bldgY + bH, th: 0.12, outer: false });
-      doors.push({ id: 'd_room2', x: bldgX + w1, y: bldgY + 2.5, len: 0.83, wall: 'W', label: 'Porte Salle 2' });
-    } else if (roomsCount <= 4) {
-      // 3 ou 4 pièces en grille 2x2
-      const splitX = Math.round(bW * 0.5 * 10) / 10;
-      const splitY = Math.round(bH * 0.45 * 10) / 10;
-      const w1 = splitX, w2 = bW - splitX;
-      const h1 = splitY, h2 = bH - splitY;
-
-      rooms.push({ id: 'room_1', type: 'libre', name: 'Salle 1 (Libre)\n(Non affectée)', x: bldgX, y: bldgY, w: w1, h: h1, area: Math.round(w1 * h1 * 10) / 10, color: '#121722' });
-      rooms.push({ id: 'room_2', type: 'libre', name: 'Salle 2 (Libre)\n(Non affectée)', x: bldgX + w1, y: bldgY, w: w2, h: h1, area: Math.round(w2 * h1 * 10) / 10, color: '#121722' });
-
-      if (roomsCount === 3) {
-        rooms.push({ id: 'room_3', type: 'libre', name: 'Salle 3 (Libre)\n(Non affectée)', x: bldgX, y: bldgY + h1, w: bW, h: h2, area: Math.round(bW * h2 * 10) / 10, color: '#121722' });
-      } else {
-        rooms.push({ id: 'room_3', type: 'libre', name: 'Salle 3 (Libre)\n(Non affectée)', x: bldgX, y: bldgY + h1, w: w1, h: h2, area: Math.round(w1 * h2 * 10) / 10, color: '#121722' });
-        rooms.push({ id: 'room_4', type: 'libre', name: 'Salle 4 (Libre)\n(Non affectée)', x: bldgX + w1, y: bldgY + h1, w: w2, h: h2, area: Math.round(w2 * h2 * 10) / 10, color: '#121722' });
-        walls.push({ x1: bldgX + w1, y1: bldgY + h1, x2: bldgX + w1, y2: bldgY + bH, th: 0.12, outer: false });
-      }
-
-      walls.push({ x1: bldgX, y1: bldgY + h1, x2: bldgX + bW, y2: bldgY + h1, th: 0.12, outer: false });
-      walls.push({ x1: bldgX + w1, y1: bldgY, x2: bldgX + w1, y2: bldgY + h1, th: 0.12, outer: false });
-      doors.push({ id: 'd_r2', x: bldgX + w1, y: bldgY + 1.8, len: 0.83, wall: 'W', label: 'Porte Salle 2' });
-      doors.push({ id: 'd_r3', x: bldgX + 2.0, y: bldgY + h1, len: 0.83, wall: 'N', label: 'Porte Salle 3' });
-    } else {
-      // 5 à 8 pièces en 2 rangées de 3 ou 4 pièces
-      const cols = Math.ceil(roomsCount / 2);
-      const rowH = Math.round((bH / 2) * 10) / 10;
-      const colW = Math.round((bW / cols) * 10) / 10;
-
-      walls.push({ x1: bldgX, y1: bldgY + rowH, x2: bldgX + bW, y2: bldgY + rowH, th: 0.12, outer: false });
-
-      for (let r = 0; r < roomsCount; r++) {
-        const row = r < cols ? 0 : 1;
-        const col = r < cols ? r : (r - cols);
-        const rx = bldgX + col * colW;
-        const ry = bldgY + row * rowH;
-        const rw = (col === cols - 1) ? (bW - col * colW) : colW;
-        const rh = (row === 1) ? (bH - rowH) : rowH;
-
-        rooms.push({
-          id: `room_${r + 1}`,
-          type: 'libre',
-          name: `Salle ${r + 1} (Libre)\n(Non affectée)`,
-          x: rx,
-          y: ry,
-          w: Math.round(rw * 10) / 10,
-          h: Math.round(rh * 10) / 10,
-          area: Math.round(rw * rh * 10) / 10,
-          color: '#121722'
-        });
-
-        if (col > 0 && row === 0) {
-          walls.push({ x1: rx, y1: bldgY, x2: rx, y2: bldgY + rowH, th: 0.12, outer: false });
-        } else if (col > 0 && row === 1) {
-          walls.push({ x1: rx, y1: bldgY + rowH, x2: rx, y2: bldgY + bH, th: 0.12, outer: false });
-        }
-        doors.push({ id: `d_r${r + 1}`, x: rx + 0.8, y: ry + (row === 0 ? rowH : 0), len: 0.83, wall: row === 0 ? 'S' : 'N', label: `Porte Salle ${r + 1}` });
-      }
-    }
-
-    return {
-      parking: parking,
-      rooms: rooms,
-      walls: walls,
-      doors: doors,
-      windows: [],
-      fixtures: [],
-      furniture: []
+  // Générateur pseudo-aléatoire déterministe (xorshift)
+  _archRng(seed) {
+    let s = (Math.abs(Math.floor(seed)) % 2147483646) + 1;
+    return () => {
+      s = (s ^ (s << 13)) >>> 0;
+      s = (s ^ (s >> 17)) >>> 0;
+      s = (s ^ (s << 5)) >>> 0;
+      return (s >>> 0) / 4294967296;
     };
   },
 
-  // Génération dynamique des opportunités immobilières du marché qui varient chaque jour in-game
-  getDailyRealEstateOffers(game) {
+  // Génère un plan complet pour une typologie : { parking, rooms, walls, doors, windows, fixtures, furniture, meta }
+  buildRealisticArchitecture(typology, opts = {}) {
+    const rnd = this._archRng(opts.seed || 12345);
+    const rd = (v) => Math.round(v * 10) / 10;
+    const BX = 7.2, BY = 1.5;              // Coin nord-ouest du bâtiment (la cour est à l'ouest)
+    const rooms = [];                       // pièces en coordonnées locales
+    const links = [];                       // portes intérieures { a, b, at, len, type }
+    const exits = [];                       // portes extérieures { room, side, at, len, main }
+    const bays = [];                        // travées de remise { room, y0 } (porte sectionnelle à l'ouest)
+    const R = (key, name, type, x, y, w, h) => { rooms.push({ key, name, type, x: rd(x), y: rd(y), w: rd(w), h: rd(h) }); return key; };
+    const link = (a, b, at = 0.5, len = 0.83, type) => links.push({ a, b, at, len, type });
+
+    // Découpe un intervalle selon des poids, avec tailles minimales
+    const split = (a0, a1, items) => {
+      const total = a1 - a0;
+      let sizes = items.map(it => it.wt || 1);
+      const fixed = new Array(items.length).fill(false);
+      for (let iter = 0; iter < items.length; iter++) {
+        const freeW = sizes.reduce((s, v, i) => s + (fixed[i] ? 0 : (items[i].wt || 1)), 0);
+        const used = sizes.reduce((s, v, i) => s + (fixed[i] ? v : 0), 0);
+        let changed = false;
+        sizes = sizes.map((v, i) => fixed[i] ? v : (total - used) * (items[i].wt || 1) / freeW);
+        sizes.forEach((v, i) => { if (!fixed[i] && v < (items[i].min || 0)) { sizes[i] = items[i].min; fixed[i] = true; changed = true; } });
+        if (!changed) break;
+      }
+      const cuts = [a0];
+      let acc = a0;
+      sizes.forEach((v, i) => { acc += v; cuts.push(i === sizes.length - 1 ? a1 : rd(acc)); });
+      return cuts;
+    };
+    // Rangée de pièces le long de x (même y0..y1)
+    const row = (x0, x1, y0, y1, items) => {
+      const c = split(x0, x1, items);
+      return items.map((it, i) => R(it.key, it.name, it.type || 'libre', c[i], y0, c[i + 1] - c[i], y1 - y0));
+    };
+    // Colonne de pièces le long de y (même x0..x1)
+    const col = (x0, x1, y0, y1, items) => {
+      const c = split(y0, y1, items);
+      return items.map((it, i) => R(it.key, it.name, it.type || 'libre', x0, c[i], x1 - x0, c[i + 1] - c[i]));
+    };
+    const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+    const v = (base, spread) => rd(base + (rnd() - 0.5) * 2 * spread);
+
+    let outdoorSpots = opts.outdoorSpots !== undefined ? opts.outdoorSpots : 2;
+    const BAY = 3.6;
+
+    if (typology === 'local') {
+      const W = v(11.2, 1.2), D = v(8.2, 0.5);
+      const xE = rd(W - v(4.4, 0.5));
+      const cy0 = rd(D * 0.48 - 0.65 + (rnd() - 0.5) * 0.6), cy1 = cy0 + 1.3;
+      R('cor', 'Couloir d\'entrée', 'couloir', 0, cy0, xE, 1.3);
+      R('big', 'Grande salle', 'libre', xE, 0, W - xE, D);
+      const north = shuffle([{ key: 'bur', name: 'Bureau', wt: 0.8, min: 2.6 }, { key: 'sal', name: 'Salle de réunion', wt: 1.2, min: 3 }]);
+      row(0, xE, 0, cy0, north);
+      const south = [{ key: 'wc', name: 'WC', type: 'wc', wt: 0.45, min: 1.5 }, { key: 'kit', name: 'Kitchenette', wt: 1, min: 2.2 }, { key: 'res', name: 'Réserve', wt: 0.9, min: 1.8 }];
+      if (rnd() < 0.5) south.reverse();
+      row(0, xE, cy1, D, south);
+      ['bur', 'sal', 'wc', 'kit', 'res'].forEach(k => link(k, 'cor', 0.25 + rnd() * 0.5));
+      link('cor', 'big', 0.5, 0.93);
+      link('big', 'kit', 0.5);
+      exits.push({ room: 'cor', side: 'W', at: 0.5, len: 0.93, main: true });
+      exits.push({ room: 'big', side: 'E', at: 0.7, len: 0.93 });
+    } else if (typology === 'pavillon') {
+      const W = v(12.8, 0.6), D = v(10.2, 0.6);
+      const gW = 7.0, gH = BAY;
+      R('gar', 'Garage', 'garage', 0, 0, gW, gH);
+      bays.push({ room: 'gar', y0: 0 });
+      row(gW, W, 0, gH, [{ key: 'ate', name: 'Atelier / cellier', wt: 1, min: 2 }, { key: 'sde', name: 'Salle d\'eau', type: 'douche', wt: 0.8, min: 2 }, { key: 'wc', name: 'WC', type: 'wc', wt: 0.5, min: 1.3 }]);
+      const cy1 = gH + 1.2;
+      R('cor', 'Couloir', 'couloir', 0, gH, W, 1.2);
+      const south = [{ key: 'sej', name: 'Grande salle (ancien séjour)', wt: 1.9, min: 4.2 }, { key: 'cui', name: 'Cuisine', wt: 1, min: 2.6 }, { key: 'ch1', name: 'Petite salle', wt: 0.9, min: 2.4 }];
+      if (rnd() < 0.5) { const t = south[1]; south[1] = south[2]; south[2] = t; }
+      row(0, W, cy1, D, south);
+      ['gar', 'ate', 'sde', 'sej', 'cui', 'ch1', 'wc'].forEach(k => link(k, 'cor', 0.3 + rnd() * 0.4));
+      link('sej', south[1].key, 0.5);
+      link('gar', 'ate', 0.5);
+      exits.push({ room: 'cor', side: 'W', at: 0.5, len: 0.93, main: true });
+      exits.push({ room: 'sej', side: 'S', at: 0.4, len: 1.4 });
+    } else if (typology === 'modulaire') {
+      const M = 2.4, nm = rnd() < 0.5 ? 6 : 7;
+      const W = nm * M, D = 7.2, cy0 = 3.0, cy1 = 4.2;
+      R('cor', 'Couloir central', 'couloir', 0, cy0, W, 1.2);
+      const northSets = [[3, 1, 1, nm - 5], [2, 1, 2, nm - 5], [1, 3, 1, nm - 5]];
+      const southSets = [[1, 1, 2, nm - 4], [2, 1, 1, nm - 4], [1, 2, 1, nm - 4]];
+      const nSet = northSets[Math.floor(rnd() * northSets.length)];
+      const sSet = southSets[Math.floor(rnd() * southSets.length)];
+      const nNames = { 1: ['Bureau', 'Bureau 2', 'Salle radio'], 2: ['Salle de réunion', 'Salle polyvalente'], 3: ['Salle de cours'] };
+      let x = 0, idx = 0;
+      const used = {};
+      nSet.forEach(n => {
+        if (n <= 0) return;
+        const pool = nNames[Math.min(3, n)];
+        used[n] = (used[n] || 0);
+        const name = pool[used[n] % pool.length] + (used[n] >= pool.length ? ` ${used[n] + 1}` : '');
+        used[n]++;
+        R('n' + idx, name, 'libre', x, 0, n * M, cy0); link('n' + idx, 'cor', 0.5); x += n * M; idx++;
+      });
+      x = 0; idx = 0;
+      const sNamesFixed = [{ name: 'Sanitaires', type: 'wc' }, { name: 'Vestiaire', type: 'vestiaire' }, { name: 'Réserve', type: 'libre' }, { name: 'Salle de pause', type: 'libre' }];
+      sSet.forEach((n, i) => {
+        if (n <= 0) return;
+        const def = sNamesFixed[i] || { name: 'Salle', type: 'libre' };
+        R('s' + idx, def.name, def.type, x, cy1, n * M, D - cy1); link('s' + idx, 'cor', 0.5); x += n * M; idx++;
+      });
+      exits.push({ room: 'cor', side: 'W', at: 0.5, len: 0.93, main: true });
+      exits.push({ room: 'cor', side: 'E', at: 0.5, len: 0.93 });
+    } else if (typology === 'atelier' || typology === 'entrepot' || typology === 'caserne') {
+      const nb = opts.bays || (typology === 'atelier' ? 2 : typology === 'entrepot' ? 2 : 3);
+      const RW = typology === 'caserne' ? 8.6 : 7.8;
+      const Hr = nb * BAY;
+      R('rem', typology === 'atelier' ? 'Remise véhicules' : 'Remise', 'garage', 0, 0, RW, Hr);
+      for (let b = 0; b < nb; b++) bays.push({ room: 'rem', y0: b * BAY });
+
+      if (typology === 'atelier') {
+        const cW = 1.4, xw = RW + cW, W = rd(xw + v(4.8, 0.5));
+        const D = Hr;
+        R('cor', 'Couloir de service', 'couloir', RW, 0, cW, D);
+        const items = nb >= 3
+          ? [{ key: 'bur', name: 'Bureau', wt: 1, min: 2.6 }, { key: 'reu', name: 'Salle de réunion', wt: 1.5, min: 3.4 }, { key: 'mag', name: 'Magasin / réserve', wt: 1.1, min: 2.4 }, { key: 'ves', name: 'Vestiaire', type: 'vestiaire', wt: 0.7, min: 1.8 }, { key: 'wc', name: 'WC', type: 'wc', wt: 0.4, min: 1.4 }]
+          : [{ key: 'bur', name: 'Bureau', wt: 1, min: 2.4 }, { key: 'reu', name: 'Salle de réunion', wt: 1.5, min: 2.8 }, { key: 'wc', name: 'WC / vestiaire', type: 'vestiaire', wt: 0.6, min: 1.6 }];
+        if (rnd() < 0.5) { const t = items[0]; items[0] = items[1]; items[1] = t; }
+        col(xw, W, 0, D, items);
+        items.forEach(it => link(it.key, 'cor', 0.5));
+        link('rem', 'cor', 0.3); link('rem', 'cor', 0.8);
+        exits.push({ room: 'cor', side: 'N', at: 0.5, len: 0.93, main: true });
+        exits.push({ room: 'cor', side: 'S', at: 0.5, len: 0.93 });
+      } else if (typology === 'entrepot') {
+        const W = v(18.2, 1.2), cy1 = Hr + 1.4, D = rd(cy1 + v(4.0, 0.4));
+        R('sto', 'Zone de stockage', 'stockage', RW, 0, W - RW, Hr);
+        R('cor', 'Couloir transversal', 'couloir', 0, Hr, W, 1.4);
+        const items = [{ key: 'acc', name: 'Accueil / bureau', wt: 1.2, min: 3 }, { key: 'bur', name: 'Bureau', wt: 0.9, min: 2.4 }, { key: 'pau', name: 'Salle de pause', wt: 1.2, min: 3 }, { key: 'vh', name: 'Vestiaire', type: 'vestiaire', wt: 0.9, min: 2.2 }, { key: 'dou', name: 'Douches', type: 'douche', wt: 0.6, min: 1.8 }, { key: 'wc', name: 'WC', type: 'wc', wt: 0.5, min: 1.5 }];
+        if (rnd() < 0.5) { const t = items[1]; items[1] = items[2]; items[2] = t; }
+        row(0, W, cy1, D, items);
+        items.forEach(it => link(it.key, 'cor', 0.5));
+        link('rem', 'sto', 0.5, 1.6, 'double_door');
+        link('rem', 'cor', 0.6); link('sto', 'cor', 0.3, 1.6, 'double_door');
+        exits.push({ room: 'cor', side: 'W', at: 0.5, len: 0.93, main: true });
+        exits.push({ room: 'cor', side: 'E', at: 0.5, len: 0.93 });
+      } else {
+        // Ancien centre de secours : couloirs en T
+        const cW = 1.6, xw = RW + cW, W = rd(xw + (nb >= 4 ? v(8.8, 0.5) : v(7.6, 0.6)));
+        const cy1 = Hr + 1.5, D = rd(cy1 + v(4.4, 0.3));
+        R('cv', 'Couloir', 'couloir', RW, 0, cW, Hr);
+        R('ch', 'Hall et couloir', 'couloir', 0, Hr, W, 1.5);
+        const east = nb >= 4
+          ? [{ key: 'pc', name: 'Salle radio / opérations', wt: 1, min: 3 }, { key: 'bur', name: 'Bureau chef de centre', wt: 0.8, min: 2.6 }, { key: 'for', name: 'Grande salle de formation', wt: 2.1, min: 5.6 }, { key: 'foy', name: 'Foyer', wt: 1.3, min: 3.4 }]
+          : [{ key: 'pc', name: 'Salle radio / opérations', wt: 1, min: 2.8 }, { key: 'bur', name: 'Bureau chef de centre', wt: 0.8, min: 2.4 }, { key: 'for', name: 'Grande salle de formation', wt: 2.1, min: 5.2 }];
+        col(xw, W, 0, Hr, east);
+        east.forEach(it => link(it.key, 'cv', 0.5, it.key === 'for' ? 1.4 : 0.83, it.key === 'for' ? 'double_door' : undefined));
+        const south = [
+          { key: 'vh', name: 'Vestiaire hommes', type: 'vestiaire', wt: 1.1, min: 2.4 },
+          { key: 'vf', name: 'Vestiaire femmes', type: 'vestiaire', wt: 1, min: 2.2 },
+          { key: 'dou', name: 'Douches & WC', type: 'douche', wt: 1, min: 2.4 },
+          { key: 'pha', name: 'Pharmacie', wt: 0.8, min: 2.2 },
+          { key: 'cui', name: nb >= 4 ? 'Cuisine' : 'Foyer / cuisine', wt: nb >= 4 ? 1 : 1.7, min: 2.8 },
+          { key: 'do1', name: nb >= 4 ? 'Dortoir 1' : 'Dortoir', wt: 1.3, min: 3 }
+        ];
+        if (nb >= 4) south.push({ key: 'do2', name: 'Dortoir 2', wt: 1.2, min: 2.8 });
+        row(0, W, cy1, D, south);
+        south.forEach(it => link(it.key, 'ch', 0.5));
+        link('rem', 'cv', 0.5, 1.4, 'double_door'); link('rem', 'ch', 0.75); link('cv', 'ch', 0.5, 1.4);
+        exits.push({ room: 'ch', side: 'W', at: 0.5, len: 1.4, main: true });
+        exits.push({ room: 'cv', side: 'N', at: 0.5, len: 0.93 });
+        exits.push({ room: 'ch', side: 'E', at: 0.5, len: 0.93 });
+      }
+    }
+
+    // ---- Passage en coordonnées monde ----
+    const byKey = {};
+    const worldRooms = rooms.map((r, i) => {
+      const o = { id: `room_${i + 1}`, key: r.key, type: r.type, x: rd(BX + r.x), y: rd(BY + r.y), w: r.w, h: r.h };
+      o.area = Math.round(o.w * o.h * 10) / 10;
+      o.baseName = r.name;
+      o.name = r.type === 'libre' ? `${r.name} (libre)\n${o.area} m² · à affecter` : r.name;
+      o.color = '#121722';
+      byKey[r.key] = o;
+      return o;
+    });
+    const walls = this._computeWallsFromRooms(worldRooms);
+    const doors = [];
+    let dn = 0;
+    // Portes entre deux pièces (sur l'arête commune)
+    links.forEach(l => {
+      const A = byKey[l.a], B = byKey[l.b];
+      if (!A || !B) return;
+      const e = this._sharedEdge(A, B);
+      if (!e) return;
+      const len = Math.min(l.len, e.hi - e.lo - 0.5);
+      if (len < 0.7) return;
+      const lo = e.lo + 0.25, hi = e.hi - 0.25 - len;
+      const pos = rd(lo + (hi - lo) * l.at);
+      dn++;
+      const d = e.vertical ? { id: `d_${dn}`, x: e.c, y: pos, len, wall: 'W' } : { id: `d_${dn}`, x: pos, y: e.c, len, wall: 'N' };
+      if (l.type) d.type = l.type;
+      d.label = `Porte ${A.baseName} ↔ ${B.baseName}`;
+      doors.push(d);
+    });
+    // Portes extérieures
+    exits.forEach(x => {
+      const A = byKey[x.room];
+      if (!A) return;
+      const vertical = x.side === 'W' || x.side === 'E';
+      const span = vertical ? A.h : A.w;
+      const len = Math.min(x.len, span - 0.5);
+      const pos = rd((vertical ? A.y : A.x) + 0.25 + (span - 0.5 - len) * x.at);
+      const c = x.side === 'W' ? A.x : x.side === 'E' ? rd(A.x + A.w) : x.side === 'N' ? A.y : rd(A.y + A.h);
+      dn++;
+      doors.push(vertical
+        ? { id: x.main ? 'd_entree' : `d_${dn}`, x: c, y: pos, len, wall: 'W', isMain: !!x.main, label: x.main ? 'Entrée principale' : 'Issue de secours' }
+        : { id: x.main ? 'd_entree' : `d_${dn}`, x: pos, y: c, len, wall: 'N', isMain: !!x.main, label: x.main ? 'Entrée principale' : 'Issue de secours' });
+    });
+    // Portes sectionnelles des travées de remise + places intérieures
+    const spots = [];
+    bays.forEach((b, i) => {
+      const A = byKey[b.room];
+      const y0 = rd(A.y + b.y0);
+      doors.push({ id: `d_rideau_${i + 1}`, x: A.x, y: rd(y0 + 0.3), len: 3.0, wall: 'W', type: 'garage_shutter', label: `Porte sectionnelle travée ${i + 1}` });
+      spots.push({ id: `spot_${spots.length + 1}`, label: `🅿️ TRAVÉE 0${i + 1}`, indoor: true, x: rd(A.x + 0.4), y: rd(y0 + 0.3), w: rd(Math.min(A.w - 0.8, 7.0)), d: 3.0 });
+    });
+
+    // Fenêtres sur les façades (évite portes et rideaux)
+    const windows = [];
+    let wn = 0;
+    const insideAny = (x, y) => worldRooms.some(r => x > r.x + 1e-6 && x < r.x + r.w - 1e-6 && y > r.y + 1e-6 && y < r.y + r.h - 1e-6);
+    const clashes = (vertical, c, a, b) => doors.some(d => {
+      const dv = d.wall === 'W' || d.wall === 'E';
+      if (dv !== vertical) return false;
+      if (Math.abs((dv ? d.x : d.y) - c) > 0.05) return false;
+      const d0 = dv ? d.y : d.x, d1 = d0 + d.len;
+      return a < d1 + 0.35 && b > d0 - 0.35;
+    });
+    worldRooms.forEach(r => {
+      if (r.type === 'couloir' && r.w * r.h < 10) return;
+      const sides = [
+        { side: 'N', vertical: false, c: r.y, a: r.x, len: r.w, ox: 0, oy: -0.1 },
+        { side: 'S', vertical: false, c: rd(r.y + r.h), a: r.x, len: r.w, ox: 0, oy: 0.1 },
+        { side: 'W', vertical: true, c: r.x, a: r.y, len: r.h, ox: -0.1, oy: 0 },
+        { side: 'E', vertical: true, c: rd(r.x + r.w), a: r.y, len: r.h, ox: 0.1, oy: 0 }
+      ];
+      sides.forEach(s => {
+        const mx = s.vertical ? s.c + s.ox : s.a + s.len / 2, my = s.vertical ? s.a + s.len / 2 : s.c + s.oy;
+        if (insideAny(mx, my)) return;
+        const small = r.type === 'wc' || r.type === 'douche';
+        const garage = r.type === 'garage';
+        if (garage && s.side === 'W') return;
+        const n = small ? 1 : garage ? Math.min(2, Math.floor(s.len / 4.5)) : s.len >= 8 ? 3 : s.len >= 5 ? 2 : s.len >= 2.2 ? 1 : 0;
+        const wl = small ? 0.6 : garage ? 1.6 : Math.min(1.8, Math.max(1.0, rd(s.len * 0.28)));
+        for (let i = 0; i < n; i++) {
+          const center = s.a + s.len * (i + 0.5) / n;
+          const a = rd(center - wl / 2), b = a + wl;
+          if (a < s.a + 0.3 || b > s.a + s.len - 0.3) continue;
+          if (clashes(s.vertical, s.c, a, b)) continue;
+          wn++;
+          windows.push(s.vertical ? { id: `w_${wn}`, x: s.c, y: a, len: wl, wall: s.side, label: `Fenêtre ${r.baseName}` } : { id: `w_${wn}`, x: a, y: s.c, len: wl, wall: s.side, label: `Fenêtre ${r.baseName}` });
+        }
+      });
+    });
+
+    // Équipements fixes : extincteurs dans les circulations, TGBT
+    const fixtures = [];
+    worldRooms.filter(r => r.type === 'couloir' || r.type === 'garage').forEach((r, i) => {
+      fixtures.push({ id: `ext_${i + 1}`, x: rd(r.x + 0.1), y: rd(r.y + 0.1), w: 0.25, h: 0.25, label: 'EXT', type: 'extinguisher' });
+    });
+
+    // ---- Cour & parking extérieur (à l'ouest, ne bloque pas la sortie des travées) ----
+    let bx1 = -Infinity, by1 = -Infinity;
+    worldRooms.forEach(r => { bx1 = Math.max(bx1, r.x + r.w); by1 = Math.max(by1, r.y + r.h); });
+    const D = by1 - BY;
+    const lanes = spots.map(s => [s.y - 0.4, s.y + s.d + 0.4]);
+    let y = BY + 0.4, placed = 0, guard = 0;
+    while (placed < outdoorSpots && guard++ < 60) {
+      const y0 = y, y1 = y + 2.5;
+      const blocked = lanes.find(([a, b]) => y0 < b && y1 > a);
+      if (blocked) { y = rd(blocked[1] + 0.05); continue; }
+      spots.push({ id: `spot_${spots.length + 1}`, label: `🅿️ PLACE EXTÉRIEURE 0${placed + 1}`, x: 1.3, y: rd(y0), w: 4.8, d: 2.5 });
+      placed++;
+      y = rd(y1 + 0.25);
+    }
+    const lastSpot = spots.filter(s => !s.indoor).reduce((m, s) => Math.max(m, s.y + s.d), 0);
+    const parking = {
+      x: 1.0, y: BY, w: rd(BX - 0.8 - 1.0),
+      h: rd(Math.max(D, lastSpot + 0.4 - BY)),
+      label: 'Cour & stationnement',
+      spots
+    };
+
+    const usable = worldRooms.reduce((s, r) => s + r.area, 0);
+    return {
+      parking, rooms: worldRooms, walls, doors, windows, fixtures, furniture: [],
+      meta: {
+        typology,
+        surfaceM2: Math.round(usable),
+        footprint: { w: rd(bx1 - BX), h: rd(D) },
+        roomsCount: worldRooms.filter(r => r.type !== 'couloir').length,
+        freeRooms: worldRooms.filter(r => r.type === 'libre').length,
+        bays: bays.length,
+        outdoorSpots: placed,
+        storageArea: Math.round(worldRooms.filter(r => r.type === 'garage' || r.type === 'stockage' || /réserve|magasin|stockage|cellier/i.test(r.baseName)).reduce((s, r) => s + r.area, 0))
+      }
+    };
+  },
+
+  // Arête commune entre deux pièces adjacentes
+  _sharedEdge(A, B) {
+    const eq = (a, b) => Math.abs(a - b) < 0.05;
+    const ov = (a0, a1, b0, b1) => ({ lo: Math.max(a0, b0), hi: Math.min(a1, b1) });
+    if (eq(A.x + A.w, B.x) || eq(B.x + B.w, A.x)) {
+      const c = eq(A.x + A.w, B.x) ? B.x : A.x;
+      const o = ov(A.y, A.y + A.h, B.y, B.y + B.h);
+      if (o.hi - o.lo > 0.9) return { vertical: true, c: Math.round(c * 10) / 10, lo: o.lo, hi: o.hi };
+    }
+    if (eq(A.y + A.h, B.y) || eq(B.y + B.h, A.y)) {
+      const c = eq(A.y + A.h, B.y) ? B.y : A.y;
+      const o = ov(A.x, A.x + A.w, B.x, B.x + B.w);
+      if (o.hi - o.lo > 0.9) return { vertical: false, c: Math.round(c * 10) / 10, lo: o.lo, hi: o.hi };
+    }
+    return null;
+  },
+
+  // Murs calculés depuis les pièces : façade (0,24 m) si un seul côté est intérieur, cloison (0,12 m) sinon
+  _computeWallsFromRooms(rooms) {
+    const q = (v) => Math.round(v * 10);
+    const Rs = rooms.map(r => ({ x0: q(r.x), y0: q(r.y), x1: q(r.x + r.w), y1: q(r.y + r.h) }));
+    const inside = (x, y) => Rs.some(r => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1);
+    const H = new Map(), V = new Map();
+    const add = (map, k, a, b) => { if (!map.has(k)) map.set(k, []); map.get(k).push([Math.min(a, b), Math.max(a, b)]); };
+    Rs.forEach(r => { add(H, r.y0, r.x0, r.x1); add(H, r.y1, r.x0, r.x1); add(V, r.x0, r.y0, r.y1); add(V, r.x1, r.y0, r.y1); });
+    const walls = [];
+    const scan = (map, horizontal) => {
+      map.forEach((segs, c) => {
+        const pts = [...new Set(segs.flat())].sort((a, b) => a - b);
+        let cur = null;
+        const flush = () => {
+          if (!cur) return;
+          walls.push(horizontal
+            ? { x1: cur.a / 10, y1: c / 10, x2: cur.b / 10, y2: c / 10, th: cur.outer ? 0.24 : 0.12, outer: cur.outer }
+            : { x1: c / 10, y1: cur.a / 10, x2: c / 10, y2: cur.b / 10, th: cur.outer ? 0.24 : 0.12, outer: cur.outer });
+          cur = null;
+        };
+        for (let i = 0; i < pts.length - 1; i++) {
+          const a = pts[i], b = pts[i + 1], m = (a + b) / 2;
+          if (!segs.some(s => s[0] <= a && s[1] >= b)) { flush(); continue; }
+          const s1 = horizontal ? inside(m, c - 0.5) : inside(c - 0.5, m);
+          const s2 = horizontal ? inside(m, c + 0.5) : inside(c + 0.5, m);
+          if (!s1 && !s2) { flush(); continue; }
+          const outer = !(s1 && s2);
+          if (cur && cur.outer === outer && cur.b === a) cur.b = b;
+          else { flush(); cur = { a, b, outer }; }
+        }
+        flush();
+      });
+    };
+    scan(H, true);
+    scan(V, false);
+    return walls;
+  },
+
+  // Compatibilité : ancienne signature (surface, nb de pièces, places) -> typologie la plus proche
+  generateProceduralArchitecture(surfaceM2, roomsCount, parkingSpots) {
+    const typ = surfaceM2 < 110 ? 'local' : surfaceM2 < 170 ? 'pavillon' : surfaceM2 < 300 ? 'atelier' : 'caserne';
+    return this.buildRealisticArchitecture(typ, { seed: Math.round(surfaceM2 * 97 + roomsCount * 13), outdoorSpots: Math.max(1, Math.min(4, parkingSpots || 2)) });
+  },
+
+  // Bâtiment de départ (mis à disposition) : petit local associatif réaliste et déterministe
+  getDefaultModel() {
+    return this.buildRealisticArchitecture('local', { seed: 20260901, outdoorSpots: 2 });
+  },
+
+  // Offres immobilières du jour (à vendre ET à louer), variant chaque jour in-game
+  getDailyRealEstateOffers(game, mode) {
     game = game || window.game;
     const year = game?.clock?.year || 2026;
     const month = game?.clock?.month !== undefined ? game.clock.month : 9;
     const day = game?.clock?.day || 5;
     const dayKey = `${year}-${month}-${day}`;
 
-    if (this._dailyOffersCache && this._dailyOffersCacheKey === dayKey) {
-      return this._dailyOffersCache;
-    }
-
-    const station = game?.stations?.[0] || { city: 'Nancy', name: 'Antenne' };
-    const city = station.city || 'Nancy';
-
-    // Algorithme pseudo-aléatoire déterministe basé sur le jour in-game
-    let seed = ((year * 372) + ((month + 1) * 31) + day) * 2654435761;
-    const nextRandom = () => {
-      seed = (seed ^ (seed << 13)) >>> 0;
-      seed = (seed ^ (seed >> 17)) >>> 0;
-      seed = (seed ^ (seed << 5)) >>> 0;
-      return (seed >>> 0) / 4294967296;
-    };
-
-    const templates = [
-      {
-        tier: 'compact',
-        icon: '🏠',
-        namePrefixes: ['Local Artisanal Municipal', 'Ancien Atelier de Quartier', 'Dépôt Technique des Lilas', 'Annexe Communale de Proximité', 'Pavillon de Voirie'],
-        surfaceBase: 90,
-        surfaceVar: 30,
-        pricePerM2: 1350,
-        roomsCount: 2,
-        parkingSpots: 2,
-        storageCap: 80,
-        desc: 'Édifice compact et économique en pleine propriété. Deux salles modulables et cour privative pour 2 véhicules.'
-      },
-      {
-        tier: 'medium',
-        icon: '🏢',
-        namePrefixes: ['Atelier d’Activités & Logistique', 'Bâtiment Polyvalent des Berges', 'Ancienne Station Municipale', 'Dépôt d’Exploitation Artisanal', 'Plateforme Technique de Secteur'],
-        surfaceBase: 180,
-        surfaceVar: 50,
-        pricePerM2: 1450,
-        roomsCount: 4,
-        parkingSpots: 4,
-        storageCap: 180,
-        desc: 'Bâtiment fonctionnel de taille intermédiaire. 4 salles indépendantes libres et parking pour 4 véhicules opérationnels.'
-      },
-      {
-        tier: 'hangar',
-        icon: '🏭',
-        namePrefixes: ['Hangar Logistique & Tertiaire', 'Centre d’Intervention Opérationnel', 'Entrepôt d’Activités Rénové', 'Parc Roulant & Réserve Territoriale', 'Base Logistique d’Agglomération'],
-        surfaceBase: 380,
-        surfaceVar: 90,
-        pricePerM2: 1550,
-        roomsCount: 5,
-        parkingSpots: 6,
-        storageCap: 350,
-        desc: 'Grande infrastructure avec vaste hangar de stockage et travées abritées. 5 salles libres et cour pour 6 véhicules.'
-      },
-      {
-        tier: 'caserne',
-        icon: '🏛️',
-        namePrefixes: ['Grand Centre de Secours Métropolitain', 'Complexe Territorial Sécurité Civile', 'Ancienne Caserne Départementale', 'Pôle Régional de Référence', 'Base Majeure d’Opérations'],
-        surfaceBase: 780,
-        surfaceVar: 220,
-        pricePerM2: 1650,
-        roomsCount: 7,
-        parkingSpots: 10,
-        storageCap: 580,
-        desc: 'Complexe de premier plan aux normes de sécurité civile. 7 salles libres spacieuses et cour opérationnelle pour 10 véhicules.'
-      }
-    ];
-
-    const offers = templates.map((tpl, idx) => {
-      const r1 = nextRandom();
-      const r2 = nextRandom();
-      const surface = Math.round(tpl.surfaceBase + (r1 - 0.5) * tpl.surfaceVar);
-      const prefix = tpl.namePrefixes[Math.floor(nextRandom() * tpl.namePrefixes.length)];
-      const name = `${prefix} • ${city}`;
-      const price = Math.round(surface * tpl.pricePerM2 * (0.95 + r2 * 0.10) / 100) * 100;
-      const roomsCount = tpl.roomsCount;
-      const parkingSpots = tpl.parkingSpots;
-
-      const arch = this.generateProceduralArchitecture(surface, roomsCount, parkingSpots);
-
-      return {
-        id: `building_offer_${dayKey}_${idx}`,
-        name: name,
-        type: 'Pleine Propriété',
-        tier: tpl.tier,
-        icon: tpl.icon,
-        surfaceM2: surface,
-        price: price,
-        roomsCount: roomsCount,
-        vehicleCapacity: parkingSpots,
-        storageCapacity: tpl.storageCap,
-        desc: tpl.desc,
-        tenure: 'owned',
-        architecture: arch,
-        offerDayKey: dayKey
+    if (!this._dailyOffersCache || this._dailyOffersCacheKey !== dayKey) {
+      const station = game?.stations?.[0] || { city: 'Nancy', name: 'Antenne' };
+      const city = station.city || 'Nancy';
+      const rnd = this._archRng(((year * 372) + ((month + 1) * 31) + day) * 7919);
+      const T = this.BUILDING_TYPOLOGIES;
+      // €/m² à l'achat et €/m²/mois à la location selon la typologie
+      const PRICING = {
+        local:     { buy: 1350, rent: 9.5 },
+        pavillon:  { buy: 1750, rent: 8.5 },
+        modulaire: { buy: 950,  rent: 7.5 },
+        atelier:   { buy: 1150, rent: 6.5 },
+        entrepot:  { buy: 980,  rent: 5.8 },
+        caserne:   { buy: 1250, rent: 6.2 }
       };
-    });
-
-    this._dailyOffersCache = offers;
-    this._dailyOffersCacheKey = dayKey;
-    return offers;
+      const make = (typology, kind, idx, extra = {}) => {
+        const seed = Math.floor(rnd() * 1e9);
+        const outdoor = typology === 'local' || typology === 'modulaire' ? 2 + Math.floor(rnd() * 2) : typology === 'pavillon' ? 1 + Math.floor(rnd() * 2) : 1 + Math.floor(rnd() * 3);
+        const arch = this.buildRealisticArchitecture(typology, { seed, outdoorSpots: outdoor, bays: extra.bays });
+        const meta = arch.meta;
+        const tpl = T[typology];
+        const name = `${tpl.names[Math.floor(rnd() * tpl.names.length)]} • ${city}`;
+        const pr = PRICING[typology];
+        const factor = 0.92 + rnd() * 0.16;
+        const offer = {
+          id: `building_${kind}_${dayKey}_${idx}`,
+          kind,
+          name,
+          typology,
+          typologyLabel: tpl.label,
+          tier: typology,
+          icon: tpl.icon,
+          surfaceM2: meta.surfaceM2,
+          roomsCount: meta.roomsCount,
+          freeRooms: meta.freeRooms,
+          vehicleCapacity: meta.bays + meta.outdoorSpots,
+          indoorBays: meta.bays,
+          storageCapacity: Math.max(40, Math.round(meta.storageArea * 2.2 + meta.surfaceM2 * 0.25)),
+          desc: tpl.desc,
+          architecture: arch,
+          offerDayKey: dayKey
+        };
+        if (kind === 'sale') {
+          offer.type = 'Pleine Propriété';
+          offer.tenure = 'owned';
+          offer.price = Math.round(meta.surfaceM2 * pr.buy * factor / 500) * 500;
+        } else {
+          offer.type = 'Location (bail commercial)';
+          offer.tenure = 'rented';
+          offer.monthlyRent = Math.round(meta.surfaceM2 * pr.rent * factor / 10) * 10;
+          offer.price = offer.monthlyRent; // premier loyer payé à la signature
+        }
+        return offer;
+      };
+      const pickDistinct = (pool, n) => { const a = pool.slice(); const out = []; while (out.length < n && a.length) out.push(a.splice(Math.floor(rnd() * a.length), 1)[0]); return out; };
+      const rentals = pickDistinct(['local', 'pavillon', 'modulaire', 'atelier', 'entrepot'], 3).map((t, i) => make(t, 'rent', i));
+      const sales = [
+        ...pickDistinct(['local', 'pavillon', 'modulaire'], 1),
+        ...pickDistinct(['atelier', 'entrepot'], 1),
+        'caserne'
+      ].map((t, i) => make(t, 'sale', i, t === 'caserne' ? { bays: rnd() < 0.5 ? 3 : 4 } : {}));
+      this._dailyOffersCache = [...rentals, ...sales];
+      this._dailyOffersCacheKey = dayKey;
+    }
+    const all = this._dailyOffersCache;
+    if (mode === 'sale' || mode === 'rent') return all.filter(o => o.kind === mode);
+    return all;
   },
 
-  // Rendu vectoriel SVG d'architecte 2D professionnel pour prévisualiser un bâtiment en vente
+  // Aperçu SVG du plan (mis à l'échelle de l'offre, noms des pièces, couloirs, portes, fenêtres)
   renderBuildingPlanPreviewSVG(b) {
     if (!b || !b.architecture) return '';
     const arch = b.architecture;
-    const width = 640;
-    const height = 260;
-    const scale = 22;
-    const originX = 30;
-    const originY = 30;
-
-    const roomsSvg = (arch.rooms || []).map((r, i) => {
-      const rx = originX + (r.x * scale);
-      const ry = originY + (r.y * scale);
-      const rw = r.w * scale;
-      const rh = r.h * scale;
-
-      // Couleurs chaleureuses selon le type de pièce
-      const colors = {
-        garage: '#64748b',
-        formation: '#0284c7',
-        stockage: '#b45309',
-        detente: '#ea580c',
-        dortoir: '#4338ca',
-        bureau: '#334155'
-      };
-      const roomBg = colors[r.type] || '#1e293b';
-
-      return `
-        <g>
-          <!-- Sol de la salle meublable -->
-          <rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${roomBg}" stroke="#475569" stroke-width="2" rx="4" />
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 - 4}" fill="#ffffff" font-size="9.5" font-weight="900" text-anchor="middle">
-            Salle ${i + 1}
-          </text>
-          <text x="${rx + rw / 2}" y="${ry + rh / 2 + 10}" fill="#cbd5e1" font-size="8" font-weight="700" text-anchor="middle">
-            ${r.area} m² · Prête à aménager
-          </text>
-        </g>
-      `;
-    }).join('');
-
-    const parking = arch.parking || { x: 1, y: 1.5, w: 4.8, h: 8 };
-    const px = originX + (parking.x * scale);
-    const py = originY + (parking.y * scale);
-    const pw = parking.w * scale;
-    const ph = parking.h * scale;
-
-    const spotsSvg = (parking.spots || []).map((s, idx) => {
-      const sx = originX + (s.x * scale);
-      const sy = originY + (s.y * scale);
-      const sw = s.w * scale;
-      const sh = s.d * scale;
-      return `
-        <g>
-          <rect x="${sx}" y="${sy}" width="${sw}" height="${sh}" fill="rgba(255, 255, 255, 0.08)" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4 3" rx="3" />
-          <text x="${sx + sw / 2}" y="${sy + sh / 2 + 3}" fill="#ffffff" font-size="8" font-weight="800" text-anchor="middle">
-            🅿️ Place 0${idx + 1}
-          </text>
-        </g>
-      `;
-    }).join('');
-
+    const vb = this.getModelViewBox(arch);
+    const pad = 0.8;
+    const W = 640;
+    const scale = (W - 20) / (vb.w + pad * 2);
+    const H = Math.round((vb.h + pad * 2) * scale + 10);
+    const X = (x) => +(10 + (x - vb.x0 + pad) * scale).toFixed(1);
+    const Y = (y) => +(5 + (y - vb.y0 + pad) * scale).toFixed(1);
+    const esc = (t) => String(t || '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+    const fills = { couloir: '#e7e5e4', wc: '#e0f2fe', douche: '#e0f2fe', vestiaire: '#e0f2fe', garage: '#cbd5e1', stockage: '#fef3c7' };
+    const pk = arch.parking;
+    let out = '';
+    if (pk) {
+      out += `<rect x="${X(pk.x)}" y="${Y(pk.y)}" width="${(pk.w * scale).toFixed(1)}" height="${(pk.h * scale).toFixed(1)}" fill="#475569" rx="4"/>`;
+      (pk.spots || []).filter(s => !s.indoor).forEach(s => {
+        out += `<rect x="${X(s.x)}" y="${Y(s.y)}" width="${(s.w * scale).toFixed(1)}" height="${(s.d * scale).toFixed(1)}" fill="none" stroke="#f8fafc" stroke-width="1.2" stroke-dasharray="3 2"/>`;
+        out += `<text x="${X(s.x + s.w / 2)}" y="${Y(s.y + s.d / 2) + 3}" fill="#f8fafc" font-size="8" font-weight="800" text-anchor="middle">P</text>`;
+      });
+    }
+    (arch.rooms || []).forEach(r => {
+      out += `<rect x="${X(r.x)}" y="${Y(r.y)}" width="${(r.w * scale).toFixed(1)}" height="${(r.h * scale).toFixed(1)}" fill="${fills[r.type] || '#f8fafc'}"/>`;
+    });
+    (pk && pk.spots || []).filter(s => s.indoor).forEach(s => {
+      out += `<rect x="${X(s.x)}" y="${Y(s.y)}" width="${(s.w * scale).toFixed(1)}" height="${(s.d * scale).toFixed(1)}" fill="none" stroke="#eab308" stroke-width="1.4"/>`;
+    });
+    (arch.walls || []).forEach(w => {
+      out += `<line x1="${X(w.x1)}" y1="${Y(w.y1)}" x2="${X(w.x2)}" y2="${Y(w.y2)}" stroke="#1e293b" stroke-width="${Math.max(1.4, w.th * scale).toFixed(1)}" stroke-linecap="square"/>`;
+    });
+    (arch.windows || []).forEach(w => {
+      const v = w.wall === 'W' || w.wall === 'E';
+      out += `<line x1="${X(w.x)}" y1="${Y(w.y)}" x2="${X(v ? w.x : w.x + w.len)}" y2="${Y(v ? w.y + w.len : w.y)}" stroke="#38bdf8" stroke-width="${Math.max(2, 0.14 * scale).toFixed(1)}"/>`;
+    });
+    (arch.doors || []).forEach(d => {
+      const v = d.wall === 'W' || d.wall === 'E';
+      const color = d.type === 'garage_shutter' ? '#facc15' : d.isMain ? '#FF6600' : '#f8fafc';
+      out += `<line x1="${X(d.x)}" y1="${Y(d.y)}" x2="${X(v ? d.x : d.x + d.len)}" y2="${Y(v ? d.y + d.len : d.y)}" stroke="${color}" stroke-width="${Math.max(2.4, 0.26 * scale).toFixed(1)}"/>`;
+    });
+    (arch.rooms || []).forEach(r => {
+      const rw = r.w * scale, rh = r.h * scale;
+      if (rw < 26 || rh < 14) return;
+      const label = (r.baseName || r.name || '').split('\n')[0];
+      const fs = Math.max(6.5, Math.min(10, rw / Math.max(6, label.length) * 1.6));
+      const showArea = rh > 26 && r.type !== 'couloir';
+      out += `<text x="${X(r.x + r.w / 2)}" y="${Y(r.y + r.h / 2) + (showArea ? -1 : 3)}" fill="#0f172a" font-size="${fs.toFixed(1)}" font-weight="800" text-anchor="middle">${esc(label.length > 26 ? label.slice(0, 25) + '…' : label)}</text>`;
+      if (showArea) out += `<text x="${X(r.x + r.w / 2)}" y="${Y(r.y + r.h / 2) + 9}" fill="#64748b" font-size="7" font-weight="700" text-anchor="middle">${r.area} m²</text>`;
+    });
     return `
-      <svg viewBox="0 0 ${width} ${height}" class="w-full h-auto max-h-[220px] block rounded-2xl font-sans select-none shadow-lg border border-slate-700/60 overflow-hidden">
-        <!-- Décor extérieur : Pelouse verte et allée goudronnée -->
-        <rect width="${width}" height="${height}" fill="#166534" />
-        <rect x="15" y="15" width="${width - 30}" height="${height - 30}" fill="#0f172a" rx="12" />
-        
-        <!-- Cour de stationnement opérationnelle -->
-        <rect x="${px}" y="${py}" width="${pw}" height="${ph}" fill="#1e293b" stroke="#f59e0b" stroke-width="2" rx="6" />
-        <text x="${px + pw / 2}" y="${py + 13}" fill="#fbbf24" font-size="8.5" font-weight="900" text-anchor="middle">COUR & HANGAR OPÉRATIONNEL</text>
-        ${spotsSvg}
-
-        <!-- Pièces du Bâtiment -->
-        ${roomsSvg}
-
-        <!-- Bandeau supérieur descriptif -->
-        <rect x="25" y="18" width="${width - 50}" height="18" fill="rgba(15, 23, 42, 0.85)" rx="4" />
-        <text x="${width / 2}" y="30" fill="#f8fafc" font-size="8.5" font-weight="800" text-anchor="middle">
-          🏛️ Caserne & Locaux d'Antenne · ${b.surfaceM2} m² · ${b.roomsCount} Salles Aménageables
-        </text>
+      <svg viewBox="0 0 ${W} ${H}" class="w-full h-auto block rounded-2xl font-sans select-none border border-slate-200 overflow-hidden" style="max-height:300px;background:#86efac">
+        ${out}
       </svg>
+      <div class="flex flex-wrap gap-x-3 gap-y-1 text-[9.5px] font-bold text-slate-500 px-1 pt-1">
+        <span><span style="color:#FF6600">▬</span> Entrée</span><span><span style="color:#facc15">▬</span> Porte sectionnelle</span><span><span style="color:#38bdf8">▬</span> Fenêtre</span><span><span style="color:#eab308">▢</span> Travée intérieure</span>
+      </div>
     `;
   },
 
@@ -1918,10 +2135,10 @@ window.ProtecLocaux = {
     station.premises = {
       buildingId: layout.id,
       name: layout.name,
-      width: layout.width,
-      height: layout.height,
-      surfaceM2: layout.surfaceM2 || (layout.width * layout.height * 25),
-      grid: [...layout.grid],
+      width: layout.width || 0,
+      height: layout.height || 0,
+      surfaceM2: layout.surfaceM2 || ((layout.width || 0) * (layout.height || 0) * 25),
+      grid: Array.isArray(layout.grid) ? [...layout.grid] : [],
       customBuilt: !!layout.customBuilt,
       tenure: layout.tenure || 'rented',
       monthlyRent: layout.tenure === 'owned' ? 0 : 280,
@@ -2745,43 +2962,81 @@ window.ProtecLocaux = {
     setTimeout(() => { this.initArchitectCanvas(); }, 200);
   },
 
-  // Achat d'un bâtiment existant (Opportunités du Marché Immobilier Quotidien)
-  async buyBuilding(game, buildingId) {
-    const dailyOffers = this.getDailyRealEstateOffers(game);
-    const b = dailyOffers.find(x => x.id === buildingId) || (this.CATALOG_BUILDINGS || []).find(x => x.id === buildingId);
-    if (!b) return;
-
-    if (game.resources.money < b.price) {
-      game.showToast('Fonds Insuffisants', `L'acquisition de ce bâtiment nécessite ${b.price.toLocaleString('fr-FR')} €.`, 'orange');
-      return;
-    }
-
-    const confirmed = await window.ProtecDialog.confirm(
-      `Confirmez-vous l'achat en PLEINE PROPRIÉTÉ de « ${b.name} » pour ${b.price.toLocaleString('fr-FR')} € ?\n\n• Surface au sol : ${b.surfaceM2} m²\n• Salles disponibles : ${b.roomsCount || 3} pièces libres (prêtes à être affectées)\n• Emplacements véhicules : ${b.vehicleCapacity || 4} places de parking\n\nVotre antenne déménagera immédiatement dans ce nouvel édifice sans loyer et avec toute liberté d'aménagement.`,
-      'Acquisition Immobilière en Pleine Propriété',
-      { confirmText: 'Acheter en Pleine Propriété', cancelText: 'Annuler' }
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    game.resources.money -= b.price;
+  // Installation de l'antenne dans un bâtiment du marché (achat ou location)
+  _moveIntoBuilding(game, b, tenure) {
     const station = game.stations[0];
-    if (station) {
-      this.applyLayout(game, station.id, b);
-      if (b.architecture) {
-        station.premises.architecture = JSON.parse(JSON.stringify(b.architecture));
-      }
-      station.premises.tenure = 'owned';
-      station.premises.monthlyRent = 0;
-      station.premises.name = b.name;
-      station.premises.surfaceM2 = b.surfaceM2;
-      station.premises.purchasedAt = Date.now();
+    if (!station) return;
+    const oldName = station.premises && station.premises.name;
+    this.applyLayout(game, station.id, b);
+    const p = station.premises;
+    p.architecture = JSON.parse(JSON.stringify(b.architecture));
+    p.name = b.name;
+    p.typology = b.typology;
+    p.surfaceM2 = b.surfaceM2;
+    if (tenure === 'owned') {
+      p.tenure = 'owned';
+      p.occupationType = 'pleine_propriete';
+      p.monthlyRent = 0;
+      p.purchasedAt = Date.now();
+    } else {
+      p.tenure = 'rented';
+      p.occupationType = 'location_privee';
+      p.monthlyRent = b.monthlyRent;
+      p.buyoutPrice = Math.round(b.surfaceM2 * 1200 / 500) * 500;
+      p.leaseStartedAt = Date.now();
     }
+    if (oldName) p.securityLogs.push({ timestamp: Date.now(), type: 'info', title: 'Déménagement', message: `Départ de « ${oldName} ».` });
+    this._currentSetupModel = null;
+    this.selectedRoomId = null;
+    this.selectedFurnitureId = null;
+    this._viewBox = null;
+  },
 
-    game.showToast('Déménagement Réussi !', `Nouvelle base d'antenne acquise en pleine propriété : ${b.name} (${b.surfaceM2} m²) ! Toutes les pièces sont libres et prêtes pour vos aménagements.`, 'green');
+  // Achat d'un bâtiment existant (marché immobilier quotidien)
+  async buyBuilding(game, buildingId) {
+    const b = this.getDailyRealEstateOffers(game).find(x => x.id === buildingId) || (this.CATALOG_BUILDINGS || []).find(x => x.id === buildingId);
+    if (!b) return;
+    if (game.resources.money < b.price) {
+      game.showToast('Fonds insuffisants', `L'acquisition de ce bâtiment nécessite ${b.price.toLocaleString('fr-FR')} €.`, 'orange');
+      return;
+    }
+    const confirmed = await window.ProtecDialog.confirm(
+      `Acheter en pleine propriété « ${b.name} » pour ${b.price.toLocaleString('fr-FR')} € ?\n\n• ${b.typologyLabel || 'Bâtiment'} de ${b.surfaceM2} m² utiles\n• ${b.roomsCount} pièces dont ${b.freeRooms ?? b.roomsCount} à affecter\n• ${b.vehicleCapacity} véhicules${b.indoorBays ? ` (dont ${b.indoorBays} en remise)` : ''}\n\nL'antenne déménage immédiatement. Le mobilier des anciens locaux n'est pas transféré.`,
+      'Achat immobilier',
+      { confirmText: 'Acheter', cancelText: 'Annuler' }
+    );
+    if (!confirmed) return;
+    game.resources.money -= b.price;
+    if (window.ProtecFinances) window.ProtecFinances.recordTransaction(game, -b.price, `Achat des locaux : ${b.name}`, 'locaux');
+    this._moveIntoBuilding(game, b, 'owned');
+    game.showToast('Déménagement réussi !', `Nouveaux locaux en pleine propriété : ${b.name} (${b.surfaceM2} m²). Affectez une vocation aux salles libres.`, 'green');
     game.saveGame();
     game.updateStatsUI();
+    this.activeTab = 'plan';
+    this.renderModal(game);
+  },
+
+  // Location d'un bâtiment existant (bail commercial, loyer mensuel)
+  async rentBuilding(game, buildingId) {
+    const b = this.getDailyRealEstateOffers(game, 'rent').find(x => x.id === buildingId);
+    if (!b) return;
+    if (game.resources.money < b.monthlyRent) {
+      game.showToast('Fonds insuffisants', `Le premier loyer (${b.monthlyRent.toLocaleString('fr-FR')} €) doit être réglé à la signature.`, 'orange');
+      return;
+    }
+    const confirmed = await window.ProtecDialog.confirm(
+      `Signer un bail pour « ${b.name} » ?\n\n• Loyer : ${b.monthlyRent.toLocaleString('fr-FR')} € / mois (premier mois réglé maintenant)\n• ${b.typologyLabel} de ${b.surfaceM2} m² utiles\n• ${b.roomsCount} pièces dont ${b.freeRooms} à affecter\n• ${b.vehicleCapacity} véhicules${b.indoorBays ? ` (dont ${b.indoorBays} en remise)` : ''}\n\nL'antenne déménage immédiatement. Le mobilier des anciens locaux n'est pas transféré.`,
+      'Location de locaux',
+      { confirmText: 'Signer le bail', cancelText: 'Annuler' }
+    );
+    if (!confirmed) return;
+    game.resources.money -= b.monthlyRent;
+    if (window.ProtecFinances) window.ProtecFinances.recordTransaction(game, -b.monthlyRent, `Premier loyer : ${b.name}`, 'locaux');
+    this._moveIntoBuilding(game, b, 'rented');
+    game.showToast('Bail signé !', `L'antenne s'installe dans ${b.name} (${b.surfaceM2} m², ${b.monthlyRent.toLocaleString('fr-FR')} €/mois).`, 'green');
+    game.saveGame();
+    game.updateStatsUI();
+    this.activeTab = 'plan';
     this.renderModal(game);
   },
 
@@ -3279,7 +3534,7 @@ window.ProtecLocaux = {
           </button>
           <button onclick="window.ProtecLocaux.setTab('catalogue', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'catalogue' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="building" class="w-3.5 h-3.5"></i>
-            <span>Acheter (${this.getDailyRealEstateOffers(game).length})</span>
+            <span>Immobilier (${this.getDailyRealEstateOffers(game).length})</span>
           </button>
           <button onclick="window.ProtecLocaux.setTab('construction', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'construction' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
             <i data-lucide="hammer" class="w-3.5 h-3.5"></i>
@@ -3383,7 +3638,7 @@ window.ProtecLocaux = {
               <span class="text-xs font-bold text-slate-500">• Bâtiment de Base Déjà Bâti</span>
             </div>
             <h3 class="text-base sm:text-lg font-black text-slate-900">Architecture & Agencement des Locaux (Protection Civile)</h3>
-            <p class="text-xs text-slate-600">Aménagez librement les 3 pièces, placez vos meubles, portes et cloisons comme dans Les Sims :</p>
+            <p class="text-xs text-slate-600">Affectez une vocation aux salles libres, placez vos meubles, portes et cloisons comme dans Les Sims :</p>
           </div>
           
           <div class="flex items-center gap-2">
@@ -3454,7 +3709,7 @@ window.ProtecLocaux = {
                 <span>🚪</span> Portes & Fenêtres
               </button>
               <button type="button" onclick="window.ProtecLocaux.setEditorTab('rooms')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'rooms' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
-                <span>🏛️</span> Vocation des 3 Salles
+                <span>🏛️</span> Vocation des salles
               </button>
               <button type="button" onclick="window.ProtecLocaux.setEditorTab('expand')" class="px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 ${this.editorTab === 'expand' ? 'bg-pc-blue text-white shadow-xs' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">
                 <span>➕</span> Agrandir (Extension)
@@ -3853,10 +4108,11 @@ window.ProtecLocaux = {
           <div class="flex items-center justify-between text-xs font-black mb-1.5">
             <span class="flex items-center gap-1.5 text-slate-900 truncate">
               <span class="w-5 h-5 rounded-full ${isSelected ? 'bg-pc-blue text-white' : 'bg-slate-200 text-slate-700'} flex items-center justify-center text-[10px] font-mono flex-shrink-0">${idx + 1}</span>
-              <span class="truncate">Pièce ${idx + 1} (${(rm.area || rm.w * rm.h || 20).toFixed(1)} m²)</span>
+              <span class="truncate">${(rm.baseName || rm.name || ('Pièce ' + (idx + 1))).split('\n')[0]} (${(rm.area || rm.w * rm.h || 20).toFixed(1)} m²)</span>
             </span>
             ${isSelected ? '<span class="text-[9.5px] text-pc-blue font-black bg-blue-100/80 px-1.5 py-0.2 rounded flex-shrink-0">Active ★</span>' : ''}
           </div>
+          ${['couloir', 'wc', 'douche', 'garage'].includes(cleanType) ? `<div class="w-full px-2 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-500">🔒 ${{ couloir: 'Circulation (non aménageable)', wc: 'Sanitaires (plomberie existante)', douche: 'Salle d’eau / douches (plomberie existante)', garage: 'Remise à véhicules (portes sectionnelles)' }[cleanType]}</div>` : `
           <select onclick="event.stopPropagation()" onchange="window.ProtecLocaux.assignRoomRole('${rm.id}', this.value)" class="w-full px-2 py-1.5 rounded-lg bg-white border border-slate-300 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue cursor-pointer">
             <option value="libre" ${cleanType === 'libre' ? 'selected' : ''}>⚪ Salle Libre (Non affectée)</option>
             <option value="bureau" ${cleanType === 'bureau' ? 'selected' : ''}>💼 Accueil & Direction</option>
@@ -3866,7 +4122,7 @@ window.ProtecLocaux = {
             <option value="pc_radio" ${cleanType === 'pc_radio' ? 'selected' : ''}>📡 PC Radio & Opérations</option>
             <option value="dortoir" ${cleanType === 'dortoir' ? 'selected' : ''}>🛏️ Dortoir d'Astreinte (SAMU/SDIS)</option>
             <option value="vestiaire" ${cleanType === 'vestiaire' || cleanType === 'vestiaires' ? 'selected' : ''}>🚿 Vestiaires & Sanitaires</option>
-          </select>
+          </select>`}
         </div>
       `;
     }).join('');
@@ -3910,6 +4166,7 @@ window.ProtecLocaux = {
     const model = this.getArchitectModel();
     const room = (model.rooms || []).find(r => r.id === roomId);
     if (!room) return;
+    if (['couloir', 'wc', 'douche', 'garage'].includes(room.type)) return;
 
     room.type = newRole;
     const roomIdx = (model.rooms || []).findIndex(r => r.id === roomId) + 1;
@@ -3937,6 +4194,7 @@ window.ProtecLocaux = {
     };
 
     room.name = titles[newRole] || `Salle ${roomIdx || 1} (Libre)\n(Non affectée)`;
+    if (newRole === 'libre' && room.baseName) room.name = `${room.baseName} (libre)\n${room.area || Math.round(room.w * room.h * 10) / 10} m² · à affecter`;
     room.color = colors[newRole] || '#131824';
 
     this.selectRoom(roomId);
@@ -4635,8 +4893,24 @@ window.ProtecLocaux = {
 
   zoomCamera(factor) {
     if (window.ProtecBaseLive && window.ProtecBaseLive.isActive()) { window.ProtecBaseLive.zoom(factor); return; }
-    this.camera2D.zoom = Math.max(20, Math.min(100, this.camera2D.zoom * factor));
+    this.camera2D.zoom = Math.max(8, Math.min(100, this.camera2D.zoom * factor));
     this.renderArchitectScene();
+  },
+
+  // Emprise du plan (pièces + cour) pour centrer et cadrer la vue 2D
+  getModelViewBox(model) {
+    model = model || this.getArchitectModel();
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    (model && model.rooms || []).forEach(r => {
+      x0 = Math.min(x0, r.x); y0 = Math.min(y0, r.y); x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
+      bx0 = Math.min(bx0, r.x); by0 = Math.min(by0, r.y); bx1 = Math.max(bx1, r.x + r.w); by1 = Math.max(by1, r.y + r.h);
+    });
+    const pk = model && model.parking;
+    if (pk) { x0 = Math.min(x0, pk.x); y0 = Math.min(y0, pk.y); x1 = Math.max(x1, pk.x + pk.w); y1 = Math.max(y1, pk.y + pk.h); }
+    if (!isFinite(x0)) { x0 = 0.8; y0 = 1.2; x1 = 15.8; y1 = 10.8; }
+    if (!isFinite(bx0)) { bx0 = x0; by0 = y0; bx1 = x1; by1 = y1; }
+    return { x0, y0, x1, y1, w: x1 - x0, h: y1 - y0, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, building: { x0: bx0, y0: by0, x1: bx1, y1: by1 } };
   },
 
   fitView(width, height) {
@@ -4646,9 +4920,10 @@ window.ProtecLocaux = {
 
     // Le complexe complet (parking + bâtiment) va de x: 0.8 à 15.8 (largeur ~15m) et y: 1.2 à 10.8 (hauteur ~9.6m).
     // On calibre le zoom pour afficher l'ensemble avec un dégagement suffisant
-    const scaleX = (w * 0.82) / 16.5;
-    const scaleY = ((h - 70) * 0.82) / 11.0;
-    const optimalScale = Math.max(16, Math.min(38, Math.min(scaleX, scaleY)));
+    const vb = this.getModelViewBox();
+    const scaleX = (w * 0.86) / (vb.w + 1.4);
+    const scaleY = ((h - 70) * 0.86) / (vb.h + 1.4);
+    const optimalScale = Math.max(8, Math.min(38, Math.min(scaleX, scaleY)));
 
     this.camera2D = {
       zoom: optimalScale,
@@ -4721,8 +4996,9 @@ window.ProtecLocaux = {
       const cx = canvas.width / 2 + this.camera2D.panX;
       const cy = canvas.height / 2 + this.camera2D.panY;
       const scale = this.camera2D.zoom;
-      const ox = cx - 8.3 * scale;
-      const oy = cy - 6.0 * scale;
+      const vb = this._viewBox || this.getModelViewBox();
+      const ox = cx - vb.cx * scale;
+      const oy = cy - vb.cy * scale;
       return {
         wx: (screenX - ox) / scale,
         wy: (screenY - oy) / scale,
@@ -6131,7 +6407,8 @@ window.ProtecLocaux = {
       pc_radio:    { floor: '#ccfbf1', accent: '#5eead4', label: '#115e59', floorType: 'tech', name: 'PC Radio & Régulation' },
       douche:      { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires & Douches' },
       wc:          { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Sanitaires' },
-      vestiaire:   { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' }
+      vestiaire:   { floor: '#f8fafc', accent: '#cbd5e1', label: '#0f172a', floorType: 'tiles', name: 'Vestiaires Secouristes' },
+      couloir:     { floor: '#e7e5e4', accent: '#d6d3d1', label: '#57534e', floorType: 'lino', name: 'Couloir & circulation' }
     };
     return ROOM_STYLES[type] || ROOM_STYLES.libre;
   },
@@ -6574,11 +6851,14 @@ window.ProtecLocaux = {
     }
     ctx.fillRect(0, 0, width, height);
 
-    // Centrage du complexe
-    const ox = cx - 8.3 * scale;
-    const oy = cy - 6.0 * scale;
+    // Centrage du complexe sur l'emprise réelle (bâtiment + cour)
+    const vb = this.getModelViewBox(model);
+    this._viewBox = vb;
+    const ox = cx - vb.cx * scale;
+    const oy = cy - vb.cy * scale;
 
     // 2. Zone extérieure : Cour enrobée bitumineuse & Parking Opérationnel
+    let drawIndoorSpots = null, drawVehTip = null;
     if (model.parking) {
       const pk = model.parking;
       const px = ox + pk.x * scale;
@@ -6611,7 +6891,7 @@ window.ProtecLocaux = {
       const st = (game && game.stations) ? (game.stations.find(s => s.id === this.currentStationId) || game.stations[0]) : null;
       const stVehs = (game && game.vehicles && st) ? game.vehicles.filter(v => (st.vehicles || []).includes(v.id) || v.stationId === st.id) : [];
 
-      (pk.spots || []).forEach((spot, idx) => {
+      const drawSpot2D = (spot, idx) => {
         const sx = ox + spot.x * scale;
         const sy = oy + spot.y * scale;
         const sw = spot.w * scale;
@@ -6620,8 +6900,8 @@ window.ProtecLocaux = {
         const assignedVeh = stVehs[idx];
         const isHovered = (this.hoveredVehicle && assignedVeh && this.hoveredVehicle.id === assignedVeh.id);
 
-        // Lignes de stationnement blanches nettes
-        ctx.strokeStyle = isHovered ? '#38bdf8' : 'rgba(255, 255, 255, 0.6)';
+        // Lignes de stationnement (blanches dehors, jaunes dans la remise)
+        ctx.strokeStyle = isHovered ? '#38bdf8' : (spot.indoor ? '#eab308' : 'rgba(255, 255, 255, 0.6)');
         ctx.lineWidth = isHovered ? 2.5 : 2;
         ctx.setLineDash([]);
         ctx.strokeRect(sx, sy, sw, sd);
@@ -6635,15 +6915,18 @@ window.ProtecLocaux = {
           // Emplacement vide
           ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
           ctx.fillRect(sx, sy, sw, sd);
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.40)';
+          ctx.fillStyle = spot.indoor ? 'rgba(15, 23, 42, 0.45)' : 'rgba(255, 255, 255, 0.40)';
           ctx.font = 'bold 9px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(spot.label || `🅿️ EMPLACEMENT 0${idx + 1}`, sx + sw / 2, sy + sd / 2);
         }
-      });
+      };
+      (pk.spots || []).forEach((spot, idx) => { if (!spot.indoor) drawSpot2D(spot, idx); });
+      drawIndoorSpots = () => (pk.spots || []).forEach((spot, idx) => { if (spot.indoor) drawSpot2D(spot, idx); });
 
-      // Infobulle flottante au survol du curseur sur un véhicule garé
+      // Infobulle flottante au survol du curseur sur un véhicule garé (dessinée après les pièces)
+      drawVehTip = () => {
       if (this.hoveredVehicle && this.hoveredVehicleSpot) {
         const sp = this.hoveredVehicleSpot;
         const hx = ox + (sp.x + sp.w / 2) * scale;
@@ -6692,13 +6975,15 @@ window.ProtecLocaux = {
         ctx.font = '600 9.5px "Plus Jakarta Sans", sans-serif';
         ctx.fillText(subText, cardX + cardW / 2, cardY + 21);
       }
+      };
     }
 
     // 3. Ombre portée globale du bâtiment (effet de relief de jeu de gestion)
-    const buildX = ox + 6.0 * scale;
-    const buildY = oy + 1.4 * scale;
-    const buildW = 9.8 * scale;
-    const buildH = 9.2 * scale;
+    const bb = vb.building;
+    const buildX = ox + (bb.x0 - 0.12) * scale;
+    const buildY = oy + (bb.y0 - 0.12) * scale;
+    const buildW = (bb.x1 - bb.x0 + 0.24) * scale;
+    const buildH = (bb.y1 - bb.y0 + 0.24) * scale;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
     ctx.beginPath();
     if (ctx.roundRect) ctx.roundRect(buildX + 6, buildY + 8, buildW, buildH, 6);
@@ -6729,7 +7014,13 @@ window.ProtecLocaux = {
 
       // Pastille conviviale avec le nom de la pièce
       if (rw > 40 && rh > 30) {
-        const roomTitle = r.name.split('\n')[0];
+        let roomTitle = r.name.split('\n')[0];
+        ctx.font = 'bold 10px "Plus Jakarta Sans", sans-serif';
+        if (ctx.measureText(roomTitle).width > rw - 22) {
+          let base = roomTitle;
+          while (base.length > 3 && ctx.measureText(base + '…').width > rw - 22) base = base.slice(0, -1);
+          roomTitle = base.trimEnd() + '…';
+        }
         const showDimensions = !!this.isEditing;
         const roomSubtitle = showDimensions ? `${r.area ? r.area.toFixed(1) : '?'} m²` : '';
 
@@ -6767,6 +7058,10 @@ window.ProtecLocaux = {
         }
       }
     });
+
+    // 4 bis. Véhicules remisés à l'intérieur (remise / garage), puis infobulle véhicule
+    if (drawIndoorSpots) drawIndoorSpots();
+    if (drawVehTip) drawVehTip();
 
     // 5. Murs porteurs épais et solides (style jeu de gestion en relief)
     model.walls.forEach(w => {
@@ -7273,6 +7568,7 @@ window.ProtecLocaux = {
 
   render3D(ctx, width, height) {
     const model = this.getArchitectModel();
+    this._viewBox = this.getModelViewBox(model);
     const cx = width / 2 + this.camera3D.panX;
     const cy = height / 2 + this.camera3D.panY;
     const cam = this.camera3D;
@@ -7389,8 +7685,9 @@ window.ProtecLocaux = {
 
   // Projection mathématique 3D vers écran (Perspective cavalière / isométrique)
   project3D(wx, wy, wz, camera, cx, cy) {
-    const ox = wx - 8.3;
-    const oy = wy - 6.0;
+    const vb = this._viewBox || { cx: 8.3, cy: 6.0 };
+    const ox = wx - vb.cx;
+    const oy = wy - vb.cy;
     const oz = wz;
 
     const cosY = Math.cos(camera.yaw);
@@ -7770,95 +8067,81 @@ window.ProtecLocaux = {
   // =========================================================================
 
   renderCatalogueTab(game) {
-    const offers = this.getDailyRealEstateOffers(game);
+    const mode = this.realEstateMode === 'sale' ? 'sale' : 'rent';
+    const offers = this.getDailyRealEstateOffers(game, mode);
     const day = game?.clock?.day || 1;
     const monthName = game?.clock?.monthsNames?.[game?.clock?.month || 0] || 'Mois';
     const year = game?.clock?.year || 2026;
+    const money = game?.resources?.money || 0;
+    const nRent = this.getDailyRealEstateOffers(game, 'rent').length;
+    const nSale = this.getDailyRealEstateOffers(game, 'sale').length;
+    const tabBtn = (m, label, n) => `<button type="button" onclick="window.ProtecLocaux.setRealEstateMode('${m}')" class="px-4 py-2 rounded-xl text-xs font-black transition ${mode === m ? 'bg-pc-blue text-white shadow-sm' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}">${label} (${n})</button>`;
 
     return `
       <div class="space-y-4">
-        <!-- Bandeau d'en-tête du Marché Immobilier Quotidien -->
-        <div class="p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-indigo-500/30">
+        <div class="p-4 rounded-2xl glass-card flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center text-xl shadow-inner">
-              🏛️
-            </div>
+            <div class="w-10 h-10 rounded-xl bg-pc-blue/10 text-pc-blue flex items-center justify-center text-xl">🏛️</div>
             <div>
-              <div class="flex items-center gap-2">
-                <h4 class="text-sm sm:text-base font-black">Marché Immobilier Territorial</h4>
-                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                  Offres du ${day} ${monthName} ${year}
-                </span>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h4 class="text-sm sm:text-base font-black text-slate-900">Marché immobilier local</h4>
+                <span class="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-emerald-100 text-emerald-700 border border-emerald-200">Offres du ${day} ${monthName} ${year}</span>
               </div>
-              <p class="text-xs text-slate-300 mt-0.5">
-                Plans 2D vectoriels réels générés par le cadastre. Les opportunités d'achat en pleine propriété varient chaque jour selon le marché.
-              </p>
+              <p class="text-xs text-slate-500 mt-0.5">Locaux existants avec plan réel : couloirs, salles de tailles variées, sanitaires, remise. Les annonces changent chaque jour.</p>
             </div>
           </div>
-          <div class="text-right sm:text-right shrink-0">
-            <span class="text-[10px] text-slate-400 uppercase font-bold block">Trésorerie Disponible</span>
-            <span class="text-base font-black text-emerald-400 font-mono">${game.resources.money.toLocaleString('fr-FR')} €</span>
+          <div class="text-right shrink-0">
+            <span class="text-[10px] text-slate-400 uppercase font-bold block">Trésorerie</span>
+            <span class="text-base font-black text-emerald-600 font-mono">${money.toLocaleString('fr-FR')} €</span>
           </div>
         </div>
 
-        <!-- Grille des Offres Immobilières du Jour -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div class="flex items-center gap-2">
+          ${tabBtn('rent', '🔑 À louer', nRent)}
+          ${tabBtn('sale', '🏷️ À vendre', nSale)}
+          <span class="text-[11px] text-slate-500 font-semibold ml-1 hidden sm:inline">${mode === 'rent' ? 'Loyer mensuel prélevé automatiquement, premier mois payé à la signature.' : 'Achat en pleine propriété : plus aucun loyer.'}</span>
+        </div>
+
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-5">
           ${offers.map(b => {
-            const canAfford = game.resources.money >= b.price;
+            const isRent = b.kind === 'rent';
+            const canAfford = money >= b.price;
+            const priceLabel = isRent ? `${b.monthlyRent.toLocaleString('fr-FR')} € / mois` : `${b.price.toLocaleString('fr-FR')} €`;
+            const rooms = (b.architecture.rooms || []);
+            const tags = [];
+            const nCor = rooms.filter(r => r.type === 'couloir').length;
+            if (nCor) tags.push(`🚶 ${nCor} couloir${nCor > 1 ? 's' : ''}`);
+            if (b.indoorBays) tags.push(`🚒 ${b.indoorBays} travée${b.indoorBays > 1 ? 's' : ''} couverte${b.indoorBays > 1 ? 's' : ''}`);
+            const nSan = rooms.filter(r => ['wc', 'douche', 'vestiaire'].includes(r.type)).length;
+            if (nSan) tags.push(`🚿 ${nSan} pièce${nSan > 1 ? 's' : ''} d’eau`);
+            const areas = rooms.filter(r => r.type === 'libre').map(r => r.area);
+            if (areas.length) tags.push(`📐 salles de ${Math.round(Math.min(...areas))} à ${Math.round(Math.max(...areas))} m²`);
             return `
-              <div class="p-5 rounded-3xl glass-card border border-slate-200/90 flex flex-col justify-between space-y-4 hover:shadow-xl hover:border-slate-300 transition-all">
+              <div class="p-5 rounded-3xl glass-card flex flex-col justify-between space-y-4">
                 <div class="space-y-3">
-                  
-                  <!-- Titre, Icône et Prix -->
-                  <div class="flex items-center justify-between flex-wrap gap-2">
-                    <div class="flex items-center gap-2.5">
+                  <div class="flex items-start justify-between flex-wrap gap-2">
+                    <div class="flex items-center gap-2.5 min-w-0">
                       <span class="text-3xl">${b.icon}</span>
-                      <div>
+                      <div class="min-w-0">
                         <h4 class="text-sm sm:text-base font-black text-slate-900 leading-tight">${b.name}</h4>
-                        <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">${b.roomsCount} pièces indépendantes libres • Dalle de ${b.surfaceM2} m²</span>
+                        <span class="text-[10px] text-slate-500 font-semibold block mt-0.5">${b.typologyLabel} • ${b.surfaceM2} m² utiles • ${b.roomsCount} pièces dont ${b.freeRooms} à affecter</span>
                       </div>
                     </div>
-                    <span class="px-3 py-1.5 rounded-xl text-xs font-black shadow-2xs ${canAfford ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-700 border border-red-200'}">
-                      ${b.price.toLocaleString('fr-FR')} € (Pleine Propriété)
-                    </span>
+                    <span class="px-3 py-1.5 rounded-xl text-xs font-black ${canAfford ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-red-100 text-red-700 border border-red-200'}">${priceLabel}</span>
                   </div>
-
                   <p class="text-xs text-slate-600 leading-relaxed">${b.desc}</p>
-
-                  <!-- Plan 2D d'Architecte Vectoriel Réel -->
-                  <div class="space-y-1">
-                    <div class="flex items-center justify-between text-[10px] font-black uppercase text-slate-400 px-1">
-                      <span>Plan CAD de l'Édifice (Vue de dessus)</span>
-                      <span class="text-amber-500 font-mono">Toutes les pièces libres</span>
-                    </div>
-                    ${this.renderBuildingPlanPreviewSVG(b)}
-                  </div>
-
-                  <!-- Chiffres clés du bâtiment -->
+                  <div class="flex flex-wrap gap-1.5">${tags.map(t => `<span class="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-600">${t}</span>`).join('')}</div>
+                  <div>${this.renderBuildingPlanPreviewSVG(b)}</div>
                   <div class="grid grid-cols-4 gap-2 text-[11px] font-bold text-center bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
-                    <div>
-                      <span class="text-slate-400 block text-[9px] uppercase">Surface</span>
-                      <strong class="text-slate-900 font-mono">${b.surfaceM2} m²</strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block text-[9px] uppercase">Pièces</span>
-                      <strong class="text-indigo-600">${b.roomsCount} libres</strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block text-[9px] uppercase">Parking</span>
-                      <strong class="text-amber-600">${b.vehicleCapacity} places</strong>
-                    </div>
-                    <div>
-                      <span class="text-slate-400 block text-[9px] uppercase">Stockage</span>
-                      <strong class="text-slate-700">${b.storageCapacity} u.</strong>
-                    </div>
+                    <div><span class="text-slate-400 block text-[9px] uppercase">Surface</span><strong class="text-slate-900 font-mono">${b.surfaceM2} m²</strong></div>
+                    <div><span class="text-slate-400 block text-[9px] uppercase">Pièces</span><strong class="text-indigo-600">${b.roomsCount}</strong></div>
+                    <div><span class="text-slate-400 block text-[9px] uppercase">Véhicules</span><strong class="text-amber-600">${b.vehicleCapacity}${b.indoorBays ? ` (${b.indoorBays} abrités)` : ''}</strong></div>
+                    <div><span class="text-slate-400 block text-[9px] uppercase">Stockage</span><strong class="text-slate-700">${b.storageCapacity} u.</strong></div>
                   </div>
                 </div>
-
-                <!-- Bouton d'Achat -->
-                <button onclick="window.ProtecLocaux.buyBuilding(window.game, '${b.id}')" ${!canAfford ? 'disabled' : ''} class="w-full py-3 rounded-2xl font-black text-xs shadow-md transition flex items-center justify-center gap-2 cursor-pointer ${canAfford ? 'bg-[#ff6600] hover:bg-[#e65c00] text-white active:scale-95 shadow-orange-500/20' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
-                  <span>${canAfford ? 'Acheter en Pleine Propriété & Déménager l’Antenne' : 'Trésorerie Insuffisante'}</span>
-                  <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+                <button onclick="window.ProtecLocaux.${isRent ? 'rentBuilding' : 'buyBuilding'}(window.game, '${b.id}')" ${!canAfford ? 'disabled' : ''} class="w-full py-3 rounded-2xl font-black text-xs shadow-md transition flex items-center justify-center gap-2 ${canAfford ? 'bg-[#ff6600] hover:bg-[#e65c00] text-white active:scale-95 cursor-pointer' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}">
+                  <span>${!canAfford ? 'Trésorerie insuffisante' : isRent ? 'Signer le bail & déménager l’antenne' : 'Acheter & déménager l’antenne'}</span>
+                  <i data-lucide="${isRent ? 'key-round' : 'shopping-cart'}" class="w-4 h-4"></i>
                 </button>
               </div>
             `;
@@ -7866,6 +8149,11 @@ window.ProtecLocaux = {
         </div>
       </div>
     `;
+  },
+
+  setRealEstateMode(mode) {
+    this.realEstateMode = mode === 'sale' ? 'sale' : 'rent';
+    if (window.game) this.renderModal(window.game);
   },
 
   // =========================================================================
