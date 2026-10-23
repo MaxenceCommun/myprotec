@@ -13521,6 +13521,11 @@ class ProtecGame {
     // Démobilisation propre des éventuels renforts extérieurs engagés
     this.demobilizeMissionReinforcements(mission);
 
+    // Nettoyage des files d'armement logistique et libération des bénévoles au garage
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.cleanupMissionArmingQueues === 'function') {
+      window.ProtecLogistique.cleanupMissionArmingQueues(mission, this);
+    }
+
     // Clôture explicite des indicateurs de la mission
     mission.status = 'completed';
     mission.isCompleted = true;
