@@ -1476,6 +1476,10 @@ window.ProtecLogistique = {
             <button onclick="window.ProtecLogistique.setTab('flotte')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${this.activeTab === 'flotte' ? 'bg-pc-blue text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
               <i data-lucide="shield-check" class="w-4 h-4"></i>
               <span>Flotte & Garage</span>
+              ${(() => {
+                const armingCount = (game.vehicles || []).filter(v => this.isVehicleArming(v)).length;
+                return `<span id="logistique-tab-flotte-badge" class="${armingCount > 0 ? 'px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500 text-white font-black animate-pulse shadow-xs' : 'hidden'}">${armingCount} ⏳</span>`;
+              })()}
             </button>
             <div class="w-px h-5 bg-slate-300 mx-0.5 hidden sm:block"></div>
             <button onclick="window.game.openModule('boutiques')" class="px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-xs hover:brightness-110 cursor-pointer" title="Commander du matériel, tenues ou radios dans les galeries marchandes">
@@ -3057,6 +3061,111 @@ window.ProtecLogistique = {
     this.refreshOpenLogisticsModalIfNeeded(game);
   },
 
+  unloadAllItemsFromVehicle(missionId, vehicleId) {
+    const game = window.game;
+    if (!game) return;
+    const mission = missionId ? (game.missions || []).find(m => m.id === missionId) : null;
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    if (!veh || !Array.isArray(veh.loadedItems) || veh.loadedItems.length === 0) return;
+
+    this.normalizeVehicle(veh);
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+
+    let addedCount = 0;
+    const durationSec = this.LOT_ARM_DURATION_SEC || 180;
+
+    veh.loadedItems.forEach(item => {
+      if (item.pendingUnloadOpId && veh.armingQueue.some(op => op.opId === item.pendingUnloadOpId)) {
+        return;
+      }
+      const opId = `op_${Date.now()}_${Math.random().toString(36).substr(2, 5)}_${addedCount}`;
+      item.pendingUnloadOpId = opId;
+
+      if (!veh.lastArmingTickAt) veh.lastArmingTickAt = Date.now();
+      veh.armingQueue.push({
+        opId: opId,
+        type: item.isVehicle ? 'unload_bike' : 'unload',
+        missionId: mission ? mission.id : null,
+        stationId: station ? station.id : null,
+        itemId: item.id,
+        bikeId: item.isVehicle ? item.id : undefined,
+        itemName: item.shortName || item.name,
+        slots: item.slots || 1,
+        totalSec: durationSec,
+        remainingSec: durationSec,
+        queuedAt: Date.now()
+      });
+      addedCount++;
+    });
+
+    if (addedCount === 0) {
+      game.showToast('Déchargement déjà en cours ⏳', `Tous les lots de ${veh.name} sont déjà dans la file de désarmement.`, 'orange');
+      return;
+    }
+
+    const autoVol = this.autoAssignPersonnelForArmingIfNeeded(veh, mission, game);
+    const effSecLeft = this.getVehicleEffectiveArmingRemainingSec(veh, game);
+    game.showToast(
+      'Déchargement Complet Lancé 🧹',
+      `${addedCount} lot(s) programmé(s) pour retour en réserve depuis ${veh.name}${autoVol ? ` (${autoVol.name})` : ''} • ~${this.formatArmingClock(effSecLeft)} au total.`,
+      'teal'
+    );
+
+    if (window.ProtecAudio) window.ProtecAudio.playClickSound();
+    this.ensureArmingInterval(game);
+    game.saveGame();
+    if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
+      game.refreshMissionDetailsIfOpen(mission.id);
+    }
+    this.refreshOpenLogisticsModalIfNeeded(game);
+  },
+
+  GARAGE_ARMING_PRESETS: {
+    dps_poste: {
+      label: '🚑 Pack Poste DPS (Lots A + B)',
+      lots: ['lot_secours_a', 'lot_secours_b'],
+      fallbackLots: ['lot_secours_b', 'lot_secours_c']
+    },
+    intemperies: {
+      label: '🌊 Pack Intempéries (Pompage + Tronçonnage)',
+      lots: ['lot_pompage', 'lot_tronconnage'],
+      fallbackLots: ['lot_tronconnage', 'lot_eclairage']
+    },
+    soutien_cai: {
+      label: '⛺ Pack CAI / Hébergement (Lits + Ravitaillement)',
+      lots: ['lot_hebergement', 'lot_ravitaillement'],
+      fallbackLots: ['lot_ravitaillement', 'caisse_rearmement']
+    }
+  },
+
+  applyGarageArmingPreset(missionId, vehicleId, presetKey) {
+    const game = window.game;
+    if (!game) return;
+    const preset = this.GARAGE_ARMING_PRESETS[presetKey];
+    if (!preset) return;
+    const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
+    if (!veh) return;
+    this.normalizeVehicle(veh);
+
+    const cap = this.getVehicleCapacityLog(veh);
+    const listToTry = (cap < 6 && preset.fallbackLots) ? preset.fallbackLots : preset.lots;
+    let loadedAny = false;
+
+    listToTry.forEach(lotId => {
+      const comp = this.getLotComposition(lotId);
+      const needed = comp?.slots || 1;
+      if (this.getFreeLogSlots(veh) >= needed) {
+        this.loadItemToVehicle(missionId, vehicleId, lotId);
+        loadedAny = true;
+      }
+    });
+
+    if (!loadedAny) {
+      game.showToast('Espace insuffisant ⚠️', `Aucun lot du « ${preset.label} » ne rentre dans l'espace libre restant de ${veh.name}.`, 'orange');
+    }
+  },
+
   loadBicycleToVehicle(missionId, vehicleId, bikeId) {
     const game = window.game;
     if (!game) return;
@@ -3482,6 +3591,24 @@ window.ProtecLogistique = {
     const curBarEl = document.getElementById(`veh-arming-current-bar-${veh.id}`);
     if (curBarEl) {
       curBarEl.style.width = `${currentPct}%`;
+    }
+    const consTimerEl = document.getElementById(`cons-rearm-timer-${veh.id}`);
+    if (consTimerEl) {
+      consTimerEl.textContent = `⏳ Réarmement (${this.formatArmingClock(effRemSec)})`;
+    }
+    const flotteBadgeEl = document.getElementById('logistique-tab-flotte-badge');
+    if (flotteBadgeEl && game) {
+      const seen = new Set();
+      let activeCount = 0;
+      (game.vehicles || []).concat(game.allVehicles || []).forEach(v => {
+        if (v && v.id && !seen.has(v.id)) {
+          seen.add(v.id);
+          if (this.isVehicleArming(v)) activeCount++;
+        }
+      });
+      flotteBadgeEl.textContent = `⏳ ${activeCount}`;
+      if (activeCount > 0) flotteBadgeEl.classList.remove('hidden');
+      else flotteBadgeEl.classList.add('hidden');
     }
   },
 
@@ -4598,9 +4725,16 @@ window.ProtecLogistique = {
         ${(isLog && showLotsCatalog) ? `
           <!-- Inventaire embarqué à bord au garage -->
           <div class="space-y-2">
-            <div class="flex items-center justify-between text-[10.5px] font-black text-slate-800">
+            <div class="flex items-center justify-between text-[10.5px] font-black text-slate-800 flex-wrap gap-1.5">
               <span>📦 Lots actuellement embarqués dans ${veh.name} (${(veh.loadedItems || []).length})</span>
-              <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900">${freeSlots}/${capLog} slot(s) libre(s)</span>
+              <div class="flex items-center gap-1.5">
+                ${(veh.loadedItems || []).length > 0 ? `
+                  <button type="button" onclick="window.ProtecLogistique.unloadAllItemsFromVehicle('${mId}', '${veh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-black bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 transition cursor-pointer">
+                    🧹 Tout décharger
+                  </button>
+                ` : ''}
+                <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900">${freeSlots}/${capLog} slot(s) libre(s)</span>
+              </div>
             </div>
             ${(veh.loadedItems || []).length > 0 ? `
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -4626,6 +4760,20 @@ window.ProtecLogistique = {
                 Aucun lot embarqué dans ${veh.name}. Pré-armez vos lots ci-dessous pour gagner du temps avant les interventions !
               </div>
             `}
+
+            <!-- Dotations Rapides (Presets 1-clic) -->
+            <div class="pt-1 space-y-1">
+              <div class="text-[10px] font-black uppercase text-slate-600 flex items-center gap-1">
+                <span>⚡ Dotations Rapides en 1 clic :</span>
+              </div>
+              <div class="flex flex-wrap gap-1.5">
+                ${Object.entries(this.GARAGE_ARMING_PRESETS || {}).map(([pKey, pDef]) => `
+                  <button type="button" onclick="window.ProtecLogistique.applyGarageArmingPreset('${mId}', '${veh.id}', '${pKey}')" class="px-2.5 py-1 rounded-xl text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 transition cursor-pointer">
+                    ${pDef.label}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
 
             <!-- Lots disponibles au stock local pour pré-armement au garage -->
             <div class="pt-1 space-y-1.5">
@@ -4680,8 +4828,10 @@ window.ProtecLogistique = {
       return v.isBicycle || v.type === 'VELO' || (v.name || '').toLowerCase().includes('vélo') || (v.name || '').toLowerCase().includes('vtt');
     });
 
-    // S'il n'y a aucun véhicule logistique ni vélo, ne pas encombrer l'écran
-    if (logVehicles.length === 0 && bicycles.length === 0) return '';
+    const armingVehicles = assignedVehs.filter(v => this.isVehicleArming(v));
+
+    // S'il n'y a aucun véhicule logistique, ni vélo, ni véhicule en cours de réarmement, ne pas encombrer l'écran
+    if (logVehicles.length === 0 && bicycles.length === 0 && armingVehicles.length === 0) return '';
 
     // Évaluation du transport des vélos
     const bikeTransportCheck = this.checkBicycleTransport(mission, game);
@@ -4943,14 +5093,21 @@ window.ProtecLogistique = {
 
                   <!-- 1. MATÉRIELS ET LOTS ACTUELLEMENT EMBARQUÉS À BORD -->
                   <div class="space-y-2">
-                    <div class="flex items-center justify-between text-[11px]">
+                    <div class="flex items-center justify-between text-[11px] flex-wrap gap-1.5">
                       <span class="font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
                         <i data-lucide="package-check" class="w-3.5 h-3.5 text-amber-600 dark:text-amber-400"></i>
                         <span>Matériels & Lots Embarqués à Bord (${(veh.loadedItems || []).length})</span>
                       </span>
-                      <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg ${freeSlots > 0 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200' : 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200'}">
-                        ${freeSlots} slot(s) disponible(s)
-                      </span>
+                      <div class="flex items-center gap-1.5">
+                        ${(veh.loadedItems || []).length > 0 ? `
+                          <button type="button" onclick="window.ProtecLogistique.unloadAllItemsFromVehicle('${mission.id}', '${veh.id}')" class="px-2 py-0.5 rounded-lg text-[9.5px] font-black bg-rose-100 hover:bg-rose-200 text-rose-800 border border-rose-300 transition cursor-pointer">
+                            🧹 Tout décharger
+                          </button>
+                        ` : ''}
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-lg ${freeSlots > 0 ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-200' : 'bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200'}">
+                          ${freeSlots} slot(s) disponible(s)
+                        </span>
+                      </div>
                     </div>
 
                     ${(veh.loadedItems || []).length > 0 ? `
@@ -5017,6 +5174,20 @@ window.ProtecLogistique = {
                         Aucun lot ni caisse actuellement à bord. Sélectionnez ci-dessous les dotations de la Protection Civile à armer (3 min par lot).
                       </div>
                     `}
+                  </div>
+
+                  <!-- Dotations Rapides (Presets 1-clic) -->
+                  <div class="pt-1 space-y-1.5">
+                    <div class="text-[10px] font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>⚡ Dotations Rapides en 1 clic :</span>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                      ${Object.entries(this.GARAGE_ARMING_PRESETS || {}).map(([pKey, pDef]) => `
+                        <button type="button" onclick="window.ProtecLogistique.applyGarageArmingPreset('${mission.id}', '${veh.id}', '${pKey}')" class="px-2.5 py-1.5 rounded-xl text-[10px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-900 dark:bg-indigo-950/60 dark:text-indigo-200 border border-indigo-200 dark:border-indigo-700 transition cursor-pointer shadow-2xs">
+                          ${pDef.label}
+                        </button>
+                      `).join('')}
+                    </div>
                   </div>
 
                   <!-- 2. MATÉRIELS ET LOTS DISPONIBLES AU CHARGEMENT (AVEC COMPOSITION ET QUANTITÉS VISIBLES) -->
@@ -5140,7 +5311,7 @@ window.ProtecLogistique = {
                     </div>
                   </div>
                 `;
-                })() : ''}
+                })() : (this.isVehicleArming(veh) ? this.renderSingleVehicleGarageArmamentPanel(game, veh, station, mission, false) : '')}
               </div>
             `;
           }).join('')}

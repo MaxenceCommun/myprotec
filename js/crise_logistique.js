@@ -1461,14 +1461,22 @@ window.ProtecCriseLogistique = {
     if (check.mode === 'mission') {
       // Réarmé sur le terrain via le véhicule LOG
       veh.armementLevel = 100;
+      veh.consumables = 100;
       veh.isRearmed = true;
       veh.needsRearming = false;
       if (check.logVehicle) {
         check.logVehicle.armementLevel = Math.max(0, (check.logVehicle.armementLevel || 100) - missing);
       }
       game.showToast('Réarmé sur Zone ✓', `${veh.name} a été réarmé sur mission grâce au ${check.logVehicle.name} LOG présent sur place (-${missing}% matériels).`, 'green');
+    } else if (window.ProtecLogistique && typeof window.ProtecLogistique.rearmVehicleSingle === 'function') {
+      // Déléguer au système temporisé de garage (2 min de réarmement & bionettoyage)
+      window.ProtecLogistique.rearmVehicleSingle(game, vehicleId);
+      if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
+        game.refreshMissionDetailsIfOpen(mission.id);
+      }
+      return;
     } else {
-      // Réarmé à la base via le stock du local
+      // Fallback réarmé à la base via le stock du local
       const consumed = Math.min(missing, check.currentStockPS);
       this.adjustStationStockPS(game, -consumed, veh.stationId);
       veh.armementLevel = Math.min(100, (veh.armementLevel || 70) + consumed);
@@ -2120,8 +2128,9 @@ window.ProtecCriseLogistique = {
 
     assignedVehs.forEach(v => {
       totalSeats += (v.seatsCount || v.capacity || 4);
+      const isRearmingQueued = Array.isArray(v.armingQueue) && v.armingQueue.some(op => op.type === 'rearm_sanitaire');
       const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
-      if (armement < 100 || v.isRearmed === false || v.needsRearming) {
+      if (!isRearmingQueued && (armement < 100 || v.isRearmed === false || v.needsRearming)) {
         hasUnrearmed = true;
         unrearmedVehs.push(v);
       }
@@ -2133,11 +2142,25 @@ window.ProtecCriseLogistique = {
     // Détection d'un véhicule LOG armé sur la mission
     const armedLogVeh = assignedVehs.find(v => (v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') && (v.logKit === 'dps' || (v.armementLevel || 100) >= 30));
 
-    // Détection du Kit indispensable pour la mission
+    // Détection du Kit indispensable pour la mission (compatible logKit et loadedItems RNMSC)
     const reqKit = this.getRequiredMissionKit(mission);
     let kitMismatchAlert = '';
     if (reqKit) {
-      const hasCorrectKit = assignedVehs.some(v => (v.type === 'VTU' || v.type === 'VTL' || v.type === 'VAHU') && v.logKit === reqKit.id);
+      const kitToLotMap = {
+        pompage: ['lot_pompage', 'remorque_motopompe'],
+        chu: ['lot_hebergement'],
+        cai: ['lot_hebergement'],
+        eclairage: ['lot_eclairage', 'remorque_groupe_electro'],
+        ravitaillement: ['lot_ravitaillement'],
+        dps: ['lot_secours_a', 'lot_secours_b', 'caisse_rearmement']
+      };
+      const validLotIds = kitToLotMap[reqKit.id] || [];
+      const hasCorrectKit = assignedVehs.some(v => {
+        if (v.logKit === reqKit.id) return true;
+        const loadedIds = (v.loadedItems || []).map(it => it.id);
+        const queuedIds = (v.armingQueue || []).filter(op => op.type === 'load').map(op => op.itemId);
+        return validLotIds.some(lid => loadedIds.includes(lid) || queuedIds.includes(lid));
+      });
       if (!hasCorrectKit) {
         kitMismatchAlert = `
           <div class="p-3.5 rounded-2xl bg-amber-500/15 border-2 border-amber-500 text-amber-950 text-xs shadow-sm space-y-1.5 animate-pulse">

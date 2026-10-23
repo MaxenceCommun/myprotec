@@ -276,6 +276,10 @@ class ProtecGame {
     if (window.ProtecVeille) {
       window.ProtecVeille.init(this);
     }
+    if (window.ProtecLogistique && typeof window.ProtecLogistique.ensureArmingInterval === 'function') {
+      window.ProtecLogistique.ensureArmingInterval(this);
+      window.ProtecLogistique.processVehicleArmingTick(this, 1);
+    }
   }
 
   // --- RÉACTIVITÉ AUTOMATIQUE DE LA TRÉSORERIE SANS RELOAD ---
@@ -19395,17 +19399,17 @@ class ProtecGame {
                               </div>
 
                               <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
-                                ${!isFull ? `
-                                  <button type="button" onclick="window.ProtecLogistique?.rearmVehicleSingle(window.game, '${v.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
-                                    <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                                    <span>Réarmer</span>
-                                  </button>
-                                ` : `
-                                  <span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
-                                    <i data-lucide="check" class="w-3 h-3"></i>
-                                    <span>Complet</span>
-                                  </span>
-                                `}
+                                ${(() => {
+                                  const isRearmingNow = window.ProtecLogistique && typeof window.ProtecLogistique.isVehicleArming === 'function' && window.ProtecLogistique.isVehicleArming(v);
+                                  if (isRearmingNow) {
+                                    const remSec = window.ProtecLogistique.getVehicleEffectiveArmingRemainingSec(v, this);
+                                    return `<span id="cons-rearm-timer-${v.id}" class="px-2.5 py-1 rounded-lg text-[10.5px] font-black bg-amber-100 text-amber-950 border border-amber-400 animate-pulse flex items-center gap-1">⏳ Réarmement (${window.ProtecLogistique.formatArmingClock(remSec)})</span>`;
+                                  }
+                                  if (!isFull) {
+                                    return `<button type="button" onclick="window.ProtecLogistique?.rearmVehicleSingle(window.game, '${v.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs"><i data-lucide="refresh-cw" class="w-3 h-3"></i><span>Réarmer (2 min)</span></button>`;
+                                  }
+                                  return `<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i><span>Complet</span></span>`;
+                                })()}
                               </div>
                             </div>
                           `;
