@@ -1,4 +1,4 @@
-﻿/**
+/**
  * PROTEC LIVE - SYSTÈME D'ÉQUIPEMENT ET D'INVENTAIRE ÉCHELONNÉ EN GAMMES
  * 
  * 1. Gammes de Matériel (Entrée de gamme / Standard / Haut de gamme & Connecté) :
@@ -92,8 +92,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 1 : Entrée de Gamme',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
           title: 'Mannequin RCP basique',
-          price: 25,
-          maintenanceCostAnnual: 5,
+          price: 180,
+          maintenanceCostAnnual: 15,
           desc: 'Mannequin standard pour l’apprentissage des gestes de base.',
           bullets: [
             '⚠️ Usure rapide de la peau faciale et voies respiratoires',
@@ -107,8 +107,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 2 : Standard Réglementaire',
           badgeColor: 'bg-blue-100 text-pc-blue border-blue-300',
           title: 'Mannequin RCP avec clicker',
-          price: 150,
-          maintenanceCostAnnual: 15,
+          price: 320,
+          maintenanceCostAnnual: 25,
           desc: 'Indicateur sonore confirmant la bonne profondeur de compression.',
           bullets: [
             '✓ Standard réglementaire d’apprentissage officiel',
@@ -122,8 +122,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 3 : Haut de Gamme & Connecté',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
           title: 'Mannequin connecté QCPR',
-          price: 450,
-          maintenanceCostAnnual: 40,
+          price: 890,
+          maintenanceCostAnnual: 65,
           desc: 'Mesure en temps réel du rythme et de la qualité des compressions sur tablette.',
           bullets: [
             '🌟 +25% de satisfaction des apprenants (+20 € tarif PSC1 autorisé)',
@@ -190,8 +190,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 1 : Tensiomètre & Saturomètre Compacts',
           badgeColor: 'bg-slate-100 text-slate-800 border-slate-300',
           title: 'Tensiomètre & oxymètre',
-          price: 180,
-          maintenanceCostAnnual: 15,
+          price: 220,
+          maintenanceCostAnnual: 20,
           desc: 'Appareils compacts pour la mesure de la tension et de la SpO2.',
           bullets: [
             '⚡ Prise des constantes automatisée (tension artérielle et oxygénation)',
@@ -205,8 +205,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 2 : Moniteur Multiparamétrique de Transport',
           badgeColor: 'bg-blue-100 text-pc-blue border-blue-300 ring-1 ring-blue-400',
           title: 'Moniteur multiparamétrique',
-          price: 950,
-          maintenanceCostAnnual: 55,
+          price: 4800,
+          maintenanceCostAnnual: 180,
           desc: 'Surveillance continue et affichage des constantes vitales.',
           bullets: [
             '⚡ Bilan secouriste 35% plus rapide et surveillance continue de la victime',
@@ -221,8 +221,8 @@ window.ProtecEquipements = {
           badge: 'Niveau 3 : Moniteur Réanimation ECG 12D & Capnographie',
           badgeColor: 'bg-purple-100 text-purple-900 border-purple-300 ring-1 ring-purple-400',
           title: 'Moniteur réanimation ECG',
-          price: 3600,
-          maintenanceCostAnnual: 140,
+          price: 14500,
+          maintenanceCostAnnual: 420,
           desc: 'Tracé ECG et capnographie pour urgences vitales et arrêts cardiaques.',
           bullets: [
             '⚡ Bilan vital instantané et exhaustif (-50% temps de prise en charge)',
@@ -1047,15 +1047,15 @@ window.ProtecEquipements = {
 
     // 1. Lot Tronçonnage / Dégagement
     if ((mText.includes('arbre') || mText.includes('vent') || mText.includes('tempête') || mText.includes('dégagement') || mText.includes('voie')) && this.hasEquipment(game, 'lot_tronconnage')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 5;
       game.showToast('🪚 Lot Tronçonnage Déployé !', 'Les tronçonneuses et tire-forts ont permis un déblaiement rapide de la voirie. Voie sécurisée !', 'emerald');
     }
 
     // 2. Lot Épuisement / Pompage
     if ((mText.includes('inondation') || mText.includes('pompage') || mText.includes('crue') || mText.includes('eau') || mText.includes('pluie')) && this.hasEquipment(game, 'lot_pompage')) {
-      const bonusPay = 160;
+      const bonusPay = 90;
       game.resources.money += bonusPay;
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 5;
       if (window.ProtecFinances) {
         window.ProtecFinances.recordTransaction(game, bonusPay, 'Indemnité Pompage Municipal (Lot Épuisement)', 'prestation');
       }
@@ -1064,25 +1064,25 @@ window.ProtecEquipements = {
 
     // 3. Lot Bâchage & Consolidation
     if ((mText.includes('toiture') || mText.includes('bâchage') || mText.includes('grêle') || mText.includes('bourrasque')) && this.hasEquipment(game, 'lot_bachage')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 30;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 6;
       game.showToast('🛖 Lot Bâchage Déployé !', 'Mise hors d’eau d’urgence des toitures endommagées : habitations préservées des infiltrations avec succès !', 'amber');
     }
 
     // 4. Lot Éclairage d'urgence
     if ((mText.includes('nuit') || mText.includes('nocturne') || mText.includes('obscurité') || mText.includes('coupure') || mText.includes('pma') || mText.includes('recherche')) && this.hasEquipment(game, 'lot_eclairage')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 4;
       game.showToast('💡 Lot Éclairage Déployé !', 'Mâts LED 360° et ballon éclairant déployés : zone de travail sécurisée en pleine nuit !', 'yellow');
     }
 
     // 5. Lot Hébergement d'urgence
     if ((mText.includes('gymnase') || mText.includes('hébergement') || mText.includes('sinistrés') || mText.includes('évacuation') || mText.includes('pcs')) && this.hasEquipment(game, 'lot_hebergement')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 35;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 8;
       game.showToast('🛏️ Lot Hébergement d’Urgence !', '30 lits de camp et kits d’hygiène installés dans le gymnase d’accueil communal pour les sinistrés.', 'emerald');
     }
 
     // 6. Lot Ravitaillement / Cuisine de crise
     if ((mText.includes('ravitaillement') || mText.includes('longue durée') || (mission.durationHours && mission.durationHours >= 4)) && this.hasEquipment(game, 'lot_ravitaillement')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 15;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 4;
       const crewVols = mission.assignedCrew?.volunteers || [];
       crewVols.forEach(v => {
         v.energy = Math.min(100, (v.energy || 70) + 15);
@@ -1093,19 +1093,19 @@ window.ProtecEquipements = {
 
     // 7. Lot Soutien psychologique & Accueil (CAI, CHU)
     if ((mText.includes('cai') || mText.includes('impliqués') || mText.includes('psychologique') || mText.includes('novi') || mText.includes('famille')) && this.hasEquipment(game, 'lot_soutien_psy')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 40;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 8;
       game.showToast('🫂 Lot Soutien Psy & Accueil (CAI) !', 'Sas confidentiel et prise en charge humaine déployés avec succès pour les familles et impliqués !', 'purple');
     }
 
     // 8. Lot A, B, C
     if (this.hasEquipment(game, 'lot_secours_a')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 15;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 2;
     }
     if ((mission.type === 'samu' || mission.type === 'pompiers' || mText.includes('sport') || mText.includes('trail') || mText.includes('course') || mText.includes('trauma')) && this.hasEquipment(game, 'lot_secours_b')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 3;
     }
     if ((mission.scale?.includes('ME') || mission.scale?.includes('GE') || (mission.requiredVolunteers && mission.requiredVolunteers >= 6)) && this.hasEquipment(game, 'lot_secours_c')) {
-      game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
+      game.resources.reputationScore = (game.resources.reputationScore || 0) + 5;
       game.showToast('⛺ Lot C Poste Fixe Déployé !', 'Tente de poste de secours et brancards de soins armés : flux de victimes parfaitement absorbé !', 'purple');
     }
 
@@ -1118,9 +1118,9 @@ window.ProtecEquipements = {
       if (isPowerCrisis) {
         const hasTractorHitch = (game.vehicles || []).some(v => v.hasTowHitch && v.status !== 'indisponible');
         if (hasTractorHitch) {
-          const powerBonus = 350;
+          const powerBonus = 180;
           game.resources.money += powerBonus;
-          game.resources.reputationScore = (game.resources.reputationScore || 0) + 45;
+          game.resources.reputationScore = (game.resources.reputationScore || 0) + 10;
           if (window.ProtecFinances) {
             window.ProtecFinances.recordTransaction(game, powerBonus, 'Subvention Réalimentation Électrique d’Urgence (Remorque GE 50 kVA)', 'prestation');
           }
@@ -1147,9 +1147,9 @@ window.ProtecEquipements = {
       if (isFloodCrisis) {
         const hasTractorHitch = (game.vehicles || []).some(v => v.hasTowHitch && v.status !== 'indisponible');
         if (hasTractorHitch) {
-          const pumpBonus = 280;
+          const pumpBonus = 150;
           game.resources.money += pumpBonus;
-          game.resources.reputationScore = (game.resources.reputationScore || 0) + 40;
+          game.resources.reputationScore = (game.resources.reputationScore || 0) + 8;
           if (window.ProtecFinances) {
             window.ProtecFinances.recordTransaction(game, pumpBonus, 'Majoration Pompage Lourd Communal (Remorque MPGC 120 m³/h)', 'prestation');
           }

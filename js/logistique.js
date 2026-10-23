@@ -805,7 +805,7 @@ window.ProtecLogistique = {
       name: 'Moniteur défibrillateur de Formation (Connecté Instructeur)',
       lucideIcon: 'monitor',
       image: 'images/equipements/moniteur_t7.png',
-      price: 2600,
+      price: 3800,
       unit: 'appareil complet',
       badge: 'Formation • Simulation',
       badgeColor: 'bg-purple-100 text-purple-900 border-purple-300',

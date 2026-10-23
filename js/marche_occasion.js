@@ -1240,8 +1240,14 @@ window.ProtecMarcheOccasion = {
       const v = (game.vehicles || []).find(veh => veh.id === itemId);
       if (!v) return;
 
-      const newRef = 28000;
-      const suggestedPrice = Math.round(newRef * (v.mechanical || 85) / 100 * 0.65);
+      const catRef = window.ProtecAdvanced?.chassisModels?.[v.chassisId]?.cost
+        || window.ProtecAdvanced?.vehicleCatalog?.[v.type]?.cost
+        || v.newPriceRef
+        || 85000;
+      const newRef = Number(catRef);
+      const km = Number(v.mileage !== undefined ? v.mileage : (v.kilometrage !== undefined ? v.kilometrage : 118400));
+      const kmDeprecation = Math.max(0.25, Math.min(0.65, 0.65 - (km / 450000)));
+      const suggestedPrice = Math.round(newRef * ((v.mechanical || 85) / 100) * kmDeprecation / 100) * 100;
       if (priceInput && !priceInput.value) {
         priceInput.value = suggestedPrice;
         this.updateSellDiscountIndicator(suggestedPrice);
@@ -1360,7 +1366,12 @@ window.ProtecMarcheOccasion = {
         capacity: vehicle.capacity || 5,
         seatsCount: vehicle.seatsCount || vehicle.capacity || 5,
         image: vehicle.image,
-        newPriceRef: vehicle.newPriceRef || 28000,
+        newPriceRef: Number(
+          window.ProtecAdvanced?.chassisModels?.[vehicle.chassisId]?.cost
+          || window.ProtecAdvanced?.vehicleCatalog?.[vehicle.type]?.cost
+          || vehicle.newPriceRef
+          || 85000
+        ),
         hasTowHitch: hasTowHitch,
         isCommandement: isPCM,
         hasCommandementKit: isPCM,

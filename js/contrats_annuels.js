@@ -28,7 +28,7 @@ window.ProtecContratsAnnuels = {
       volunteersPerEvent: 6,
       vehiclesPerEvent: ['VPSP'],
       revenuePerEvent: 650,
-      annualGrantBonus: 3500,
+      annualGrantBonus: 0,
       minVolunteersRequired: 6,
       minVehiclesRequired: 1,
       minReputationRequired: 40,
@@ -61,7 +61,7 @@ window.ProtecContratsAnnuels = {
       volunteersPerEvent: 8,
       vehiclesPerEvent: ['VPSP', 'VTU'],
       revenuePerEvent: 850,
-      annualGrantBonus: 6500,
+      annualGrantBonus: 0,
       minVolunteersRequired: 8,
       minVehiclesRequired: 2,
       minReputationRequired: 75,
@@ -94,7 +94,7 @@ window.ProtecContratsAnnuels = {
       volunteersPerEvent: 10,
       vehiclesPerEvent: ['VPSP', 'VTU'],
       revenuePerEvent: 980,
-      annualGrantBonus: 10000,
+      annualGrantBonus: 0,
       minVolunteersRequired: 10,
       minVehiclesRequired: 2,
       minReputationRequired: 60,
@@ -127,7 +127,7 @@ window.ProtecContratsAnnuels = {
       volunteersPerEvent: 12,
       vehiclesPerEvent: ['VPSP', 'VPSP', 'VTU'],
       revenuePerEvent: 1450,
-      annualGrantBonus: 5000,
+      annualGrantBonus: 0,
       minVolunteersRequired: 12,
       minVehiclesRequired: 2,
       minReputationRequired: 120,
@@ -426,8 +426,7 @@ window.ProtecContratsAnnuels = {
     const confirmMsg = `Félicitations ! Votre dossier a reçu un AVIS FAVORABLE de « ${item.client} ».\n\n` +
       `Confirmez-vous la signature de la convention cadre annuelle ?\n\n` +
       `• Fréquence : ${item.recurrenceLabel}\n` +
-      `• Indemnité par poste : ${item.revenuePerEvent} €\n` +
-      `• Prime annuelle de partenariat : +${item.annualGrantBonus} € (versée immédiatement)\n` +
+      `• Indemnité facturée par dispositif assuré : ${item.revenuePerEvent} €\n` +
       `• Durée : 1 an renouvelable`;
 
     let confirmed = true;
@@ -441,7 +440,6 @@ window.ProtecContratsAnnuels = {
     if (!confirmed) return;
 
     // Enregistrement du contrat
-    const grantBonus = item.annualGrantBonus || 0;
     const record = {
       id: item.id,
       title: item.title,
@@ -450,20 +448,14 @@ window.ProtecContratsAnnuels = {
       signedAt: Date.now(),
       expiresAt: Date.now() + (365 * 24 * 3600 * 1000),
       eventsCompleted: 0,
-      totalEarned: grantBonus,
+      totalEarned: 0,
       nextScheduledDay: (game.clock?.day || 5) + 3
     };
 
     game.annualContracts.push(record);
 
-    // Versement de la dotation / prime annuelle
-    game.resources.money = (game.resources.money || 0) + grantBonus;
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + 20;
-
-    // Traçabilité financière
-    if (window.ProtecFinances && typeof window.ProtecFinances.recordTransaction === 'function') {
-      window.ProtecFinances.recordTransaction(game, grantBonus, `Prime Partenariat Annuel : ${item.title}`, 'subvention');
-    }
+    // Gain de notoriété à la signature (aucun versement cash sans prestation réalisée)
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + 8;
 
     // Planification immédiate du premier événement régulier
     this.scheduleNextMission(game, item.id, 3);
@@ -474,7 +466,7 @@ window.ProtecContratsAnnuels = {
     if (game.showToast) {
       game.showToast(
         'Contrat Cadre Signé ! 📜',
-        `Partenariat annuel validé avec « ${item.client} ». +${grantBonus} € versés sur votre trésorerie et premier poste inscrit au calendrier !`,
+        `Partenariat annuel validé avec « ${item.client} » (${item.revenuePerEvent} € par dispositif assuré). Premier poste inscrit au calendrier !`,
         'green'
       );
     }

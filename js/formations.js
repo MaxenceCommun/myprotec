@@ -937,13 +937,17 @@ window.ProtecFormations = {
     proposal.vehicleId = vehicle ? vehicle.id : null;
     proposal.status = 'in_progress';
     proposal.startedAt = Date.now();
+    const durHours = Number(cfg.durationHours || 7);
+    proposal.durationHours = durHours;
+    proposal.endsAt = Date.now() + (durHours * 180 * 1000);
 
     this.syncB2BWithSupabase(game, proposal);
     game.saveGame();
 
+    const minsDuration = Math.round((durHours * 180) / 60);
     game.showToast(
       'Session B2B Lancée ! 🚀',
-      `La formation ${proposal.training_type} chez « ${proposal.client_name} » a débuté. Formateur : ${trainer.name} ${vehicle ? `(Convoyage : ${vehicle.name})` : ''}.`,
+      `La formation ${proposal.training_type} (${durHours}h, ~${minsDuration} min) chez « ${proposal.client_name} » a débuté. Formateur : ${trainer.name} ${vehicle ? `(Convoyage : ${vehicle.name})` : ''}.`,
       'blue'
     );
 
@@ -955,6 +959,16 @@ window.ProtecFormations = {
     if (!game) return;
     const proposal = (game.formationB2BProposals || []).find(p => p.id === proposalId);
     if (!proposal || !['in_progress', 'accepted'].includes(proposal.status)) return;
+
+    if (proposal.endsAt && Date.now() < proposal.endsAt) {
+      const minsLeft = Math.max(1, Math.ceil((proposal.endsAt - Date.now()) / 60000));
+      game.showToast(
+        'Session en Cours ⏳',
+        `La formation ${proposal.training_type} chez « ${proposal.client_name} » n’est pas encore terminée (encore ~${minsLeft} min d’enseignement sur le terrain).`,
+        'orange'
+      );
+      return;
+    }
 
     // Libération du formateur
     const trainerId = proposal.trainer_id || proposal.trainerId;
@@ -1043,12 +1057,11 @@ window.ProtecFormations = {
     this.renderModal(game);
   },
 
-  // 8. FIDÉLISATION & RAPPEL AUTOMATIQUE DE RECYCLAGE MAC SST
+  // 8. FIDÉLISATION & RAPPEL AUTOMATIQUE DE RECYCLAGE MAC SST (AVEC DÉLAI RÉEL DE 30 JOURS SIMULÉS)
   createMacSstReminder(game, completedProposal) {
     if (!game || !completedProposal) return;
-    if (!game.formationB2BProposals) game.formationB2BProposals = [];
+    if (!game.pendingMacSstReminders) game.pendingMacSstReminders = [];
 
-    // Déclenchement d'une future opportunité de recyclage MAC SST pour cette entreprise
     const now = Date.now();
     const reminderProposal = {
       id: `b2b-mac-${now}-${Math.random().toString(36).substring(2, 6)}`,
@@ -1066,7 +1079,7 @@ window.ProtecFormations = {
       clientTargetBudget: 850,
       proposed_price: null,
       proposedPrice: null,
-      acceptance_rate: 90, // Bonus de fidélité pour recyclage de clients déjà formés chez nous
+      acceptance_rate: 90,
       acceptanceRate: 90,
       status: 'pending_quote',
       trainer_id: null,
@@ -1075,13 +1088,13 @@ window.ProtecFormations = {
       consumableCost: 65,
       isFidelisation: true,
       originProposalId: completedProposal.id,
-      deadline: now + (72 * 3600 * 1000),
+      availableAt: now + (24 * 3600 * 1000), // Disponible après 24h réelles / cycle de recyclage
+      deadline: now + (96 * 3600 * 1000),
       created_at: new Date(now).toISOString(),
       createdAt: now
     };
 
-    game.formationB2BProposals.push(reminderProposal);
-    this.syncB2BWithSupabase(game, reminderProposal);
+    game.pendingMacSstReminders.push(reminderProposal);
   },
 
   // 9. SURVEILLANCE PÉRIODIQUE D'HORLOGE (DÉLIBÉRATIONS, DEMANDES ENTRANTES & REMPLISSAGE GRAND PUBLIC)
@@ -1091,12 +1104,37 @@ window.ProtecFormations = {
     const now = Date.now();
     let hasChanges = false;
 
-    // Délibérations des devis entreprises
+    // Activation des rappels MAC SST arrivés à échéance
+    if (Array.isArray(game.pendingMacSstReminders) && game.pendingMacSstReminders.length > 0) {
+      const due = game.pendingMacSstReminders.filter(r => now >= (r.availableAt || 0));
+      if (due.length > 0) {
+        if (!game.formationB2BProposals) game.formationB2BProposals = [];
+        due.forEach(r => {
+          r.deadline = now + (72 * 3600 * 1000);
+          game.formationB2BProposals.unshift(r);
+          this.syncB2BWithSupabase(game, r);
+        });
+        game.pendingMacSstReminders = game.pendingMacSstReminders.filter(r => now < (r.availableAt || 0));
+        hasChanges = true;
+      }
+    }
+
+    // Délibérations des devis entreprises & fin automatique des sessions B2B
     if (game.formationB2BProposals) {
       game.formationB2BProposals.forEach(p => {
         if (p.status === 'evaluating' && p.evaluationEndsAt && now >= p.evaluationEndsAt) {
           this.resolveQuote(game, p.id, true);
           hasChanges = true;
+        } else if (p.status === 'in_progress' && p.endsAt && now >= p.endsAt && !p._notifiedReady) {
+          p._notifiedReady = true;
+          hasChanges = true;
+          if (typeof game.showToast === 'function') {
+            game.showToast(
+              'Formation B2B Terminée ! 🎓',
+              `La session ${p.training_type} chez « ${p.client_name} » est achevée. Vous pouvez la clôturer et encaisser la facture.`,
+              'green'
+            );
+          }
         }
       });
     }
@@ -2434,6 +2472,43 @@ window.ProtecFormations = {
       return;
     }
 
+    // Durée réelle d'animation de la session avant certification (2 min par heure de cours, ex: 14 min pour un PSC1 7h)
+    const nowMs = Date.now();
+    const durH = Number(course?.durationHours || session.durationHours || 7);
+    if (!session.startedCourseAt && !session.isStageExterne) {
+      const trObj = (game.volunteers || []).find(v => v.id === session.trainerId);
+      if (trObj && trObj.status && trObj.status !== 'dispo' && trObj.status !== 'formation') {
+        game.showToast('Formateur Occupé', `${trObj.name} est actuellement engagé sur une autre mission.`, 'orange');
+        return;
+      }
+      if (trObj) trObj.status = 'formation';
+      session.startedCourseAt = nowMs;
+      session.courseEndsAt = nowMs + (durH * 120 * 1000);
+      game.saveGame();
+      game.showToast(
+        'Session de Formation Lancée ! 🎓',
+        `L'enseignement de « ${session.title} » (${durH}h, ~${durH * 2} min) a démarré avec ${totalCount} stagiaire(s).`,
+        'blue'
+      );
+      this.renderModal(game);
+      return;
+    }
+
+    if (session.courseEndsAt && nowMs < session.courseEndsAt) {
+      const minsLeft = Math.max(1, Math.ceil((session.courseEndsAt - nowMs) / 60000));
+      game.showToast(
+        'Enseignement en Cours ⏳',
+        `La session « ${session.title} » est en cours d'animation (encore ~${minsLeft} min avant la délivrance des diplômes).`,
+        'orange'
+      );
+      return;
+    }
+
+    const trRelease = (game.volunteers || []).find(v => v.id === session.trainerId);
+    if (trRelease && trRelease.status === 'formation') {
+      trRelease.status = 'dispo';
+    }
+
     let totalRevenue = 0;
     let netGain = 0;
 
@@ -2893,18 +2968,27 @@ window.ProtecFormations = {
                       </div>
                     ` : ''}
 
-                    ${p.status === 'in_progress' ? `
+                    ${p.status === 'in_progress' ? (() => {
+                      const totalDurMs = Math.max(60000, (p.endsAt || (p.startedAt + 1260000)) - (p.startedAt || now));
+                      const elapsedMs = Math.max(0, now - (p.startedAt || now));
+                      const pctDone = Math.min(100, Math.round((elapsedMs / totalDurMs) * 100));
+                      const minsRem = Math.max(0, Math.ceil(((p.endsAt || 0) - now) / 60000));
+                      return `
                       <div class="p-3 rounded-2xl bg-blue-50 border border-blue-200 space-y-2 text-xs">
                         <div class="flex items-center justify-between text-blue-900 font-bold">
-                          <span>Session en cours chez le client</span>
-                          <span class="animate-pulse text-blue-700 font-black">● Active</span>
+                          <span>Session en cours (${p.durationHours || cfg.durationHours}h)</span>
+                          <span class="${minsRem > 0 ? 'animate-pulse text-blue-700' : 'text-emerald-700'} font-black">${minsRem > 0 ? `⏳ ~${minsRem} min restantes (${pctDone}%)` : '✓ Terminée (100%)'}</span>
+                        </div>
+                        <div class="w-full bg-blue-200/80 rounded-full h-1.5 overflow-hidden">
+                          <div class="${minsRem > 0 ? 'bg-pc-blue' : 'bg-emerald-600'} h-full rounded-full transition-all" style="width: ${pctDone}%;"></div>
                         </div>
                         <div class="text-[11px] text-blue-800 space-y-0.5">
                           <div>Formateur engagé : <strong>${assignedTrainer ? assignedTrainer.name : 'Formateur'}</strong></div>
                           ${assignedVehicle ? `<div>Véhicule mobilisé : <strong>${assignedVehicle.name} (${assignedVehicle.type})</strong></div>` : ''}
                         </div>
                       </div>
-                    ` : ''}
+                      `;
+                    })() : ''}
 
                     ${p.status === 'completed' ? `
                       <div class="p-2.5 rounded-2xl bg-slate-100 text-xs space-y-1">
@@ -2963,13 +3047,17 @@ window.ProtecFormations = {
                       </button>
                     ` : ''}
 
-                    ${p.status === 'in_progress' ? `
-                      <span class="text-[10px] text-blue-600 font-bold">Formation sur le terrain</span>
-                      <button onclick="window.ProtecFormations.completeB2BSession(window.game, '${p.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+                    ${p.status === 'in_progress' ? (() => {
+                      const isReady = !p.endsAt || now >= p.endsAt;
+                      const minsRem = Math.max(1, Math.ceil(((p.endsAt || 0) - now) / 60000));
+                      return `
+                      <span class="text-[10px] ${isReady ? 'text-emerald-700' : 'text-blue-600'} font-bold">${isReady ? 'Formation terminée ✓' : `En cours (~${minsRem} min)`}</span>
+                      <button onclick="window.ProtecFormations.completeB2BSession(window.game, '${p.id}')" class="px-4 py-2 rounded-xl ${isReady ? 'bg-pc-blue hover:bg-pc-blue-light text-white cursor-pointer' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} font-black text-xs shadow-md transition flex items-center gap-1.5">
                         <i data-lucide="award" class="w-3.5 h-3.5"></i>
-                        Clôturer & Encaisser
+                        ${isReady ? 'Clôturer & Encaisser' : `En cours (${minsRem}m)`}
                       </button>
-                    ` : ''}
+                      `;
+                    })() : ''}
 
                     ${p.status === 'completed' ? `
                       <span class="text-[10px] text-emerald-700 font-bold">✓ Attestations délivrées</span>
@@ -3848,11 +3936,24 @@ window.ProtecFormations = {
 
                     <!-- Clôture et Certification -->
                     <div class="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                      <span class="text-[10px] text-slate-400">Attestations officielles Sécurité Civile</span>
-                      <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-black shadow transition flex items-center gap-1 cursor-pointer">
-                        <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
-                        Valider & Certifier
-                      </button>
+                      ${sess.startedCourseAt ? (() => {
+                        const nowSess = Date.now();
+                        const isSessReady = !sess.courseEndsAt || nowSess >= sess.courseEndsAt;
+                        const minsRemSess = Math.max(1, Math.ceil(((sess.courseEndsAt || 0) - nowSess) / 60000));
+                        return `
+                          <span class="text-[10px] ${isSessReady ? 'text-emerald-700 font-bold' : 'text-blue-600 font-bold animate-pulse'}">${isSessReady ? '✓ Enseignement terminé' : `⏳ En cours (~${minsRemSess} min restantes)`}</span>
+                          <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-4 py-2 rounded-xl ${isSessReady ? 'bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer' : 'bg-slate-200 text-slate-500 cursor-not-allowed'} text-xs font-black shadow transition flex items-center gap-1">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                            ${isSessReady ? 'Valider & Certifier' : `En cours (${minsRemSess}m)`}
+                          </button>
+                        `;
+                      })() : `
+                        <span class="text-[10px] text-slate-400">Durée : ${course?.durationHours || 7}h (~${(course?.durationHours || 7) * 2} min)</span>
+                        <button onclick="window.ProtecFormations.completeSession(window.game, '${sess.id}')" class="px-4 py-2 rounded-xl bg-pc-blue hover:bg-pc-blue-light text-white text-xs font-black shadow transition flex items-center gap-1 cursor-pointer">
+                          <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                          Démarrer la Session
+                        </button>
+                      `}
                     </div>
 
                   </div>

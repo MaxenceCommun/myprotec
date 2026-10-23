@@ -212,8 +212,8 @@ window.ProtecGardesSamu = {
             posture: slot.riskLevel === 'eleve' ? 'base' : 'domicile', // 'base' (Prêt à partir) ou 'domicile' (Dispo domicile)
             riskLevel: slot.riskLevel, // 'faible' | 'modere' | 'eleve' | 'critique'
             guardType: slot.guardType, // 'reguliere' | 'previsionnelle' | 'urgence'
-            rewardMoney: slot.durationHours * 45 + 100, // Indemnisation horaire de mise à disposition
-            rewardReputation: 25,
+            rewardMoney: slot.durationHours * 22, // Forfait horaire conventionné de mise à disposition VPSP
+            rewardReputation: 8,
             address: `Base Opérationnelle - Antenne ${baseCity}`,
             commune: baseCity,
             lat: game.stations?.[0]?.lat || 48.6921,
@@ -290,8 +290,8 @@ window.ProtecGardesSamu = {
       posture: sc.risk === 'eleve' ? 'base' : 'domicile',
       riskLevel: sc.risk,
       guardType: 'previsionnelle',
-      rewardMoney: sc.durHours * 55 + 150,
-      rewardReputation: 35,
+      rewardMoney: sc.durHours * 25 + 40,
+      rewardReputation: 10,
       address: `Base Opérationnelle - Antenne ${baseCity}`,
       commune: baseCity,
       lat: game.stations?.[0]?.lat || 48.6921,
@@ -324,21 +324,21 @@ window.ProtecGardesSamu = {
         desc: 'Pic d’urgences pré-hospitalières et débordement sanitaire. Le SAMU 15 réquisitionne d’urgence les vecteurs VPSP d’astreinte des AASC pour évacuation vers les CHU.',
         risk: 'critique',
         durHours: 4,
-        reward: 580
+        reward: 180
       },
       {
         title: 'Alerte SDIS / SAMU : Grand Incendie Urbain & Soutien Sanitaire',
         desc: 'Incendie d’immeuble d’habitation avec nombreux impliqués et intoxications aux fumées. Astreinte VPSP déclenchée immédiatement.',
         risk: 'critique',
         durHours: 5,
-        reward: 520
+        reward: 210
       },
       {
         title: 'Pic de Surtension Urgences : Débordement SAMU 15',
         desc: 'Saturation complète des équipages pompiers et privés. La régulation 15 active l’astreinte AASC pour départs réflexes immédiats.',
         risk: 'eleve',
         durHours: 4,
-        reward: 450
+        reward: 160
       }
     ];
 
@@ -376,8 +376,8 @@ window.ProtecGardesSamu = {
       posture: 'base', // En urgence critique, mise à la base exigée
       riskLevel: pick.risk || 'critique',
       guardType: 'urgence',
-      rewardMoney: pick.reward || 500,
-      rewardReputation: 50,
+      rewardMoney: pick.reward || 180,
+      rewardReputation: 12,
       address: `Base Opérationnelle - Antenne ${baseCity}`,
       commune: baseCity,
       lat: game.stations?.[0]?.lat || 48.6921,

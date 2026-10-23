@@ -23,11 +23,11 @@ window.ProtecSocial = {
       badgeColor: 'bg-blue-100 text-pc-blue border-blue-200',
       title: 'Dispositif Veille Sociale & Grand Froid',
       desc: 'Veille mobile auprès des personnes vulnérables dans la rue et signalements 115.',
-      targetMaraudes: 4,
-      targetKits: 20,
-      grantAmount: 3500,
-      penaltyAmount: 1200,
-      durationDays: 7,
+      targetMaraudes: 8,
+      targetKits: 30,
+      grantAmount: 2200,
+      penaltyAmount: 750,
+      durationDays: 30,
       icon: 'landmark'
     },
     {
@@ -37,11 +37,11 @@ window.ProtecSocial = {
       badgeColor: 'bg-purple-100 text-purple-700 border-purple-200',
       title: 'Maraudes Urbaines de Proximité & Colis Repas',
       desc: 'Distribution de denrées de première nécessité et maintien du lien social de quartier.',
-      targetMaraudes: 3,
-      targetKits: 15,
-      grantAmount: 2400,
-      penaltyAmount: 800,
-      durationDays: 5,
+      targetMaraudes: 6,
+      targetKits: 24,
+      grantAmount: 1500,
+      penaltyAmount: 500,
+      durationDays: 25,
       icon: 'heart-handshake'
     },
     {
@@ -51,11 +51,11 @@ window.ProtecSocial = {
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
       title: 'Lutte contre la Grande Exclusion & Urgences',
       desc: 'Accompagnement sanitaire de base, couverture chaude et orientation vers foyers d\'accueil.',
-      targetMaraudes: 5,
-      targetKits: 25,
-      grantAmount: 4200,
-      penaltyAmount: 1600,
-      durationDays: 10,
+      targetMaraudes: 10,
+      targetKits: 40,
+      grantAmount: 2500,
+      penaltyAmount: 900,
+      durationDays: 35,
       icon: 'shield-check'
     },
     {
@@ -65,11 +65,11 @@ window.ProtecSocial = {
       badgeColor: 'bg-amber-100 text-amber-900 border-amber-200',
       title: 'Plan Métropolitain d\'Aide d\'Urgence',
       desc: 'Soutien aux campements précaires et maraudes conjointes avec les associations partenaires.',
-      targetMaraudes: 2,
-      targetKits: 10,
-      grantAmount: 1800,
-      penaltyAmount: 600,
-      durationDays: 4,
+      targetMaraudes: 5,
+      targetKits: 20,
+      grantAmount: 1200,
+      penaltyAmount: 400,
+      durationDays: 20,
       icon: 'users'
     }
   ],
@@ -243,17 +243,18 @@ window.ProtecSocial = {
     game.socialData.blankets = Math.max(0, game.socialData.blankets - Math.min(game.socialData.blankets, 1));
     game.socialData.totalDistributed += actualUsed;
 
-    // Mise à jour des contrats de subvention actifs
+    // Mise à jour d'un seul contrat de subvention actif à la fois (le contrat ciblé ou le premier signé non terminé)
     const activeList = game.socialData.contracts.filter(c => c.status === 'active');
-    activeList.forEach(c => {
-      if (!subventionId || c.id === subventionId) {
-        c.currentMaraudes += 1;
-        c.currentKits += actualUsed;
-        if (c.currentMaraudes >= c.targetMaraudes && c.currentKits >= c.targetKits) {
-          c.status = 'completed';
-        }
+    const targetContract = subventionId
+      ? activeList.find(c => c.id === subventionId)
+      : activeList[0];
+    if (targetContract) {
+      targetContract.currentMaraudes += 1;
+      targetContract.currentKits += actualUsed;
+      if (targetContract.currentMaraudes >= targetContract.targetMaraudes && targetContract.currentKits >= targetContract.targetKits) {
+        targetContract.status = 'completed';
       }
-    });
+    }
 
     game.saveGame();
     game.updateStatsUI();
@@ -267,7 +268,7 @@ window.ProtecSocial = {
 
     contract.claimed = true;
     game.resources.money += contract.grantAmount;
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + 25;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + 10;
 
     if (window.ProtecFinances) {
       window.ProtecFinances.recordTransaction(
@@ -280,17 +281,17 @@ window.ProtecSocial = {
 
     game.showToast(
       'Subvention Versée !',
-      `Félicitations ! ${contract.funder} vous a versé la dotation de ${contract.grantAmount.toLocaleString('fr-FR')} €.`,
+      `Félicitations ! ${contract.funder} vous a versé la dotation saisonnière de ${contract.grantAmount.toLocaleString('fr-FR')} €.`,
       'green'
     );
 
-    // Permettre de renouveler l'offre après un cycle
-    setTimeout(() => {
-      contract.status = 'available';
-      contract.currentMaraudes = 0;
-      contract.currentKits = 0;
-      contract.claimed = false;
-    }, 5000);
+    // Délai saisonnier de 90 jours simulés avant de pouvoir solliciter à nouveau ce bailleur public
+    const currentDay = game.currentDayIndex || 0;
+    game.socialData.funderPenalties[contract.id] = currentDay + 90;
+    contract.status = 'available';
+    contract.currentMaraudes = 0;
+    contract.currentKits = 0;
+    contract.claimed = false;
 
     game.saveGame();
     game.updateStatsUI();

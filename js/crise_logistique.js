@@ -3764,7 +3764,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 40, reputation_samu: 35, reputation_sdis: 20, indemnite_crise: 3800 },
+        recompenses: { reputation_prefecture: 15, reputation_samu: 12, reputation_sdis: 10, indemnite_crise: 850 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       recherche_disparu: {
@@ -3846,7 +3846,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 35, reputation_samu: 25, reputation_sdis: 15, indemnite_crise: 2400 },
+        recompenses: { reputation_prefecture: 12, reputation_samu: 10, reputation_sdis: 8, indemnite_crise: 550 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       greve_ambulances: {
@@ -3910,7 +3910,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 25, reputation_samu: 45, reputation_sdis: 15, indemnite_crise: 3200 },
+        recompenses: { reputation_prefecture: 10, reputation_samu: 18, reputation_sdis: 8, indemnite_crise: 720 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       violences_urbaines: {
@@ -3974,7 +3974,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 35, reputation_samu: 15, reputation_sdis: 35, indemnite_crise: 2900 },
+        recompenses: { reputation_prefecture: 14, reputation_samu: 8, reputation_sdis: 14, indemnite_crise: 650 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       inondation_cai: {
@@ -4047,7 +4047,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 40, reputation_samu: 15, reputation_sdis: 25, indemnite_crise: 3400 },
+        recompenses: { reputation_prefecture: 16, reputation_samu: 8, reputation_sdis: 12, indemnite_crise: 780 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       },
       accident_novi: {
@@ -4121,7 +4121,7 @@ window.ProtecCriseLogistique = {
             ]
           }
         ],
-        recompenses: { reputation_prefecture: 45, reputation_samu: 35, reputation_sdis: 30, indemnite_crise: 4200 },
+        recompenses: { reputation_prefecture: 18, reputation_samu: 14, reputation_sdis: 12, indemnite_crise: 950 },
         penalites: { reputation_prefecture: 0, reputation_samu: 0, amende_administrative: 0 }
       }
     };
@@ -4309,12 +4309,12 @@ window.ProtecCriseLogistique = {
       doneSubCount = 1;
     }
 
-    const baseIndemnite = crisis.recompenses?.indemnite_crise || 3000;
+    const baseIndemnite = crisis.recompenses?.indemnite_crise || 650;
     const taskRatio = Math.max(0.3, doneSubCount / totalSubCount);
-    // Plus il y a de missions accomplies, plus la récompense est élevée !
-    const moneyGain = Math.round((baseIndemnite * taskRatio) + (doneSubCount * 450));
+    // Remboursement aux frais réels (carburant, consommables, repas des équipages)
+    const moneyGain = Math.round((baseIndemnite * taskRatio) + (doneSubCount * 85));
 
-    // 2. Calcul de la réputation : monte avec les moyens engagés et la rapidité d'intervention
+    // 2. Calcul de la réputation : progression équilibrée selon les moyens et la réactivité
     const mobilisedIds = crisis.mobilisation?.mobilisedVolunteerIds || [];
     const volsCount = mobilisedIds.length;
     const assignedVehs = crisis.mobilisation?.assignedVehicles || [];
@@ -4323,27 +4323,27 @@ window.ProtecCriseLogistique = {
       const v = (game.volunteers || []).find(x => x.id === vId);
       return v && ['CE', 'CD', 'Cadre'].includes(v.rank);
     });
-    const repMeansBonus = (volsCount * 3) + (vehsCount * 8) + (hasCadre ? 6 : 0);
+    const repMeansBonus = Math.min(8, Math.round((volsCount * 0.8) + (vehsCount * 2) + (hasCadre ? 2 : 0)));
 
-    let repSpeedBonus = 8;
+    let repSpeedBonus = 2;
     let speedLabel = "Déploiement Opérationnel";
     const startTime = crisis.startedAt || (Date.now() - 600000);
     const firstEngaged = crisis.firstEngagementAt || (Date.now() - 300000);
     const responseMinutes = Math.max(0, (firstEngaged - startTime) / 60000);
 
     if (responseMinutes <= 4) {
-      repSpeedBonus = 25;
+      repSpeedBonus = 8;
       speedLabel = "Départ Réflexe Immédiat (< 4 min) ⚡";
     } else if (responseMinutes <= 10) {
-      repSpeedBonus = 16;
+      repSpeedBonus = 5;
       speedLabel = "Mobilisation Rapide (< 10 min) ⏱️";
     } else if (responseMinutes <= 20) {
-      repSpeedBonus = 10;
+      repSpeedBonus = 3;
       speedLabel = "Réponse Conforme (< 20 min)";
     }
 
-    const baseRep = crisis.recompenses?.reputation_prefecture || 35;
-    const repGain = Math.max(15, Math.round(baseRep * (doneSubCount / totalSubCount) + repMeansBonus + repSpeedBonus));
+    const baseRep = crisis.recompenses?.reputation_prefecture || 14;
+    const repGain = Math.max(8, Math.min(28, Math.round(baseRep * (doneSubCount / totalSubCount) + repMeansBonus + repSpeedBonus)));
 
     // Prise en compte financière et réputation antenne
     if (!game.resources) game.resources = { money: 0 };

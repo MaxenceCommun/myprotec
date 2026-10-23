@@ -111,47 +111,56 @@ window.ProtecPersonnel = {
     }
   },
 
-  // Agréments de Sécurité Civile officiels
+  // Agréments de Sécurité Civile officiels (Délivrés gratuitement par la Préfecture sur dossier et prérequis opérationnels)
   agrementsCatalog: [
     {
       code: 'D',
       title: 'Agrément D - Dispositifs Prévisionnels de Secours (DPS)',
       category: 'Secours Événementiel',
-      cost: 1500,
+      cost: 0,
+      minReputation: 0,
+      minVolunteers: 4,
       icon: 'shield',
       color: 'blue',
       unlocks: 'PAPS & DPS Petite Envergure (DPS-PE)',
-      desc: 'Agrément préfectoral obligatoire autorisant l’association à déployer des postes de secours sur les manifestations sportives et culturelles.'
+      desc: 'Arrêté préfectoral (gratuit sur dossier) autorisant l’association à déployer des postes de secours sur les manifestations sportives et culturelles.'
     },
     {
       code: 'A',
       title: 'Agrément A - Opérations de Secours à Personnes (SAMU 15)',
       category: 'Réseau Urgence Préfectorale',
-      cost: 3800,
+      cost: 0,
+      minReputation: 80,
+      minVolunteers: 8,
+      requireVpsp: true,
       icon: 'activity',
       color: 'orange',
       unlocks: 'Départs Réflexes VPSP & Réquisition SAMU',
-      desc: 'Convention ARS et Préfecture validant la conformité sanitaire des VPSP pour intervenir sur demande du SAMU 15 et des Sapeurs-Pompiers.'
+      desc: 'Agrément préfectoral (gratuit, nécessite ≥ 8 secouristes, 1 VPSP et 80 pts de réputation) validant la capacité à intervenir en renfort du SAMU 15 et des Sapeurs-Pompiers.'
     },
     {
       code: 'B',
-      title: 'Agrément B - Sauvetage en Milieu Aquatique & Nautique',
-      category: 'Secours Aquatique',
-      cost: 2200,
+      title: 'Agrément B - Actions de Soutien et d’Accompagnement des Populations',
+      category: 'Soutien aux Populations',
+      cost: 0,
+      minReputation: 50,
+      minVolunteers: 6,
       icon: 'life-buoy',
       color: 'sky',
-      unlocks: 'Embarcations, Secours Nautique & Sauvetage Inondations',
-      desc: 'Agrément ministériel de Sécurité Civile autorisant le déploiement d’équipages nautiques, embarcations et sauveteurs aquatiques sur plans d’eau et crues.'
+      unlocks: 'Accueil des Sinistrés, Hébergement d’Urgence (CHU) & Ravitaillement',
+      desc: 'Agrément préfectoral (gratuit, nécessite ≥ 6 bénévoles et 50 pts de réputation) autorisant l’accompagnement social et le soutien logistique aux populations sinistrées.'
     },
     {
       code: 'C',
-      title: 'Agrément C - Soutien aux Populations Sinistrées (NOVI / ORSEC)',
+      title: 'Agrément C - Encadrement des Bénévoles lors des Actions de Soutien (ORSEC / NOVI)',
       category: 'Grandes Catastrophes',
-      cost: 5000,
+      cost: 0,
+      minReputation: 110,
+      minVolunteers: 10,
       icon: 'siren',
       color: 'red',
-      unlocks: 'Alertes Plan NOVI, Inondations Majeures, Sinistrés',
-      desc: 'Agrément national de Sécurité Civile délivré par le Ministère de l’Intérieur pour armer des PMA et gérer les crises majeures.'
+      unlocks: 'Coordination ORSEC, Alertes Plan NOVI & Cellule de Crise',
+      desc: 'Agrément préfectoral (gratuit, nécessite ≥ 10 secouristes et 110 pts de réputation) habilitant l’antenne à encadrer les opérations de crise majeure sous l’autorité du Préfet.'
     }
   ],
 
@@ -501,22 +510,23 @@ window.ProtecPersonnel = {
         const station = game.stations[0];
         const foyerRoom = station?.premises?.rooms?.foyer_vie_associative;
         const foyerLevel = foyerRoom?.level || (station?.rooms?.foyer === 3 ? 3 : (station?.rooms?.foyer === 2 ? 2 : 1));
-        const bonusFoyer = foyerLevel === 2 ? 1.5 : (foyerLevel === 3 ? 2.0 : 1.0);
-        const cuisineBonus = foyerRoom?.hasCuisineEquipee ? 1.25 : 1.0;
-        const recoveryGain = Math.round(5 * bonusFoyer * cuisineBonus * (v.trait === 'dynamique' ? 1.3 : 1.0));
+        const bonusFoyer = foyerLevel === 2 ? 1.2 : (foyerLevel === 3 ? 1.4 : 1.0);
+        const cuisineBonus = foyerRoom?.hasCuisineEquipee ? 1.15 : 1.0;
+        // Récupération horaire réaliste : ~8% à 12% de fatigue en moins par heure simulée de repos
+        const recoveryGain = Math.round(8 * bonusFoyer * cuisineBonus * (v.trait === 'dynamique' ? 1.25 : 1.0));
         
         // Récupération de fatigue et d'énergie
         v.fatigue = Math.max(0, (v.fatigue || 20) - recoveryGain);
         v.energy = Math.max(0, 100 - v.fatigue);
 
-        // Sortie de repos si fatigue retombée sous 50
-        if (v.status === 'repos' && v.fatigue <= 50 && !v.isBurnout) {
+        // Sortie de repos si fatigue retombée sous 35
+        if (v.status === 'repos' && v.fatigue <= 35 && !v.isBurnout) {
           v.status = 'dispo';
         }
 
-        // Si bien reposé, le moral remonte avec boost passif du foyer de vie associative et des équipements
+        // Si bien reposé, le moral converge progressivement vers son niveau d'équilibre (~80-85%)
         if (v.fatigue <= 30 && v.status !== 'retrait') {
-          let moralPassiveGain = (foyerLevel >= 2 ? 2 : 1) + (foyerRoom?.hasCuisineEquipee ? 1 : 0);
+          let moralPassiveGain = (foyerLevel >= 2 ? 1 : 0.5) + (foyerRoom?.hasCuisineEquipee ? 0.5 : 0);
 
           // Impact des gammes d'équipements et tenues
           const eqTiers = game.equipmentTiers || {};
@@ -526,18 +536,23 @@ window.ProtecPersonnel = {
           const isLargeStation = (game.volunteers && game.volunteers.length >= 10) || (game.vehicles && game.vehicles.length >= 3);
 
           if (hasModernEup) {
-            moralPassiveGain += 1; // Fierté de porter des tenues de haute technicité
+            moralPassiveGain += 0.5;
           }
           if (hasHighTechEquipment) {
-            moralPassiveGain += 1; // Fierté d'utiliser du matériel connecté
+            moralPassiveGain += 0.5;
           }
           if (isAllLevel1 && isLargeStation) {
-            moralPassiveGain = Math.max(0, moralPassiveGain - 2); // Malus passif "manque de moyens"
+            moralPassiveGain = Math.max(0, moralPassiveGain - 1);
           }
 
-          v.moral = Math.min(100, (v.moral || 70) + moralPassiveGain);
-          v.motivation = v.moral;
-          v.humeur = v.moral;
+          const targetEquilibrium = (hasModernEup || hasHighTechEquipment) ? 88 : 80;
+          if ((v.moral || 70) < targetEquilibrium) {
+            v.moral = Math.min(targetEquilibrium, Math.round(((v.moral || 70) + moralPassiveGain) * 10) / 10);
+          } else if ((v.moral || 70) > 92) {
+            v.moral = Math.max(targetEquilibrium, Math.round(((v.moral || 70) - 0.5) * 10) / 10);
+          }
+          v.motivation = Math.round(v.moral);
+          v.humeur = Math.round(v.moral);
         }
 
         // 0. ABSENCE DE TENUE OFFICIELLE PROTECTION CIVILE : Frustration & Démotivation
@@ -666,7 +681,9 @@ window.ProtecPersonnel = {
 
     totalMonthlyCharges = Math.round(totalMonthlyCharges * 100) / 100;
 
-    if (totalMonthlyCharges > 0 && game.clock.day === 1 && game.clock.hour === 9 && game.clock.minute === 0) {
+    const monthKey = `${game.clock?.year || 2026}-${game.clock?.month ?? 0}`;
+    if (totalMonthlyCharges > 0 && game.clock?.day === 1 && (game.clock?.hour ?? 9) >= 9 && game.lastSalaryPaidMonthKey !== monthKey) {
+      game.lastSalaryPaidMonthKey = monthKey;
       if (game.resources.money >= totalMonthlyCharges) {
         game.resources.money = Math.round((game.resources.money - totalMonthlyCharges) * 100) / 100;
         if (window.ProtecFinances) {
@@ -675,7 +692,7 @@ window.ProtecPersonnel = {
             -totalMonthlyCharges,
             `Virement Salaires & Indemnités Mensuelles (${salarieCount} salarié(s) [charges inc.], ${serviceCiviqueCount} service(s) civique(s) [114,85 €])`,
             'salaires',
-            'SAL-' + (game.clock ? `${game.clock.year || 2026}-${game.clock.month || 1}` : Date.now()),
+            'SAL-' + monthKey,
             'Personnel & URSSAF'
           );
         }
@@ -698,7 +715,7 @@ window.ProtecPersonnel = {
     }
   },
 
-  // Achat d'un agrément officiel
+  // Obtention d'un agrément officiel de Sécurité Civile (gratuit en Préfecture sur dossier et prérequis)
   purchaseAgrement(game, agrementCode) {
     const agr = this.agrementsCatalog.find(a => a.code === agrementCode);
     if (!agr) return;
@@ -708,28 +725,29 @@ window.ProtecPersonnel = {
       return;
     }
 
-    if (game.resources.money < agr.cost) {
-      game.showToast('Trésorerie insuffisante', `L’audit préfectoral requiert ${agr.cost} €.`, 'orange');
+    const repScore = game.resources.reputationScore || 0;
+    const volCount = (game.volunteers || []).length;
+    const hasVpsp = (game.vehicles || []).some(v => v.type === 'VPSP');
+
+    if (agr.minReputation && repScore < agr.minReputation) {
+      game.showToast('Prérequis Préfectoral Non Atteint', `L’instruction préfectorale de l’${agr.title} exige au moins ${agr.minReputation} pts de réputation (actuel : ${repScore}).`, 'orange');
+      return;
+    }
+    if (agr.minVolunteers && volCount < agr.minVolunteers) {
+      game.showToast('Effectif Insuffisant', `La Préfecture exige au moins ${agr.minVolunteers} secouristes actifs pour délivrer l’${agr.title} (actuel : ${volCount}).`, 'orange');
+      return;
+    }
+    if (agr.requireVpsp && !hasVpsp) {
+      game.showToast('Vecteur VPSP Requis', `L’${agr.title} nécessite de posséder au moins une ambulance VPSP homologuée dans votre parc.`, 'orange');
       return;
     }
 
-    game.resources.money -= agr.cost;
-    if (window.ProtecFinances) {
-      window.ProtecFinances.recordTransaction(
-        game,
-        -agr.cost,
-        `Audit & Droits d'Agrément Préfectoral : ${agr.title}`,
-        'frais',
-        'AGR-' + agrementCode,
-        'Préfecture'
-      );
-    }
     game.resources.agrements[agrementCode] = true;
-    game.resources.reputationScore = (game.resources.reputationScore || 0) + 50;
+    game.resources.reputationScore = (game.resources.reputationScore || 0) + 12;
 
     game.showToast(
-      'Agrément Préfectoral Obtenu !',
-      `Félicitations ! L’${agr.title} est validé par la Préfecture. ${agr.unlocks} débloqué !`,
+      'Arrêté Préfectoral d’Agrément Délivré ! 🏛️',
+      `Félicitations ! La Préfecture a validé gratuitement votre dossier pour l’${agr.title}. ${agr.unlocks} débloqué !`,
       'green'
     );
 
@@ -758,7 +776,7 @@ window.ProtecPersonnel = {
     maxDailyWorkHours: 10,  // Durée maximale quotidienne de travail effectif (Art. L3121-18)
     baseHourlySalary: 14.57, // Taux horaire de base brut (2 200 € / 151h)
     overtimeRate: 18.21,     // Heures supplémentaires majorées à +25% (Art. L3121-36)
-    restSimSeconds: 110      // 11 heures consécutives de repos simulées en 110 secondes réelles de jeu
+    restSimSeconds: 1320     // 11 heures consécutives de repos simulées en 22 minutes réelles de jeu
   },
 
   salarieTasksCatalog: [
@@ -772,8 +790,8 @@ window.ProtecPersonnel = {
       icon: 'heart-pulse',
       color: 'blue',
       desc: 'Animation d’un atelier citoyen de 2h aux gestes d’urgence et défibrillateur (DAE).',
-      revenue: 120,
-      repGain: 6,
+      revenue: 80,
+      repGain: 3,
       trainerRank: 'PSE1'
     },
     {
@@ -785,8 +803,8 @@ window.ProtecPersonnel = {
       icon: 'graduation-cap',
       color: 'indigo',
       desc: 'Journée complète de formation certifiante aux premiers secours civiques de base.',
-      revenue: 380,
-      repGain: 15,
+      revenue: 180,
+      repGain: 6,
       trainerRank: 'PSE1'
     },
     {
@@ -798,8 +816,8 @@ window.ProtecPersonnel = {
       icon: 'building-2',
       color: 'teal',
       desc: 'Animation de la journée Sauveteur Secouriste du Travail pour les salariés d’une entreprise locale.',
-      revenue: 550,
-      repGain: 20,
+      revenue: 240,
+      repGain: 8,
       trainerRank: 'PSE2'
     },
     {
@@ -812,7 +830,7 @@ window.ProtecPersonnel = {
       color: 'purple',
       desc: 'Recyclage annuel officiel des secouristes bénévoles de l’antenne pour maintenir leurs qualifications.',
       revenue: 0,
-      repGain: 12,
+      repGain: 5,
       moraleBoost: 10,
       trainerRank: 'CE'
     },
@@ -827,8 +845,8 @@ window.ProtecPersonnel = {
       icon: 'file-text',
       color: 'emerald',
       desc: 'Rédaction du dossier Cerfa et mémoire d’utilité publique pour la mairie et la préfecture.',
-      revenue: 200,
-      repGain: 12,
+      revenue: 140,
+      repGain: 4,
       grantHoursValorisation: 15
     },
     {
@@ -840,8 +858,8 @@ window.ProtecPersonnel = {
       icon: 'file-check',
       color: 'amber',
       desc: 'Relance des devis DPS, calcul des grilles RNMSC et contractualisation des postes à venir.',
-      revenue: 90,
-      repGain: 8,
+      revenue: 60,
+      repGain: 3,
       generateDevis: true
     },
     {
@@ -854,7 +872,7 @@ window.ProtecPersonnel = {
       color: 'sky',
       desc: 'Vérification des visites médicales d’aptitude, permis VPSP et conformité Code du Travail.',
       revenue: 0,
-      repGain: 10,
+      repGain: 4,
       moraleBoost: 6
     },
     {
@@ -867,7 +885,7 @@ window.ProtecPersonnel = {
       color: 'purple',
       desc: 'Rédaction des publications d’antenne, valorisation des missions et modération des messages citoyens pour maintenir la visibilité au maximum.',
       revenue: 0,
-      repGain: 15,
+      repGain: 5,
       boostSocialVisibility: 0.5
     },
 
@@ -882,7 +900,7 @@ window.ProtecPersonnel = {
       color: 'cyan',
       desc: 'Désinfection intégrale de la cellule sanitaire aux normes ARS. Remet l’ambulance à 100% de propreté.',
       revenue: 0,
-      repGain: 15,
+      repGain: 5,
       restoreVpsp: true
     },
     {
@@ -895,7 +913,7 @@ window.ProtecPersonnel = {
       color: 'rose',
       desc: 'Contrôle des péremptions, remplacement des électrodes et réarmement des bouteilles d’oxygène.',
       revenue: 0,
-      repGain: 8,
+      repGain: 4,
       restockSupplies: true
     },
     {
@@ -908,7 +926,7 @@ window.ProtecPersonnel = {
       color: 'orange',
       desc: 'Contrôle des organes de sécurité, éclairages prioritaires et révision préventive de la flotte.',
       revenue: 0,
-      repGain: 10,
+      repGain: 5,
       repairVehicles: true
     }
   ],
@@ -981,8 +999,8 @@ window.ProtecPersonnel = {
       }
     }
 
-    // Durée réelle de simulation : 1h de travail = 8 secondes réelles
-    const simDurationSec = Math.max(12, task.hours * 8);
+    // Durée réelle de simulation : 1h de travail = 120 secondes réelles (2 min/h, soit 14 min pour 7h)
+    const simDurationSec = Math.max(180, task.hours * 120);
     const now = Date.now();
 
     salarie.status = 'vacation';

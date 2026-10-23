@@ -1348,12 +1348,14 @@ class ProtecGame {
       .catch(() => null)
       .then(data => {
         if (data && Array.isArray(data.vehicles) && data.vehicles.length > 0) {
-          if (window.ProtecAdvanced) {
-            window.ProtecAdvanced.vehicleCatalog = data.vehicles;
+          if (window.ProtecAdvanced && window.ProtecAdvanced.vehicleCatalog) {
+            data.vehicles.forEach(srvVeh => {
+              const catEntry = window.ProtecAdvanced.vehicleCatalog[srvVeh.type];
+              if (catEntry && Array.isArray(srvVeh.beacons)) {
+                catEntry.beacons = JSON.parse(JSON.stringify(srvVeh.beacons));
+              }
+            });
           }
-          try {
-            localStorage.setItem('protec_custom_vehicle_catalog', JSON.stringify(data.vehicles));
-          } catch (e) {}
           if (Array.isArray(this.vehicles)) {
             this.vehicles.forEach(veh => {
               const match = data.vehicles.find(m => m.type === veh.type || m.name === veh.name);
@@ -6024,27 +6026,17 @@ class ProtecGame {
     const ratePerHour = 18;
     let personnelCost = 0;
 
-    if (devis.isMultiDays) {
-      const wDays = devis.weekdayDaysCount || 20;
-      const weDays = devis.weekendDaysCount || 8;
-      const wHours = devis.weekdayHours || 6;
-      const weHours = devis.weekendHours || 10;
+    // Facturation par vacation journalière (8h à 10h) même pour un événement multi-jours
+    const vols = devis.isMultiDays
+      ? ((devis.configuredVolunteersWeekend !== undefined && devis.configuredVolunteersWeekend !== null)
+          ? devis.configuredVolunteersWeekend
+          : (devis.configuredVolunteers || devis.requiredVolunteers || 4))
+      : (devis.configuredVolunteers || devis.requiredVolunteers || 4);
+    const dur = devis.isMultiDays
+      ? (devis.weekendHours || Math.max(8, devis.durationHours || 8))
+      : (devis.durationHours || 4);
 
-      const wVols = (devis.configuredVolunteersWeekday !== undefined && devis.configuredVolunteersWeekday !== null)
-        ? devis.configuredVolunteersWeekday
-        : Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
-      const weVols = (devis.configuredVolunteersWeekend !== undefined && devis.configuredVolunteersWeekend !== null)
-        ? devis.configuredVolunteersWeekend
-        : (devis.requiredVolunteers || 4);
-
-      const weekdayPersonnelCost = wDays * wVols * wHours * ratePerHour;
-      const weekendPersonnelCost = weDays * weVols * weHours * ratePerHour;
-      personnelCost = weekdayPersonnelCost + weekendPersonnelCost;
-    } else {
-      const vols = devis.configuredVolunteers || devis.requiredVolunteers || 4;
-      const dur = devis.durationHours || 4;
-      personnelCost = vols * dur * ratePerHour;
-    }
+    personnelCost = vols * dur * ratePerHour;
 
     let dailyVehiclesCost = 0;
     const counts = this.ensureDevisVehicleCounts(devis);
@@ -6063,19 +6055,14 @@ class ProtecGame {
       else dailyVehiclesCost += 40 * c;
     });
 
-    let vehicleCost = dailyVehiclesCost;
-    if (devis.isMultiDays) {
-      const totalDays = (devis.weekdayDaysCount || 20) + (devis.weekendDaysCount || 8);
-      vehicleCost = dailyVehiclesCost * totalDays;
-    }
+    const vehicleCost = dailyVehiclesCost;
 
     const scale = devis.configuredScale || devis.scale || 'DPS-PE';
     let matCost = 35;
     if (scale.includes('DPS-PE')) matCost = 65;
     if (scale.includes('DPS-ME') || scale.includes('DPS-GE')) matCost = 120;
-    if (devis.isMultiDays) matCost = matCost * 4;
 
-    const adminCost = devis.isMultiDays ? 150 : 40;
+    const adminCost = 40;
     const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
 
     return {
@@ -13084,30 +13071,30 @@ class ProtecGame {
         const crewCount = crew.length;
         const vehCount = (vehicles || []).length;
         const hasCadre = crew.some(v => ['CE', 'CD', 'Cadre'].includes(v.rank));
-        const repMeansBonus = (crewCount * 3) + (vehCount * 8) + (hasCadre ? 6 : 0);
+        const repMeansBonus = Math.min(8, Math.round((crewCount * 0.8) + (vehCount * 2) + (hasCadre ? 2 : 0)));
 
-        let repSpeedBonus = 8;
+        let repSpeedBonus = 2;
         let speedNotice = "Intervention Opérationnelle";
         const spawnTime = mission.spawnedRealTime || (Date.now() - 600000);
         const departureTime = mission.firstDepartureTime || mission.startedAt || Date.now();
         const responseMinutes = Math.max(0, (departureTime - spawnTime) / 60000);
 
         if (responseMinutes <= 4) {
-          repSpeedBonus = 25;
+          repSpeedBonus = 8;
           speedNotice = "Départ Réflexe Immédiat (< 4 min) ⚡";
         } else if (responseMinutes <= 10) {
-          repSpeedBonus = 16;
+          repSpeedBonus = 5;
           speedNotice = "Mobilisation Rapide (< 10 min) ⏱️";
         } else if (responseMinutes <= 20) {
-          repSpeedBonus = 10;
+          repSpeedBonus = 3;
           speedNotice = "Réponse Conforme (< 20 min)";
         }
 
-        const baseRep = mission.rewardReputation || 30;
-        const totalCrisisRep = Math.max(15, baseRep + repMeansBonus + repSpeedBonus);
+        const baseRep = Math.min(12, mission.rewardReputation || 10);
+        const totalCrisisRep = Math.max(8, Math.min(25, baseRep + repMeansBonus + repSpeedBonus));
 
-        const baseMoney = mission.rewardMoney || 1200;
-        const crisisMoneyGain = Math.round(baseMoney + (crewCount * 80) + (vehCount * 250));
+        // Remboursement préfectoral strict aux frais réels (carburant, consommables, repas des équipages)
+        const crisisMoneyGain = Math.round(150 + (crewCount * 25) + (vehCount * 90));
 
         // Partage de l'indemnité et de la réputation entre antenne directrice et antennes contributrices
         const acceptedRenforts = (mission.proposedRenforts || []).filter(p => p.status === 'accepted' || p.status === 'on_site');
@@ -13127,10 +13114,9 @@ class ProtecGame {
           });
 
           if (isManager) {
-            // Le Directeur perçoit la part principale (70% des fonds et réputation)
             const dirMoney = Math.round(crisisMoneyGain * 0.7);
             const dirRep = Math.round(totalCrisisRep * 0.7);
-            this.resources.money = (this.resources.money || 0) + dirMoney;
+            mission.rewardMoney = dirMoney;
             this.resources.reputationScore = (this.resources.reputationScore || 0) + dirRep;
 
             if (this.prefectureState) {
@@ -13142,33 +13128,31 @@ class ProtecGame {
             }
 
             const closeTitle = 'Mission de Crise Clôturée 🏁';
-            const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${dirMoney} €) ! Réputation +${dirRep}. Quote-part reversée aux ${acceptedRenforts.length} antenne(s) alliée(s) contributrice(s).`;
+            const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${dirMoney} € frais réels) ! Réputation +${dirRep}. Quote-part reversée aux ${acceptedRenforts.length} antenne(s) alliée(s) contributrice(s).`;
             this.showToast(closeTitle, closeMsg, 'green');
           } else if (myContributedVehs > 0) {
-            // L'antenne alliée contributrice perçoit sa quote-part d'appui
             const allieRatio = myContributedVols / Math.max(1, totalRenfortVols);
             const allieMoney = Math.round((crisisMoneyGain * 0.3) * allieRatio);
             const allieRep = Math.round((totalCrisisRep * 0.3) * allieRatio);
-            this.resources.money = (this.resources.money || 0) + allieMoney;
+            mission.rewardMoney = allieMoney;
             this.resources.reputationScore = (this.resources.reputationScore || 0) + allieRep;
 
             if (window.ProtecConventions) {
               window.ProtecConventions.adjustInstitutionalReputation(this, 'prefecture', Math.round(allieRep * 0.7), 'Renfort départemental crise');
             }
 
-            const closeTitle = 'Crise Résolue : Indemnisation Reçue 💰';
-            const closeMsg = `L'antenne directrice a clôturé « ${mission.title} ». Votre détachement est récompensé : +${allieMoney} € et +${allieRep} réputation !`;
+            const closeTitle = 'Crise Résolue : Défraiement Reçu 💰';
+            const closeMsg = `L'antenne directrice a clôturé « ${mission.title} ». Votre détachement est défrayé : +${allieMoney} € et +${allieRep} réputation !`;
             this.showToast(closeTitle, closeMsg, 'green');
           } else {
-            // Cas où le joueur n'a pas contribué
-            this.resources.money = (this.resources.money || 0) + crisisMoneyGain;
+            mission.rewardMoney = crisisMoneyGain;
             this.resources.reputationScore = (this.resources.reputationScore || 0) + totalCrisisRep;
             const closeTitle = 'Mission de Crise Clôturée 🏁';
-            const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${crisisMoneyGain} €) ! Réputation +${totalCrisisRep}.`;
+            const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${crisisMoneyGain} € frais réels) ! Réputation +${totalCrisisRep}.`;
             this.showToast(closeTitle, closeMsg, 'green');
           }
         } else {
-          this.resources.money = (this.resources.money || 0) + crisisMoneyGain;
+          mission.rewardMoney = crisisMoneyGain;
           this.resources.reputationScore = (this.resources.reputationScore || 0) + totalCrisisRep;
 
           if (this.prefectureState) {
@@ -13180,7 +13164,7 @@ class ProtecGame {
           }
 
           const closeTitle = 'Mission de Crise Clôturée 🏁';
-          const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${crisisMoneyGain} €) ! Réputation +${totalCrisisRep} (Moyens déployés : ${crewCount} équipier(s), ${vehCount} véhicule(s) • ${speedNotice}).`;
+          const closeMsg = `Dispositif « ${mission.title} » clôturé avec succès (+${crisisMoneyGain} € remboursement aux frais réels) ! Réputation +${totalCrisisRep} (Moyens déployés : ${crewCount} équipier(s), ${vehCount} véhicule(s) • ${speedNotice}).`;
           this.showToast(closeTitle, closeMsg, 'green');
         }
 
@@ -13248,24 +13232,26 @@ class ProtecGame {
         comRoleLabel = 'Chargé de Communication';
       }
 
-      const baseDon = comLevel === 3 ? (450 + Math.floor(Math.random() * 200)) : (comLevel === 2 ? (250 + Math.floor(Math.random() * 150)) : (140 + Math.floor(Math.random() * 80)));
-      const baseRep = comLevel === 3 ? 45 : (comLevel === 2 ? 25 : 15);
-      const recruitChance = comLevel === 3 ? 0.85 : (comLevel === 2 ? 0.55 : 0.35);
-
-      this.resources.money += baseDon;
+      const baseRep = comLevel === 3 ? 5 : (comLevel === 2 ? 3 : 2);
       this.resources.reputationScore += baseRep;
 
-      if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(this, baseDon, `Dons Publics & Mécénat (Reportage de ${comSpecialist.name} - ${comRoleLabel})`, 'communication');
+      // Dons citoyens occasionnels (25% de chance sur les missions d'au moins 4 bénévoles)
+      const isSignificantMission = (mission.requiredVolunteers || crew.length || 2) >= 4 || mission.isCrisis;
+      if (isSignificantMission && Math.random() < 0.25) {
+        const baseDon = comLevel === 3 ? (50 + Math.floor(Math.random() * 40)) : (comLevel === 2 ? (30 + Math.floor(Math.random() * 25)) : (15 + Math.floor(Math.random() * 15)));
+        this.resources.money += baseDon;
+        if (window.ProtecFinances) {
+          window.ProtecFinances.recordTransaction(this, baseDon, `Dons Publics & Mécénat (Reportage de ${comSpecialist.name} - ${comRoleLabel})`, 'communication');
+        }
+        this.showToast(
+          `📸 Couverture Com' [Niveau ${comLevel}]`,
+          `${comSpecialist.name} (${comRoleLabel}) a valorisé la mission : +${baseDon} € de dons citoyens en ligne et +${baseRep} Réputation !`,
+          'purple'
+        );
       }
 
-      this.showToast(
-        `📸 Couverture Com' [Niveau ${comLevel}]`,
-        `${comSpecialist.name} (${comRoleLabel}) a valorisé la mission : +${baseDon} € de dons citoyens en ligne et excellent rayonnement de l'antenne !`,
-        'purple'
-      );
-
-      // Chance d'inspirer une candidature spontanée selon la qualité de la com
+      // Chance modérée d'inspirer une candidature spontanée selon la qualité de la com
+      const recruitChance = comLevel === 3 ? 0.25 : (comLevel === 2 ? 0.15 : 0.08);
       if (Math.random() < recruitChance && typeof this.generateRandomCandidature === 'function') {
         setTimeout(() => {
           this.generateRandomCandidature();
@@ -13278,17 +13264,17 @@ class ProtecGame {
     const aep2Specialist = crew.find(v => v.skills && v.skills.includes('aep2'));
     const aep1Specialist = crew.find(v => v.skills && v.skills.includes('aep1'));
     if (aep2Specialist) {
-      this.resources.reputationScore = (this.resources.reputationScore || 0) + 30;
+      this.resources.reputationScore = (this.resources.reputationScore || 0) + 6;
       this.showToast(
         '🫂 Soutien Psycho Approfondi (AEP2)',
-        `${aep2Specialist.name} (Praticien AEP2) a mené le debriefing post-intervention et le defusing : équipage apaisé et reconnaissance chaleureuse des partenaires !`,
+        `${aep2Specialist.name} (Praticien AEP2) a mené le debriefing post-intervention et le defusing : équipage apaisé (+6 Réputation) !`,
         'purple'
       );
     } else if (aep1Specialist) {
-      this.resources.reputationScore = (this.resources.reputationScore || 0) + 15;
+      this.resources.reputationScore = (this.resources.reputationScore || 0) + 3;
       this.showToast(
         '🧠 Écoute Psychologique d’Urgence (AEP1)',
-        `${aep1Specialist.name} (Sensibilisé AEP1) a désamorcé l’angoisse des victimes et témoins sur les lieux de l'intervention.`,
+        `${aep1Specialist.name} (Sensibilisé AEP1) a désamorcé l’angoisse des victimes et témoins sur les lieux de l'intervention (+3 Réputation).`,
         'indigo'
       );
     }
@@ -31303,9 +31289,9 @@ class ProtecGame {
         window.ProtecSystems.updateWeatherAndDayNight(this);
       }
 
-      // 7. Micro-dons citoyens en ligne
-      if (this.grants && this.grants.publicDonationsActive && this.clock.second === 0 && Math.random() < 0.25) {
-        const don = 25 + Math.floor(Math.random() * 50);
+      // 7. Micro-dons citoyens en ligne (1 tirage quotidien à 14h00 si campagne active)
+      if (this.grants && this.grants.publicDonationsActive && this.clock.hour === 14 && this.clock.minute === 0 && this.clock.second === 0 && Math.random() < 0.35) {
+        const don = 20 + Math.floor(Math.random() * 45);
         this.resources.money += don;
         if (window.ProtecFinances) {
           window.ProtecFinances.recordTransaction(
@@ -31321,15 +31307,15 @@ class ProtecGame {
         this.updateStatsUI();
       }
 
-      // 8. Régénération avancée de l'énergie, moral et gestion du burnout au repos
-      if (this.clock.second === 0 && this.clock.minute % 2 === 0) {
+      // 8. Régénération horaire réaliste de l'énergie, moral et gestion des salaires mensuels
+      if (this.clock.second === 0 && this.clock.minute === 0) {
         if (window.ProtecPersonnel) {
           window.ProtecPersonnel.applyRestCycle(this);
           window.ProtecPersonnel.processSalariesAndStipends(this);
         } else {
           this.volunteers.forEach(v => {
             if (v.status === 'dispo' && v.energy < 100) {
-              v.energy = Math.min(100, (v.energy || 80) + 3);
+              v.energy = Math.min(100, (v.energy || 80) + 8);
             }
           });
         }
@@ -31487,22 +31473,22 @@ class ProtecGame {
     const capacity = this.calculatePlayerCapacity();
 
     const emergencies = [
-      // Urgences Réflexes Vitales (Périmètre 'ur_only' ou 'toutes_urgences')
-      { urgType: 'ur', title: 'Urgence 15 : Arrêt Cardio-Respiratoire (Départ Réflexe)', desc: 'Témoin signale une victime inconsciente sans respiration au centre commercial.', durMin: 30, reward: 480 },
-      { urgType: 'ur', title: 'Urgence 15 : Suspicion AVC / Déficit Moteur Brutal', desc: 'Femme de 68 ans présentant une asymétrie faciale et une perte de force au bras droit. Départ réflexe prioritaire.', durMin: 24, reward: 370 },
-      { urgType: 'ur', title: 'Urgence 15 : Détresse Respiratoire à Domicile', desc: 'Patient dyspnéique en crise sévère. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 340 },
-      { urgType: 'ur', title: 'Urgence 15 : Douleur Thoracique Constrictive', desc: 'Homme de 56 ans avec douleur rétro-sternale irradiant dans le bras gauche. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 360 },
-      { urgType: 'ur', title: 'Urgence 15 : Choc Anaphylactique / Piqûre d’Hyménoptère', desc: 'Gonflement des lèvres, urticaire géante et dyspnée sifflante suite à une piqûre de guêpe.', durMin: 22, reward: 390 },
+      // Urgences Réflexes Vitales (Périmètre 'ur_only' ou 'toutes_urgences') - Forfait conventionné AASC ~75 € à 115 € par départ
+      { urgType: 'ur', title: 'Urgence 15 : Arrêt Cardio-Respiratoire (Départ Réflexe)', desc: 'Témoin signale une victime inconsciente sans respiration au centre commercial.', durMin: 30, reward: 115 },
+      { urgType: 'ur', title: 'Urgence 15 : Suspicion AVC / Déficit Moteur Brutal', desc: 'Femme de 68 ans présentant une asymétrie faciale et une perte de force au bras droit. Départ réflexe prioritaire.', durMin: 24, reward: 95 },
+      { urgType: 'ur', title: 'Urgence 15 : Détresse Respiratoire à Domicile', desc: 'Patient dyspnéique en crise sévère. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 90 },
+      { urgType: 'ur', title: 'Urgence 15 : Douleur Thoracique Constrictive', desc: 'Homme de 56 ans avec douleur rétro-sternale irradiant dans le bras gauche. Oxygénothérapie et bilan régulateur.', durMin: 25, reward: 95 },
+      { urgType: 'ur', title: 'Urgence 15 : Choc Anaphylactique / Piqûre d’Hyménoptère', desc: 'Gonflement des lèvres, urticaire géante et dyspnée sifflante suite à une piqûre de guêpe.', durMin: 22, reward: 100 },
 
       // Traumatologie & Accidents (Périmètre 'toutes_urgences')
-      { urgType: 'trauma', title: 'Urgence 15 : AVP Deux-Roues contre Véhicule Léger', desc: 'Collision urbaine. Motard projeté sur la chaussée. Maintien tête dans l’axe, retrait du casque et pose du collier.', durMin: 30, reward: 420 },
-      { urgType: 'trauma', title: 'Urgence 15 : Accident de Trottinette Électrique', desc: 'Choc contre trottoir, dermabrasions multiples et suspicion entorse cheville.', durMin: 22, reward: 310 },
-      { urgType: 'trauma', title: 'Urgence 15 : Chute de Personne Âgée avec Suspicion Fracture', desc: 'Octogénaire au sol depuis 2 heures. Douleur aiguë à l’aine et raccourcissement du membre inférieur.', durMin: 28, reward: 330 },
-      { urgType: 'trauma', title: 'Urgence 15 : Brûlure Domestique Étendue du 2nd Degré', desc: 'Ébouillantement lors de la préparation d’un repas. Arrosage immédiat à l’eau tempérée et pansements stériles.', durMin: 22, reward: 320 },
+      { urgType: 'trauma', title: 'Urgence 15 : AVP Deux-Roues contre Véhicule Léger', desc: 'Collision urbaine. Motard projeté sur la chaussée. Maintien tête dans l’axe, retrait du casque et pose du collier.', durMin: 30, reward: 105 },
+      { urgType: 'trauma', title: 'Urgence 15 : Accident de Trottinette Électrique', desc: 'Choc contre trottoir, dermabrasions multiples et suspicion entorse cheville.', durMin: 22, reward: 80 },
+      { urgType: 'trauma', title: 'Urgence 15 : Chute de Personne Âgée avec Suspicion Fracture', desc: 'Octogénaire au sol depuis 2 heures. Douleur aiguë à l’aine et raccourcissement du membre inférieur.', durMin: 28, reward: 85 },
+      { urgType: 'trauma', title: 'Urgence 15 : Brûlure Domestique Étendue du 2nd Degré', desc: 'Ébouillantement lors de la préparation d’un repas. Arrosage immédiat à l’eau tempérée et pansements stériles.', durMin: 22, reward: 85 },
 
       // Malaises Généraux (Périmètre 'toutes_urgences')
-      { urgType: 'general', title: 'Urgence 15 : Malaise Voie Publique', desc: 'Passant pris de vertiges et chute au sol. Bilan et surveillance requis.', durMin: 20, reward: 280 },
-      { urgType: 'general', title: 'Urgence 15 : Malaise Hypoglycémique en Gare', desc: 'Voyageur diabétique confus et sueurs profuses. Prise de dextro et resucrage oral sous avis médical.', durMin: 20, reward: 290 }
+      { urgType: 'general', title: 'Urgence 15 : Malaise Voie Publique', desc: 'Passant pris de vertiges et chute au sol. Bilan et surveillance requis.', durMin: 20, reward: 75 },
+      { urgType: 'general', title: 'Urgence 15 : Malaise Hypoglycémique en Gare', desc: 'Voyageur diabétique confus et sueurs profuses. Prise de dextro et resucrage oral sous avis médical.', durMin: 20, reward: 75 }
     ];
 
     // Filtrage strict selon le périmètre conventionné par l'autorité
@@ -31544,7 +31530,7 @@ class ProtecGame {
       requiredRanks: ranks,
       requiredVehicles: ['VPSP'],
       rewardMoney: pick.reward,
-      rewardReputation: 35,
+      rewardReputation: 8,
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],

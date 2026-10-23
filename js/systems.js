@@ -2010,15 +2010,25 @@ window.ProtecSystems = {
       v.missionsSinceDisinfection = 0;
       game.showToast('Désinfection Trimestrielle Validée', `${v.name} a été intégralement nébulisé et certifié conforme ARS / SAMU.`, 'green');
     } else if (actionType === 'mechanical') {
-      const cost = 280;
+      const catRef = window.ProtecAdvanced?.chassisModels?.[v.chassisId]?.cost
+        || window.ProtecAdvanced?.vehicleCatalog?.[v.type]?.cost
+        || v.newPriceRef
+        || (v.type === 'VPSP' ? 88500 : (v.type === 'VL' ? 24500 : 42500));
+      const km = Number(v.mileage || v.kilometrage || 80000);
+      const kmFactor = 1 + Math.min(0.8, km / 250000);
+      const damageRatio = Math.max(0.25, (100 - (v.mechanical ?? 75)) / 100);
+      const cost = Math.max(180, Math.round((catRef * 0.012 * kmFactor * (0.5 + damageRatio)) / 10) * 10);
       if (game.resources.money < cost) {
-        game.showToast('Fonds insuffisants', `Révision garage & pièces : ${cost} €.`, 'orange');
+        game.showToast('Fonds insuffisants', `Révision garage & pièces (${v.name}) : ${cost.toLocaleString('fr-FR')} €.`, 'orange');
         return;
       }
       game.resources.money -= cost;
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -cost, `Révision mécanique & pièces d'usure : ${v.name} (${km.toLocaleString('fr-FR')} km)`, 'vehicule');
+      }
       v.mechanical = 100;
       v.isBrokenDown = false;
-      game.showToast('Révision effectuée', `Contrôle technique et réparations mécaniques validés pour ${v.name}.`, 'green');
+      game.showToast('Révision effectuée', `Contrôle technique et réparations mécaniques validés pour ${v.name} (-${cost.toLocaleString('fr-FR')} €).`, 'green');
     }
 
     game.updateStatsUI();
@@ -2689,64 +2699,102 @@ updateWeatherAndDayNight(game) {
     const city = station.city || station.commune || 'Nancy';
     const repCity = (game.reputation_villes && game.reputation_villes[city] !== undefined) ? game.reputation_villes[city] : 50;
 
-    // 1. STATUT D'OCCUPATION & LOYER MENSUEL
-    const occType = premises.occupationType || (premises.tenure === 'owned' ? 'pleine_propriete' : 'mise_a_disposition_mairie');
-    if (occType === 'mise_a_disposition_mairie') {
-      if (repCity < 30) {
-        // La mairie impose une indemnité compensatoire et menace d'expulsion sous 30 jours !
-        premises.evictionNotice = true;
-        premises.chargesImposed = true;
-        const evictionCost = 650;
-        game.resources.money = Math.max(0, game.resources.money - evictionCost);
-        if (window.ProtecFinances) {
-          window.ProtecFinances.recordTransaction(game, -evictionCost, `Indemnité d'occupation municipale imposée (Réputation ${repCity}/100 < 30) - Mairie de ${city}`, 'locaux');
+    // 1. STATUT D'OCCUPATION, LOYERS & FLUIDES DE TOUTES LES ANTENNES
+    let totalRentAllStations = 0;
+    let totalFluidesAllStations = 0;
+
+    (game.stations || []).forEach((st, idx) => {
+      const stPrem = (window.ProtecLocaux && typeof window.ProtecLocaux.getStationPremises === 'function')
+        ? window.ProtecLocaux.getStationPremises(game, st.id)
+        : (st.premises || {});
+      const stCity = st.city || st.commune || city;
+      const stRepCity = (game.reputation_villes && game.reputation_villes[stCity] !== undefined) ? game.reputation_villes[stCity] : 50;
+      const occType = stPrem?.occupationType || (st.buildingTenure === 'owned' || stPrem?.tenure === 'owned' ? 'pleine_propriete' : (st.monthlyRent > 0 ? 'location_privee' : 'mise_a_disposition_mairie'));
+
+      if (occType === 'mise_a_disposition_mairie') {
+        if (stRepCity < 30) {
+          if (stPrem) {
+            stPrem.evictionNotice = true;
+            stPrem.chargesImposed = true;
+          }
+          totalRentAllStations += 650;
+          if (idx === 0) {
+            game.showToast(
+              '⚠️ Préavis d’Expulsion & Indemnité Mairie',
+              `Votre réputation communale est tombée à ${stRepCity}/100 ! Le Maire exige une indemnité de 650 € et menace d'expulser l'antenne sous 30 jours.`,
+              'red'
+            );
+          }
+        } else if (stPrem) {
+          stPrem.evictionNotice = false;
+          stPrem.chargesImposed = false;
+          stPrem.monthlyRent = 0;
         }
-        game.showToast(
-          '⚠️ Préavis d’Expulsion & Indemnité Mairie',
-          `Votre réputation communale est tombée à ${repCity}/100 ! Le Maire exige une indemnité de 650 € et menace d'expulser l'antenne sous 30 jours si la réputation ne remonte pas.`,
-          'red'
-        );
-        if (window.ProtecNotifications) {
-          window.ProtecNotifications.recordNotification({
-            title: '🏛️ Mise en Demeure Municipale & Expulsion',
-            message: `La Mairie de ${city} met fin à la gratuité du local en raison d'un manque d'engagement associatif (${repCity}/100). Facturation de 650 € et préavis de départ actif.`,
-            category: 'general',
-            level: 'error'
-          });
-        }
-      } else {
-        premises.evictionNotice = false;
-        premises.chargesImposed = false;
-        premises.monthlyRent = 0;
+      } else if (occType === 'location_privee') {
+        const rent = Number(st.monthlyRent || stPrem?.monthlyRent || 850);
+        totalRentAllStations += rent;
+      } else if (occType === 'pleine_propriete' && stPrem) {
+        stPrem.monthlyRent = 0;
+        stPrem.evictionNotice = false;
+        stPrem.chargesImposed = false;
       }
-    } else if (occType === 'location_privee') {
-      const rent = premises.monthlyRent || 850;
-      game.resources.money = Math.max(0, game.resources.money - rent);
+
+      const baseFluides = stPrem?.fluidesBaseCost || 180;
+      const isoLevel = stPrem?.isolationLevel || 2;
+      let fluidesMultiplier = 1.0;
+      if (isoLevel === 1) {
+        fluidesMultiplier = isWinter ? 1.8 : 1.1;
+      } else if (isoLevel === 3) {
+        fluidesMultiplier = 0.7;
+      }
+      totalFluidesAllStations += Math.round(baseFluides * fluidesMultiplier);
+    });
+
+    if (totalRentAllStations > 0) {
+      game.resources.money = Math.max(0, game.resources.money - totalRentAllStations);
       if (window.ProtecFinances) {
-        window.ProtecFinances.recordTransaction(game, -rent, `Loyer commercial mensuel des locaux d'antenne (Bail privé indépendant)`, 'locaux');
+        window.ProtecFinances.recordTransaction(game, -totalRentAllStations, `Loyers & indemnités d'occupation des locaux (${(game.stations || []).length} antenne(s))`, 'locaux');
       }
-      game.showToast('Loyer Prélevé 🏢', `Loyer mensuel privé de ${rent} € débité. Indépendance municipale totale garantie.`, 'blue');
-    } else if (occType === 'pleine_propriete') {
-      premises.monthlyRent = 0;
-      premises.evictionNotice = false;
-      premises.chargesImposed = false;
+      game.showToast('Loyers Prélevés 🏢', `Loyer mensuel total de ${totalRentAllStations.toLocaleString('fr-FR')} € débité pour vos antennes.`, 'blue');
     }
 
-    // 2. CHARGES DE FLUIDES & ÉNERGIE (Modulées par l'isolation du bâtiment)
-    const baseFluides = premises.fluidesBaseCost || 180;
-    const isoLevel = premises.isolationLevel || 2; // 1: Passoire, 2: Standard, 3: BBC
-    let fluidesMultiplier = 1.0;
-    if (isoLevel === 1) {
-      fluidesMultiplier = isWinter ? 1.8 : 1.1; // Factures explosives en hiver pour passoire thermique
-    } else if (isoLevel === 3) {
-      fluidesMultiplier = 0.7; // Factures réduites de 30% grâce au double vitrage / BBC
+    if (totalFluidesAllStations > 0) {
+      game.resources.money = Math.max(0, game.resources.money - totalFluidesAllStations);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -totalFluidesAllStations, `Fluides & Énergie (Eau, Chauffage, Électricité - ${(game.stations || []).length} antenne(s))`, 'locaux');
+      }
     }
-    const fluidesCost = Math.round(baseFluides * fluidesMultiplier);
-    game.resources.money = Math.max(0, game.resources.money - fluidesCost);
+
+    // 2b. ASSURANCE FLOTTE AUTOMOBILE & COTISATION FÉDÉRALE FNPC / LICENCES BÉNÉVOLES
+    const fleetInsurance = (game.vehicles || []).reduce((sum, veh) => {
+      if (veh.requiresTrailer) return sum + 20;
+      if (veh.type === 'VPSP') return sum + (veh.insuranceMonthlyCost || 115);
+      if (veh.type === 'PCM' || veh.type === 'FLIT') return sum + 165;
+      return sum + (veh.insuranceMonthlyCost || 65);
+    }, 0);
+    if (fleetInsurance > 0) {
+      game.resources.money = Math.max(0, game.resources.money - fleetInsurance);
+      if (window.ProtecFinances) {
+        window.ProtecFinances.recordTransaction(game, -fleetInsurance, `Assurance flotte opérationnelle & RC Circulation (${(game.vehicles || []).length} véhicule(s))`, 'vehicule');
+      }
+    }
+
+    const volCount = (game.volunteers || []).length;
+    const federalLicensesCost = Math.round(volCount * 2.5);
+    const federalContribution = Math.max(120, federalLicensesCost + ((game.stations || []).length * 95));
+    game.resources.money = Math.max(0, game.resources.money - federalContribution);
     if (window.ProtecFinances) {
-      const isoLabel = isoLevel === 3 ? 'BBC (-30%)' : (isoLevel === 1 ? 'Passoire thermique (+80% en hiver)' : 'Standard');
-      window.ProtecFinances.recordTransaction(game, -fluidesCost, `Fluides & Énergie (Eau, Chauffage, Électricité) - Isolation ${isoLabel}`, 'locaux');
+      window.ProtecFinances.recordTransaction(game, -federalContribution, `Cotisation fédérale FNPC & Licences assurance bénévoles (${volCount} membres)`, 'frais');
     }
+
+    // 2c. ÉROSION NATURELLE DE LA RÉPUTATION À HAUT NIVEAU (maintien de l'équilibre long terme)
+    const curRep = game.resources.reputationScore || 0;
+    if (curRep > 250) {
+      const erosion = Math.max(2, Math.round((curRep - 250) * 0.05));
+      game.resources.reputationScore = Math.max(250, curRep - erosion);
+    }
+
+    const isoLevel = premises.isolationLevel || 2;
 
     // Risque de gel des médicaments/sérums si passoire thermique en hiver
     if (isoLevel === 1 && isWinter && (game.weather?.temp !== undefined && game.weather.temp <= 0)) {

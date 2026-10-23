@@ -529,46 +529,24 @@
       let matCost = 35;
       let adminCost = 40;
 
-      if (multiDaysMeta && multiDaysMeta.isMultiDays) {
-        const wDays = multiDaysMeta.weekdayDaysCount || 20;
-        const weDays = multiDaysMeta.weekendDaysCount || 8;
-        const wHours = multiDaysMeta.weekdayHours || 6;
-        const weHours = multiDaysMeta.weekendHours || 10;
+      // Facturation par vacation journalière (8h à 10h) même pour les événements multi-jours
+      const vacHours = (multiDaysMeta && multiDaysMeta.isMultiDays)
+        ? (multiDaysMeta.weekendHours || Math.max(8, durationHours || 8))
+        : durationHours;
 
-        // En semaine : dimensionnement allégé (environ 50% de l'effectif week-end, min 2)
-        const wVols = Math.max(2, Math.round(minVolunteers * 0.5));
-        // Le week-end : plein effectif
-        const weVols = minVolunteers;
+      personnelCost = minVolunteers * vacHours * ratePerHour;
+      (requiredVehicles || []).forEach(v => {
+        if (v === 'VPSP') vehicleCost += 110;
+        else if (v === 'VTU') vehicleCost += 55;
+        else if (v === 'VL') vehicleCost += 35;
+      });
 
-        personnelCost = (wDays * wVols * wHours * ratePerHour) + (weDays * weVols * weHours * ratePerHour);
-
-        let dailyVehWe = 0;
-        let dailyVehW = 0;
-        (requiredVehicles || []).forEach(v => {
-          let u = 35;
-          if (v === 'VPSP') u = 110;
-          else if (v === 'VTU') u = 55;
-          dailyVehWe += u;
-          dailyVehW += Math.round(u * 0.5);
-        });
-        vehicleCost = (wDays * dailyVehW) + (weDays * dailyVehWe);
-        matCost = 150;
-        adminCost = 100;
-      } else {
-        personnelCost = minVolunteers * durationHours * ratePerHour;
-        (requiredVehicles || []).forEach(v => {
-          if (v === 'VPSP') vehicleCost += 110;
-          else if (v === 'VTU') vehicleCost += 55;
-          else if (v === 'VL') vehicleCost += 35;
-        });
-
-        if (scaleKey === 'PAPS') matCost = 25;
-        else if (scaleKey === 'DPS-PE') matCost = 65;
-        else if (scaleKey === 'DPS-ME' || scaleKey === 'DPS-GE') matCost = 130;
-      }
+      if (scaleKey === 'PAPS') matCost = 25;
+      else if (scaleKey === 'DPS-PE') matCost = 65;
+      else if (scaleKey === 'DPS-ME' || scaleKey === 'DPS-GE') matCost = 130;
 
       const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
-      const budgetMax = Math.round(totalBareme * (1.10 + Math.random() * 0.20));
+      const budgetMax = Math.round(totalBareme * (1.10 + Math.random() * 0.15));
 
       return {
         bareme: {
