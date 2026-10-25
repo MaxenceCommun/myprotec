@@ -305,9 +305,15 @@ window.ProtecModals = {
     if (w.vigilance === 'orange') { cardBg = 'bg-orange-50 border-orange-200 text-orange-950'; badgeBg = 'bg-pc-orange text-white'; }
     if (w.vigilance === 'red') { cardBg = 'bg-red-50 border-red-200 text-red-950'; badgeBg = 'bg-red-600 text-white'; }
 
-    const windText = `${Math.round(w.windGusts || w.windSpeed || 0)} km/h`;
-    const rainText = `${(w.precipitation || 0).toFixed(1)} mm/h`;
+    const curWind = Math.round(w.windGusts || w.windSpeed || 0);
+    const maxWind = Math.round(w.dailyWindGustsMax || curWind);
+    const windText = maxWind > curWind ? `${curWind} km/h <span class="text-[9.5px] font-bold text-amber-600 block">(max ${maxWind} km/h)</span>` : `${curWind} km/h`;
+    
+    const curRain = (w.precipitation || 0).toFixed(1);
+    const dailyRain = w.dailyPrecipitation != null ? Number(w.dailyPrecipitation).toFixed(1) : null;
+    const rainText = dailyRain && Number(dailyRain) > 0 ? `${curRain} mm/h <span class="text-[9.5px] font-bold text-sky-600 block">(${dailyRain} mm auj.)</span>` : `${curRain} mm/h`;
     const humidityText = `${Math.round(w.humidity || 60)}%`;
+    const activePheno = Array.isArray(w.activePhenomena) ? w.activePhenomena : [];
 
     return `
       <div class="space-y-5">
@@ -353,27 +359,31 @@ window.ProtecModals = {
         <div class="space-y-3 text-xs">
           <h4 class="font-extrabold text-slate-700 uppercase tracking-wider">Consignes Opérationnelles & Risques Préfectoraux</h4>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-amber-200">
-              <span class="font-extrabold text-amber-700 flex items-center gap-1.5">
-                <i data-lucide="sun" class="w-4 h-4 text-amber-500"></i> Canicule & Coups de Chaleur
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border ${activePheno.includes('Canicule') ? 'border-amber-400 bg-amber-50/70 ring-2 ring-amber-400/40' : 'border-amber-200'}">
+              <span class="font-extrabold text-amber-700 flex items-center justify-between">
+                <span class="flex items-center gap-1.5"><i data-lucide="sun" class="w-4 h-4 text-amber-500"></i> Canicule & Coups de Chaleur</span>
+                ${activePheno.includes('Canicule') ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase">Alerte Active</span>' : ''}
               </span>
               <p class="text-slate-600">Distribution d’eau minérale, maraudes fraîcheur d’urgence auprès des sans-abri, tentes climatisées.</p>
             </div>
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-sky-200">
-              <span class="font-extrabold text-sky-700 flex items-center gap-1.5">
-                <i data-lucide="waves" class="w-4 h-4 text-sky-500"></i> Inondations & Crues (PCS)
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border ${activePheno.includes('Pluie-inondation') ? 'border-sky-400 bg-sky-50/70 ring-2 ring-sky-400/40' : 'border-sky-200'}">
+              <span class="font-extrabold text-sky-700 flex items-center justify-between">
+                <span class="flex items-center gap-1.5"><i data-lucide="waves" class="w-4 h-4 text-sky-500"></i> Inondations & Crues (PCS)</span>
+                ${activePheno.includes('Pluie-inondation') ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase">Vigilance Active</span>' : ''}
               </span>
               <p class="text-slate-600">Activation du Plan Communal de Sauvegarde, ouverture de gymnases pour le Centre d'Accueil des Impliqués (CAI), pompage d’urgence.</p>
             </div>
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-teal-200">
-              <span class="font-extrabold text-teal-700 flex items-center gap-1.5">
-                <i data-lucide="wind" class="w-4 h-4 text-teal-500"></i> Vents Violents & Chutes d'Arbres
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border ${activePheno.includes('Vent') || activePheno.includes('Vent violent') ? 'border-amber-400 bg-amber-50/70 ring-2 ring-amber-400/40' : 'border-teal-200'}">
+              <span class="font-extrabold text-teal-700 flex items-center justify-between">
+                <span class="flex items-center gap-1.5"><i data-lucide="wind" class="w-4 h-4 text-teal-500"></i> Vents Violents & Chutes d'Arbres</span>
+                ${activePheno.includes('Vent') || activePheno.includes('Vent violent') ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase">Vigilance Active</span>' : ''}
               </span>
               <p class="text-slate-600">Balisage d’urgence des voies de circulation bloquées, renfort de protection contre les chutes de tuiles et branches.</p>
             </div>
-            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border border-indigo-200">
-              <span class="font-extrabold text-indigo-700 flex items-center gap-1.5">
-                <i data-lucide="snowflake" class="w-4 h-4 text-indigo-500"></i> Neige, Verglas & Grand Froid
+            <div class="p-3.5 rounded-2xl glass-card space-y-1.5 border ${activePheno.includes('Neige-verglas') || activePheno.includes('Grand Froid') ? 'border-indigo-400 bg-indigo-50/70 ring-2 ring-indigo-400/40' : 'border-indigo-200'}">
+              <span class="font-extrabold text-indigo-700 flex items-center justify-between">
+                <span class="flex items-center gap-1.5"><i data-lucide="snowflake" class="w-4 h-4 text-indigo-500"></i> Neige, Verglas & Grand Froid</span>
+                ${activePheno.includes('Neige-verglas') || activePheno.includes('Grand Froid') ? '<span class="px-2 py-0.5 rounded text-[9px] font-black bg-amber-500 text-white uppercase">Alerte Active</span>' : ''}
               </span>
               <p class="text-slate-600">Maraudes sociales nocturnes avec le 115, hébergement de crise, chaînes à neige obligatoires sur les véhicules.</p>
             </div>

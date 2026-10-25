@@ -2148,7 +2148,7 @@ window.ProtecSystems = {
     }
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat.toFixed(4)}&longitude=${coords.lng.toFixed(4)}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat.toFixed(4)}&longitude=${coords.lng.toFixed(4)}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,temperature_2m_max,temperature_2m_min&timezone=Europe%2FParis`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -2165,9 +2165,16 @@ window.ProtecSystems = {
         game.weather.locationName = coords.name;
         game.weather.lastFetchTimestamp = now;
 
+        // Données journalières (cumul de pluie du jour, rafales maximales)
+        if (data.daily) {
+          game.weather.dailyPrecipitation = (Array.isArray(data.daily.precipitation_sum) && data.daily.precipitation_sum[0] != null) ? data.daily.precipitation_sum[0] : 0;
+          game.weather.dailyWindGustsMax = (Array.isArray(data.daily.wind_gusts_10m_max) && data.daily.wind_gusts_10m_max[0] != null) ? data.daily.wind_gusts_10m_max[0] : (game.weather.windGusts || 0);
+          game.weather.dailyWeatherCode = (Array.isArray(data.daily.weather_code) && data.daily.weather_code[0] != null) ? data.daily.weather_code[0] : current.weather_code;
+        }
+
         // Détection du phénomène et de la vigilance Météo-France correspondante
         this.interpretMeteoFranceVigilance(game);
-        console.log(`[Météo Réelle] Synchronisée pour ${coords.name}: ${game.weather.temp}°C, vent ${game.weather.windGusts} km/h, code ${game.weather.weatherCode}, vigilance: ${game.weather.vigilance}`);
+        console.log(`[Météo Réelle] Synchronisée pour ${coords.name}: ${game.weather.temp}°C, vent ${game.weather.windGusts} km/h (max ${game.weather.dailyWindGustsMax} km/h), pluie ${game.weather.precipitation} mm/h (cumul ${game.weather.dailyPrecipitation} mm), code ${game.weather.weatherCode}, vigilance: ${game.weather.vigilance}`);
       }
     } catch (err) {
       console.warn('Erreur synchronisation météo réelle:', err);
@@ -2179,8 +2186,10 @@ window.ProtecSystems = {
     const w = game.weather;
     const code = w.weatherCode || 0;
     let temp = w.temp != null ? w.temp : 18;
-    const wind = w.windGusts || w.windSpeed || 0;
+    const curWind = Math.max(w.windGusts || 0, w.windSpeed || 0);
+    const maxWind = Math.max(curWind, w.dailyWindGustsMax || 0);
     const precip = w.precipitation || 0;
+    const dailyPrecip = w.dailyPrecipitation || 0;
 
     // Prise en compte de la saison virtuelle (mois de jeu 0 à 11)
     const month = (game.clock && game.clock.month !== undefined) ? game.clock.month : 9; // 0=Janv, 5=Juin, 6=Juil, 7=Août, 11=Déc
@@ -2193,48 +2202,108 @@ window.ProtecSystems = {
     if (isWinter && temp > 12) temp = Math.min(temp, 3);
 
     let vigilance = 'green';
-    let condition = 'ensoleille'; // 6 conditions normalisées : ensoleille, canicule, pluie_battante, orage_violent, grand_froid, neige
+    let condition = 'ensoleille'; // ensoleille, canicule, pluie_battante, orage_violent, grand_froid, neige
     let alertTitle = 'Vigilance Verte - Conditions Nominales';
-    let alertDesc = 'Aucune vigilance météorologique particulière. Les dispositifs de secours se déroulent normalement.';
+    let alertDesc = 'Conditions nominales d\'intervention sur le département.';
     let phenomenon = 'nominal';
+    const activePhenomena = [];
 
-    // 1. CANICULE (en été ou forte température)
-    if (temp >= 33 || (isSummer && temp >= 30)) {
-      vigilance = temp >= 36 ? 'red' : 'orange';
-      condition = 'canicule';
-      phenomenon = 'canicule';
-      alertTitle = temp >= 36 ? 'Vigilance Rouge Canicule Extrême' : 'Vigilance Orange Canicule Préfectorale';
-      alertDesc = `Canicule à ${Math.round(temp)}°C. Risque critique de malaises thermiques, déshydratations et insolations. Tentes climatisées et stocks de solutés obligatoires sur les DPS.`;
+    // Détection des aléas spécifiques selon les critères officiels Météo-France
+    const hasExtremeHeat = temp >= 36;
+    const hasSevereHeat = (temp >= 33 || (isSummer && temp >= 30));
+    const hasModerateHeat = temp >= 29;
+
+    const hasExtremeCold = temp <= -6;
+    const hasSevereCold = temp <= -2 || (isWinter && temp <= 0);
+    const hasModerateCold = temp <= 2 && isWinter;
+
+    const hasSevereSnow = [73, 75, 86].includes(code) || (isWinter && (precip > 3 || dailyPrecip >= 10) && temp <= 1);
+    const hasModerateSnow = [71, 77, 85].includes(code) || (isWinter && (precip > 0.5 || dailyPrecip >= 2) && temp <= 2);
+
+    const hasExtremeStorm = [96, 99].includes(code) && (precip >= 15 || maxWind >= 80);
+    const hasSevereStorm = [95, 96, 99].includes(code) || (precip >= 12 && maxWind >= 60);
+    const hasModerateStorm = [95].includes(code) || (precip >= 5 && maxWind >= 45);
+
+    const hasExtremeRain = precip >= 25 || dailyPrecip >= 80;
+    const hasSevereRain = [65, 82].includes(code) || precip >= 7 || dailyPrecip >= 40;
+    // Seuil Jaune Pluie : cumul journalier >= 15 mm OU précip instantanée >= 1.5 mm/h OU code météo pluvieux
+    const hasModerateRain = [53, 55, 61, 63, 65, 80, 81, 82].includes(code) || precip >= 1.5 || dailyPrecip >= 15;
+
+    const hasExtremeWind = maxWind >= 100;
+    const hasSevereWind = maxWind >= 75;
+    // Seuil Jaune Vent : rafales actuelles >= 40 km/h OU rafales maximales journalières >= 48 km/h
+    const hasModerateWind = curWind >= 40 || maxWind >= 48;
+
+    // --- 1. VIGILANCE ROUGE ---
+    if (hasExtremeHeat || hasExtremeCold || hasExtremeStorm || hasExtremeRain || hasExtremeWind) {
+      vigilance = 'red';
+      if (hasExtremeHeat) { condition = 'canicule'; phenomenon = 'canicule'; activePhenomena.push('Canicule'); }
+      if (hasExtremeCold) { condition = 'grand_froid'; phenomenon = 'grand_froid'; activePhenomena.push('Grand Froid'); }
+      if (hasExtremeWind) { condition = 'orage_violent'; phenomenon = 'vent'; activePhenomena.push('Vent violent'); }
+      if (hasExtremeRain) { condition = 'pluie_battante'; phenomenon = 'inondation'; activePhenomena.push('Pluie-inondation'); }
+      if (hasExtremeStorm) { condition = 'orage_violent'; phenomenon = 'orage'; activePhenomena.push('Orages'); }
+
+      alertTitle = `Vigilance Rouge - ${activePhenomena.join(' & ')} Extrême`;
+      alertDesc = `Alerte maximale préfectorale (${activePhenomena.join(' / ')}). Risque de dégâts majeurs et saturation des secours. Mobilisation générale requise.`;
     }
-    // 2. GRAND FROID & NEIGE (en hiver ou températures négatives)
-    else if (temp <= -2 || (isWinter && temp <= 0)) {
-      vigilance = temp <= -6 ? 'red' : 'orange';
-      condition = 'grand_froid';
-      phenomenon = 'grand_froid';
-      alertTitle = 'Vigilance Grand Froid & Gel Sévère';
-      alertDesc = `Froid polaire (${Math.round(temp)}°C). Déclenchement du Plan Grand Froid : maraudes renforcées et accueil en gymnase d'urgence.`;
-    } else if ([71, 73, 75, 77, 85, 86].includes(code) || (isWinter && precip > 2 && temp <= 2)) {
+    // --- 2. VIGILANCE ORANGE ---
+    else if (hasSevereHeat || hasSevereCold || hasSevereSnow || hasSevereStorm || hasSevereRain || hasSevereWind) {
       vigilance = 'orange';
-      condition = 'neige';
-      phenomenon = 'neige';
-      alertTitle = 'Vigilance Orange Neige & Verglas';
-      alertDesc = 'Chutes de neige et verglas. Risque élevé de glissades, accidents de circulation et axes bloqués. Véhicules équipés et chaînes requis.';
+      if (hasSevereHeat) { condition = 'canicule'; phenomenon = 'canicule'; activePhenomena.push('Canicule'); }
+      if (hasSevereCold) { condition = 'grand_froid'; phenomenon = 'grand_froid'; activePhenomena.push('Grand Froid'); }
+      if (hasSevereSnow) { condition = 'neige'; phenomenon = 'neige'; activePhenomena.push('Neige-verglas'); }
+      if (hasSevereWind) { condition = 'orage_violent'; phenomenon = 'vent'; activePhenomena.push('Vent violent'); }
+      if (hasSevereRain) { condition = 'pluie_battante'; phenomenon = 'inondation'; activePhenomena.push('Pluie-inondation'); }
+      if (hasSevereStorm) { condition = 'orage_violent'; phenomenon = 'inondation'; activePhenomena.push('Orages violents'); }
+
+      alertTitle = `Vigilance Orange - ${activePhenomena.join(' & ')}`;
+      alertDesc = `Vigilance préfectorale renforcée (${activePhenomena.join(' / ')}). Préparez les moyens spécialisés d'intervention et appliquez les consignes de prudence.`;
     }
-    // 3. ORAGE VIOLENT & PLUIE BATTANTE
-    else if ([95, 96, 99].includes(code) || (precip >= 15) || wind >= 70) {
-      vigilance = 'orange';
-      condition = 'orage_violent';
-      phenomenon = 'inondation';
-      alertTitle = 'Vigilance Orange Orages Violents & Rafales';
-      alertDesc = 'Forte activité orageuse, risques de ruissellement et traumatismes. Véhicules tout-chemin (VLHR) et abris fermés obligatoires pour les secouristes.';
-    } else if ([65, 82, 63, 81].includes(code) || (precip >= 7)) {
-      vigilance = 'orange';
-      condition = 'pluie_battante';
-      phenomenon = 'inondation';
-      alertTitle = 'Vigilance Orange Pluie Battante & Crues';
-      alertDesc = 'Précipitations continues intenses. Risque de glissades, hypothermie et crue de cours d\'eau. Postes ouverts interdits sans barnums étanches.';
+    // --- 3. VIGILANCE JAUNE ---
+    else if (hasModerateHeat || hasModerateCold || hasModerateSnow || hasModerateStorm || hasModerateRain || hasModerateWind) {
+      vigilance = 'yellow';
+      if (hasModerateWind) {
+        condition = 'pluie_battante';
+        phenomenon = 'vent';
+        activePhenomena.push('Vent');
+      }
+      if (hasModerateRain) {
+        condition = 'pluie_battante';
+        phenomenon = phenomenon === 'vent' ? 'pluie_vent' : 'inondation';
+        activePhenomena.push('Pluie-inondation');
+      }
+      if (hasModerateStorm) {
+        condition = 'orage_violent';
+        phenomenon = 'orage';
+        activePhenomena.push('Orages');
+      }
+      if (hasModerateSnow) {
+        condition = 'neige';
+        phenomenon = 'neige';
+        activePhenomena.push('Neige-verglas');
+      }
+      if (hasModerateHeat) {
+        condition = 'canicule';
+        phenomenon = 'canicule';
+        activePhenomena.push('Canicule');
+      }
+      if (hasModerateCold) {
+        condition = 'grand_froid';
+        phenomenon = 'grand_froid';
+        activePhenomena.push('Grand Froid');
+      }
+
+      const phenoTitle = activePhenomena.length > 0 ? activePhenomena.join(' & ') : 'Situation Météo Dégradée';
+      alertTitle = `Vigilance Jaune - ${phenoTitle}`;
+
+      const details = [];
+      if (activePhenomena.includes('Vent')) details.push(`rafales jusqu'à ${Math.round(maxWind)} km/h`);
+      if (activePhenomena.includes('Pluie-inondation')) details.push(`cumul pluviométrique de ${dailyPrecip > 0 ? Math.round(dailyPrecip) + ' mm' : (precip > 0 ? precip.toFixed(1) + ' mm/h' : 'averses actives')}`);
+
+      const detailStr = details.length > 0 ? ` (${details.join(', ')})` : '';
+      alertDesc = `Météo-France place votre département en vigilance jaune pour ${phenoTitle}${detailStr}. Soyez attentif si vous pratiquez des activités sensibles au risque météorologique.`;
     }
-    // 4. CONDITIONS CLAIRES / TEMPÉRÉES
+    // --- 4. VIGILANCE VERTE (Conditions nominales) ---
     else {
       condition = 'ensoleille';
       vigilance = 'green';
@@ -2250,6 +2319,7 @@ window.ProtecSystems = {
     w.alertTitle = alertTitle;
     w.alertDesc = alertDesc;
     w.alertPhenomenon = phenomenon;
+    w.activePhenomena = activePhenomena;
 
     // Toast de notification si passage à une vigilance supérieure
     if (previousVigilance !== vigilance && ['yellow', 'orange', 'red'].includes(vigilance)) {
