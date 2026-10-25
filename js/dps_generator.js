@@ -624,31 +624,28 @@
 
     let targetCommune = { nom: baseStation.city || 'Chef-Lieu', lat: baseStation.lat, lng: baseStation.lng };
 
+    // Antennes du secteur : les miennes + celles des autres joueurs (la plus proche assure le DPS)
+    const sectorAntennas = (typeof game.getSectorAntennas === 'function')
+      ? game.getSectorAntennas()
+      : (game.stations || []).map(s => ({ id: s.id, lat: s.lat, lng: s.lng, own: true, ref: s }));
+    const distKm = (lat1, lng1, lat2, lng2) => (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+      ? window.ProtecDepartements.calculateDistance(lat1, lng1, lat2, lng2)
+      : Math.hypot((lat2 - lat1) * 111, (lng2 - lng1) * 75);
+    const nearestOf = (lat, lng) => {
+      let best = null, bestD = Infinity;
+      sectorAntennas.forEach(a => { const d = distKm(lat, lng, a.lat, a.lng); if (d < bestD) { bestD = d; best = a; } });
+      return { antenna: best, d: bestD };
+    };
+    const inMySector = (lat, lng) => { const n = nearestOf(lat, lng); return !n.antenna || n.antenna.own; };
+
+    let assignedStation = baseStation;
     if (deptCommunes && deptCommunes.length > 0) {
-      const allStationsInDept = (game.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
-
-      // Filtrer les communes dont l'antenne la plus proche est bien baseStation
-      const eligibleCommunes = deptCommunes.filter(c => {
-        let bestDist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
-          ? window.ProtecDepartements.calculateDistance(baseStation.lat, baseStation.lng, c.lat, c.lng)
-          : Math.hypot((c.lat - baseStation.lat) * 111, (c.lng - baseStation.lng) * 75);
-        let closestStationId = baseStation.id;
-
-        for (const st of allStationsInDept) {
-          if (st.id === baseStation.id) continue;
-          const dist = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
-            ? window.ProtecDepartements.calculateDistance(st.lat, st.lng, c.lat, c.lng)
-            : Math.hypot((c.lat - st.lat) * 111, (c.lng - st.lng) * 75);
-          if (dist < bestDist) {
-            bestDist = dist;
-            closestStationId = st.id;
-          }
-        }
-        return closestStationId === baseStation.id;
-      });
-
+      // Toutes les communes du département dont l'antenne la plus proche est l'une des miennes
+      const eligibleCommunes = deptCommunes.filter(c => c && isFinite(c.lat) && isFinite(c.lng) && inMySector(c.lat, c.lng));
       if (eligibleCommunes.length > 0) {
         targetCommune = eligibleCommunes[Math.floor(Math.random() * eligibleCommunes.length)];
+        const n = nearestOf(targetCommune.lat, targetCommune.lng);
+        if (n.antenna && n.antenna.own && n.antenna.ref) assignedStation = n.antenna.ref;
       }
     }
 
@@ -664,7 +661,13 @@
     }
 
     // 3. Recherche ciblée du lieu sur OpenStreetMap autour de la commune du département
-    const radiusMeters = Math.min(25000, (template.radiusKm || 20) * 1000);
+    // Rayon de recherche limité pour que le lieu trouvé reste dans mon secteur
+    let radiusMeters = Math.min(25000, (template.radiusKm || 20) * 1000);
+    const dOwn = distKm(targetCommune.lat, targetCommune.lng, assignedStation.lat, assignedStation.lng);
+    sectorAntennas.filter(a => !a.own).forEach(a => {
+      const margin = (distKm(targetCommune.lat, targetCommune.lng, a.lat, a.lng) - dOwn) / 2;
+      radiusMeters = Math.min(radiusMeters, Math.max(1500, margin * 1000));
+    });
     let location = null;
     if (template.poiCategory && window.ProtecOSMPOISystem && typeof window.ProtecOSMPOISystem.fetchPOI === 'function') {
       try {
@@ -680,6 +683,18 @@
         template.defaultFallback,
         commune
       );
+    }
+
+    // Lieu trouvé hors de mon secteur (une autre antenne est plus proche) : on se replace sur la commune
+    if (location && isFinite(location.lat) && isFinite(location.lng) && !inMySector(location.lat, location.lng)) {
+      location = Object.assign({}, location, {
+        lat: parseFloat((targetCommune.lat + (Math.random() - 0.5) * 0.004).toFixed(5)),
+        lng: parseFloat((targetCommune.lng + (Math.random() - 0.5) * 0.006).toFixed(5)),
+        venue: `Site de ${commune}`,
+        name: undefined,
+        city: commune,
+        isOsmReal: false
+      });
     }
 
     // 3. Remplacement et assemblage du titre
@@ -744,6 +759,7 @@
       address: fullAddress,
       lat: location.lat,
       lng: location.lng,
+      stationId: assignedStation && assignedStation.id,
       isOsmRealLocation: location.isOsmReal,
       eventDate: eventDate,
       durationHours: template.dur,

@@ -116,14 +116,12 @@
       const req = (game.samuConvention && game.samuConvention.requirements) || {};
       const activeSdis = missions.filter(m => m && m.type === 'pompiers' && !m.isRenfort && !m.isGarde && (m.status === 'ongoing' || m.status === 'planifie')).length;
 
-      // Demandes de DPS (bloc 4 de la boucle de simulation)
-      const completedDps = missions.filter(m => m && m.type === 'dps' && m.status === 'completed').length;
+      // Notoriété réelle de l'antenne (modèle réaliste du serveur, sans valeurs par défaut flatteuses)
+      const doneDps = missions.filter(m => m && m.type === 'dps' && m.status === 'completed');
+      const completedDps = doneDps.length;
+      const completedLast90 = doneDps.filter(m => Number(m.completedAt) > now - 90 * 24 * 3600 * 1000).length;
       const vols = (game.volunteers || []).length;
       const rep = (game.resources && game.resources.reputationScore) || 0;
-      let notoriety = 0.18, cooldownH = 3.5;
-      if (completedDps >= 30 && rep >= 150) { notoriety = 1.0; cooldownH = 1; }
-      else if (completedDps >= 12 && rep >= 70) { notoriety = 0.60; cooldownH = 2; }
-      else if (completedDps >= 4 && rep >= 35) { notoriety = 0.35; cooldownH = 2.5; }
       let devisLastTs = 0;
       if (game.clock && game._lastDevisReceivedTotalHours) {
         const c = game.clock;
@@ -131,18 +129,26 @@
         const since = curHours - game._lastDevisReceivedTotalHours;
         if (since >= 0 && since < 24 * 365) devisLastTs = now - since * 3600 * 1000;
       }
-      const reviews = (window.ProtecCommunication && typeof window.ProtecCommunication.getReviewsStats === 'function') ? window.ProtecCommunication.getReviewsStats(game) : { average: 4.8 };
-      const campaign = !!((game.commData && game.commData.activeCampaign && game.commData.activeCampaign.subjectId === 'dps') || (game.resources && game.resources.campaigns && (game.resources.campaigns.social || game.resources.campaigns.posters)));
-      const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
-      const maxDevis = cfgMaxDevis !== null ? cfgMaxDevis : (typeof game.getSimultaneousDevisLimit === 'function' ? game.getSimultaneousDevisLimit() : 0);
+      const reviews = (window.ProtecCommunication && typeof window.ProtecCommunication.getReviewsStats === 'function') ? window.ProtecCommunication.getReviewsStats(game) : { average: 0, totalCount: (game.publicReviews || []).length };
+      const campaigns = (game.resources && game.resources.campaigns) || {};
+      const activeSubject = game.commData && game.commData.activeCampaign && game.commData.activeCampaign.subjectId;
+      const dpsCampaign = activeSubject === 'dps' || !!campaigns.social || !!campaigns.posters;
+      const recruitCampaign = activeSubject === 'recrutement' || !!campaigns.social || !!campaigns.posters;
       const website = game.antenneWebsite || null;
+      const sitePublished = !!(website && website.published);
+      const freshness = sitePublished ? (Number(website.freshness) || 0) : 0;
+      const socialVis = (game.socialMedia && Number(game.socialMedia.visibilityScore)) || 0;
+      // Plafond de demandes en attente : réglage admin s'il a été modifié, sinon le plafond du jeu (au moins 1)
+      const cfgVals = window.ProtecGameplayConfig && window.ProtecGameplayConfig.values;
+      const adminMax = cfgVals && cfgVals.maxSimultaneousPendingDevis !== undefined ? Number(cfgVals.maxSimultaneousPendingDevis) : null;
+      const gameMax = typeof game.getSimultaneousDevisLimit === 'function' ? game.getSimultaneousDevisLimit() : 1;
+      const maxDevis = adminMax !== null ? adminMax : Math.max(1, gameMax);
+      const unknown = !sitePublished && completedDps === 0 && !dpsCampaign && !recruitCampaign && rep < 20;
+      // Stagiaires PSC1 récents (sessions ouvertes au public terminées depuis 30 jours)
+      const psc1Last30 = (game.sessionsFormation || []).filter(sess => sess && sess.status === 'completed' && sess.openToPublic && (Number(sess.publicSeatsBooked) || 0) > 0 && Number(sess.completedAt) > now - 30 * 24 * 3600 * 1000).length;
 
-      // Candidatures (bloc 5)
+      // Candidatures : plafonds du jeu (palier journalier, intervalle, candidatures en attente)
       const cap = typeof game.getDailyRecruitmentCap === 'function' ? game.getDailyRecruitmentCap() : null;
-      let candBonus = 0;
-      if (game.commData && game.commData.activeCampaign && game.commData.activeCampaign.subjectId === 'recrutement') candBonus += 0.06;
-      if (game.resources && game.resources.campaigns && game.resources.campaigns.social) candBonus += 0.03;
-      if (game.resources && game.resources.campaigns && game.resources.campaigns.posters) candBonus += 0.02;
       const dcs = game.dailyCandidatureStats || {};
 
       const notifCfg = (window.ProtecNotifications && window.ProtecNotifications.config) || null;
@@ -173,22 +179,26 @@
         devis: {
           max: maxDevis,
           pending: (game.devis || []).filter(d => d && d.status === 'pending').length,
-          notoriety, cooldownH, lastTs: devisLastTs,
-          freshness: website ? (website.freshness !== undefined ? website.freshness : 85) : 85,
+          lastTs: devisLastTs,
+          unknown, sitePublished, freshness,
           autopilot: !!(website && website.autoPilotSalarieId),
-          reviewsOk: (reviews && reviews.average >= 4.7) || false,
-          volunteers: vols, completedDps, campaign,
-          socialVis: (game.socialMedia && game.socialMedia.visibilityScore !== undefined) ? game.socialMedia.visibilityScore : 75,
+          reviewsCount: (reviews && reviews.totalCount) || 0,
+          reviewsAvg: (reviews && reviews.average) || 0,
+          completedTotal: completedDps, completedLast90, rep, volunteers: vols, socialVis,
+          campaign: dpsCampaign,
           mult: cfg('dpsRequestBaseChanceMultiplier', 1.0)
         },
         cand: cap ? {
           cap: { maxPerDay: cap.maxPerDay, minIntervalHours: cap.minIntervalHours, hourlyBaseChance: cap.hourlyBaseChance, tier: cap.tier },
-          bonus: candBonus,
-          mult: cfg('candidatureChanceMultiplier', 1.0),
           todayKey: dcs.date || null,
           todayCount: dcs.count || 0,
           lastTs: dcs.lastSpawnTimestamp || 0,
-          pending: (game.candidatures || []).filter(c => c && c.status !== 'rejected').length
+          pending: (game.candidatures || []).filter(c => c && c.status !== 'rejected').length,
+          unknown, sitePublished, freshness,
+          autopilot: !!(website && website.autoPilotSalarieId),
+          rep, completedTotal: completedDps, socialVis, volunteers: vols, psc1Last30,
+          campaign: recruitCampaign,
+          mult: cfg('candidatureChanceMultiplier', 1.0)
         } : null
       };
     },
