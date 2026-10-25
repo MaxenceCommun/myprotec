@@ -431,15 +431,26 @@
     </div>
 
     <!-- Ligne 2 : Filtres de carte & Raccourcis secondaires (Défilant fluide sans déborder) -->
-    <div class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 mobile-scroll-x w-full">
+    <div class="pointer-events-auto flex items-center gap-1.5 overflow-x-auto md:overflow-visible no-scrollbar py-0.5 mobile-scroll-x w-full">
       <button onclick="window.game.setFilter('all')" id="filter-btn-all" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold text-slate-200 border-slate-400/40 shadow-sm flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-slate-400"></span>
         Toutes (<span id="count-all">0</span>)
       </button>
-      <button onclick="window.game.setFilter('dps')" id="filter-btn-dps" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-blue-400 transition flex items-center gap-1.5 flex-shrink-0">
-        <span class="w-2 h-2 rounded-full bg-blue-600"></span>
-        DPS (<span id="count-dps">0</span>)
-      </button>
+      <!-- Filtre DPS avec sous-bouton Prévisionnel sortant vers le bas au survol -->
+      <div class="relative group/dps flex-shrink-0" id="container-filter-dps" onmouseenter="window.game?.onDpsHover?.(true)" onmouseleave="window.game?.onDpsHover?.(false)">
+        <button onclick="window.game.setFilter('dps')" id="filter-btn-dps" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-blue-400 transition flex items-center gap-1.5 cursor-pointer">
+          <span class="w-2 h-2 rounded-full bg-blue-600"></span>
+          <span>DPS (<span id="count-dps">0</span>)</span>
+        </button>
+
+        <!-- Sous-bouton sortant de derrière vers le bas au placement du curseur -->
+        <div id="dropdown-dps-previ" class="absolute left-0 top-full pt-1.5 z-[999] opacity-0 pointer-events-none group-hover/dps:opacity-100 group-hover/dps:pointer-events-auto transition-all duration-200 transform -translate-y-2 group-hover/dps:translate-y-0">
+          <button type="button" onclick="event.stopPropagation(); window.game?.toggleDpsPrevisionnelFilter?.(event)" id="filter-btn-dps-previ" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition active:scale-95 bg-slate-900/95 text-amber-300 border-amber-500/40 hover:border-amber-400" title="Cliquer pour basculer le filtrage des DPS en Prévisionnel">
+            <span class="w-2 h-2 rounded-full bg-amber-500" id="dot-dps-previ"></span>
+            <span id="label-dps-previ">Prévisionnel</span> (<span id="count-dps-previ">0</span>)
+          </button>
+        </div>
+      </div>
       <button data-feature-key="samu" onclick="window.game.setFilter('samu')" id="filter-btn-samu" class="glass-pill px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-orange-400 transition flex items-center gap-1.5 flex-shrink-0">
         <span class="w-2 h-2 rounded-full bg-orange-500"></span>
         SAMU 15 (<span id="count-samu">0</span>)
@@ -1410,7 +1421,7 @@
   <script src="js/privacy.js"></script>
   <script src="js/help.js"></script>
   <script src="js/ads.js"></script>
-  <script src="js/notifications.js?v=2.6.6"></script>
+  <script src="js/notifications.js?v=2.6.7"></script>
   <script src="js/incidents.js?v=2.7.1"></script>
   <script src="js/personnel.js?v=2.1.1"></script>
   <script src="js/poles.js?v=3.0.0"></script>
@@ -1453,6 +1464,6 @@
   <script src="js/antenne_messages.js?v=2.5.4"></script>
   <script src="js/sms_mobilization.js?v=2.6.0"></script>
   <script src="js/api.js?v=2.6.0"></script>
-  <script src="js/app.js?v=2.9.1"></script>
+  <script src="js/app.js?v=2.9.2"></script>
 </body>
 </html>

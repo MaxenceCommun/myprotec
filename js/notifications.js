@@ -2042,7 +2042,7 @@ window.ProtecNotifications = {
                     Affiche la définition complète au survol de la souris ou au clic sur les abréviations de la Protection Civile.
                   </span>
                 </div>
-                <input type="checkbox" id="setting-acronym-popups" ${(!window.ProtecGlossaire || window.ProtecGlossaire.isEnabled()) ? 'checked' : ''} onchange="if(window.ProtecGlossaire) window.ProtecGlossaire.setEnabled(this.checked); if(window.game) window.game.showToast('Paramètres', this.checked ? 'Popups d’acronymes activés' : 'Popups d’acronymes masqués', 'blue');" class="w-4 h-4 text-pc-blue rounded cursor-pointer flex-shrink-0" />
+                <input type="checkbox" id="setting-acronym-popups" ${(!window.ProtecGlossaire || window.ProtecGlossaire.isEnabled()) ? 'checked' : ''} onchange="if(window.ProtecGlossaire) window.ProtecGlossaire.setEnabled(this.checked);" class="w-4 h-4 text-pc-blue rounded cursor-pointer flex-shrink-0" />
               </label>
             </div>
 

@@ -206,6 +206,9 @@ class ProtecGame {
 
     // Filtre DPS étendu : 'today' (DPS du jour) vs 'all' (Tous les DPS à venir)
     this.dpsFilterMode = 'today';
+    // Filtre DPS prévisionnels : 'all' (inclus), 'only' (prévis seuls), 'hide' (masqués)
+    this.dpsPreviFilterMode = 'all';
+    this._dpsHoverTimeout = null;
 
     // Système d'Alerte et Rappel Automatisé (Module E-Alerte SaaS)
     this.alertSubscription = {
@@ -4409,10 +4412,18 @@ class ProtecGame {
       );
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && !isUrgentOrCrisis) return;
 
-      // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
-      if (mission.type === 'dps') {
+      // Règle DPS et Prévisionnels : selon le mode actif et le filtre prévisionnel
+      const isDpsType = mission.type === 'dps' || (!mission.type && !mission.isCrisis && mission.category !== 'crise');
+      const isPrevi = !!(mission.isPrevisionnel || mission.status === 'previsionnel');
+
+      if (isDpsType) {
+        if (this.dpsPreviFilterMode === 'only' && !isPrevi) return;
+        if (this.dpsPreviFilterMode === 'hide' && isPrevi) return;
+
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
         if (this.currentFilter === 'dps' && this.dpsFilterMode === 'today' && !isToday) return;
+      } else if (this.dpsPreviFilterMode === 'only') {
+        return; // Si mode Uniquement Prévi actif, masquer les autres types de missions
       }
 
       if (!mission.lat || !mission.lng || isNaN(mission.lat) || isNaN(mission.lng)) {
@@ -31523,10 +31534,8 @@ class ProtecGame {
   setFilter(filterKey) {
     if (filterKey === 'dps') {
       if (this.currentFilter === 'dps') {
-        // Clic répété sur DPS : basculer entre 'today' (DPS du jour) et 'all' (Tous les DPS à venir)
+        // Clic répété sur DPS : basculer entre 'today' (DPS du jour) et 'all' (Tous les DPS à venir) sans notification
         this.dpsFilterMode = (this.dpsFilterMode === 'today') ? 'all' : 'today';
-        const label = this.dpsFilterMode === 'today' ? "DPS du Jour uniquement" : "Tous les DPS à venir";
-        this.showToast('Filtre DPS', `Affichage carte : ${label}`, 'blue', null, { silent: true, skipRecord: true });
       } else {
         this.currentFilter = 'dps';
         this.dpsFilterMode = 'all';
@@ -31564,6 +31573,67 @@ class ProtecGame {
 
     this.renderMissions();
     this.updateMissionCounts();
+  }
+
+  onDpsHover(isHovering) {
+    const dd = document.getElementById('dropdown-dps-previ');
+    if (!dd) return;
+    if (isHovering) {
+      if (this._dpsHoverTimeout) clearTimeout(this._dpsHoverTimeout);
+      dd.classList.remove('opacity-0', 'pointer-events-none', '-translate-y-2');
+      dd.classList.add('opacity-100', 'pointer-events-auto', 'translate-y-0');
+    } else {
+      clearTimeout(this._dpsHoverTimeout);
+      this._dpsHoverTimeout = setTimeout(() => {
+        dd.classList.add('opacity-0', 'pointer-events-none', '-translate-y-2');
+        dd.classList.remove('opacity-100', 'pointer-events-auto', 'translate-y-0');
+      }, 250);
+    }
+  }
+
+  toggleDpsPrevisionnelFilter(e) {
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+
+    // Cycle à 3 états :
+    // 1. 'all' : DPS confirmés et prévisionnels inclus
+    // 2. 'only' : Uniquement les DPS en prévisionnel
+    // 3. 'hide' : DPS prévisionnels masqués (confirmés uniquement)
+    if (this.dpsPreviFilterMode === 'all') {
+      this.dpsPreviFilterMode = 'only';
+    } else if (this.dpsPreviFilterMode === 'only') {
+      this.dpsPreviFilterMode = 'hide';
+    } else {
+      this.dpsPreviFilterMode = 'all';
+    }
+
+    if (this.dpsPreviFilterMode !== 'all' && this.currentFilter !== 'dps' && this.currentFilter !== 'all') {
+      this.currentFilter = 'dps';
+    }
+
+    this.updateDpsPreviButtonUI();
+    this.renderMissions();
+    this.updateMissionCounts();
+  }
+
+  updateDpsPreviButtonUI() {
+    const btn = document.getElementById('filter-btn-dps-previ');
+    const label = document.getElementById('label-dps-previ');
+    const dot = document.getElementById('dot-dps-previ');
+    if (!btn || !label) return;
+
+    if (this.dpsPreviFilterMode === 'only') {
+      label.textContent = 'Prévi : Uniquement';
+      btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-black border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-amber-500/20 text-amber-300 border-amber-400 ring-2 ring-amber-400/40';
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+    } else if (this.dpsPreviFilterMode === 'hide') {
+      label.textContent = 'Prévi : Masqués';
+      btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-slate-900/95 text-slate-400 border-slate-600 line-through opacity-80';
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+    } else {
+      label.textContent = 'Prévi : Inclus';
+      btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-slate-900/95 text-amber-300 border-amber-500/40 hover:border-amber-400';
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-500';
+    }
   }
 
   // --- GESTION DES REPAS EN MISSION & NOTES DE FRAIS (12h00 & 19h00) ---
@@ -34939,6 +35009,15 @@ class ProtecGame {
       `;
       dpsBtn.title = `Filtrer les DPS (${dpsCount} dispositif(s) au total)`;
     }
+
+    // 3. Mise à jour du compteur du sous-bouton prévisionnel
+    const previCount = activeMissions.filter(m => 
+      (m.type === 'dps' || (!m.type && !m.isCrisis && m.category !== 'crise')) && 
+      (m.isPrevisionnel || m.status === 'previsionnel')
+    ).length;
+    const previEl = document.getElementById('count-dps-previ');
+    if (previEl) previEl.textContent = previCount;
+    this.updateDpsPreviButtonUI();
   }
 
   updateToastContainerPosition() {
@@ -35027,10 +35106,45 @@ class ProtecGame {
       m.includes('thème sélectionné') || 
       m.includes('mode sombre') || 
       m.includes('mode clair') || 
-      m.includes('presse-papier');
+      m.includes('presse-papier') ||
+      m.includes('acronyme') ||
+      m.includes('filtre');
 
-    const skipRecord = !!(options?.skipRecord || isNonAlert);
-    const silent = !!(options?.silent || isNonAlert);
+    // RÈGLE STRICTE : AUCUNE notification d'action UI (filtre, paramètre, acronyme, thème, etc.) ne doit s'afficher
+    if (isNonAlert) return;
+
+    // Respect strict des préférences utilisateur configurées dans les paramètres
+    let opCategory = null;
+    if (t.includes('crise') || m.includes('crise') || t.includes('préfecture') || t.includes('prefecture') || m.includes('préfecture') || m.includes('prefecture') || t.includes('réquisition') || t.includes('requisition') || m.includes('réquisition') || m.includes('requisition') || target?.type === 'crise' || target?.type === 'prefecture' || target?.isCrise) {
+      opCategory = 'crise';
+    } else if (t.includes('samu') || m.includes('samu') || t.includes('départ réflexe') || t.includes('depart reflexe') || m.includes('départ réflexe') || m.includes('depart reflexe') || target?.type === 'samu' || target?.isSamu) {
+      opCategory = 'samu';
+    } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || t.includes('garde') || m.includes('garde') || target?.type === 'pompiers' || target?.type === 'sdis' || target?.isSdis) {
+      opCategory = 'sdis';
+    } else if (t.includes('dps') || m.includes('dps') || t.includes('devis') || m.includes('devis') || target?.type === 'dps' || target?.type === 'devis') {
+      opCategory = 'dps';
+    } else if (t.includes('candidature') || m.includes('candidature') || t.includes('recrutement') || m.includes('recrutement') || t.includes('bénévole') || m.includes('benevole') || target?.type === 'rh' || target?.type === 'personnel') {
+      opCategory = 'rh';
+    } else if (t.includes('météo') || m.includes('meteo') || t.includes('vigilance') || m.includes('vigilance') || t.includes('sncf') || m.includes('sncf') || target?.type === 'meteo' || target?.type === 'weather') {
+      opCategory = 'weather';
+    }
+
+    if (opCategory && window.ProtecNotifications && typeof window.ProtecNotifications.getAlertMode === 'function') {
+      const alertMode = window.ProtecNotifications.getAlertMode(opCategory);
+      if (alertMode === 'off') {
+        return; // Alerte désactivée dans les paramètres
+      }
+      if (alertMode === 'sound') {
+        // Son uniquement : jouer le signal sonore, ne pas polluer l'écran avec un toast
+        if (window.ProtecAudio && typeof window.ProtecAudio.handleToastAudio === 'function') {
+          window.ProtecAudio.handleToastAudio(title, message, color, target);
+        }
+        return;
+      }
+    }
+
+    const skipRecord = !!options?.skipRecord;
+    const silent = !!options?.silent;
 
     // Enregistrement dans l'historique des notifications (sauf si skipRecord ou notification de filtre)
     if (!skipRecord && window.ProtecNotifications && typeof window.ProtecNotifications.recordNotification === 'function') {
