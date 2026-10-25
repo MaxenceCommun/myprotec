@@ -813,7 +813,7 @@
       </button>
 
       <!-- 3. Antenne -->
-      <button onclick="window.game.openModule('locaux')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-slate-100 min-w-0" title="Bâtiment, Flotte & Logistique">
+      <button onclick="window.ProtecBaseLive ? window.ProtecBaseLive.openBaseView(window.game.stations && window.game.stations[0] && window.game.stations[0].id) : window.game.openModule('locaux')" class="flex flex-col items-center justify-center flex-1 py-1 rounded-xl active:bg-slate-100 min-w-0" title="Ma base : antenne, flotte, effectif et aménagement">
         <div class="relative">
           <i data-lucide="building-2" class="w-5 h-5 text-slate-700"></i>
           <span id="badge-materiel-mobile" class="hidden absolute -top-1 -right-2 px-1 py-0.1 rounded-full text-[8px] font-black bg-amber-500 text-white min-w-[14px] text-center leading-tight">!</span>
@@ -999,12 +999,12 @@
             <span class="text-xs font-bold text-slate-700">Messages</span>
             <span class="text-[9px] text-slate-400">Courriers antenne</span>
           </button>
-          <button onclick="window.game.closeMobileMenu(); if(window.ProtecLocaux) window.ProtecLocaux.activeTab = 'plan'; window.game.openModule('locaux')" class="mobile-grid-btn group">
+          <button onclick="window.game.closeMobileMenu(); if(window.ProtecLocaux) window.ProtecLocaux.activeTab = 'modulaire'; window.game.openModule('locaux')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
               <i data-lucide="layout-grid" class="w-4.5 h-4.5"></i>
             </div>
             <span class="text-xs font-bold text-slate-700">Bâtiment</span>
-            <span class="text-[9px] text-slate-400">Plan 2D & Salles</span>
+            <span class="text-[9px] text-slate-400">Immobilier & sécurité</span>
           </button>
           <button onclick="window.game.closeMobileMenu(); window.game.openModule('flotte')" class="mobile-grid-btn group">
             <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-1 group-hover:scale-105 transition">
@@ -1425,8 +1425,8 @@
   <script src="js/scenarios_manager.js"></script>
   <script src="js/admin.js?v=2.6.5"></script>
   <script src="js/building_engine.js"></script>
-  <script src="js/base_live_scene.js?v=2.2.0"></script>
-  <script src="js/locaux.js?v=2.9.0"></script>
+  <script src="js/base_live_scene.js?v=2.5.0"></script>
+  <script src="js/locaux.js?v=2.10.0"></script>
   <script src="js/logistique.js?v=2.7.9"></script>
   <script src="js/boutiques.js"></script>
   <script src="js/finances.js?v=2.6.2"></script>
@@ -1435,7 +1435,8 @@
   <script src="js/audio.js?v=2.1.2"></script>
   <script src="js/crisis_radio.js?v=1.0.0"></script>
   <script src="js/specialites.js"></script>
-  <script src="js/crise_logistique.js?v=2.7.2"></script>
+  <script src="js/crise_logistique.js?v=2.7.3"></script>
+  <script src="js/missions_logistiques.js?v=1.0.0"></script>
   <script src="js/commandement.js"></script>
   <script src="js/pwa.js?v=2.6.3"></script>
   <script src="js/glossaire.js"></script>
@@ -1452,6 +1453,6 @@
   <script src="js/antenne_messages.js?v=2.5.4"></script>
   <script src="js/sms_mobilization.js?v=2.6.0"></script>
   <script src="js/api.js?v=2.6.0"></script>
-  <script src="js/app.js?v=2.7.9"></script>
+  <script src="js/app.js?v=2.8.1"></script>
 </body>
 </html>

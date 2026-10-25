@@ -1970,7 +1970,7 @@ window.ProtecCriseLogistique = {
     // 2. Gestion des missions d'atelier de réarmement
     if (Array.isArray(game.missions)) {
       game.missions.forEach(m => {
-        if (m.isRearmentWorkshop || m.isRearmamentWorkshop) {
+        if ((m.isRearmentWorkshop || m.isRearmamentWorkshop) && !m.logV2) {
           if (m.status === 'ongoing' || m.status === 'en_cours') {
             const regCount = Math.max(1, (m.registeredVolunteers || []).length);
             // La durée effective est réduite par le nombre de bénévoles inscrits

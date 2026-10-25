@@ -3012,8 +3012,8 @@ window.ProtecLocaux = {
     game.showToast('Déménagement réussi !', `Nouveaux locaux en pleine propriété : ${b.name} (${b.surfaceM2} m²). Affectez une vocation aux salles libres.`, 'green');
     game.saveGame();
     game.updateStatsUI();
-    this.activeTab = 'plan';
-    this.renderModal(game);
+    this.activeTab = 'modulaire';
+    this.openInBaseView(true);
   },
 
   // Location d'un bâtiment existant (bail commercial, loyer mensuel)
@@ -3036,8 +3036,8 @@ window.ProtecLocaux = {
     game.showToast('Bail signé !', `L'antenne s'installe dans ${b.name} (${b.surfaceM2} m², ${b.monthlyRent.toLocaleString('fr-FR')} €/mois).`, 'green');
     game.saveGame();
     game.updateStatsUI();
-    this.activeTab = 'plan';
-    this.renderModal(game);
+    this.activeTab = 'modulaire';
+    this.openInBaseView(true);
   },
 
   // Lancement d'une construction sur-mesure d'Architecte
@@ -3519,9 +3519,8 @@ window.ProtecLocaux = {
 
         <!-- Barre d'onglets du module -->
         <div class="flex items-center gap-2 border-b border-slate-200 pb-2 text-xs font-bold overflow-x-auto no-scrollbar flex-nowrap">
-          <button onclick="window.ProtecLocaux.setTab('plan', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${(this.activeTab === 'plan' || !this.activeTab) ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
-            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
-            <span>📐 Plan du Bâtiment 2D</span>
+          <button onclick="window.ProtecLocaux.openInBaseView(true)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 bg-[#ff6600] hover:bg-[#e65c00] text-white shadow-sm" title="L'aménagement (mobilier, vocations) se fait directement dans la vue « Ma base »">
+            <span>✏️ Aménager dans Ma base</span>
             ${ongoingWorksCount > 0 ? `<span class="px-1.5 py-0.5 rounded-full text-[9px] bg-amber-400 text-slate-900 font-black">${ongoingWorksCount}</span>` : ''}
           </button>
           <button onclick="window.ProtecLocaux.setTab('modulaire', window.game)" class="px-3.5 py-2 rounded-xl transition flex-shrink-0 flex items-center gap-1.5 ${this.activeTab === 'modulaire' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-blue-400/40' : 'text-slate-600 hover:bg-slate-100'}">
@@ -3557,7 +3556,17 @@ window.ProtecLocaux = {
     if (window.lucide) window.lucide.createIcons();
   },
 
+  // L'aménagement se fait uniquement dans la vue « Ma base »
+  openInBaseView(edit) {
+    const game = window.game;
+    const st = game && game.stations && game.stations[0];
+    if (!st || !window.ProtecBaseLive) return;
+    if (game && typeof game.closeModal === 'function') { try { game.closeModal(); } catch (e) { /* ignoré */ } }
+    window.ProtecBaseLive.openBaseView(st.id, { edit: !!edit });
+  },
+
   setTab(tabKey, game) {
+    if (tabKey === 'plan') { this.openInBaseView(true); return; }
     this.activeTab = tabKey;
     this.renderModal(game);
   },
@@ -4628,9 +4637,7 @@ window.ProtecLocaux = {
 
   // Rendu selon l'onglet actif
   renderActiveTabContent(game, station, premises, stats) {
-    if (this.activeTab === 'plan' || !this.activeTab) {
-      return this.renderPlanTab(game, premises, stats);
-    }
+    if (this.activeTab === 'plan' || !this.activeTab) this.activeTab = 'modulaire';
     if (this.activeTab === 'modulaire') {
       return this.renderModulaireTab(game, station, premises, stats);
     }

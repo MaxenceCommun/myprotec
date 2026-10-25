@@ -3838,6 +3838,9 @@ class ProtecGame {
       // Les gardes (SAMU/SDIS) sont gérées dans le planning et la modale de garde, elles ne doivent JAMAIS apparaître comme des marqueurs physiques sur la carte
       if (mission.isGarde || mission.type === 'garde_samu' || mission.isGuard || mission.category === 'garde') return;
 
+      // Les missions qui se déroulent à la base (logistique, réarmement, travaux) n'ont pas de point sur la carte
+      if (mission.logV2 || mission.isRearmamentWorkshop || mission.type === 'logistique' || mission.type === 'rearmement' || mission.type === 'travaux' || mission.atBase) return;
+
       // Exclusion stricte des missions SAMU si le joueur n'a pas de convention SAMU signée ou aucun VPSP
       const hasSamuConv = Boolean(this.samuConvention && this.samuConvention.signed);
       const hasVpsp = Array.isArray(this.vehicles) && this.vehicles.some(v => v.type === 'VPSP');
@@ -4407,8 +4410,12 @@ class ProtecGame {
       window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, newStation.departmentCode || this.currentDepartmentCode, { lat: newStation.lat, lng: newStation.lng });
     }
 
-    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Ouverture du plan d'aménagement...`, 'green');
-    if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
+    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Aménagez vos locaux depuis « Ma base ».`, 'green');
+    if (window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') {
+      setTimeout(() => {
+        window.ProtecBaseLive.openBaseView(stationId, { edit: true });
+      }, 200);
+    } else if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
       setTimeout(() => {
         window.ProtecLocaux.openInitialSetupModal(this, stationId);
       }, 200);
@@ -8570,6 +8577,18 @@ class ProtecGame {
   createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null, forcePendingDelivery = false) {
     const veh = (this.vehicles || []).find(v => v.id === vehicleId);
     if (!veh) return null;
+
+    // Nouveau système : mission logistique planifiable, tâches combinables
+    if (window.ProtecMissionsLog) {
+      const existingV2 = window.ProtecMissionsLog.findOpenMissionForVehicle(this, veh.id, 'rearm');
+      if (existingV2) {
+        if (!autoCreated) this.openMissionDetails(existingV2.id);
+        return existingV2;
+      }
+      if (autoCreated) return window.ProtecMissionsLog.createAuto(this, veh.id, ['rearm'], pole);
+      window.ProtecMissionsLog.openCreateModal(this, { vehicleId: veh.id, tasks: ['rearm'], usePending: forcePendingDelivery });
+      return null;
+    }
 
     // Vérifier si une mission de réarmement est déjà en cours ou planifiée pour ce véhicule
     const existing = (this.missions || []).find(m => 
@@ -16669,6 +16688,11 @@ class ProtecGame {
         }
       }
 
+      if (mission.logV2 && window.ProtecMissionsLog) {
+        window.ProtecMissionsLog.openDetails(this, mission.id);
+        return;
+      }
+
       if (!Array.isArray(mission.registeredVolunteers)) {
         mission.registeredVolunteers = [];
       }
@@ -21500,9 +21524,14 @@ class ProtecGame {
     this.deployReinforcementVehicleWithCrew(missionId, vehId, [dispoDriver.id]);
   }
 
-  openStationDetails(stationId) {
+  openStationDetails(stationId, opts = {}) {
     const station = this.stations.find(s => s.id === stationId);
     if (!station) return;
+    // Point d'entrée unique : la fiche de l'antenne est intégrée à la vue « Ma base »
+    if (!opts.drawer && window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') {
+      window.ProtecBaseLive.openBaseView(stationId, { tab: opts.tab || 'flotte', closeModal: false });
+      return;
+    }
 
     this.selectedStationId = stationId;
     const drawer = document.getElementById('context-drawer');
@@ -27094,7 +27123,7 @@ class ProtecGame {
                 <i data-lucide="package-check" class="w-4 h-4"></i>
                 <span>Réarmer Flotte & Lots</span>
               </button>
-              <button onclick="window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <button onclick="window.ProtecMissionsLog ? window.ProtecMissionsLog.openCreateModal(window.game, {}) : window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="wrench" class="w-4 h-4"></i>
                 <span>Mission Logistique</span>
               </button>
@@ -27288,12 +27317,12 @@ class ProtecGame {
                             ⏳ ${v.logOperation.label}
                           </span>
                         ` : v.logKit ? `
-                          <button onclick="window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer le stockage ou changer de kit">
+                          <button onclick="window.ProtecMissionsLog ? window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['kit_unload'] }) : window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer le stockage ou changer de kit">
                             <i data-lucide="arrow-down-to-dot" class="w-3.5 h-3.5"></i>
                             <span>Décharger (${window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]?.shortName || 'Kit'})</span>
                           </button>
                         ` : `
-                          <select onchange="if(this.value) { window.ProtecCriseLogistique.startLoadingVehicleKit(window.game, '${v.id}', this.value); this.value=''; }" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 transition cursor-pointer">
+                          <select onchange="if(this.value) { if (window.ProtecMissionsLog) window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['kit_load'], kitId: this.value }); else window.ProtecCriseLogistique.startLoadingVehicleKit(window.game, '${v.id}', this.value); this.value=''; }" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 transition cursor-pointer">
                             <option value="">📦 Charger un Kit LOG...</option>
                             <option value="dps">📦 Kit DPS (Matériels PS)</option>
                             <option value="chu">🛏️ Kit CHU (50 Lits de Camp)</option>
@@ -27404,9 +27433,13 @@ class ProtecGame {
       }
     } else if (moduleKey === 'amenagement' || moduleKey === 'locaux' || moduleKey === 'plan' || moduleKey === 'plan_batiment') {
       if (window.ProtecLocaux) {
-        if (moduleKey === 'plan' || moduleKey === 'plan_batiment' || !window.ProtecLocaux.activeTab) {
-          window.ProtecLocaux.activeTab = 'plan';
+        if ((moduleKey === 'plan' || moduleKey === 'plan_batiment' || moduleKey === 'amenagement') && window.ProtecBaseLive) {
+          // L'aménagement du bâtiment se fait uniquement dans « Ma base »
+          modal.classList.add('hidden');
+          window.ProtecBaseLive.openBaseView(this.stations[0] && this.stations[0].id, { edit: true });
+          return;
         }
+        if (!window.ProtecLocaux.activeTab || window.ProtecLocaux.activeTab === 'plan') window.ProtecLocaux.activeTab = 'modulaire';
         window.ProtecLocaux.renderModal(this);
       } else if (window.ProtecAdvancedModals) {
         title.textContent = 'Aménagement du local';
@@ -29228,6 +29261,35 @@ class ProtecGame {
             })()}
           </div>
 
+          <!-- Propreté du véhicule (salissure selon les km et la météo) -->
+          ${(() => {
+            const ML = window.ProtecMissionsLog;
+            const cl = Math.round(typeof v.cleanliness === 'number' ? v.cleanliness : 100);
+            const col = cl >= 60 ? 'bg-lime-500' : (cl >= 40 ? 'bg-amber-500' : 'bg-amber-800');
+            const txt = cl >= 60 ? 'text-emerald-600' : (cl >= 40 ? 'text-amber-600' : 'text-red-600');
+            const pending = ML ? ML.findOpenMissionForVehicle(this, v.id) : null;
+            const washPrice = ML ? ML.washPrice(v) : 20;
+            return `
+              <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                  <span class="font-extrabold text-slate-700 flex items-center gap-1.5"><span>🧽</span> Propreté</span>
+                  <span class="font-mono font-black ${txt}">${cl}%</span>
+                </div>
+                <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
+                  <div class="h-full rounded-full transition-all duration-300 ${col}" style="width: ${cl}%"></div>
+                </div>
+                <div class="flex items-center justify-between text-[10px] gap-2 flex-wrap">
+                  <span class="font-bold ${txt}">${cl >= 60 ? 'Présentable' : (cl >= 40 ? 'Nettoyage conseillé' : (cl >= 20 ? 'Sale' : 'Très sale : image de l’antenne en jeu'))}</span>
+                  ${pending ? `<button type="button" onclick="window.game.openMissionDetails('${pending.id}'); document.getElementById('${modalId}').remove();" class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">🛠️ Mission logistique prévue</button>` : (ML && cl < 95 ? `
+                    <span class="flex gap-2">
+                      <button type="button" onclick="window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['wash_hand'] }); document.getElementById('${modalId}').remove();" class="font-black text-sky-700 hover:underline">🧽 À la main (gratuit)</button>
+                      <button type="button" onclick="window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['wash_station'] }); document.getElementById('${modalId}').remove();" class="font-black text-sky-700 hover:underline">🚿 Station (${washPrice} €)</button>
+                    </span>` : '')}
+                </div>
+              </div>
+            `;
+          })()}
+
           <!-- Transmissions & Informatique Embarquée (Armement Facultatif) -->
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
             <div class="flex items-center justify-between">
@@ -30211,7 +30273,13 @@ class ProtecGame {
         window.ProtecLogistique.updateArmamentDomProgress();
       }
 
+      // Missions logistiques à la base (moteur dédié : début planifié, trajets, tâches combinées)
+      if (window.ProtecMissionsLog && typeof window.ProtecMissionsLog.tick === 'function') {
+        try { window.ProtecMissionsLog.tick(this); } catch (e) { console.warn('[Missions logistiques]', e); }
+      }
+
       this.missions.forEach(m => {
+        if (m.logV2) return;
         if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit || m.type === 'crise' || m.isCrisis) {
           const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
           let hasCrisisChanges = false;
@@ -30746,7 +30814,7 @@ class ProtecGame {
 
         // 1b-2. Contrôle et départ automatique des missions planifiées (DPS, Maraudes, etc.)
         this.missions.forEach(m => {
-          if (m.status === 'planifie') {
+          if (m.status === 'planifie' && !m.logV2) {
             const targetHour = m.startHour || m.eventDate?.hour || 14;
             const targetMinute = m.startMinute || m.eventDate?.minute || 0;
             const durHours = m.durationHours || (m.durationSeconds ? m.durationSeconds / 3600 : 4);
