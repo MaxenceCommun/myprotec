@@ -549,16 +549,20 @@ window.ProtecCump = {
   },
 
   // Déclenchement d'alerte CUMP / CAI par le SAMU 15
-  triggerCumpAlert(game) {
+  triggerCumpAlert(game, opts = {}) {
     if (!game) game = window.game;
+    // Alerte tirée par le serveur (jeu éventuellement fermé) : plafond journalier déjà contrôlé
+    const fromServer = !!(opts && opts.fromServer);
     if (!game.cumpConvention || !game.cumpConvention.signed || !game.cumpConvention.normCompliant) return;
-    if (typeof game.canTriggerDailyCrisis === 'function' && !game.canTriggerDailyCrisis()) return;
+    if (!fromServer && typeof game.canTriggerDailyCrisis === 'function' && !game.canTriggerDailyCrisis()) return;
 
+    const atTs = (fromServer && opts.at) ? opts.at : Date.now();
+    const atD = new Date(atTs);
     const curDay = (game.clock && game.clock.year) 
-      ? `${game.clock.year}-${game.clock.month}-${game.clock.day}` 
-      : new Date().toISOString().slice(0, 10);
+      ? `${atD.getFullYear()}-${atD.getMonth()}-${atD.getDate()}` 
+      : atD.toISOString().slice(0, 10);
     game.lastCrisisCalendarDay = curDay;
-    game.lastCrisisTimestamp = Date.now();
+    game.lastCrisisTimestamp = atTs;
     if (window.ProtecNotifications) {
       window.ProtecNotifications.notifyCategory(
         'alertes',

@@ -474,6 +474,9 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Moteur d'événements serveur 24h/24 (statut + battement « jeu ouvert »)
+  if (eventsEngine && EventsEngineMod && EventsEngineMod.handleHttp(eventsEngine, req, res)) return;
+
   // Obtenir l'IP client
   if (url === '/api/client-ip' && req.method === 'GET') {
     const rawIp = getClientIp(req);
@@ -2611,5 +2614,24 @@ const CLOUD_BRIDGE_POLL_MS = 1000;
 setInterval(checkAndDispatchCloudPushQueue, CLOUD_BRIDGE_POLL_MS);
 setTimeout(checkAndDispatchCloudPushQueue, 500);
 console.log(`⚡ [Cloud Push Bridge Éclair] Passerelle active (cadence de vérification ultra-rapide toutes les ${CLOUD_BRIDGE_POLL_MS}ms).`);
+
+// =========================================================================
+// MOTEUR D'ÉVÉNEMENTS 24h/24 : crises, inter SAMU/SDIS, demandes de DPS, candidatures
+// Les événements sont tirés ici pour tous les joueurs (jeu ouvert ou fermé) et
+// notifiés via la passerelle Cloud Push ci-dessus selon les réglages du joueur.
+// =========================================================================
+var EventsEngineMod = null;
+var eventsEngine = null;
+try {
+  EventsEngineMod = require('./server_events_engine');
+  eventsEngine = EventsEngineMod.createEngine({
+    supabaseUrl: process.env.SUPABASE_URL || SUPABASE_REST_URL,
+    supabaseKey: process.env.SUPABASE_SERVICE_KEY || SUPABASE_REST_KEY,
+    statePath: path.join(__dirname, 'data', 'server_events_state.json')
+  });
+  eventsEngine.start();
+} catch (eEngine) {
+  console.warn('⚠️ [Moteur événements] Démarrage impossible :', eEngine.message);
+}
 
 

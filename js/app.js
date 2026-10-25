@@ -3227,7 +3227,8 @@ class ProtecGame {
     const pendingCount = (this.devis || []).filter(d => d.status === 'pending').length;
     const maxPending = this.getSimultaneousDevisLimit ? this.getSimultaneousDevisLimit() : 0;
 
-    if (pendingCount < maxPending && siteFreshness >= 40) {
+    // Les demandes reçues pendant l'absence sont désormais tirées en direct par le serveur
+    if (!this.isServerEventsEngineActive() && pendingCount < maxPending && siteFreshness >= 40) {
       const potentialQuotes = Math.min(maxPending - pendingCount, Math.floor(elapsedHours / 3.5) + (Math.random() < 0.7 ? 1 : 0));
       for (let q = 0; q < potentialQuotes; q++) {
         if (window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
@@ -6039,12 +6040,14 @@ class ProtecGame {
     return 5;
   }
 
-  generateRandomDevisOpportunity() {
+  generateRandomDevisOpportunity(opts = {}) {
     if (this.stations.length === 0) return;
+    // Demande tirée par le serveur : les plafonds ont déjà été contrôlés au moment du tirage
+    const fromServer = !!(opts && opts.fromServer);
 
     // Contrôle strict de la limite invisible du nombre de demandes simultanées en attente
     const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
-    if (pendingDevisCount >= this.getSimultaneousDevisLimit()) {
+    if (!fromServer && pendingDevisCount >= this.getSimultaneousDevisLimit()) {
       return; // Limite invisible atteinte : aucune nouvelle demande tant qu'un devis n'est pas traité
     }
 
@@ -6052,14 +6055,17 @@ class ProtecGame {
 
     // 1. MOTEUR DYNAMIQUE DE DPS PAR LIEU RÉEL OPENSTREETMAP (Scénario métier -> Recherche ciblée OSM)
     // Utilisé prioritairement pour varier à l'infini les lieux réels sans alourdir la sauvegarde
-    const preferOsmEngine = !this.territoryEventsPool || this.territoryEventsPool.length === 0 || Math.random() < 0.70;
+    const preferOsmEngine = !(opts && opts.noOsm) && (!this.territoryEventsPool || this.territoryEventsPool.length === 0 || Math.random() < 0.70);
     if (preferOsmEngine && window.ProtecDPSGenerator && typeof window.ProtecDPSGenerator.generateDPSWithOSMLocation === 'function') {
       window.ProtecDPSGenerator.generateDPSWithOSMLocation(this, { baseStation: base }).then(d => {
-        if (!d) return;
+        if (!d) {
+          if (fromServer) this.generateRandomDevisOpportunity(Object.assign({}, opts, { noOsm: true }));
+          return;
+        }
 
         // Contrôle de sécurité de la limite simultanée au retour asynchrone
         const curPending = (this.devis || []).filter(item => item.status === 'pending').length;
-        if (curPending >= this.getSimultaneousDevisLimit()) return;
+        if (!fromServer && curPending >= this.getSimultaneousDevisLimit()) return;
 
         const curHours = (this.clock.year * 8760) + (this.clock.month * 720) + (this.clock.day * 24) + (this.clock.hour || 0);
         this._lastDevisReceivedTotalHours = curHours;
@@ -6080,6 +6086,7 @@ class ProtecGame {
         this.showToast('Nouvelle Demande Organisateur', `« ${d.eventName} » (${d.scale}) vous a sollicité pour un devis.`, 'blue');
       }).catch(err => {
         console.warn('Erreur generateDPSWithOSMLocation, bascule fallback:', err);
+        if (fromServer) this.generateRandomDevisOpportunity(Object.assign({}, opts, { noOsm: true }));
       });
       return;
     }
@@ -12516,10 +12523,11 @@ class ProtecGame {
   }
 
   // Déclencheur officiel d'une Préalerte AASC (Veille Opérationnelle)
-  async triggerAascPrealert(origin = null) {
-    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
+  async triggerAascPrealert(origin = null, opts = {}) {
+    const fromServer = !!(opts && opts.fromServer);
+    if (!fromServer && window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.stations || this.stations.length === 0) return;
-    if (!this.canTriggerDailyCrisis()) return;
+    if (!fromServer && !this.canTriggerDailyCrisis()) return;
 
     const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '54');
 
@@ -12639,6 +12647,18 @@ class ProtecGame {
       departmentCode: base.departmentCode || deptCode
     };
 
+    // Événement tiré par le serveur (jeu éventuellement fermé) : l'heure réelle de l'alerte fait foi
+    if (fromServer && opts.at) {
+      const elapsedSec = Math.max(0, Math.floor((Date.now() - opts.at) / 1000));
+      newMission.spawnedAt = opts.at;
+      newMission.targetTime = opts.at + (prealertSec * 1000);
+      newMission.prealertSecondsLeft = Math.max(0, prealertSec - elapsedSec);
+      newMission.serverEventId = opts.serverEventId || null;
+      const atD = new Date(opts.at);
+      this.lastCrisisCalendarDay = (this.clock && this.clock.year) ? `${atD.getFullYear()}-${atD.getMonth()}-${atD.getDate()}` : atD.toISOString().slice(0, 10);
+      this.lastCrisisTimestamp = opts.at;
+    }
+
     this.enrichMissionLocationWithCity(newMission);
 
     // Initialisation du ciblage initial et de l'escalade selon la décision du Président APC
@@ -12719,12 +12739,17 @@ class ProtecGame {
     }
   }
 
-  triggerSncfPrealert() {
-    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
+  triggerSncfPrealert(opts = {}) {
+    if (!(opts && opts.fromServer) && window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.sncfConvention || !this.sncfConvention.signed) return;
     const activeSncf = this.missions.find(m => m.alertOrigin === 'sncf' && ['prealerte', 'declenche', 'ongoing'].includes(m.status));
     if (activeSncf) return;
-    this.triggerAascPrealert('sncf');
+    this.triggerAascPrealert('sncf', opts);
+  }
+
+  // Moteur d'événements du serveur actif : le jeu ne tire plus d'événements localement
+  isServerEventsEngineActive() {
+    return !!(window.ProtecServerEvents && typeof window.ProtecServerEvents.isActive === 'function' && window.ProtecServerEvents.isActive());
   }
 
   // --- SYNCHRONISATION DÉPARTEMENTALE DES CRISES & SIMULATION DU MONDE HORS LIGNE ---
@@ -13083,7 +13108,7 @@ class ProtecGame {
         localStorage.setItem(lastCheckKey, String(now));
 
         // Déclenchement probabiliste après absence (simulation temps réel hors ligne)
-        if (offlineHours >= 0.75 && this.stations && this.stations.length > 0) {
+        if (offlineHours >= 0.75 && this.stations && this.stations.length > 0 && !this.isServerEventsEngineActive()) {
           const spawnProb = Math.min(0.85, Math.max(0.30, offlineHours * 0.20));
           if (Math.random() < spawnProb) {
             console.log(`Simulation hors-ligne [Dpt ${myDept}] : création de l'événement survenu durant l'absence (${offlineHours.toFixed(1)}h).`);
@@ -32846,7 +32871,8 @@ class ProtecGame {
         if (window.ProtecVeille && typeof window.ProtecVeille.checkSlotsLifecycle === 'function') {
           window.ProtecVeille.checkSlotsLifecycle(this);
         }
-        if (this.canTriggerDailyCrisis()) {
+        // Tirage local désactivé quand le moteur d'événements du serveur est actif (source unique, jeu ouvert ou fermé)
+        if (!this.isServerEventsEngineActive() && this.canTriggerDailyCrisis()) {
           const hour = (this.clock && this.clock.hour !== undefined) ? this.clock.hour : new Date().getHours();
           const isNight = (hour >= 1 && hour < 7); // Nuit profonde entre 01h et 07h
 
@@ -32889,7 +32915,7 @@ class ProtecGame {
       // - Même avec de la publicité / campagne active, elle reçoit 1 ou 2 demandes réparties sur plusieurs heures de jeu.
       // - Cooldown obligatoire entre 2 arrivées de devis : 2 à 4 heures pour petite antenne, 1 à 2 heures pour grande antenne.
       if (this.clock.second === 0 && (this.clock.minute === 0 || this.clock.minute === 30)) {
-        if (this.stations.length > 0) {
+        if (this.stations.length > 0 && !this.isServerEventsEngineActive()) {
           const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
           const volsCount = (this.volunteers || []).length;
           const repScore = this.resources.reputationScore || 0;
@@ -33007,7 +33033,7 @@ class ProtecGame {
           window.ProtecFormations.processClockTick(this);
         }
 
-        if (this.stations.length > 0 && typeof this.canSpawnSpontaneousCandidate === 'function' && this.canSpawnSpontaneousCandidate()) {
+        if (this.stations.length > 0 && !this.isServerEventsEngineActive() && typeof this.canSpawnSpontaneousCandidate === 'function' && this.canSpawnSpontaneousCandidate()) {
           const cap = this.getDailyRecruitmentCap();
           let candChance = cap.hourlyBaseChance || 0.04;
 
@@ -33192,13 +33218,15 @@ class ProtecGame {
 
   // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
   // Alerte d'urgence SAMU 15 calibrée aux moyens de l'antenne (Convention Cadre requise)
-  triggerRandomSamuEmergency() {
-    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
+  triggerRandomSamuEmergency(opts = {}) {
+    const fromServer = !!(opts && opts.fromServer);
+    if (!fromServer && window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
     if (!this.samuConvention || !this.samuConvention.signed) return;
 
     const activeGuard = window.ProtecGardesSamu ? window.ProtecGardesSamu.getCurrentActiveGuard(this) : null;
     const isGuardActive = Boolean(activeGuard || (this.samuGarde && this.samuGarde.active));
-    if (!isGuardActive) return;
+    // Événement serveur : la garde était active à l'heure de l'alerte (vérifié par le serveur)
+    if (!isGuardActive && !fromServer) return;
 
     // CONTRÔLE STRICT : VÉRIFIER QU'UN VECTEUR VPSP EST RÉELLEMENT DISPONIBLE AVANT TOUT DÉCLENCHEMENT
     const isVehicleDispo = (v) => Boolean(
@@ -33217,7 +33245,7 @@ class ProtecGame {
       ? guardVehicle
       : (this.vehicles || []).find(v => isVehicleDispo(v));
 
-    if (!availableVpsp) {
+    if (!availableVpsp && !fromServer) {
       // AUCUN VECTEUR DISPONIBLE : NE PAS DÉCLENCHER D'INTERVENTION SAMU !
       return;
     }
@@ -33233,7 +33261,7 @@ class ProtecGame {
     );
     const totalDispoVpsps = (this.vehicles || []).filter(v => isVehicleDispo(v)).length;
 
-    if (totalDispoVpsps === 0 || activeStandardSamu.length >= totalDispoVpsps) {
+    if (!fromServer && (totalDispoVpsps === 0 || activeStandardSamu.length >= totalDispoVpsps)) {
       // Tous les vecteurs Protec disponibles sont déjà engagés en intervention !
       this.maybeTriggerSamuRenfortRequest();
       return;
@@ -33307,8 +33335,9 @@ class ProtecGame {
       assignedCrew: { volunteers: [], vehicles: [] },
       address: this.generateRealisticStreetAddress(this.stations[0]?.city || 'Paris', samuCoords.lat, samuCoords.lng),
       isSector: false,
-      spawnedAt: Date.now(),
-      maxResponseMinutes: maxRespMins,
+      spawnedAt: (fromServer && opts.at) ? opts.at : Date.now(),
+      maxResponseMinutes: (fromServer && opts.maxResponseMinutes) ? opts.maxResponseMinutes : maxRespMins,
+      serverEventId: fromServer ? (opts.serverEventId || null) : undefined,
       sanctionApplied: false
     };
 
@@ -34086,9 +34115,10 @@ class ProtecGame {
     this.openModule('pompiers');
   }
 
-  triggerRandomSdisEmergency() {
-    if (window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
-    if (!this.sdisGarde || !this.sdisGarde.active) return;
+  triggerRandomSdisEmergency(opts = {}) {
+    const fromServer = !!(opts && opts.fromServer);
+    if (!fromServer && window.ProtecAPI && window.ProtecAPI.isBackendManaged) return;
+    if (!this.sdisGarde || (!this.sdisGarde.active && !fromServer)) return;
 
     // CONTRÔLE STRICT DU NOMBRE DE VECTEURS DEMANDÉS PAR LE SDIS / CODIS
     // RÈGLE : Il n'y a jamais plus d'interventions en même temps que de vecteurs demandés.
@@ -34096,7 +34126,7 @@ class ProtecGame {
     const maxSdisVectors = 1;
     const activeStandardSdis = (this.missions || []).filter(m => m.type === 'pompiers' && !m.isRenfort && !m.isGarde && (m.status === 'ongoing' || m.status === 'planifie'));
 
-    if (activeStandardSdis.length >= maxSdisVectors) {
+    if (!fromServer && activeStandardSdis.length >= maxSdisVectors) {
       // Le vecteur de caserne est déjà engagé en intervention !
       // Le CODIS peut toutefois solliciter très rarement un renfort exceptionnel sans obligation.
       this.maybeTriggerSdisRenfortRequest();
@@ -34186,7 +34216,8 @@ class ProtecGame {
       rewardMoney: reward,
       rewardReputation: 40,
       maxResponseMinutes: pick.maxResponseMinutes,
-      spawnedAt: Date.now(),
+      spawnedAt: (fromServer && opts.at) ? opts.at : Date.now(),
+      serverEventId: fromServer ? (opts.serverEventId || null) : undefined,
       progress: 0,
       status: 'planifie',
       registeredVolunteers: [],

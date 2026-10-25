@@ -1533,7 +1533,9 @@ window.ProtecSupabase = {
         autoLogisticsActive: game.autoLogisticsActive !== undefined ? game.autoLogisticsActive : true,
         platformStats: game.platformStats || (window.ProtecPlatformAnalytics?.recordSession(game.player, game)) || null,
         lastDevice: game.lastDevice || (window.ProtecPlatformAnalytics?.getCurrentDevice()) || null,
-        localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || [])
+        localEcussons: (game.localEcussons && game.localEcussons.length > 0) ? game.localEcussons : (game.localEcussons || []),
+        // Profil lu par le moteur d'événements du VPS (tirages 24h/24 + réglages de notifications)
+        srvProfile: (window.ProtecServerEvents && typeof window.ProtecServerEvents.buildProfile === 'function') ? (() => { try { return window.ProtecServerEvents.buildProfile(game); } catch (eP) { return null; } })() : null
       };
 
       // Préservation des données injectées à distance (alertes push, missions SAMU, écussons, notifications en attente)
@@ -1543,6 +1545,17 @@ window.ProtecSupabase = {
           // 1. Préserver les notifications en attente
           if (Array.isArray(exSave.save_data.pending_notifications) && exSave.save_data.pending_notifications.length > 0) {
             stateToSave.pending_notifications = exSave.save_data.pending_notifications;
+          }
+          // 1b. Préserver l'abonnement push du téléphone (sinon la passerelle ne peut plus réveiller l'appareil)
+          if (exSave.save_data.push_subscription && !stateToSave.push_subscription) {
+            stateToSave.push_subscription = exSave.save_data.push_subscription;
+            if (exSave.save_data.push_updated_at) stateToSave.push_updated_at = exSave.save_data.push_updated_at;
+          }
+          // 1c. Événements du serveur pas encore récupérés par le jeu
+          if (Array.isArray(exSave.save_data.server_inbox)) {
+            stateToSave.server_inbox = (window.ProtecServerEvents && typeof window.ProtecServerEvents.filterInboxForSave === 'function')
+              ? window.ProtecServerEvents.filterInboxForSave(exSave.save_data.server_inbox)
+              : exSave.save_data.server_inbox;
           }
           // 2. Fusionner les missions injectées à distance pour ne jamais les écraser
           if (Array.isArray(exSave.save_data.missions) && exSave.save_data.missions.length > 0) {
@@ -1566,6 +1579,14 @@ window.ProtecSupabase = {
           }
         }
       } catch (e) {}
+
+      // Abonnement push mémorisé sur cet appareil : recopié si la sauvegarde n'en a pas
+      if (!stateToSave.push_subscription) {
+        try {
+          const lsSub = JSON.parse(localStorage.getItem('protec_push_sub') || 'null');
+          if (lsSub && lsSub.endpoint && lsSub.keys) stateToSave.push_subscription = lsSub;
+        } catch (eSub) { /* abonnement local illisible */ }
+      }
 
       const payload = {
         user_id: userId,

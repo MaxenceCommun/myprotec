@@ -224,6 +224,8 @@
      */
     handleNewIntervention(intervention) {
       if (!intervention || !intervention.id) return;
+      // Remplacé par le moteur d'événements du VPS (js/server_events_engine.js) : on ignore ce flux pour éviter les doublons
+      if (window.ProtecServerEvents && typeof window.ProtecServerEvents.isActive === 'function' && window.ProtecServerEvents.isActive()) return;
       const game = this._gameRef || window.game;
 
       const result = this.syncInterventionIntoGame(intervention, true);
