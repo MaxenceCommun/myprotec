@@ -2612,6 +2612,7 @@ window.ProtecFormations = {
     }
 
     session.status = 'completed';
+    session.completedAt = Date.now(); // utilisé par le moteur d'événements (stagiaires PSC1 → candidatures)
 
     // Rangement automatique du matériel pédagogique dans le meuble du Pôle Formation (puis libre, puis antenne)
     if (window.ProtecLocaux && typeof window.ProtecLocaux.autoStoreItem === 'function') {

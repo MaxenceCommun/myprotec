@@ -10,7 +10,7 @@
  * - En cas de coupure réseau, le client bloque immédiatement l'accès au jeu.
  */
 
-const CACHE_VERSION = 'myprotec-online-v3.0.18';
+const CACHE_VERSION = 'myprotec-online-v3.0.19';
 const STATIC_CACHE = `myprotec-static-${CACHE_VERSION}`;
 
 // Tableau de suivi des minuteurs d'alerte en arrière-plan
@@ -251,8 +251,13 @@ self.addEventListener('push', (event) => {
     ]
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, notificationOptions)
+  // Alerte du moteur d'événements : si le jeu est déjà ouvert et visible, il l'affiche lui-même (pas de doublon)
+  const fromEngine = !!(payload.data && payload.data.fromEngine);
+  const visibleClient = fromEngine
+    ? self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => list.some((c) => c.visibilityState === 'visible'))
+    : Promise.resolve(false);
+
+  event.waitUntil(visibleClient.then((skip) => skip ? null : self.registration.showNotification(title, notificationOptions)
       .catch((err) => {
         console.warn('[SW] showNotification échec avec options complètes, essai fallback simple:', err);
         return self.registration.showNotification(title, {
@@ -269,7 +274,7 @@ self.addEventListener('push', (event) => {
           });
         });
       })
-      .catch((err) => console.error('[SW] Erreur finale notification push:', err))
+      .catch((err) => console.error('[SW] Erreur finale notification push:', err)))
   );
 });
 

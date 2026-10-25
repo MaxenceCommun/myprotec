@@ -210,10 +210,12 @@
       if (!game || !supa || !userId || !Array.isArray(game.stations) || !game.stations.length) return;
       this._busy = true;
       try {
-        const { data, error } = await supa.from('game_saves').select('inbox:save_data->server_inbox').eq('user_id', userId).maybeSingle();
+        const { data, error } = await supa.from('game_saves').select('inbox:save_data->server_inbox,engAt:save_data->srv_engine_at').eq('user_id', userId).maybeSingle();
         if (error || !data) return;
         const inbox = Array.isArray(data.inbox) ? data.inbox : [];
-        if (inbox.length && !this._engineOk) {
+        // Marqueur déposé par le moteur du VPS (rafraîchi toutes les 6 h) : moteur actif
+        const engAt = Number(data.engAt) || 0;
+        if ((inbox.length || (engAt > 0 && Date.now() - engAt < STATUS_TTL_MS)) && !this._engineOk) {
           this._engineOk = true;
           try { localStorage.setItem(ENGINE_OK_KEY, String(Date.now())); } catch (e) { /* stockage indisponible */ }
         }

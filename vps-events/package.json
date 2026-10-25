@@ -1,0 +1,15 @@
+{
+  "name": "myprotec-events",
+  "version": "1.0.0",
+  "description": "MyProtec – moteur d'événements 24h/24 et envoi des notifications push (VPS)",
+  "main": "worker.js",
+  "scripts": {
+    "start": "node worker.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
+  }
+}

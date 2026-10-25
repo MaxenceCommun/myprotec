@@ -2862,7 +2862,7 @@ console.log(`⚡ [Cloud Push Bridge Éclair] Passerelle active (cadence de véri
 var EventsEngineMod = null;
 var eventsEngine = null;
 try {
-  EventsEngineMod = require('./js/server_events_engine');
+  EventsEngineMod = require('./vps-events/server_events_engine');
   eventsEngine = EventsEngineMod.createEngine({
     supabaseUrl: process.env.SUPABASE_URL || SUPABASE_REST_URL,
     supabaseKey: process.env.SUPABASE_SERVICE_KEY || SUPABASE_REST_KEY,

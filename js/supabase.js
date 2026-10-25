@@ -1551,6 +1551,8 @@ window.ProtecSupabase = {
             stateToSave.push_subscription = exSave.save_data.push_subscription;
             if (exSave.save_data.push_updated_at) stateToSave.push_updated_at = exSave.save_data.push_updated_at;
           }
+          // 1c-bis. Marqueur « moteur d'événements du VPS actif »
+          if (exSave.save_data.srv_engine_at) stateToSave.srv_engine_at = exSave.save_data.srv_engine_at;
           // 1c. Événements du serveur pas encore récupérés par le jeu
           if (Array.isArray(exSave.save_data.server_inbox)) {
             stateToSave.server_inbox = (window.ProtecServerEvents && typeof window.ProtecServerEvents.filterInboxForSave === 'function')
