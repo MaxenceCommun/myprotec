@@ -4427,10 +4427,17 @@ class ProtecGame {
         mission.status === 'ongoing' ||
         ['pompiers', 'samu', 'meteo'].includes(mission.type)
       );
+
+      // Règle de masquage des filtres expressément retirés par le joueur
+      const isDpsType = mission.type === 'dps' || (!mission.type && !mission.isCrisis && mission.category !== 'crise');
+      if (this.excludedMissionFilters) {
+        if (this.excludedMissionFilters.has(mission.type)) return;
+        if (isDpsType && this.excludedMissionFilters.has('dps')) return;
+      }
+
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && !isUrgentOrCrisis) return;
 
       // Règle DPS et Prévisionnels : selon le mode actif et le filtre prévisionnel
-      const isDpsType = mission.type === 'dps' || (!mission.type && !mission.isCrisis && mission.category !== 'crise');
       const isPrevi = !!(mission.isPrevisionnel || mission.status === 'previsionnel');
 
       if (isDpsType) {
@@ -26413,52 +26420,52 @@ class ProtecGame {
               <!-- Filtre Pôle Secours & DPS (Bleu marine) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('dps')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-white dark:bg-slate-700 text-pc-blue dark:text-sky-300 border-pc-blue/40 dark:border-slate-600 hover:bg-blue-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.dps ? 'bg-pc-blue text-white border-pc-blue shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 opacity-60'}"
                 title="${filters.dps ? 'Cliquer pour masquer Secours & DPS' : 'Cliquer pour afficher Secours & DPS'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-pc-blue dark:bg-sky-400'}"></span>
-                <span>🔵 Secours DPS (${poleCounts.dps})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.dps ? 'bg-white' : 'bg-slate-400 dark:bg-slate-600'}"></span>
+                <span class="${filters.dps ? '' : 'line-through decoration-slate-400 dark:decoration-slate-500 decoration-2'}">🔵 Secours DPS (${poleCounts.dps})</span>
               </button>
 
               <!-- Filtre Pôle Postes Prévisionnels (Ambre / Jaune-orange) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('previ')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-amber-700 dark:text-amber-300 border-amber-400 dark:border-slate-600 hover:bg-amber-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.previ ? 'bg-amber-500 text-white border-amber-600 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 opacity-60'}"
                 title="${filters.previ ? 'Cliquer pour masquer Postes Prévisionnels' : 'Cliquer pour afficher Postes Prévisionnels'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-amber-500'}"></span>
-                <span>⏳ Prévi (${poleCounts.previ})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.previ ? 'bg-white' : 'bg-slate-400 dark:bg-slate-600'}"></span>
+                <span class="${filters.previ ? '' : 'line-through decoration-slate-400 dark:decoration-slate-500 decoration-2'}">⏳ Prévi (${poleCounts.previ})</span>
               </button>
 
               <!-- Filtre Pôle Demandes de Devis (Bleu ciel / Sky) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('devis')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-white dark:bg-slate-700 text-sky-700 dark:text-sky-300 border-sky-400 dark:border-slate-600 hover:bg-sky-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.devis ? 'bg-sky-500 text-white border-sky-600 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 opacity-60'}"
                 title="${filters.devis ? 'Cliquer pour masquer Demandes de Devis' : 'Cliquer pour afficher Demandes de Devis'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-sky-500'}"></span>
-                <span>📋 Devis (${poleCounts.devis})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.devis ? 'bg-white' : 'bg-slate-400 dark:bg-slate-600'}"></span>
+                <span class="${filters.devis ? '' : 'line-through decoration-slate-400 dark:decoration-slate-500 decoration-2'}">📋 Devis (${poleCounts.devis})</span>
               </button>
 
               <!-- Filtre Pôle Formations (Vert émeraude) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('formations')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-emerald-700 dark:text-emerald-300 border-emerald-400 dark:border-slate-600 hover:bg-emerald-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.formations ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 opacity-60'}"
                 title="${filters.formations ? 'Cliquer pour masquer Formations' : 'Cliquer pour afficher Formations'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-emerald-600'}"></span>
-                <span>🎓 Formation (${poleCounts.formations})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.formations ? 'bg-white' : 'bg-slate-400 dark:bg-slate-600'}"></span>
+                <span class="${filters.formations ? '' : 'line-through decoration-slate-400 dark:decoration-slate-500 decoration-2'}">🎓 Formation (${poleCounts.formations})</span>
               </button>
 
 
               <!-- Filtre Pôle Gestion de Crise & NOVI (Rouge / Rose d'urgence) -->
               <button 
                 onclick="window.game.togglePlanningPoleFilter('crise')" 
-                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.crise ? 'bg-rose-600 text-white border-rose-700 shadow-sm' : 'bg-white dark:bg-slate-700 text-rose-700 dark:text-rose-300 border-rose-400 dark:border-slate-600 hover:bg-rose-50/50'}"
+                class="px-3 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer border ${filters.crise ? 'bg-rose-600 text-white border-rose-700 shadow-sm' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-300 dark:border-slate-700 opacity-60'}"
                 title="${filters.crise ? 'Cliquer pour masquer Crise & NOVI' : 'Cliquer pour afficher Crise & NOVI'}"
               >
-                <span class="w-2.5 h-2.5 rounded-full ${filters.crise ? 'bg-white' : 'bg-rose-600 animate-pulse'}"></span>
-                <span>🚨 Crise (${poleCounts.crise})</span>
+                <span class="w-2.5 h-2.5 rounded-full ${filters.crise ? 'bg-white' : 'bg-slate-400 dark:bg-slate-600 animate-pulse'}"></span>
+                <span class="${filters.crise ? '' : 'line-through decoration-slate-400 dark:decoration-slate-500 decoration-2'}">🚨 Crise (${poleCounts.crise})</span>
               </button>
             </div>
 
@@ -31575,17 +31582,26 @@ class ProtecGame {
   }
 
   setFilter(filterKey) {
-    if (filterKey === 'dps') {
-      if (this.currentFilter === 'dps') {
-        // Clic répété sur DPS : basculer entre 'today' (DPS du jour) et 'all' (Tous les DPS à venir) sans notification
-        this.dpsFilterMode = (this.dpsFilterMode === 'today') ? 'all' : 'today';
+    if (!this.excludedMissionFilters) this.excludedMissionFilters = new Set();
+
+    if (filterKey === 'all') {
+      this.currentFilter = 'all';
+      this.excludedMissionFilters.clear();
+      this.dpsFilterMode = 'all';
+    } else {
+      if (this.excludedMissionFilters.has(filterKey)) {
+        // Le filtre était retiré (barré) : on le réintègre
+        this.excludedMissionFilters.delete(filterKey);
+        this.currentFilter = 'all';
+      } else if (this.currentFilter === filterKey) {
+        // Re-clic sur le filtre actif : on le retire des filtres et on le barre !
+        this.excludedMissionFilters.add(filterKey);
+        this.currentFilter = 'all';
       } else {
-        this.currentFilter = 'dps';
+        // Clic normal pour filtrer sur cette catégorie
+        this.currentFilter = filterKey;
         this.dpsFilterMode = 'all';
       }
-    } else {
-      this.currentFilter = filterKey;
-      this.dpsFilterMode = 'all';
     }
 
     const filterThemes = {
@@ -31606,11 +31622,24 @@ class ProtecGame {
       const btn = document.getElementById(`filter-btn-${f}`);
       if (!btn) return;
       const theme = filterThemes[f] || filterThemes.all;
-      btn.classList.remove(...allActiveBorders, ...allActiveTexts, 'border-pc-blue/40', 'text-pc-blue', 'text-slate-600', 'font-semibold', 'font-bold');
-      if (f === this.currentFilter) {
+      btn.classList.remove(
+        ...allActiveBorders, ...allActiveTexts,
+        'border-pc-blue/40', 'text-pc-blue', 'text-slate-600', 'font-semibold', 'font-bold',
+        'line-through', 'opacity-60', 'decoration-slate-400', 'decoration-2', 'border-slate-600/40'
+      );
+
+      const isExcluded = this.excludedMissionFilters && this.excludedMissionFilters.has(f);
+      const dot = btn.querySelector('.rounded-full');
+
+      if (isExcluded) {
+        btn.classList.add('line-through', 'decoration-slate-400', 'decoration-2', 'opacity-60', 'text-slate-500', 'font-semibold', 'border-slate-600/40');
+        if (dot) dot.classList.add('opacity-40', 'grayscale');
+      } else if (f === this.currentFilter) {
         btn.classList.add(theme.border, theme.text, 'font-bold');
+        if (dot) dot.classList.remove('opacity-40', 'grayscale');
       } else {
         btn.classList.add('text-slate-400', 'font-semibold');
+        if (dot) dot.classList.remove('opacity-40', 'grayscale');
       }
     });
 
@@ -31670,8 +31699,8 @@ class ProtecGame {
       if (dot) dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
     } else if (this.dpsPreviFilterMode === 'hide') {
       label.textContent = 'Prévi : Masqués';
-      btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-slate-900/95 text-slate-400 border-slate-600 line-through opacity-80';
-      if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500';
+      btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-slate-900/95 text-slate-400 border-slate-600 line-through decoration-slate-400 decoration-2 opacity-60';
+      if (dot) dot.className = 'w-2 h-2 rounded-full bg-slate-500 opacity-50 grayscale';
     } else {
       label.textContent = 'Prévi : Inclus';
       btn.className = 'glass-pill px-3 py-1.5 rounded-xl text-xs font-bold border shadow-xl flex items-center gap-1.5 whitespace-nowrap cursor-pointer transition bg-slate-900/95 text-amber-300 border-amber-500/40 hover:border-amber-400';
