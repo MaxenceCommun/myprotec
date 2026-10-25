@@ -6404,12 +6404,12 @@ class ProtecGame {
   // Catalogue unifié des types de véhicules (Devis, Missions, Renforts)
   getAvailableVehicleTypesCatalog() {
     return [
-      { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑', dailyRate: 110 },
-      { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚', dailyRate: 55 },
-      { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗', dailyRate: 35 },
-      { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐', dailyRate: 45 },
-      { type: 'VLHR', name: 'Véhicule Hors Route VLHR 4x4', funcBadge: 'HR / 4x4', emoji: '🚙', dailyRate: 65 },
-      { type: 'PCM', name: 'PCM (Poste de Commandement Mobile)', funcBadge: 'CMD / PCM', emoji: '📡', dailyRate: 95 },
+      { type: 'VPSP', name: 'VPSP', funcBadge: 'PS', emoji: '🚑', dailyRate: 110 },
+      { type: 'VTU', name: 'VTU', funcBadge: 'TU / LOG', emoji: '🚚', dailyRate: 55 },
+      { type: 'VL', name: 'VL', funcBadge: 'LIAISON / CMD', emoji: '🚗', dailyRate: 35 },
+      { type: 'VTP', name: 'VTP', funcBadge: 'TP', emoji: '🚐', dailyRate: 45 },
+      { type: 'VLHR', name: 'VLHR 4x4', funcBadge: 'HR / 4x4', emoji: '🚙', dailyRate: 65 },
+      { type: 'PCM', name: 'PCM', funcBadge: 'CMD / PCM', emoji: '📡', dailyRate: 95 },
       { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️', dailyRate: 40 },
       { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲', dailyRate: 20 },
       { type: 'QUAD', name: 'Quad Tout-Terrain SSV', funcBadge: 'HR / PS', emoji: '🚜', dailyRate: 50 },
@@ -6422,18 +6422,18 @@ class ProtecGame {
   // Catalogue unifié des lots matériels (Devis, Missions, Renforts)
   getAvailableLotsCatalog() {
     return [
-      { id: 'lot_a', name: 'Lot A (Prompt Secours & DAE)', emoji: '🎒', dailyRate: 35, logSlots: 1, desc: 'Sac de prompt secours, DAE automatisé, oxygénothérapie B2, colliers cervicaux, aspirateur de mucosités.' },
-      { id: 'lot_b', name: 'Lot B (Brancardage, MID & PMA)', emoji: '🛏️', dailyRate: 45, logSlots: 2, desc: 'Matelas immobilisateur à dépression (MID), attelles, plan dur, brancards pliants et matériel de soins PMA.' },
-      { id: 'tente', name: 'Lot C (Tente Gonflable & Abri PMA)', emoji: '⛺', dailyRate: 60, logSlots: 3, desc: 'Tente de poste de secours gonflable/pliante 25m², éclairage interne, chauffage soufflant et mobilier.' },
-      { id: 'lot_log', name: 'Lot LOG (Éclairage & Énergie)', emoji: '💡', dailyRate: 35, logSlots: 2, desc: 'Mât d’éclairage autonome LED, groupe électrogène portatif, enrouleurs IP67 et balisage.' },
+      { id: 'lot_a', name: 'Lot A', emoji: '🎒', dailyRate: 35, logSlots: 1, desc: 'Sac de prompt secours, DAE automatisé, oxygénothérapie B2, colliers cervicaux, aspirateur de mucosités.' },
+      { id: 'lot_b', name: 'Lot B', emoji: '🛏️', dailyRate: 45, logSlots: 2, desc: 'Matelas immobilisateur à dépression, attelles, plan dur, brancards pliants et matériel de soins PMA.' },
+      { id: 'tente', name: 'Lot C - Tente Gonflable', emoji: '⛺', dailyRate: 60, logSlots: 3, desc: 'Tente de poste de secours gonflable/pliante 25m², éclairage interne, chauffage soufflant et mobilier.' },
+      { id: 'lot_log', name: 'Lot LOG', emoji: '💡', dailyRate: 35, logSlots: 2, desc: 'Mât d’éclairage autonome LED, groupe électrogène portatif, enrouleurs IP67 et balisage.' },
       { id: 'dae_supp', name: 'DAE Automatisé Supplémentaire', emoji: '💓', dailyRate: 20, logSlots: 1, desc: 'Défibrillateur automatisé externe supplémentaire avec électrodes adultes/pédiatriques pour binôme.' },
       { id: 'radio_portatifs', name: 'Valise 6 Radios Portatives VHF/UHF', emoji: '📻', dailyRate: 25, logSlots: 1, desc: 'Valise de 6 portatifs radio numériques cryptés avec oreillettes et chargeur multiple.' },
-      { id: 'lot_hebergement', name: 'Kit CHU (25 Lits Picots & Couvertures)', emoji: '🛌', dailyRate: 50, logSlots: 4, desc: 'Centre d’Hébergement d’Urgence : 25 lits picots pliants, couvertures bactériostatiques et kits hygiène.' },
+      { id: 'lot_hebergement', name: 'Kit CHU', emoji: '🛌', dailyRate: 50, logSlots: 4, desc: 'Centre d’Hébergement d’Urgence : 25 lits picots pliants, couvertures bactériostatiques et kits hygiène.' },
       { id: 'lot_ravitaillement', name: 'Lot Ravitaillement & Boissons Chaudes', emoji: '☕', dailyRate: 30, logSlots: 2, desc: 'Percolateurs grands volumes, barnum pliables, gobelets, barres énergétiques et réserves d’eau.' },
       { id: 'lot_pompage', name: 'Lot Pompage & Épuisement Inondation', emoji: '💧', dailyRate: 45, logSlots: 2, desc: 'Vide-caves électriques, pompe thermique, aspirateur à eau, raclettes et tuyaux de refoulement.' },
       { id: 'lot_tronconnage', name: 'Lot Dégagement & Tronçonnage', emoji: '🪚', dailyRate: 40, logSlots: 2, desc: 'Tronçonneuse thermique, EPI forestiers complets, cordages et outils de dégagement.' },
       { id: 'lot_bachage', name: 'Lot Bâchage & Mise Hors d’Eau', emoji: '🛡️', dailyRate: 35, logSlots: 2, desc: 'Bâches armées lourdes, liteaux, sangles à cliquet et outillage de protection de toiture.' },
-      { id: 'lot_soutien_psy', name: 'Lot CAI (Accueil Impliqués & Soutien)', emoji: '🤝', dailyRate: 25, logSlots: 1, desc: 'Fiches de traçabilité SINUS/CAI, chasubles d’identification, paravents d’intimité et accueil.' }
+      { id: 'lot_soutien_psy', name: 'Lot CAI', emoji: '🤝', dailyRate: 25, logSlots: 1, desc: 'Fiches de traçabilité SINUS/CAI, chasubles d’identification, paravents d’intimité et accueil.' }
     ];
   }
 
@@ -6549,6 +6549,16 @@ class ProtecGame {
     devis.configuredVolunteers = req.minVolunteers;
     devis.configuredCP = req.requiredCP;
     devis.configuredCE = req.requiredCE;
+    devis.configuredRoles = {
+      log: req.requiredScale === 'DPS-GE' || req.requiredScale === 'DPS-ME' ? 1 : 0,
+      pse1: Math.max(0, Math.floor((req.minVolunteers - req.requiredCE - req.requiredCP) * 0.35)),
+      pse2: Math.max(0, req.minVolunteers - req.requiredCE - req.requiredCP - (req.requiredScale === 'DPS-GE' || req.requiredScale === 'DPS-ME' ? 1 : 0) - Math.max(0, Math.floor((req.minVolunteers - req.requiredCE - req.requiredCP) * 0.35))),
+      ce: req.requiredCE,
+      cp: req.requiredCP,
+      cs: req.requiredScale === 'DPS-GE' ? 1 : 0,
+      cd: req.requiredScale === 'DPS-GE' ? 1 : 0
+    };
+    this.ensureDevisPersonnelCounts(devis);
     devis.configuredVehicles = [...req.requiredVehicles];
     devis.configuredVehicleCounts = {};
     req.requiredVehicles.forEach(t => {
@@ -6563,44 +6573,161 @@ class ProtecGame {
 
     this.showToast(
       'Recommandation Pôle Opérationnel 📋',
-      `Appliquée par ${opSalarie.name} : ${req.requiredScale} (${req.minVolunteers} secouristes, ${req.requiredCE} CE, ${req.requiredCP} CP, ${req.requiredVehicles.join(' + ') || 'Pédestre'}, tarif conseillé ${req.recommendedPrice} €).`,
+      `Appliquée par ${opSalarie.name} : ${req.requiredScale} - ${devis.configuredVolunteers} personnels, tarif conseillé ${req.recommendedPrice} €.`,
       'green'
     );
 
     this.openModule('devis', true);
   }
 
-  // Choix manuel du type de dispositif (avec recalcul automatique du barème)
+  // Garantit la cohérence des effectifs par rôle et du total des personnels sur un devis
+  ensureDevisPersonnelCounts(devis) {
+    if (!devis.configuredRoles || typeof devis.configuredRoles !== 'object') {
+      devis.configuredRoles = {};
+    }
+    const r = devis.configuredRoles;
+    if (r.log === undefined) r.log = Number(devis.configuredLog) || 0;
+    if (r.pse1 === undefined) r.pse1 = Number(devis.configuredPSE1) || 0;
+    if (r.pse2 === undefined) r.pse2 = Number(devis.configuredPSE2) || 0;
+    if (r.ce === undefined) r.ce = Number(devis.configuredCE) || 0;
+    if (r.cp === undefined) r.cp = Number(devis.configuredCP) || 0;
+    if (r.cs === undefined) r.cs = Number(devis.configuredCS) || 0;
+    if (r.cd === undefined) r.cd = Number(devis.configuredCD) || 0;
+
+    let sum = (r.log || 0) + (r.pse1 || 0) + (r.pse2 || 0) + (r.ce || 0) + (r.cp || 0) + (r.cs || 0) + (r.cd || 0);
+    const target = devis.configuredVolunteers || devis.requiredVolunteers || 0;
+
+    if (sum === 0 && target > 0) {
+      if (target <= 2) {
+        r.ce = 1;
+        r.pse2 = Math.max(0, target - 1);
+      } else if (target <= 6) {
+        r.ce = Math.max(1, devis.configuredCE || 1);
+        r.cp = devis.configuredCP || 0;
+        const remainder = Math.max(0, target - r.ce - r.cp);
+        r.pse2 = Math.ceil(remainder * 0.6);
+        r.pse1 = remainder - r.pse2;
+      } else if (target <= 12) {
+        r.cp = 1;
+        r.ce = 2;
+        r.log = 1;
+        const rem = Math.max(0, target - 4);
+        r.pse2 = Math.ceil(rem * 0.65);
+        r.pse1 = rem - r.pse2;
+      } else {
+        r.cd = 1;
+        r.cs = 1;
+        r.cp = 2;
+        r.ce = Math.max(2, Math.floor(target / 4));
+        r.log = 1;
+        const rem = Math.max(0, target - (r.cd + r.cs + r.cp + r.ce + r.log));
+        r.pse2 = Math.ceil(rem * 0.7);
+        r.pse1 = rem - r.pse2;
+      }
+      sum = (r.log || 0) + (r.pse1 || 0) + (r.pse2 || 0) + (r.ce || 0) + (r.cp || 0) + (r.cs || 0) + (r.cd || 0);
+    }
+
+    devis.configuredVolunteers = sum;
+    devis.configuredCE = r.ce || 0;
+    devis.configuredCP = r.cp || 0;
+    devis.configuredCS = r.cs || 0;
+    devis.configuredCD = r.cd || 0;
+    devis.configuredLog = r.log || 0;
+    devis.configuredPSE1 = r.pse1 || 0;
+    devis.configuredPSE2 = r.pse2 || 0;
+    return r;
+  }
+
+  // Choix manuel du type de dispositif (recalcule automatiquement la dotation type et le barème)
   updateDevisScale(devisId, scaleType) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     devis.configuredScale = scaleType;
+    if (!devis.configuredRoles || typeof devis.configuredRoles !== 'object') {
+      devis.configuredRoles = {};
+    }
+    if (scaleType === 'PAPS') {
+      devis.configuredRoles = { log: 0, pse1: 0, pse2: 1, ce: 1, cp: 0, cs: 0, cd: 0 };
+    } else if (scaleType === 'DPS-PE') {
+      devis.configuredRoles = { log: 0, pse1: 1, pse2: 2, ce: 1, cp: 0, cs: 0, cd: 0 };
+    } else if (scaleType === 'DPS-ME') {
+      devis.configuredRoles = { log: 1, pse1: 2, pse2: 4, ce: 2, cp: 1, cs: 0, cd: 0 };
+    } else if (scaleType === 'DPS-GE') {
+      devis.configuredRoles = { log: 1, pse1: 3, pse2: 8, ce: 4, cp: 2, cs: 1, cd: 1 };
+    }
+    this.ensureDevisPersonnelCounts(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Ajustement manuel de l'effectif secouriste engagé (recalcul automatique du devis)
-  adjustDevisVolunteers(devisId, delta) {
+  // Ajustement d'un rôle précis (Log, PSE1, PSE2, CE, CP, CS, CD)
+  adjustDevisRole(devisId, roleKey, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
-    const current = devis.configuredVolunteers || 0;
-    devis.configuredVolunteers = Math.max(0, Math.min(999, current + delta));
+    const r = this.ensureDevisPersonnelCounts(devis);
+    const cur = r[roleKey] || 0;
+    r[roleKey] = Math.max(0, Math.min(999, cur + delta));
+    this.ensureDevisPersonnelCounts(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Saisie directe de l'effectif secouriste engagé au clavier
-  setDevisVolunteers(devisId, value) {
+  // Saisie directe d'un rôle précis au clavier
+  setDevisRole(devisId, roleKey, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const r = this.ensureDevisPersonnelCounts(devis);
+    const parsed = parseInt(value, 10);
+    r[roleKey] = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    this.ensureDevisPersonnelCounts(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Ajustement global du Nombre Total de Personnels (répartit sur PSE2 en priorité)
+  adjustDevisTotalPersonnels(devisId, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const r = this.ensureDevisPersonnelCounts(devis);
+    if (delta > 0) {
+      r.pse2 = (r.pse2 || 0) + delta;
+    } else if (delta < 0) {
+      let toRemove = Math.abs(delta);
+      const prioOrder = ['pse2', 'pse1', 'log', 'ce', 'cp', 'cs', 'cd'];
+      for (const k of prioOrder) {
+        if (toRemove <= 0) break;
+        const avail = r[k] || 0;
+        const dec = Math.min(avail, toRemove);
+        r[k] -= dec;
+        toRemove -= dec;
+      }
+    }
+    this.ensureDevisPersonnelCounts(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe du Nombre Total de Personnels au clavier
+  setDevisTotalPersonnels(devisId, value) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const parsed = parseInt(value, 10);
-    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
-    devis.configuredVolunteers = count;
-    const bareme = this.calculateDynamicBareme(devis);
-    devis.proposedPrice = bareme.totalBareme;
-    this.openModule('devis', true);
+    const target = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    const current = devis.configuredVolunteers || 0;
+    this.adjustDevisTotalPersonnels(devisId, target - current);
+  }
+
+  // Wrappers de rétrocompatibilité pour effectifs globaux
+  adjustDevisVolunteers(devisId, delta) {
+    return this.adjustDevisTotalPersonnels(devisId, delta);
+  }
+
+  setDevisVolunteers(devisId, value) {
+    return this.setDevisTotalPersonnels(devisId, value);
   }
 
   // Ajustement des secouristes en Semaine pour poste multi-jours (recalcul automatique)
@@ -6653,50 +6780,21 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
-  // Ajustement manuel des Chefs d'Équipe (CE) (recalcul automatique)
+  // Wrappers de rétrocompatibilité CE & CP
   adjustDevisCE(devisId, delta) {
-    const devis = this.devis.find(d => d.id === devisId);
-    if (!devis) return;
-    const current = devis.configuredCE || 0;
-    devis.configuredCE = Math.max(0, Math.min(99, current + delta));
-    const bareme = this.calculateDynamicBareme(devis);
-    devis.proposedPrice = bareme.totalBareme;
-    this.openModule('devis', true);
+    return this.adjustDevisRole(devisId, 'ce', delta);
   }
 
-  // Saisie directe des Chefs d'Équipe (CE) au clavier
   setDevisCE(devisId, value) {
-    const devis = this.devis.find(d => d.id === devisId);
-    if (!devis) return;
-    const parsed = parseInt(value, 10);
-    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(99, parsed));
-    devis.configuredCE = count;
-    const bareme = this.calculateDynamicBareme(devis);
-    devis.proposedPrice = bareme.totalBareme;
-    this.openModule('devis', true);
+    return this.setDevisRole(devisId, 'ce', value);
   }
 
-  // Ajustement manuel des Chefs de Poste (CP) (recalcul automatique)
   adjustDevisCP(devisId, delta) {
-    const devis = this.devis.find(d => d.id === devisId);
-    if (!devis) return;
-    const current = devis.configuredCP || 0;
-    devis.configuredCP = Math.max(0, Math.min(50, current + delta));
-    const bareme = this.calculateDynamicBareme(devis);
-    devis.proposedPrice = bareme.totalBareme;
-    this.openModule('devis', true);
+    return this.adjustDevisRole(devisId, 'cp', delta);
   }
 
-  // Saisie directe des Chefs de Poste (CP) au clavier
   setDevisCP(devisId, value) {
-    const devis = this.devis.find(d => d.id === devisId);
-    if (!devis) return;
-    const parsed = parseInt(value, 10);
-    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
-    devis.configuredCP = count;
-    const bareme = this.calculateDynamicBareme(devis);
-    devis.proposedPrice = bareme.totalBareme;
-    this.openModule('devis', true);
+    return this.setDevisRole(devisId, 'cp', value);
   }
 
   // Formatage propre et arrondi du public attendu pour affichage
@@ -9214,8 +9312,14 @@ class ProtecGame {
       duration: devis.durationHours * 10,
       durationSeconds: Math.round(devis.durationHours * 3600),
       requiredVolunteers: volsCount,
-      configuredCE: devis.configuredCE || 1,
+      configuredCE: devis.configuredCE || 0,
       configuredCP: devis.configuredCP || 0,
+      configuredCS: devis.configuredCS || 0,
+      configuredCD: devis.configuredCD || 0,
+      configuredLog: devis.configuredLog || 0,
+      configuredPSE1: devis.configuredPSE1 || 0,
+      configuredPSE2: devis.configuredPSE2 || 0,
+      configuredRoles: { ...(devis.configuredRoles || {}) },
       requiredRanks: devis.requiredRanks || ['PSE1', 'PSE2'],
       requiredVehicles: vehsChosen,
       assignedVehicleIds: preAssignedVehIds,
@@ -24628,9 +24732,7 @@ class ProtecGame {
             ${pendingDevis.map(d => {
               // Règle opérationnelle : aucun pré-remplissage automatique des moyens ni du prix
               if (d.configuredScale === undefined) d.configuredScale = '';
-              if (d.configuredVolunteers === undefined) d.configuredVolunteers = 0;
-              if (d.configuredCE === undefined) d.configuredCE = 0;
-              if (d.configuredCP === undefined) d.configuredCP = 0;
+              this.ensureDevisPersonnelCounts(d);
               if (!Array.isArray(d.configuredVehicles)) d.configuredVehicles = [];
               if (!Array.isArray(d.configuredLots)) d.configuredLots = [];
 
@@ -24747,126 +24849,124 @@ class ProtecGame {
 
                     <!-- Type de Dispositif -->
                     <div>
-                      <label class="block text-[11px] font-bold text-slate-600 mb-1">Type de dispositif (RNMSC) :</label>
+                      <label class="block text-[11px] font-bold text-slate-600 mb-1">Type de dispositif :</label>
                       <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'PAPS')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'PAPS' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          PAPS (2 sec.)
+                        <button type="button" onclick="window.game.updateDevisScale('${d.id}', 'PAPS')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'PAPS' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          PAPS
                         </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-PE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-PE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-PE (3-6 sec.)
+                        <button type="button" onclick="window.game.updateDevisScale('${d.id}', 'DPS-PE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-PE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-PE
                         </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-ME')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-ME' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-ME (7-12 sec.)
+                        <button type="button" onclick="window.game.updateDevisScale('${d.id}', 'DPS-ME')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-ME' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-ME
                         </button>
-                        <button onclick="window.game.updateDevisScale('${d.id}', 'DPS-GE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-GE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
-                          DPS-GE (13+ sec.)
+                        <button type="button" onclick="window.game.updateDevisScale('${d.id}', 'DPS-GE')" class="p-2 rounded-xl font-bold transition text-center cursor-pointer ${d.configuredScale === 'DPS-GE' ? 'bg-pc-blue text-white shadow-sm ring-2 ring-pc-blue/30' : 'glass-button text-slate-700'}">
+                          DPS-GE
                         </button>
                       </div>
                     </div>
 
-                    <!-- Moyens humains : Secouristes (Semaine / Week-end si multi-jours), CE, CP -->
-                    ${d.isMultiDays ? `
-                      <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
-                        <div class="flex items-center justify-between text-xs font-black text-indigo-950">
-                          <span>📅 Poste Étalé sur un Mois (${d.durationDays || 28} jours de présence)</span>
-                          <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">Dimensionnement Différencié</span>
-                        </div>
-                        <p class="text-[11px] text-indigo-800 leading-tight">
-                          L'affluence varie fortement entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser votre rentabilité et mobiliser vos bénévoles au bon moment.
-                        </p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-                          <!-- Semaine : Lundi au Vendredi -->
-                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
-                            <div class="flex items-center justify-between mb-1">
-                              <label class="text-[11px] font-bold text-slate-700">💼 Semaine (Lun - Ven) :</label>
-                              <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
-                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                    ${(() => {
+                      const roles = this.ensureDevisPersonnelCounts(d);
+                      const rolesList = [
+                        { key: 'log', label: 'Logisticiens', emoji: '📦', textColor: 'text-slate-800 dark:text-slate-100', max: 99 },
+                        { key: 'pse1', label: 'PSE1', emoji: '🩹', textColor: 'text-sky-700 dark:text-sky-300', max: 99 },
+                        { key: 'pse2', label: 'PSE2', emoji: '🚑', textColor: 'text-pc-blue dark:text-blue-300', max: 99 },
+                        { key: 'ce', label: 'CE', emoji: '⭐', textColor: 'text-amber-600 dark:text-amber-300', max: 99 },
+                        { key: 'cp', label: 'CP', emoji: '🛡️', textColor: 'text-indigo-600 dark:text-indigo-300', max: 50 },
+                        { key: 'cs', label: 'CS', emoji: '🗺️', textColor: 'text-purple-700 dark:text-purple-300', max: 50 },
+                        { key: 'cd', label: 'CD', emoji: '🎖️', textColor: 'text-rose-700 dark:text-rose-300', max: 20 }
+                      ];
+
+                      return `
+                        <!-- Moyens humains : Total personnels & ventilation détaillée par rôle -->
+                        <div class="space-y-2.5 pt-1">
+                          ${d.isMultiDays ? `
+                            <div class="p-3 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-2">
+                              <div class="flex items-center justify-between text-xs font-black text-indigo-950">
+                                <span>📅 Poste Étalé sur un Mois (${d.durationDays || 28} jours de présence)</span>
+                                <span class="text-[10px] font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">Vacations Journalières</span>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                            </div>
-                          </div>
+                              <p class="text-[11px] text-indigo-800 leading-tight">
+                                L'affluence varie entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser la rentabilité.
+                              </p>
+                              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                <!-- Semaine : Lundi au Vendredi -->
+                                <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                                  <div class="flex items-center justify-between mb-1">
+                                    <label class="text-[11px] font-bold text-slate-700">Semaine :</label>
+                                    <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
+                                  </div>
+                                  <div class="flex items-center gap-1.5">
+                                    <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                                    <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                      <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
+                                      <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                                    </div>
+                                    <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                                  </div>
+                                </div>
 
-                          <!-- Week-end : Samedi et Dimanche -->
-                          <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
-                            <div class="flex items-center justify-between mb-1">
-                              <label class="text-[11px] font-bold text-slate-700">🎉 Week-end (Sam - Dim) :</label>
-                              <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
-                            </div>
-                            <div class="flex items-center gap-1.5">
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                              <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
-                                <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                                <!-- Week-end : Samedi et Dimanche -->
+                                <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
+                                  <div class="flex items-center justify-between mb-1">
+                                    <label class="text-[11px] font-bold text-slate-700">Week-end :</label>
+                                    <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
+                                  </div>
+                                  <div class="flex items-center gap-1.5">
+                                    <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
+                                    <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
+                                      <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
+                                      <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
+                                    </div>
+                                    <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                                  </div>
+                                </div>
                               </div>
-                              <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                             </div>
-                          </div>
-                        </div>
+                          ` : ''}
 
-                        <!-- Encadrement CE & CP pour multi-jours -->
-                        <div class="grid grid-cols-2 gap-2 pt-1 border-t border-indigo-100">
-                          <div class="p-2 bg-white rounded-xl border border-slate-200">
-                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
-                            <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
-                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-amber-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
-                              <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
+                          <!-- Ligne Total Personnels -->
+                          <div class="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-blue-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+                            <div class="flex items-center gap-2">
+                              <span class="text-xl">👥</span>
+                              <div>
+                                <label class="block text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">
+                                  Total Personnels :
+                                </label>
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">
+                                  Effectif global mobilisé sur le dispositif
+                                </span>
+                              </div>
+                            </div>
+                            <div class="flex items-center gap-1.5 self-start sm:self-auto">
+                              <button type="button" onclick="window.game.adjustDevisTotalPersonnels('${d.id}', -1)" class="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-black cursor-pointer shadow-2xs transition shrink-0" title="Retirer un secouriste">-</button>
+                              <div class="px-3 py-1 rounded-xl bg-white dark:bg-slate-900 border border-blue-300 dark:border-slate-600 shadow-inner text-center min-w-[70px]">
+                                <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisTotalPersonnels('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-14 text-center text-base font-black text-pc-blue dark:text-sky-300 bg-transparent border-0 focus:outline-none" />
+                              </div>
+                              <button type="button" onclick="window.game.adjustDevisTotalPersonnels('${d.id}', 1)" class="w-8 h-8 rounded-xl bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 font-black cursor-pointer shadow-2xs transition shrink-0" title="Ajouter un secouriste">+</button>
                             </div>
                           </div>
-                          <div class="p-2 bg-white rounded-xl border border-slate-200">
-                            <label class="block text-[10px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
-                            <div class="flex items-center gap-1">
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">-</button>
-                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="flex-1 min-w-0 text-center text-xs font-black text-indigo-600 bg-slate-50 border border-slate-300 rounded py-0.5 focus:bg-white focus:outline-none" />
-                              <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-6 h-6 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs cursor-pointer shrink-0">+</button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ` : `
-                      <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                        <!-- Secouristes / Équipiers -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Secouristes Totaux :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="999" value="${d.configuredVolunteers || 0}" onchange="window.game.setDevisVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                          </div>
-                        </div>
 
-                        <!-- Chefs d'Équipe (CE) -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs d'Équipe (CE) :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="99" value="${d.configuredCE || 0}" onchange="window.game.setDevisCE('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisCE('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
+                          <!-- Grille des 7 rôles (Logisticien, PSE1, PSE2, CE, CP, CS, CD) -->
+                          <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 text-xs">
+                            ${rolesList.map(rItem => `
+                              <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-2xs flex flex-col justify-between space-y-1">
+                                <div class="flex items-center justify-between">
+                                  <span class="text-[11px] font-black ${rItem.textColor} truncate">${rItem.label}</span>
+                                  <span class="text-sm shrink-0">${rItem.emoji}</span>
+                                </div>
+                                <div class="flex items-center gap-1 pt-1">
+                                  <button type="button" onclick="window.game.adjustDevisRole('${d.id}', '${rItem.key}', -1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs cursor-pointer transition shrink-0">-</button>
+                                  <input type="number" min="0" max="${rItem.max}" value="${roles[rItem.key] || 0}" onchange="window.game.setDevisRole('${d.id}', '${rItem.key}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-full text-center text-xs font-black ${rItem.textColor} bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-600 rounded py-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" />
+                                  <button type="button" onclick="window.game.adjustDevisRole('${d.id}', '${rItem.key}', 1)" class="w-6 h-6 rounded-lg bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs cursor-pointer transition shrink-0">+</button>
+                                </div>
+                              </div>
+                            `).join('')}
                           </div>
                         </div>
-
-                        <!-- Chefs de Poste (CP) -->
-                        <div class="p-2.5 bg-white rounded-xl border border-slate-200">
-                          <label class="block text-[11px] font-bold text-slate-600 mb-1">Chefs de Poste (CP) :</label>
-                          <div class="flex items-center gap-1.5">
-                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
-                            <div class="flex-1 text-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                              <input type="number" min="0" max="50" value="${d.configuredCP || 0}" onchange="window.game.setDevisCP('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-indigo-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-indigo-500 focus:outline-none" />
-                            </div>
-                            <button type="button" onclick="window.game.adjustDevisCP('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
-                          </div>
-                        </div>
-                      </div>
-                    `}
+                      `;
+                    })()}
 
                     <!-- Moyens matériels & vecteurs : Véhicules et Lots (Listes déroulantes + quantités) -->
                     <div class="space-y-3 pt-1">
