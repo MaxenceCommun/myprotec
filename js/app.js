@@ -1498,7 +1498,7 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
-  openAllianceStationDetails(st) {
+  openAllianceStationDetails(st, selectedMissionId = null) {
     const drawer = document.getElementById('context-drawer');
     const title = document.getElementById('drawer-title');
     const catBadge = document.getElementById('drawer-category-badge');
@@ -1506,50 +1506,195 @@ class ProtecGame {
     const body = document.getElementById('drawer-body');
     const footer = document.getElementById('drawer-footer');
 
+    this._activeAllianceDrawerStation = st;
+    if (!this._allianceDrawerDraft || this._allianceDrawerDraft.stationId !== st.id) {
+      const candidateMissions = (this.missions || []).filter(m => m && m.status !== 'completed' && m.status !== 'failed' && m.status !== 'cancelled');
+      const defaultMission = candidateMissions.find(m => m.id === selectedMissionId) || candidateMissions[0] || null;
+      const defaultNeeded = defaultMission
+        ? Math.max(1, (defaultMission.requiredVolunteers || 4) - (defaultMission.registeredVolunteers?.length || 0))
+        : 2;
+      this._allianceDrawerDraft = {
+        stationId: st.id,
+        missionId: defaultMission ? defaultMission.id : '',
+        volunteersCount: defaultNeeded,
+        vehicleCounts: defaultMission && Array.isArray(defaultMission.requiredVehicles) && defaultMission.requiredVehicles.includes('VPSP') ? { VPSP: 1 } : {},
+        lotCounts: {},
+        indemnite: 180
+      };
+    } else if (selectedMissionId) {
+      this._allianceDrawerDraft.missionId = selectedMissionId;
+    }
+
+    const draft = this._allianceDrawerDraft;
+    const candidateMissions = (this.missions || []).filter(m => m && m.status !== 'completed' && m.status !== 'failed' && m.status !== 'cancelled');
+    const targetMission = candidateMissions.find(m => String(m.id) === String(draft.missionId)) || null;
+    const vehCatalog = this.getAvailableVehicleTypesCatalog();
+    const lotCatalog = this.getAvailableLotsCatalog();
+
     catBadge.textContent = 'ANTENNE PARTENAIRE ALLIÉE';
     catBadge.className = 'text-[10px] uppercase font-bold tracking-wider text-indigo-700';
     title.textContent = st.name;
     headerIcon.setAttribute('data-lucide', 'shield-check');
 
+    const selectedVehEntries = Object.entries(draft.vehicleCounts || {}).filter(([, c]) => c > 0);
+    const selectedLotEntries = Object.entries(draft.lotCounts || {}).filter(([, c]) => c > 0);
+
     body.innerHTML = `
-      <div class="space-y-4">
-        <div class="p-4 rounded-2xl bg-indigo-50/80 border border-indigo-100 space-y-2">
+      <div class="space-y-3.5">
+        <div class="p-3.5 rounded-2xl bg-indigo-50/80 border border-indigo-100 space-y-1.5">
           <div class="flex items-center justify-between text-xs">
             <span class="font-extrabold text-indigo-900">Responsable : ${st.playerName}</span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Allié UFSC</span>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-600 text-white">Allié FNPC</span>
           </div>
-          <p class="text-xs text-indigo-800">Antenne conventionnée avec l’Union Fédérale. Prête à déployer des renforts sur demande.</p>
+          <p class="text-[11px] text-indigo-800">Antenne conventionnée du réseau fédéral. Sélectionnez l'événement et composez les moyens souhaités en renfort.</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-3 text-xs">
-          <div class="p-3 rounded-2xl bg-white/80 border border-slate-200">
-            <span class="text-slate-400 block text-[10px] font-bold uppercase">Véhicules</span>
+        <div class="grid grid-cols-2 gap-2.5 text-xs">
+          <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Parc Véhicules</span>
             <span class="text-sm font-extrabold text-slate-800">${st.vehicles} unités</span>
           </div>
-          <div class="p-3 rounded-2xl bg-white/80 border border-slate-200">
-            <span class="text-slate-400 block text-[10px] font-bold uppercase">Secouristes</span>
+          <div class="p-2.5 rounded-2xl bg-white/90 border border-slate-200">
+            <span class="text-slate-400 block text-[10px] font-bold uppercase">Effectif Secouriste</span>
             <span class="text-sm font-extrabold text-slate-800">${st.volunteers} membres</span>
           </div>
         </div>
 
-        <div class="p-4 rounded-2xl bg-white/80 border border-slate-200 space-y-2">
-          <h4 class="text-xs font-extrabold text-slate-700 uppercase">Entraide Opérationnelle</h4>
-          <p class="text-xs text-slate-600 leading-relaxed">
-            Vous pouvez solliciter un départ de renfort VPSP ou d'équipiers auprès de cette antenne si l'un de vos dispositifs planifiés manque d'effectif.
-          </p>
+        <!-- 1. Choix de l'événement / mission -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+          <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+            1. Pour quel événement / mission ?
+          </label>
+          ${candidateMissions.length === 0 ? `
+            <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
+              ⚠️ Vous n'avez aucune mission active ou planifiée au calendrier pour le moment. Signez un devis DPS ou attendez un déclenchement avant de demander un renfort.
+            </div>
+          ` : `
+            <select onchange="window.game.setAllianceDrawerMission(this.value)" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+              ${candidateMissions.map(m => {
+                const statusLbl = m.status === 'ongoing' ? 'EN COURS' : (m.isCrisis || m.type === 'crise' ? 'URGENCE / CRISE' : 'PLANIFIÉ');
+                const reg = (m.registeredVolunteers || []).length;
+                const req = m.requiredVolunteers || 4;
+                return `<option value="${m.id}" ${String(m.id) === String(draft.missionId) ? 'selected' : ''}>[${statusLbl}] ${m.title} (${reg}/${req} sec.)</option>`;
+              }).join('')}
+            </select>
+            ${targetMission ? `
+              <div class="text-[10.5px] text-slate-500 flex items-center justify-between pt-0.5">
+                <span>Effectif inscrit : <strong>${(targetMission.registeredVolunteers || []).length}/${targetMission.requiredVolunteers || 4}</strong></span>
+                <span>Véhicules affectés : <strong>${(targetMission.assignedVehicleIds || []).length}</strong></span>
+              </div>
+            ` : ''}
+          `}
+        </div>
+
+        <!-- 2. Secouristes demandés -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+          <div class="flex items-center justify-between">
+            <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+              2. Secouristes demandés
+            </label>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="window.game.adjustAllianceDrawerVolunteers(-1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+              <input type="number" min="0" max="50" value="${draft.volunteersCount || 0}" onchange="window.game.setAllianceDrawerVolunteers(this.value)" class="w-12 py-1 text-center font-mono font-black text-xs rounded-lg border border-slate-300 bg-slate-50 text-indigo-700">
+              <button type="button" onclick="window.game.adjustAllianceDrawerVolunteers(1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-500">Mettez 0 si vous souhaitez uniquement un prêt de véhicule ou de matériel.</p>
+        </div>
+
+        <!-- 3. Véhicules demandés (Liste déroulante + compteurs en dessous) -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-2xs">
+          <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+            3. Véhicules demandés
+          </label>
+          <select onchange="if(this.value){ window.game.addAllianceDrawerVehicle(this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+            <option value="">+ Ajouter un type de véhicule...</option>
+            ${vehCatalog.map(v => `<option value="${v.type}">${v.emoji} ${v.name} [${v.funcBadge}]</option>`).join('')}
+          </select>
+
+          ${selectedVehEntries.length === 0 ? `
+            <div class="text-[11px] text-slate-400 italic py-1">Aucun véhicule sélectionné dans la liste.</div>
+          ` : `
+            <div class="space-y-1.5 pt-1">
+              ${selectedVehEntries.map(([vType, count]) => {
+                const meta = vehCatalog.find(v => v.type === vType) || { type: vType, name: vType, emoji: '🚑', funcBadge: '' };
+                return `
+                  <div class="p-2 rounded-xl bg-indigo-50/70 border border-indigo-200 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <span>${meta.emoji}</span>
+                      <span class="text-xs font-extrabold text-slate-800 truncate">${meta.name}</span>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <button type="button" onclick="window.game.adjustAllianceDrawerVehicle('${vType}', -1)" class="w-6 h-6 rounded bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+                      <input type="number" min="0" max="20" value="${count}" onchange="window.game.setAllianceDrawerVehicle('${vType}', this.value)" class="w-9 text-center font-mono font-black text-xs text-indigo-700 bg-white border border-slate-200 rounded py-0.5">
+                      <button type="button" onclick="window.game.adjustAllianceDrawerVehicle('${vType}', 1)" class="w-6 h-6 rounded bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+                      <button type="button" onclick="window.game.setAllianceDrawerVehicle('${vType}', 0)" class="w-6 h-6 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-xs flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- 4. Matériels & Lots demandés (Liste déroulante + compteurs en dessous) -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-2xs">
+          <label class="block text-[11px] font-black text-slate-800 uppercase tracking-wide">
+            4. Lots & Matériels demandés
+          </label>
+          <select onchange="if(this.value){ window.game.addAllianceDrawerLot(this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+            <option value="">+ Ajouter un lot ou matériel...</option>
+            ${lotCatalog.map(l => `<option value="${l.id}">${l.emoji} ${l.name}</option>`).join('')}
+          </select>
+
+          ${selectedLotEntries.length === 0 ? `
+            <div class="text-[11px] text-slate-400 italic py-1">Aucun lot matériel sélectionné.</div>
+          ` : `
+            <div class="space-y-1.5 pt-1">
+              ${selectedLotEntries.map(([lotId, count]) => {
+                const meta = lotCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, emoji: '📦' };
+                return `
+                  <div class="p-2 rounded-xl bg-amber-50/70 border border-amber-200 flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-1.5 min-w-0">
+                      <span>${meta.emoji}</span>
+                      <span class="text-xs font-extrabold text-slate-800 truncate">${meta.name}</span>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                      <button type="button" onclick="window.game.adjustAllianceDrawerLot('${lotId}', -1)" class="w-6 h-6 rounded bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+                      <input type="number" min="0" max="20" value="${count}" onchange="window.game.setAllianceDrawerLot('${lotId}', this.value)" class="w-9 text-center font-mono font-black text-xs text-amber-800 bg-white border border-slate-200 rounded py-0.5">
+                      <button type="button" onclick="window.game.adjustAllianceDrawerLot('${lotId}', 1)" class="w-6 h-6 rounded bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+                      <button type="button" onclick="window.game.setAllianceDrawerLot('${lotId}', 0)" class="w-6 h-6 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-xs flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+
+        <!-- 5. Indemnité proposée -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
+          <div>
+            <span class="block text-[11px] font-black text-slate-800 uppercase">5. Indemnité de Déplacement</span>
+            <span class="text-[10px] text-slate-500">Défraiement versé à l'antenne alliée</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input type="number" min="0" max="5000" step="20" value="${draft.indemnite ?? 180}" onchange="window.game.setAllianceDrawerIndemnite(this.value)" class="w-20 py-1 px-2 text-right font-mono font-black text-xs rounded-lg border border-slate-300 bg-slate-50 text-emerald-700">
+            <span class="text-xs font-black text-slate-700">€</span>
+          </div>
         </div>
       </div>
     `;
 
     footer.innerHTML = `
-      <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700">Fermer</button>
-      <button onclick="if(window.game.map){window.game.map.flyTo([${st.lat}, ${st.lng}], 13, { duration: 1.2 });} window.game.closeDrawer();" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center justify-center gap-1">
+      <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 cursor-pointer">Fermer</button>
+      <button onclick="if(window.game.map){window.game.map.flyTo([${st.lat}, ${st.lng}], 13, { duration: 1.2 });} window.game.closeDrawer();" class="px-3 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition flex items-center justify-center gap-1 cursor-pointer">
         <i data-lucide="crosshair" class="w-4 h-4 text-indigo-600"></i>
         Localiser
       </button>
-      <button onclick="window.game.requestDirectRenfort('${st.id}', '${st.name}')" class="flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md transition flex items-center justify-center gap-1.5">
+      <button onclick="window.game.requestDirectRenfort('${st.id}', '${st.name.replace(/'/g, "\\'")}')" ${candidateMissions.length === 0 ? 'disabled' : ''} class="flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold ${candidateMissions.length === 0 ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'} shadow-md transition flex items-center justify-center gap-1.5">
         <i data-lucide="send" class="w-4 h-4"></i>
-        Demander un Renfort VPSP
+        Envoyer la Demande
       </button>
     `;
 
@@ -1558,18 +1703,153 @@ class ProtecGame {
     if (window.lucide) window.lucide.createIcons();
   }
 
+  setAllianceDrawerMission(missionId) {
+    if (!this._allianceDrawerDraft) return;
+    this._allianceDrawerDraft.missionId = missionId;
+    const m = (this.missions || []).find(mis => String(mis.id) === String(missionId));
+    if (m) {
+      const deficit = Math.max(0, (m.requiredVolunteers || 4) - (m.registeredVolunteers?.length || 0));
+      if (deficit > 0) this._allianceDrawerDraft.volunteersCount = deficit;
+    }
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation, missionId);
+  }
+
+  adjustAllianceDrawerVolunteers(delta) {
+    if (!this._allianceDrawerDraft) return;
+    const cur = parseInt(this._allianceDrawerDraft.volunteersCount, 10) || 0;
+    this._allianceDrawerDraft.volunteersCount = Math.max(0, Math.min(50, cur + delta));
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  setAllianceDrawerVolunteers(val) {
+    if (!this._allianceDrawerDraft) return;
+    this._allianceDrawerDraft.volunteersCount = Math.max(0, Math.min(50, parseInt(val, 10) || 0));
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  addAllianceDrawerVehicle(vType) {
+    if (!this._allianceDrawerDraft || !vType) return;
+    if (!this._allianceDrawerDraft.vehicleCounts) this._allianceDrawerDraft.vehicleCounts = {};
+    this._allianceDrawerDraft.vehicleCounts[vType] = (this._allianceDrawerDraft.vehicleCounts[vType] || 0) + 1;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  adjustAllianceDrawerVehicle(vType, delta) {
+    if (!this._allianceDrawerDraft || !vType) return;
+    const cur = this._allianceDrawerDraft.vehicleCounts?.[vType] || 0;
+    const next = Math.max(0, Math.min(20, cur + delta));
+    if (next <= 0) delete this._allianceDrawerDraft.vehicleCounts[vType];
+    else this._allianceDrawerDraft.vehicleCounts[vType] = next;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  setAllianceDrawerVehicle(vType, val) {
+    if (!this._allianceDrawerDraft || !vType) return;
+    const next = Math.max(0, Math.min(20, parseInt(val, 10) || 0));
+    if (next <= 0) delete this._allianceDrawerDraft.vehicleCounts[vType];
+    else this._allianceDrawerDraft.vehicleCounts[vType] = next;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  addAllianceDrawerLot(lotId) {
+    if (!this._allianceDrawerDraft || !lotId) return;
+    if (!this._allianceDrawerDraft.lotCounts) this._allianceDrawerDraft.lotCounts = {};
+    this._allianceDrawerDraft.lotCounts[lotId] = (this._allianceDrawerDraft.lotCounts[lotId] || 0) + 1;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  adjustAllianceDrawerLot(lotId, delta) {
+    if (!this._allianceDrawerDraft || !lotId) return;
+    const cur = this._allianceDrawerDraft.lotCounts?.[lotId] || 0;
+    const next = Math.max(0, Math.min(20, cur + delta));
+    if (next <= 0) delete this._allianceDrawerDraft.lotCounts[lotId];
+    else this._allianceDrawerDraft.lotCounts[lotId] = next;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  setAllianceDrawerLot(lotId, val) {
+    if (!this._allianceDrawerDraft || !lotId) return;
+    const next = Math.max(0, Math.min(20, parseInt(val, 10) || 0));
+    if (next <= 0) delete this._allianceDrawerDraft.lotCounts[lotId];
+    else this._allianceDrawerDraft.lotCounts[lotId] = next;
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  setAllianceDrawerIndemnite(val) {
+    if (!this._allianceDrawerDraft) return;
+    this._allianceDrawerDraft.indemnite = Math.max(0, Math.min(5000, parseInt(val, 10) || 0));
+  }
+
   requestDirectRenfort(targetStationId, targetStationName) {
+    const draft = this._allianceDrawerDraft || {};
+    const mission = (this.missions || []).find(m => String(m.id) === String(draft.missionId));
+    if (!mission) {
+      this.showToast('Événement Requis ⚠️', 'Veuillez sélectionner une mission ou un événement pour votre demande de renfort.', 'orange');
+      return;
+    }
+
+    const volsCount = Math.max(0, parseInt(draft.volunteersCount, 10) || 0);
+    const vehCounts = draft.vehicleCounts || {};
+    const lotCounts = draft.lotCounts || {};
+    const lotCatalog = this.getAvailableLotsCatalog();
+
+    const requiredVehicles = [];
+    const vehParts = [];
+    Object.entries(vehCounts).forEach(([vType, c]) => {
+      const n = parseInt(c, 10) || 0;
+      if (n > 0) {
+        vehParts.push(`${n} ${vType}`);
+        for (let i = 0; i < n; i++) requiredVehicles.push(vType);
+      }
+    });
+
+    const requestedLots = [];
+    const lotParts = [];
+    Object.entries(lotCounts).forEach(([lotId, c]) => {
+      const n = parseInt(c, 10) || 0;
+      if (n > 0) {
+        const meta = lotCatalog.find(l => l.id === lotId);
+        const name = meta ? meta.name : lotId;
+        requestedLots.push({ id: lotId, name, count: n });
+        lotParts.push(`${n}x ${name}`);
+      }
+    });
+
+    if (volsCount === 0 && requiredVehicles.length === 0 && requestedLots.length === 0) {
+      this.showToast('Moyens Requis ⚠️', 'Sélectionnez au moins un secouriste, un véhicule ou un lot matériel à demander.', 'orange');
+      return;
+    }
+
+    const summaryParts = [];
+    if (volsCount > 0) summaryParts.push(`${volsCount} secouriste(s)`);
+    if (vehParts.length > 0) summaryParts.push(vehParts.join(', '));
+    if (lotParts.length > 0) summaryParts.push(lotParts.join(', '));
+    const unitRequested = summaryParts.join(' + ');
+
     this.closeDrawer();
+    const mySt = this.stations?.[0];
     const renfortData = {
+      id: `renf-${Date.now()}`,
+      missionId: mission.id,
       requesterPlayerId: this.player.id,
       requesterName: this.player.name,
+      requesterStationName: mySt?.name || 'Antenne Locale',
       allianceId: this.player.allianceId,
-      allianceTag: 'UFSC',
-      title: `Renfort d’urgence pour DPS urbain`,
-      desc: `Demande de 1 VPSP ou 2 secouristes qualifiés transmise à ${targetStationName}.`,
+      allianceTag: 'FNPC',
+      title: `Renfort pour « ${mission.title} »`,
+      desc: `Demande ciblée vers ${targetStationName} pour l'événement « ${mission.title} » : ${unitRequested}.`,
+      targetStationId: targetStationId,
       targetStationName: targetStationName,
-      unitRequested: '1 VPSP ou binôme PSE',
-      indemnite: 180
+      unitRequested: unitRequested,
+      requiredVolsCount: volsCount,
+      requiredVehicles: requiredVehicles,
+      requestedVehicleTypes: Object.entries(vehCounts).filter(([, c]) => c > 0).map(([type, count]) => ({ type, count })),
+      requestedLots: requestedLots,
+      indemnite: draft.indemnite !== undefined ? draft.indemnite : 180,
+      lat: mission.lat || mySt?.lat || 48.8566,
+      lng: mission.lng || mySt?.lng || 2.3522,
+      status: 'open',
+      createdAt: Date.now()
     };
 
     fetch('/api/alliances/renfort/request', {
@@ -1584,30 +1864,30 @@ class ProtecGame {
         window.ProtecAntenneMessages.addOperationnelMessage(
           this,
           'Pôle Opérationnel',
-          `🚨 Demande de Renfort Réseau FNPC transmise : « ${renfortData.title} » vers ${targetStationName} (${renfortData.requiredVolsCount || 2} secouristes / ${renfortData.requiredVehicles?.join(', ') || 'VPSP'}).`,
+          `🚨 Demande de Renfort Réseau FNPC transmise à ${targetStationName} pour « ${mission.title} » : ${unitRequested}.`,
           'Coordination Réseau',
           'radio',
           { badgeColor: 'orange' }
         );
       }
-      this.showToast('Appel à Renfort Transmis', `Demande envoyée à ${targetStationName}. En attente de détachement...`, 'green');
+      this.showToast('Appel à Renfort Transmis 🤝', `Demande pour « ${mission.title} » (${unitRequested}) envoyée à ${targetStationName}.`, 'green');
       this.updateStatsUI();
+      this.saveGame();
     }).catch(() => {
-      // Simulation locale si serveur hors-ligne
-      renfortData.id = `renf-${Date.now()}`;
       this.renforts.unshift(renfortData);
       this.sanitizeRenforts();
       if (window.ProtecAntenneMessages) {
         window.ProtecAntenneMessages.addOperationnelMessage(
           this,
           'Pôle Opérationnel',
-          `🚨 Demande de Renfort Réseau FNPC transmise : « ${renfortData.title} » (${renfortData.requiredVolsCount || 2} secouristes).`,
+          `🚨 Demande de Renfort Réseau FNPC transmise à ${targetStationName} pour « ${mission.title} » : ${unitRequested}.`,
           'Coordination Réseau',
           'radio',
           { badgeColor: 'orange' }
         );
       }
-      this.showToast('Appel à Renfort Transmis', `Demande transmise sur la fréquence fédérale.`, 'green');
+      this.showToast('Appel à Renfort Transmis 🤝', `Demande pour « ${mission.title} » (${unitRequested}) envoyée à ${targetStationName}.`, 'green');
+      this.saveGame();
     });
   }
 
@@ -3412,11 +3692,7 @@ class ProtecGame {
       });
 
       const marker = L.marker([station.lat, station.lng], { icon }).addTo(this.map);
-      // Clic sur sa propre antenne : ouverture de la vue plein écran « Ma base » (scène 2.5D vivante)
-      marker.on('click', () => {
-        if (window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') window.ProtecBaseLive.openBaseView(station.id);
-        else this.openStationDetails(station.id);
-      });
+      marker.on('click', () => this.openStationDetails(station.id));
       this.markers.stations[station.id] = marker;
     });
 
@@ -3568,31 +3844,43 @@ class ProtecGame {
   // Détection si la date/heure d'un événement ou renfort est passée
   isMissionEventDatePassed(eventDate, durationHours = 4) {
     if (!eventDate) return false;
+    const curClockYear = this.clock?.year || new Date().getFullYear();
+    const curClockMonth = this.clock?.month ?? new Date().getMonth();
+    const curClockDay = this.clock?.day || new Date().getDate();
     const curClockMs = new Date(
-      this.clock?.year || new Date().getFullYear(),
-      this.clock?.month ?? new Date().getMonth(),
-      this.clock?.day || new Date().getDate(),
+      curClockYear,
+      curClockMonth,
+      curClockDay,
       this.clock?.hour || 0,
       this.clock?.minute || 0
     ).getTime();
 
     try {
       if (typeof eventDate === 'object') {
-        const y = eventDate.year || this.clock?.year || new Date().getFullYear();
-        let m = eventDate.month;
-        if (m > 0 && m <= 12) m = m - 1;
-        else m = m || 0;
-        const d = eventDate.day || 1;
-        const h = (eventDate.hour !== undefined) ? eventDate.hour : 8;
-        const dur = durationHours || 4;
-        const endMs = new Date(y, m, d, h + dur, 0, 0).getTime();
-        return curClockMs > endMs;
+        const y = Number(eventDate.year) || curClockYear;
+        let m = eventDate.month !== undefined ? Number(eventDate.month) : curClockMonth;
+        if (m > 11) m = m - 1;
+        const d = Number(eventDate.day) || 1;
+        const h = (eventDate.hour !== undefined) ? Number(eventDate.hour) : 8;
+        const min = (eventDate.minute !== undefined) ? Number(eventDate.minute) : 0;
+        const dur = Number(durationHours) || 4;
+
+        // Jour calendaire antérieur strict
+        if (y < curClockYear) return true;
+        if (y === curClockYear && m < curClockMonth) return true;
+        if (y === curClockYear && m === curClockMonth && d < curClockDay) return true;
+
+        const endMs = new Date(y, m, d, h + dur, min, 0).getTime();
+        return curClockMs >= endMs;
       } else if (typeof eventDate === 'string') {
         const parsed = new Date(eventDate).getTime();
         if (!isNaN(parsed)) {
-          const durMs = (durationHours || 4) * 3600 * 1000;
-          return curClockMs > (parsed + durMs);
+          const durMs = (Number(durationHours) || 4) * 3600 * 1000;
+          return curClockMs >= (parsed + durMs);
         }
+      } else if (typeof eventDate === 'number') {
+        const durMs = (Number(durationHours) || 4) * 3600 * 1000;
+        return curClockMs >= (eventDate + durMs);
       }
     } catch (e) {
       return false;
@@ -3796,10 +4084,13 @@ class ProtecGame {
     Object.values(this.markers.missions).forEach(m => this.map.removeLayer(m));
     this.markers.missions = {};
 
+    const curClockYear = this.clock.year;
+    const curClockMonth = this.clock.month;
+    const curClockDay = this.clock.day;
     const curClockMs = new Date(
-      this.clock.year,
-      this.clock.month,
-      this.clock.day,
+      curClockYear,
+      curClockMonth,
+      curClockDay,
       this.clock.hour || 0,
       this.clock.minute || 0
     ).getTime();
@@ -3809,21 +4100,31 @@ class ProtecGame {
       if (!eventDate) return false;
       try {
         if (typeof eventDate === 'object') {
-          const y = eventDate.year || this.clock.year;
-          let m = eventDate.month;
-          if (m > 0 && m <= 12) m = m - 1;
-          else m = m || 0;
-          const d = eventDate.day || 1;
-          const h = (eventDate.hour !== undefined) ? eventDate.hour : 8;
-          const dur = durationHours || 4;
-          const endMs = new Date(y, m, d, h + dur, 0, 0).getTime();
-          return curClockMs > endMs;
+          const y = Number(eventDate.year) || curClockYear;
+          let m = eventDate.month !== undefined ? Number(eventDate.month) : curClockMonth;
+          if (m > 11) m = m - 1;
+          const d = Number(eventDate.day) || 1;
+          const h = (eventDate.hour !== undefined) ? Number(eventDate.hour) : 8;
+          const min = (eventDate.minute !== undefined) ? Number(eventDate.minute) : 0;
+          const dur = Number(durationHours) || 4;
+
+          // Jour calendaire strictement antérieur : événement définitivement passé
+          if (y < curClockYear) return true;
+          if (y === curClockYear && m < curClockMonth) return true;
+          if (y === curClockYear && m === curClockMonth && d < curClockDay) return true;
+
+          // Même jour : vérification du terme horaire
+          const endMs = new Date(y, m, d, h + dur, min, 0).getTime();
+          return curClockMs >= endMs;
         } else if (typeof eventDate === 'string') {
           const parsed = new Date(eventDate).getTime();
           if (!isNaN(parsed)) {
-            const durMs = (durationHours || 4) * 3600 * 1000;
-            return curClockMs > (parsed + durMs);
+            const durMs = (Number(durationHours) || 4) * 3600 * 1000;
+            return curClockMs >= (parsed + durMs);
           }
+        } else if (typeof eventDate === 'number') {
+          const durMs = (Number(durationHours) || 4) * 3600 * 1000;
+          return curClockMs >= (eventDate + durMs);
         }
       } catch (e) {
         return false;
@@ -3835,11 +4136,13 @@ class ProtecGame {
       // Exclure formellement les missions et DPS terminés, clôturés, archivés ou annulés
       if (this.isMissionTerminated(mission)) return;
 
+      // Exclure formellement tout événement / mission dont la date est passée / échue
+      if (mission.eventDate && isDatePassed(mission.eventDate, mission.durationHours || 4)) return;
+      if (mission.scheduled_date && isDatePassed(mission.scheduled_date, mission.durationHours || 4)) return;
+      if (mission.date && isDatePassed(mission.date, mission.durationHours || 4)) return;
+
       // Les gardes (SAMU/SDIS) sont gérées dans le planning et la modale de garde, elles ne doivent JAMAIS apparaître comme des marqueurs physiques sur la carte
       if (mission.isGarde || mission.type === 'garde_samu' || mission.isGuard || mission.category === 'garde') return;
-
-      // Les missions qui se déroulent à la base (logistique, réarmement, travaux) n'ont pas de point sur la carte
-      if (mission.logV2 || mission.isRearmamentWorkshop || mission.type === 'logistique' || mission.type === 'rearmement' || mission.type === 'travaux' || mission.atBase) return;
 
       // Exclusion stricte des missions SAMU si le joueur n'a pas de convention SAMU signée ou aucun VPSP
       const hasSamuConv = Boolean(this.samuConvention && this.samuConvention.signed);
@@ -3859,10 +4162,7 @@ class ProtecGame {
       if (this.currentFilter !== 'all' && mission.type !== this.currentFilter && !isUrgentOrCrisis) return;
 
       // Règle DPS : selon le mode actif ('today' = uniquement jour même ou en cours, 'all' = tous les DPS à venir)
-      if (mission.type === 'dps' && mission.status === 'planifie') {
-        // Retirer les événements DPS passés de la carte
-        if (mission.eventDate && isDatePassed(mission.eventDate, mission.durationHours || 4)) return;
-
+      if (mission.type === 'dps') {
         const isToday = mission.eventDate ? (mission.eventDate.day === this.clock.day && mission.eventDate.month === this.clock.month) : true;
         if (this.currentFilter === 'dps' && this.dpsFilterMode === 'today' && !isToday) return;
       }
@@ -4039,6 +4339,7 @@ class ProtecGame {
       if (!this.isRenfortAccessibleForPlayer(r)) return false;
       const coords = this.ensureRenfortCoordinates(r);
       if (!coords) return false;
+      if (r.eventDate && isDatePassed(r.eventDate, r.durationHours || 6)) return false;
       return true;
     });
 
@@ -4410,12 +4711,8 @@ class ProtecGame {
       window.ProtecHealthInfrastructures.ensureDepartmentInfrastructures(this, newStation.departmentCode || this.currentDepartmentCode, { lat: newStation.lat, lng: newStation.lng });
     }
 
-    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Aménagez vos locaux depuis « Ma base ».`, 'green');
-    if (window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') {
-      setTimeout(() => {
-        window.ProtecBaseLive.openBaseView(stationId, { edit: true });
-      }, 200);
-    } else if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
+    this.showToast('Bâtiment Implanté !', `${stationName} est désormais implantée sur le secteur. Ouverture du plan d'aménagement...`, 'green');
+    if (window.ProtecLocaux && typeof window.ProtecLocaux.openInitialSetupModal === 'function') {
       setTimeout(() => {
         window.ProtecLocaux.openInitialSetupModal(this, stationId);
       }, 200);
@@ -6073,6 +6370,18 @@ class ProtecGame {
     if (scale.includes('DPS-PE')) matCost = 65;
     if (scale.includes('DPS-ME') || scale.includes('DPS-GE')) matCost = 120;
 
+    // Surcoût de valorisation par lot/matériel engagé (selon la quantité)
+    const lotCounts = this.ensureDevisLotCounts ? this.ensureDevisLotCounts(devis) : {};
+    const lotCatalog = this.getAvailableLotsCatalog ? this.getAvailableLotsCatalog() : [];
+    Object.entries(lotCounts).forEach(([lotId, cnt]) => {
+      const c = Number(cnt) || 0;
+      if (c > 0) {
+        const meta = lotCatalog.find(l => l.id === lotId);
+        const unitRate = meta?.dailyRate || 30;
+        matCost += unitRate * c;
+      }
+    });
+
     const adminCost = 40;
     const totalBareme = personnelCost + vehicleCost + matCost + adminCost;
 
@@ -6085,6 +6394,42 @@ class ProtecGame {
       totalBareme,
       isMultiDays: !!devis.isMultiDays
     };
+  }
+
+  // Catalogue unifié des types de véhicules (Devis, Missions, Renforts)
+  getAvailableVehicleTypesCatalog() {
+    return [
+      { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑', dailyRate: 110 },
+      { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚', dailyRate: 55 },
+      { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗', dailyRate: 35 },
+      { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐', dailyRate: 45 },
+      { type: 'VLHR', name: 'Véhicule Hors Route VLHR 4x4', funcBadge: 'HR / 4x4', emoji: '🚙', dailyRate: 65 },
+      { type: 'PCM', name: 'PCM (Poste de Commandement Mobile)', funcBadge: 'CMD / PCM', emoji: '📡', dailyRate: 95 },
+      { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️', dailyRate: 40 },
+      { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲', dailyRate: 20 },
+      { type: 'QUAD', name: 'Quad Tout-Terrain SSV', funcBadge: 'HR / PS', emoji: '🚜', dailyRate: 50 },
+      { type: 'DRONE', name: 'Télépilote Drone Reconnaissance', funcBadge: 'RECO', emoji: '🛸', dailyRate: 60 },
+      { type: 'ERS', name: 'Embarcation Nautique ERS', funcBadge: 'NAUTIQUE', emoji: '🚤', dailyRate: 80 },
+      { type: 'CYNO', name: 'Unité Cynotechnique VCYNO', funcBadge: 'CYNO', emoji: '🐕', dailyRate: 70 }
+    ];
+  }
+
+  // Catalogue unifié des lots matériels (Devis, Missions, Renforts)
+  getAvailableLotsCatalog() {
+    return [
+      { id: 'lot_a', name: 'Lot A (Prompt Secours & DAE)', emoji: '🎒', dailyRate: 35, logSlots: 1, desc: 'Sac de prompt secours, DAE automatisé, oxygénothérapie B2, colliers cervicaux, aspirateur de mucosités.' },
+      { id: 'lot_b', name: 'Lot B (Brancardage, MID & PMA)', emoji: '🛏️', dailyRate: 45, logSlots: 2, desc: 'Matelas immobilisateur à dépression (MID), attelles, plan dur, brancards pliants et matériel de soins PMA.' },
+      { id: 'tente', name: 'Lot C (Tente Gonflable & Abri PMA)', emoji: '⛺', dailyRate: 60, logSlots: 3, desc: 'Tente de poste de secours gonflable/pliante 25m², éclairage interne, chauffage soufflant et mobilier.' },
+      { id: 'lot_log', name: 'Lot LOG (Éclairage & Énergie)', emoji: '💡', dailyRate: 35, logSlots: 2, desc: 'Mât d’éclairage autonome LED, groupe électrogène portatif, enrouleurs IP67 et balisage.' },
+      { id: 'dae_supp', name: 'DAE Automatisé Supplémentaire', emoji: '💓', dailyRate: 20, logSlots: 1, desc: 'Défibrillateur automatisé externe supplémentaire avec électrodes adultes/pédiatriques pour binôme.' },
+      { id: 'radio_portatifs', name: 'Valise 6 Radios Portatives VHF/UHF', emoji: '📻', dailyRate: 25, logSlots: 1, desc: 'Valise de 6 portatifs radio numériques cryptés avec oreillettes et chargeur multiple.' },
+      { id: 'lot_hebergement', name: 'Kit CHU (25 Lits Picots & Couvertures)', emoji: '🛌', dailyRate: 50, logSlots: 4, desc: 'Centre d’Hébergement d’Urgence : 25 lits picots pliants, couvertures bactériostatiques et kits hygiène.' },
+      { id: 'lot_ravitaillement', name: 'Lot Ravitaillement & Boissons Chaudes', emoji: '☕', dailyRate: 30, logSlots: 2, desc: 'Percolateurs grands volumes, barnum pliables, gobelets, barres énergétiques et réserves d’eau.' },
+      { id: 'lot_pompage', name: 'Lot Pompage & Épuisement Inondation', emoji: '💧', dailyRate: 45, logSlots: 2, desc: 'Vide-caves électriques, pompe thermique, aspirateur à eau, raclettes et tuyaux de refoulement.' },
+      { id: 'lot_tronconnage', name: 'Lot Dégagement & Tronçonnage', emoji: '🪚', dailyRate: 40, logSlots: 2, desc: 'Tronçonneuse thermique, EPI forestiers complets, cordages et outils de dégagement.' },
+      { id: 'lot_bachage', name: 'Lot Bâchage & Mise Hors d’Eau', emoji: '🛡️', dailyRate: 35, logSlots: 2, desc: 'Bâches armées lourdes, liteaux, sangles à cliquet et outillage de protection de toiture.' },
+      { id: 'lot_soutien_psy', name: 'Lot CAI (Accueil Impliqués & Soutien)', emoji: '🤝', dailyRate: 25, logSlots: 1, desc: 'Fiches de traçabilité SINUS/CAI, chasubles d’identification, paravents d’intimité et accueil.' }
+    ];
   }
 
   // Détection d'un salarié qualifié assigné au pôle opérationnel
@@ -6200,7 +6545,15 @@ class ProtecGame {
     devis.configuredCP = req.requiredCP;
     devis.configuredCE = req.requiredCE;
     devis.configuredVehicles = [...req.requiredVehicles];
+    devis.configuredVehicleCounts = {};
+    req.requiredVehicles.forEach(t => {
+      devis.configuredVehicleCounts[t] = (devis.configuredVehicleCounts[t] || 0) + 1;
+    });
     devis.configuredLots = [...req.requiredLots];
+    devis.configuredLotCounts = {};
+    req.requiredLots.forEach(l => {
+      devis.configuredLotCounts[l] = (devis.configuredLotCounts[l] || 0) + 1;
+    });
     devis.proposedPrice = req.recommendedPrice;
 
     this.showToast(
@@ -6408,6 +6761,19 @@ class ProtecGame {
     return parts.join(', ');
   }
 
+  // Ajout d'un type de véhicule depuis la liste déroulante du devis
+  addDevisVehicleType(devisId, vehType) {
+    if (!vehType) return;
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisVehicleCounts(devis);
+    counts[vehType] = (counts[vehType] || 0) + 1;
+    this.syncDevisConfiguredVehicles(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
   // Bascule manuelle (cocher / décocher un type de véhicule)
   toggleDevisVehicleType(devisId, vehType) {
     const devis = this.devis.find(d => d.id === devisId);
@@ -6424,21 +6790,25 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
-  // Ajustement du compteur pour un type de véhicule coché
+  // Ajustement du compteur pour un type de véhicule sélectionné
   adjustDevisVehicleCount(devisId, vehType, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
     const current = counts[vehType] || 0;
-    const next = Math.max(1, Math.min(50, current + delta));
-    counts[vehType] = next;
+    const next = Math.max(0, Math.min(50, current + delta));
+    if (next <= 0) {
+      delete counts[vehType];
+    } else {
+      counts[vehType] = next;
+    }
     this.syncDevisConfiguredVehicles(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
   }
 
-  // Saisie directe du compteur pour un type de véhicule coché au clavier
+  // Saisie directe du compteur pour un type de véhicule au clavier
   setDevisVehicleCount(devisId, vehType, value) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
@@ -6452,13 +6822,241 @@ class ProtecGame {
       }
     } else {
       counts[vehType] = count;
-      if (!Array.isArray(devis.configuredVehicles)) devis.configuredVehicles = [];
-      if (!devis.configuredVehicles.includes(vehType)) devis.configuredVehicles.push(vehType);
     }
     this.syncDevisConfiguredVehicles(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
+  }
+
+  // Initialisation et normalisation des compteurs de lots matériels d'un devis
+  ensureDevisLotCounts(devis) {
+    if (!devis) return {};
+    if (!devis.configuredLotCounts || typeof devis.configuredLotCounts !== 'object') {
+      devis.configuredLotCounts = {};
+      if (Array.isArray(devis.configuredLots)) {
+        devis.configuredLots.forEach(l => {
+          devis.configuredLotCounts[l] = (devis.configuredLotCounts[l] || 0) + 1;
+        });
+      }
+    }
+    return devis.configuredLotCounts;
+  }
+
+  // Synchronisation de la liste à plat configuredLots avec les compteurs
+  syncDevisConfiguredLots(devis) {
+    const counts = this.ensureDevisLotCounts(devis);
+    const list = [];
+    Object.entries(counts).forEach(([lotId, count]) => {
+      const n = Math.max(0, parseInt(count, 10) || 0);
+      for (let i = 0; i < n; i++) {
+        list.push(lotId);
+      }
+    });
+    devis.configuredLots = list;
+    return list;
+  }
+
+  // Résumé lisible des lots matériels du devis
+  formatDevisLotsSummary(devis) {
+    if (!devis) return 'dotation standard';
+    const counts = this.ensureDevisLotCounts(devis);
+    const catalog = this.getAvailableLotsCatalog();
+    const parts = [];
+    Object.entries(counts).forEach(([lotId, count]) => {
+      if (count > 0) {
+        const meta = catalog.find(l => l.id === lotId);
+        const shortName = meta ? meta.name.split(' (')[0] : lotId;
+        parts.push(`${count}x ${shortName}`);
+      }
+    });
+    return parts.length > 0 ? parts.join(', ') : 'dotation standard';
+  }
+
+  // Ajout d'un lot matériel depuis la liste déroulante du devis
+  addDevisLotType(devisId, lotId) {
+    if (!lotId) return;
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisLotCounts(devis);
+    counts[lotId] = (counts[lotId] || 0) + 1;
+    this.syncDevisConfiguredLots(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Ajustement du compteur pour un lot matériel du devis
+  adjustDevisLotCount(devisId, lotId, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisLotCounts(devis);
+    const current = counts[lotId] || 0;
+    const next = Math.max(0, Math.min(30, current + delta));
+    if (next <= 0) {
+      delete counts[lotId];
+    } else {
+      counts[lotId] = next;
+    }
+    this.syncDevisConfiguredLots(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Saisie directe de la quantité d'un lot matériel au devis
+  setDevisLotCount(devisId, lotId, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    const counts = this.ensureDevisLotCounts(devis);
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(30, parsed));
+    if (count <= 0) {
+      delete counts[lotId];
+    } else {
+      counts[lotId] = count;
+    }
+    this.syncDevisConfiguredLots(devis);
+    const bareme = this.calculateDynamicBareme(devis);
+    devis.proposedPrice = bareme.totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Initialisation et normalisation des compteurs de véhicules requis d'une mission
+  ensureMissionVehicleCounts(mission) {
+    if (!mission) return {};
+    if (!mission.configuredVehicleCounts || typeof mission.configuredVehicleCounts !== 'object' || Object.keys(mission.configuredVehicleCounts).length === 0) {
+      mission.configuredVehicleCounts = {};
+      if (Array.isArray(mission.requiredVehicles) && mission.requiredVehicles.length > 0) {
+        mission.requiredVehicles.forEach(t => {
+          mission.configuredVehicleCounts[t] = (mission.configuredVehicleCounts[t] || 0) + 1;
+        });
+      } else if (mission.requiredAssets) {
+        if (mission.requiredAssets.vpsp > 0) mission.configuredVehicleCounts['VPSP'] = mission.requiredAssets.vpsp;
+        if (mission.requiredAssets.vtu > 0) mission.configuredVehicleCounts['VTU'] = mission.requiredAssets.vtu;
+        if (mission.requiredAssets.vl > 0) mission.configuredVehicleCounts['VL'] = mission.requiredAssets.vl;
+        if (mission.requiredAssets.vtp > 0) mission.configuredVehicleCounts['VTP'] = mission.requiredAssets.vtp;
+      }
+    }
+    return mission.configuredVehicleCounts;
+  }
+
+  syncMissionRequiredVehicles(mission) {
+    const counts = this.ensureMissionVehicleCounts(mission);
+    const list = [];
+    Object.entries(counts).forEach(([t, count]) => {
+      const n = Math.max(0, parseInt(count, 10) || 0);
+      for (let i = 0; i < n; i++) list.push(t);
+    });
+    mission.requiredVehicles = list;
+    return list;
+  }
+
+  addMissionRequiredVehicleType(missionId, vehType) {
+    if (!vehType) return;
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionVehicleCounts(mission);
+    counts[vehType] = (counts[vehType] || 0) + 1;
+    this.syncMissionRequiredVehicles(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  adjustMissionRequiredVehicleCount(missionId, vehType, delta) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionVehicleCounts(mission);
+    const current = counts[vehType] || 0;
+    const next = Math.max(0, Math.min(30, current + delta));
+    if (next <= 0) delete counts[vehType];
+    else counts[vehType] = next;
+    this.syncMissionRequiredVehicles(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  setMissionRequiredVehicleCount(missionId, vehType, value) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionVehicleCounts(mission);
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(30, parsed));
+    if (count <= 0) delete counts[vehType];
+    else counts[vehType] = count;
+    this.syncMissionRequiredVehicles(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  // Initialisation et normalisation des compteurs de lots/matériels requis d'une mission
+  ensureMissionLotCounts(mission) {
+    if (!mission) return {};
+    if (!mission.configuredLotCounts || typeof mission.configuredLotCounts !== 'object') {
+      mission.configuredLotCounts = {};
+      if (Array.isArray(mission.configuredLots) && mission.configuredLots.length > 0) {
+        mission.configuredLots.forEach(l => {
+          mission.configuredLotCounts[l] = (mission.configuredLotCounts[l] || 0) + 1;
+        });
+      } else {
+        const scale = (mission.scale || '').toUpperCase();
+        if (scale.includes('GE')) {
+          mission.configuredLotCounts['lot_a'] = 1;
+          mission.configuredLotCounts['lot_b'] = 1;
+        } else if (scale.includes('ME')) {
+          mission.configuredLotCounts['lot_a'] = 1;
+        }
+      }
+    }
+    return mission.configuredLotCounts;
+  }
+
+  syncMissionRequiredLots(mission) {
+    const counts = this.ensureMissionLotCounts(mission);
+    const list = [];
+    Object.entries(counts).forEach(([lotId, count]) => {
+      const n = Math.max(0, parseInt(count, 10) || 0);
+      for (let i = 0; i < n; i++) list.push(lotId);
+    });
+    mission.configuredLots = list;
+    return list;
+  }
+
+  addMissionRequiredLotType(missionId, lotId) {
+    if (!lotId) return;
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionLotCounts(mission);
+    counts[lotId] = (counts[lotId] || 0) + 1;
+    this.syncMissionRequiredLots(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  adjustMissionRequiredLotCount(missionId, lotId, delta) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionLotCounts(mission);
+    const current = counts[lotId] || 0;
+    const next = Math.max(0, Math.min(30, current + delta));
+    if (next <= 0) delete counts[lotId];
+    else counts[lotId] = next;
+    this.syncMissionRequiredLots(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
+  }
+
+  setMissionRequiredLotCount(missionId, lotId, value) {
+    const mission = this.missions.find(m => m.id === missionId);
+    if (!mission) return;
+    const counts = this.ensureMissionLotCounts(mission);
+    const parsed = parseInt(value, 10);
+    const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(30, parsed));
+    if (count <= 0) delete counts[lotId];
+    else counts[lotId] = count;
+    this.syncMissionRequiredLots(mission);
+    this.openMissionDetails(missionId);
+    this.saveGame();
   }
 
   // Sélection / Retrait libre d'un véhicule du garage pour la mission
@@ -7321,6 +7919,35 @@ class ProtecGame {
         }
       } else if (reqLogKits > 0 && logKitNames.length === 0) {
         logKitNames = ['Lot Matériel DPS (1 lot)'];
+      }
+    }
+
+    // Prise en compte des lots et véhicules configurés manuellement (avec quantités)
+    if (mission.configuredVehicleCounts && typeof mission.configuredVehicleCounts === 'object') {
+      const customVpsp = parseInt(mission.configuredVehicleCounts['VPSP'], 10);
+      if (!isNaN(customVpsp) && customVpsp > 0) {
+        needsPS = true;
+        reqPSCount = customVpsp;
+      }
+      if ((parseInt(mission.configuredVehicleCounts['VLHR'], 10) || 0) > 0) {
+        needsHR = true;
+      }
+    }
+    if (mission.configuredLotCounts && typeof mission.configuredLotCounts === 'object') {
+      const lotEntries = Object.entries(mission.configuredLotCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+      if (lotEntries.length > 0) {
+        const lotCat = this.getAvailableLotsCatalog ? this.getAvailableLotsCatalog() : [];
+        let customKitsCount = 0;
+        const customKitNames = [];
+        lotEntries.forEach(([lotId, c]) => {
+          const n = parseInt(c, 10) || 0;
+          customKitsCount += n;
+          const meta = lotCat.find(l => l.id === lotId);
+          const label = meta ? meta.name.split(' (')[0] : lotId;
+          customKitNames.push(`${label} (${n} lot${n > 1 ? 's' : ''})`);
+        });
+        reqLogKits = Math.max(reqLogKits, customKitsCount);
+        logKitNames = customKitNames;
       }
     }
 
@@ -8529,7 +9156,8 @@ class ProtecGame {
       contractVehiclesSummary: vehsSummary,
       configuredVehicleCounts: { ...(devis.configuredVehicleCounts || {}) },
       extraTransportVehicles: [],
-      configuredLots: devis.configuredLots || [],
+      configuredLots: [...(devis.configuredLots || [])],
+      configuredLotCounts: { ...(devis.configuredLotCounts || {}) },
       rewardMoney: devis.proposedPrice,
       rewardReputation: 25,
       hiddenMinVolunteers: devis.hiddenMinVolunteers || volsCount,
@@ -8577,18 +9205,6 @@ class ProtecGame {
   createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null, forcePendingDelivery = false) {
     const veh = (this.vehicles || []).find(v => v.id === vehicleId);
     if (!veh) return null;
-
-    // Nouveau système : mission logistique planifiable, tâches combinables
-    if (window.ProtecMissionsLog) {
-      const existingV2 = window.ProtecMissionsLog.findOpenMissionForVehicle(this, veh.id, 'rearm');
-      if (existingV2) {
-        if (!autoCreated) this.openMissionDetails(existingV2.id);
-        return existingV2;
-      }
-      if (autoCreated) return window.ProtecMissionsLog.createAuto(this, veh.id, ['rearm'], pole);
-      window.ProtecMissionsLog.openCreateModal(this, { vehicleId: veh.id, tasks: ['rearm'], usePending: forcePendingDelivery });
-      return null;
-    }
 
     // Vérifier si une mission de réarmement est déjà en cours ou planifiée pour ce véhicule
     const existing = (this.missions || []).find(m => 
@@ -16688,11 +17304,6 @@ class ProtecGame {
         }
       }
 
-      if (mission.logV2 && window.ProtecMissionsLog) {
-        window.ProtecMissionsLog.openDetails(this, mission.id);
-        return;
-      }
-
       if (!Array.isArray(mission.registeredVolunteers)) {
         mission.registeredVolunteers = [];
       }
@@ -18769,6 +19380,57 @@ class ProtecGame {
                       </div>
                     `;
                   })()}
+
+                  <!-- Configuration des Types & Quantités de Véhicules requis sur la mission (Liste déroulante + compteurs) -->
+                  ${(() => {
+                    const vehCatalog = this.getAvailableVehicleTypesCatalog();
+                    const reqCounts = this.ensureMissionVehicleCounts(mission);
+                    const selectedReqVehs = Object.entries(reqCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+                    const assignedVehs = (mission.assignedVehicleIds || []).map(id => this.vehicles.find(v => v.id === id)).filter(Boolean);
+                    return `
+                      <div class="p-3 rounded-xl bg-slate-50/90 border border-slate-200 space-y-2">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <label class="text-[11px] font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+                            <i data-lucide="sliders" class="w-3.5 h-3.5 text-pc-blue"></i>
+                            <span>Types & Quantités de Véhicules Requis sur la Mission :</span>
+                          </label>
+                          <span class="text-[10px] font-bold text-slate-500">Liste déroulante + quantités</span>
+                        </div>
+                        <select onchange="if(this.value){ window.game.addMissionRequiredVehicleType('${mission.id}', this.value); this.value=''; }" class="w-full px-3 py-1.5 rounded-xl border border-slate-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-pc-blue cursor-pointer">
+                          <option value="">+ Ajouter un type de véhicule requis au dispositif...</option>
+                          ${vehCatalog.map(v => `<option value="${v.type}">${v.emoji} ${v.name} [${v.funcBadge}]</option>`).join('')}
+                        </select>
+                        ${selectedReqVehs.length === 0 ? `
+                          <div class="text-[11px] text-slate-500 italic">Aucun type de véhicule imposé (dispositif pédestre ou libre).</div>
+                        ` : `
+                          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-0.5">
+                            ${selectedReqVehs.map(([vType, count]) => {
+                              const meta = vehCatalog.find(v => v.type === vType) || { type: vType, name: vType, emoji: '🚑', funcBadge: '' };
+                              const assignedOfType = assignedVehs.filter(v => v.type === vType).length;
+                              const isCovered = assignedOfType >= count;
+                              return `
+                                <div class="p-2 rounded-xl border ${isCovered ? 'bg-emerald-50/70 border-emerald-300' : 'bg-white border-slate-200'} flex items-center justify-between gap-1.5 shadow-2xs">
+                                  <div class="flex items-center gap-1.5 min-w-0">
+                                    <span>${meta.emoji}</span>
+                                    <div class="min-w-0">
+                                      <span class="text-xs font-extrabold text-slate-800 block truncate">${meta.name}</span>
+                                      <span class="text-[9.5px] font-bold ${isCovered ? 'text-emerald-700' : 'text-amber-700'}">Affectés : ${assignedOfType}/${count}</span>
+                                    </div>
+                                  </div>
+                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-slate-200">
+                                    <button type="button" onclick="window.game.adjustMissionRequiredVehicleCount('${mission.id}', '${vType}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+                                    <input type="number" min="0" max="30" value="${count}" onchange="window.game.setMissionRequiredVehicleCount('${mission.id}', '${vType}', this.value)" class="w-8 text-center font-mono font-black text-xs text-pc-blue bg-slate-50 border border-slate-200 rounded py-0.5" />
+                                    <button type="button" onclick="window.game.adjustMissionRequiredVehicleCount('${mission.id}', '${vType}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+                                    <button type="button" onclick="window.game.setMissionRequiredVehicleCount('${mission.id}', '${vType}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+                                  </div>
+                                </div>
+                              `;
+                            }).join('')}
+                          </div>
+                        `}
+                      </div>
+                    `;
+                  })()}
                 </div>
 
                 <!-- Alertes Logistique / Réarmement (si kit manquant ou réarmement requis) -->
@@ -19198,9 +19860,69 @@ class ProtecGame {
                   <span class="text-base">⚠️</span>
                   <div>
                     <strong class="block font-black text-amber-950">Matériels d'Intervention Opérationnels</strong>
-                    <span class="text-[10px] text-amber-800">Les lots et matériels réglementaires sont armés automatiquement dans les agrès engagés.</span>
+                    <span class="text-[10px] text-amber-800">Gérez ci-dessous le type et la quantité de chaque matériel ou lot requis sur la mission, puis armez-les dans vos véhicules.</span>
                   </div>
                 </div>
+
+                <!-- Gestion par Liste Déroulante & Quantités des Matériels / Lots requis sur la mission -->
+                ${(() => {
+                  const lotCatalog = this.getAvailableLotsCatalog();
+                  const lotCounts = this.ensureMissionLotCounts(mission);
+                  const selectedLots = Object.entries(lotCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+                  const totalKits = selectedLots.reduce((acc, [, c]) => acc + (parseInt(c, 10) || 0), 0);
+                  return `
+                    <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                        <div>
+                          <span class="text-xs font-black text-slate-800 uppercase flex items-center gap-1.5">
+                            <i data-lucide="sliders" class="w-4 h-4 text-amber-600"></i>
+                            <span>Gestion des Types & Quantités de Matériels Requis</span>
+                          </span>
+                          <p class="text-[10px] text-slate-500">Sélectionnez un lot ou matériel dans la liste déroulante puis ajustez la quantité requise en dessous.</p>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-black bg-amber-50 text-amber-900 border border-amber-200 self-start sm:self-auto">
+                          Total : <strong>${totalKits} lot(s) requis</strong>
+                        </span>
+                      </div>
+
+                      <select onchange="if(this.value){ window.game.addMissionRequiredLotType('${mission.id}', this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 cursor-pointer">
+                        <option value="">+ Ajouter un lot ou matériel à la mission...</option>
+                        ${lotCatalog.map(l => `<option value="${l.id}">${l.emoji} ${l.name}</option>`).join('')}
+                      </select>
+
+                      ${selectedLots.length === 0 ? `
+                        <div class="p-2.5 rounded-xl bg-slate-50 border border-dashed border-slate-200 text-[11px] text-slate-500 flex items-center gap-2">
+                          <span>📦</span>
+                          <span>Aucun lot matériel spécifique configuré pour cette mission. Utilisez le menu déroulant ci-dessus pour ajouter du matériel.</span>
+                        </div>
+                      ` : `
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-0.5">
+                          ${selectedLots.map(([lotId, count]) => {
+                            const meta = lotCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, emoji: '📦', desc: '' };
+                            const owned = (this.workplaceEquipment && this.workplaceEquipment[lotId]) || 0;
+                            return `
+                              <div class="p-2.5 rounded-xl border bg-amber-50/70 border-amber-300 flex items-center justify-between gap-2 shadow-2xs">
+                                <div class="min-w-0 flex-1">
+                                  <div class="flex items-center gap-1.5">
+                                    <span>${meta.emoji}</span>
+                                    <span class="text-xs font-extrabold text-slate-900 truncate" title="${meta.name}">${meta.name}</span>
+                                  </div>
+                                  <div class="text-[10px] text-slate-500 truncate mt-0.5">${meta.desc || ''} ${owned > 0 ? `• Stock antenne: x${owned}` : ''}</div>
+                                </div>
+                                <div class="flex items-center gap-1 shrink-0 bg-white px-1.5 py-1 rounded-lg border border-amber-200 shadow-2xs">
+                                  <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+                                  <input type="number" min="0" max="30" value="${count}" onchange="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', this.value)" class="w-9 text-center font-mono font-black text-xs text-amber-800 bg-slate-50 border border-slate-200 rounded py-0.5" />
+                                  <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+                                  <button type="button" onclick="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+                                </div>
+                              </div>
+                            `;
+                          }).join('')}
+                        </div>
+                      `}
+                    </div>
+                  `;
+                })()}
 
                 <!-- Dotation réglementaire des lots opérationnels -->
                 <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
@@ -21524,14 +22246,9 @@ class ProtecGame {
     this.deployReinforcementVehicleWithCrew(missionId, vehId, [dispoDriver.id]);
   }
 
-  openStationDetails(stationId, opts = {}) {
+  openStationDetails(stationId) {
     const station = this.stations.find(s => s.id === stationId);
     if (!station) return;
-    // Point d'entrée unique : la fiche de l'antenne est intégrée à la vue « Ma base »
-    if (!opts.drawer && window.ProtecBaseLive && typeof window.ProtecBaseLive.openBaseView === 'function') {
-      window.ProtecBaseLive.openBaseView(stationId, { tab: opts.tab || 'flotte', closeModal: false });
-      return;
-    }
 
     this.selectedStationId = stationId;
     const drawer = document.getElementById('context-drawer');
@@ -23919,93 +24636,113 @@ class ProtecGame {
                       </div>
                     `}
 
-                    <!-- Moyens matériels & vecteurs : Véhicules et Lots -->
+                    <!-- Moyens matériels & vecteurs : Véhicules et Lots (Listes déroulantes + quantités) -->
                     <div class="space-y-3 pt-1">
-                      <!-- Véhicules proposés au client (Compteurs par type) -->
-                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
+                      <!-- Véhicules proposés au client (Liste déroulante + compteurs en dessous) -->
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2.5">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                           <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                            Véhicules proposés au devis (Cochez les types puis réglez le nombre) :
+                            Véhicules proposés au devis :
                           </label>
                           <span class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-blue-50 dark:bg-sky-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-sky-500/40 self-start sm:self-auto">
                             Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
                           </span>
                         </div>
                         <p class="text-[10px] text-slate-500 dark:text-slate-400">
-                          Cochez les catégories de véhicules souhaitées pour le dispositif puis ajustez le nombre exact avec les compteurs <strong>-</strong> et <strong>+</strong> ou saisissez-le directement au clavier.
+                          Sélectionnez les véhicules souhaités dans la liste déroulante ci-dessous, puis ajustez la quantité avec <strong>-</strong> et <strong>+</strong>.
                         </p>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-1">
-                          ${[
-                            { type: 'VPSP', name: 'VPSP (Secours à Personnes)', funcBadge: 'PS', emoji: '🚑' },
-                            { type: 'VTU', name: 'VTU (Logistique & Appui)', funcBadge: 'TU / LOG', emoji: '🚚' },
-                            { type: 'VL', name: 'VL (Liaison & Commandement)', funcBadge: 'LIAISON / CMD', emoji: '🚗' },
-                            { type: 'VTP', name: 'VTP (Transport de Personnel)', funcBadge: 'TP', emoji: '🚐' },
-                            { type: 'VLHR', name: 'Véhicule Hors Route VLHR', funcBadge: 'HR / 4x4', emoji: '🚙' },
-                            { type: 'MOTO', name: 'Moto Secours MPS', funcBadge: 'PS', emoji: '🏍️' },
-                            { type: 'VELO', name: 'Patrouille Vélo / VTT', funcBadge: 'PS', emoji: '🚲' },
-                            { type: 'QUAD', name: 'Quad Tout-Terrain', funcBadge: 'HR / PS', emoji: '🚜' },
-                            { type: 'DRONE', name: 'Télépilote Drone', funcBadge: 'RECO', emoji: '🛸' }
-                          ].map(vItem => {
-                            const counts = this.ensureDevisVehicleCounts(d);
-                            const count = counts[vItem.type] || 0;
-                            const isChecked = count > 0;
-                            return `
-                              <div class="p-2 rounded-xl border transition flex items-center justify-between gap-1.5 ${isChecked ? 'bg-indigo-50/80 dark:bg-indigo-950/60 border-pc-blue dark:border-indigo-500 shadow-2xs ring-1 ring-pc-blue/30' : 'bg-slate-50/70 dark:bg-slate-700/60 border-slate-200 dark:border-slate-600 hover:border-slate-300 dark:hover:border-slate-500'}">
-                                <label class="flex items-center gap-2 cursor-pointer select-none flex-1 min-w-0">
-                                  <input 
-                                    type="checkbox" 
-                                    ${isChecked ? 'checked' : ''} 
-                                    onchange="window.game.toggleDevisVehicleType('${d.id}', '${vItem.type}')" 
-                                    class="w-4 h-4 rounded text-pc-blue accent-pc-blue cursor-pointer shrink-0"
-                                  />
-                                  <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate">${vItem.emoji} ${vItem.name}</span>
-                                  ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 shrink-0">${vItem.funcBadge}</span>` : ''}
-                                </label>
-                                ${isChecked ? `
-                                  <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-700 shadow-2xs">
-                                    <button 
-                                      type="button" 
-                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', -1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
-                                    <input 
-                                      type="number" 
-                                      min="0" 
-                                      max="50" 
-                                      value="${count}" 
-                                      onchange="window.game.setDevisVehicleCount('${d.id}', '${vItem.type}', this.value)" 
-                                      onkeydown="if(event.key==='Enter')this.blur()" 
-                                      class="w-9 text-center font-black text-xs text-pc-blue dark:text-sky-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" 
-                                    />
-                                    <button 
-                                      type="button" 
-                                      onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vItem.type}', 1)" 
-                                      class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
-                                  </div>
-                                ` : ''}
+                        ${(() => {
+                          const vehCatalog = this.getAvailableVehicleTypesCatalog();
+                          const counts = this.ensureDevisVehicleCounts(d);
+                          const selectedVehs = Object.entries(counts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+                          return `
+                            <select onchange="if(this.value){ window.game.addDevisVehicleType('${d.id}', this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-pc-blue cursor-pointer">
+                              <option value="">+ Ajouter un type de véhicule au dispositif...</option>
+                              ${vehCatalog.map(vItem => `<option value="${vItem.type}">${vItem.emoji} ${vItem.name} [${vItem.funcBadge}]</option>`).join('')}
+                            </select>
+
+                            ${selectedVehs.length === 0 ? `
+                              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <span>🚶</span>
+                                <span>Aucun véhicule ajouté (Dispositif pédestre / poste fixe). Utilisez le menu déroulant pour engager un véhicule.</span>
                               </div>
-                            `;
-                          }).join('')}
-                        </div>
+                            ` : `
+                              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-0.5">
+                                ${selectedVehs.map(([vType, count]) => {
+                                  const vItem = vehCatalog.find(v => v.type === vType) || { type: vType, name: vType, emoji: '🚑', funcBadge: '' };
+                                  return `
+                                    <div class="p-2 rounded-xl border bg-indigo-50/80 dark:bg-indigo-950/60 border-pc-blue dark:border-indigo-500 shadow-2xs ring-1 ring-pc-blue/20 flex items-center justify-between gap-1.5">
+                                      <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span class="text-sm shrink-0">${vItem.emoji}</span>
+                                        <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate" title="${vItem.name}">${vItem.name}</span>
+                                        ${vItem.funcBadge ? `<span class="px-1.5 py-0.2 rounded text-[8.5px] font-mono font-black bg-slate-200/90 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 shrink-0">${vItem.funcBadge}</span>` : ''}
+                                      </div>
+                                      <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-indigo-200 dark:border-indigo-700 shadow-2xs">
+                                        <button type="button" onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vType}', -1)" class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                        <input type="number" min="0" max="50" value="${count}" onchange="window.game.setDevisVehicleCount('${d.id}', '${vType}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-9 text-center font-black text-xs text-pc-blue dark:text-sky-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" />
+                                        <button type="button" onclick="window.game.adjustDevisVehicleCount('${d.id}', '${vType}', 1)" class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
+                                        <button type="button" onclick="window.game.setDevisVehicleCount('${d.id}', '${vType}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer transition shrink-0 ml-0.5" title="Retirer">✕</button>
+                                      </div>
+                                    </div>
+                                  `;
+                                }).join('')}
+                              </div>
+                            `}
+                          `;
+                        })()}
                       </div>
 
-                      <!-- Lots matériels engagés -->
-                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2">
-                        <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">Lots matériels engagés :</label>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
-                          ${[
-                            { id: 'lot_a', name: 'Lot A (Secours & Réa)' },
-                            { id: 'lot_b', name: 'Lot B (Brancardage & MID)' },
-                            { id: 'tente', name: 'Lot C (Tente & Abri PMA)' },
-                            { id: 'lot_log', name: 'Lot LOG (Éclairage / Énergie)' }
-                          ].map(lot => {
-                            const isSelected = (d.configuredLots || []).includes(lot.id);
-                            return `
-                              <button type="button" onclick="window.game.toggleDevisLot('${d.id}', '${lot.id}')" class="p-2 rounded-xl text-xs font-bold transition text-center cursor-pointer border ${isSelected ? 'bg-amber-600 text-white border-amber-600 shadow-xs' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600'}">
-                                ${isSelected ? '✓ ' : ''}${lot.name}
-                              </button>
-                            `;
-                          }).join('')}
+                      <!-- Lots matériels engagés (Liste déroulante + compteurs en dessous) -->
+                      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                          <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
+                            Lots & Matériels engagés au devis :
+                          </label>
+                          <span class="text-[10px] font-black text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 px-2.5 py-0.5 rounded-lg border border-amber-200 dark:border-amber-500/40 self-start sm:self-auto">
+                            Dotation : <strong>${this.formatDevisLotsSummary(d)}</strong>
+                          </span>
                         </div>
+                        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                          Choisissez les lots et matériels requis dans la liste déroulante puis réglez la quantité engagée en dessous.
+                        </p>
+                        ${(() => {
+                          const lotCatalog = this.getAvailableLotsCatalog();
+                          const lotCounts = this.ensureDevisLotCounts(d);
+                          const selectedLots = Object.entries(lotCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+                          return `
+                            <select onchange="if(this.value){ window.game.addDevisLotType('${d.id}', this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 cursor-pointer">
+                              <option value="">+ Ajouter un lot ou matériel au dispositif...</option>
+                              ${lotCatalog.map(lItem => `<option value="${lItem.id}">${lItem.emoji} ${lItem.name}</option>`).join('')}
+                            </select>
+
+                            ${selectedLots.length === 0 ? `
+                              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                                <span>📦</span>
+                                <span>Aucun lot spécifique ajouté. Sélectionnez un lot ci-dessus (Lot A, Lot B, Tente PMA, Lot LOG...).</span>
+                              </div>
+                            ` : `
+                              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-0.5">
+                                ${selectedLots.map(([lotId, count]) => {
+                                  const lItem = lotCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, emoji: '📦' };
+                                  return `
+                                    <div class="p-2 rounded-xl border bg-amber-50/80 dark:bg-amber-950/50 border-amber-400 dark:border-amber-600 shadow-2xs flex items-center justify-between gap-1.5">
+                                      <div class="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span class="text-sm shrink-0">${lItem.emoji}</span>
+                                        <span class="text-xs font-extrabold text-slate-800 dark:text-slate-100 truncate" title="${lItem.name}">${lItem.name}</span>
+                                      </div>
+                                      <div class="flex items-center gap-1 shrink-0 bg-white dark:bg-slate-800 px-1 py-0.5 rounded-lg border border-amber-200 dark:border-amber-700 shadow-2xs">
+                                        <button type="button" onclick="window.game.adjustDevisLotCount('${d.id}', '${lotId}', -1)" class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">-</button>
+                                        <input type="number" min="0" max="30" value="${count}" onchange="window.game.setDevisLotCount('${d.id}', '${lotId}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-9 text-center font-black text-xs text-amber-800 dark:text-amber-300 mono-num bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded py-0.5 px-0.5 focus:bg-white dark:focus:bg-slate-800 focus:outline-none" />
+                                        <button type="button" onclick="window.game.adjustDevisLotCount('${d.id}', '${lotId}', 1)" class="w-5 h-5 rounded bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-black text-xs flex items-center justify-center cursor-pointer transition shrink-0">+</button>
+                                        <button type="button" onclick="window.game.setDevisLotCount('${d.id}', '${lotId}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer transition shrink-0 ml-0.5" title="Retirer">✕</button>
+                                      </div>
+                                    </div>
+                                  `;
+                                }).join('')}
+                              </div>
+                            `}
+                          `;
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -24995,12 +25732,12 @@ class ProtecGame {
                         let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
                         if (isSelected) {
                           bgClass = isPast 
-                            ? 'bg-slate-200 dark:bg-slate-700 border-pc-blue ring-2 ring-pc-blue/40' 
+                            ? 'bg-slate-200/80 dark:bg-slate-900/90 border-slate-400 dark:border-slate-600 ring-2 ring-slate-400/50 dark:ring-slate-500/50 opacity-70' 
                             : 'bg-pc-blue/10 dark:bg-sky-950/40 border-pc-blue ring-2 ring-pc-blue/30';
                         } else if (isToday) {
                           bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
                         } else if (isPast) {
-                          bgClass = 'bg-slate-100/90 dark:bg-slate-800/80 hover:bg-slate-200/70 dark:hover:bg-slate-700 border-slate-200/90 dark:border-slate-700/80';
+                          bgClass = 'bg-slate-100/60 dark:bg-slate-950/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 border-slate-200/50 dark:border-slate-800/60 opacity-40 hover:opacity-70 transition-opacity';
                         }
 
                         return `
@@ -25009,13 +25746,13 @@ class ProtecGame {
                             class="min-h-16 rounded-xl p-1.5 flex flex-col justify-between text-left transition border ${bgClass} cursor-pointer group"
                           >
                             <div class="flex items-center justify-between w-full">
-                              <span class="text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-400 font-bold' : 'text-slate-800 dark:text-slate-200 font-extrabold'}">
+                              <span class="text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-500 font-semibold' : 'text-slate-800 dark:text-slate-200 font-extrabold'}">
                                 ${day}
                               </span>
                               ${isToday ? `<span class="px-1 py-0.2 rounded text-[8px] font-black bg-amber-400 text-amber-950 uppercase">Auj.</span>` : ''}
                             </div>
 
-                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-65 filter saturate-50' : ''}">
+                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-50 filter grayscale' : ''}">
                               ${crisisCount > 0 ? `
                                 <div class="px-1 py-0.2 rounded text-[8px] font-black bg-rose-600 text-white truncate text-center animate-pulse shadow-xs">
                                   🚨 Crise (${crisisCount})
@@ -27123,7 +27860,7 @@ class ProtecGame {
                 <i data-lucide="package-check" class="w-4 h-4"></i>
                 <span>Réarmer Flotte & Lots</span>
               </button>
-              <button onclick="window.ProtecMissionsLog ? window.ProtecMissionsLog.openCreateModal(window.game, {}) : window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
+              <button onclick="window.ProtecCriseLogistique.openCreateRearmamentModal(window.game)" class="px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-black text-xs shadow-md transition flex items-center gap-1.5 cursor-pointer">
                 <i data-lucide="wrench" class="w-4 h-4"></i>
                 <span>Mission Logistique</span>
               </button>
@@ -27317,12 +28054,12 @@ class ProtecGame {
                             ⏳ ${v.logOperation.label}
                           </span>
                         ` : v.logKit ? `
-                          <button onclick="window.ProtecMissionsLog ? window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['kit_unload'] }) : window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer le stockage ou changer de kit">
+                          <button onclick="window.ProtecCriseLogistique.startUnloadingVehicleKit(window.game, '${v.id}')" class="px-3 py-1.5 rounded-xl bg-orange-100 hover:bg-orange-200 text-orange-900 text-xs font-bold transition inline-flex items-center gap-1 cursor-pointer border border-orange-300" title="Vider le véhicule pour libérer le stockage ou changer de kit">
                             <i data-lucide="arrow-down-to-dot" class="w-3.5 h-3.5"></i>
                             <span>Décharger (${window.ProtecCriseLogistique?.LOG_KITS?.[v.logKit]?.shortName || 'Kit'})</span>
                           </button>
                         ` : `
-                          <select onchange="if(this.value) { if (window.ProtecMissionsLog) window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['kit_load'], kitId: this.value }); else window.ProtecCriseLogistique.startLoadingVehicleKit(window.game, '${v.id}', this.value); this.value=''; }" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 transition cursor-pointer">
+                          <select onchange="if(this.value) { window.ProtecCriseLogistique.startLoadingVehicleKit(window.game, '${v.id}', this.value); this.value=''; }" class="text-xs font-bold bg-slate-100 hover:bg-slate-200 border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-800 transition cursor-pointer">
                             <option value="">📦 Charger un Kit LOG...</option>
                             <option value="dps">📦 Kit DPS (Matériels PS)</option>
                             <option value="chu">🛏️ Kit CHU (50 Lits de Camp)</option>
@@ -27433,13 +28170,9 @@ class ProtecGame {
       }
     } else if (moduleKey === 'amenagement' || moduleKey === 'locaux' || moduleKey === 'plan' || moduleKey === 'plan_batiment') {
       if (window.ProtecLocaux) {
-        if ((moduleKey === 'plan' || moduleKey === 'plan_batiment' || moduleKey === 'amenagement') && window.ProtecBaseLive) {
-          // L'aménagement du bâtiment se fait uniquement dans « Ma base »
-          modal.classList.add('hidden');
-          window.ProtecBaseLive.openBaseView(this.stations[0] && this.stations[0].id, { edit: true });
-          return;
+        if (moduleKey === 'plan' || moduleKey === 'plan_batiment' || !window.ProtecLocaux.activeTab) {
+          window.ProtecLocaux.activeTab = 'plan';
         }
-        if (!window.ProtecLocaux.activeTab || window.ProtecLocaux.activeTab === 'plan') window.ProtecLocaux.activeTab = 'modulaire';
         window.ProtecLocaux.renderModal(this);
       } else if (window.ProtecAdvancedModals) {
         title.textContent = 'Aménagement du local';
@@ -29238,8 +29971,8 @@ class ProtecGame {
                       ${hasPendingRearm ? `
                         <span class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">🛠️ Atelier Prévu</span>
                       ` : (() => {
-                        const caissesEnStock = station?.stock?.caisse_rearmement || 0;
-                        const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === station.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+                        const caissesEnStock = st?.stock?.caisse_rearmement || 0;
+                        const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
                         const label = (caissesEnStock === 0 && caissesEnRoute > 0)
                           ? `+ Réarmer (Mission Log • ${caissesEnRoute} en commande 📦)`
                           : `+ Réarmer (Mission Logistique)`;
@@ -29260,35 +29993,6 @@ class ProtecGame {
               `;
             })()}
           </div>
-
-          <!-- Propreté du véhicule (salissure selon les km et la météo) -->
-          ${(() => {
-            const ML = window.ProtecMissionsLog;
-            const cl = Math.round(typeof v.cleanliness === 'number' ? v.cleanliness : 100);
-            const col = cl >= 60 ? 'bg-lime-500' : (cl >= 40 ? 'bg-amber-500' : 'bg-amber-800');
-            const txt = cl >= 60 ? 'text-emerald-600' : (cl >= 40 ? 'text-amber-600' : 'text-red-600');
-            const pending = ML ? ML.findOpenMissionForVehicle(this, v.id) : null;
-            const washPrice = ML ? ML.washPrice(v) : 20;
-            return `
-              <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2">
-                <div class="flex items-center justify-between text-xs">
-                  <span class="font-extrabold text-slate-700 flex items-center gap-1.5"><span>🧽</span> Propreté</span>
-                  <span class="font-mono font-black ${txt}">${cl}%</span>
-                </div>
-                <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden border border-slate-200">
-                  <div class="h-full rounded-full transition-all duration-300 ${col}" style="width: ${cl}%"></div>
-                </div>
-                <div class="flex items-center justify-between text-[10px] gap-2 flex-wrap">
-                  <span class="font-bold ${txt}">${cl >= 60 ? 'Présentable' : (cl >= 40 ? 'Nettoyage conseillé' : (cl >= 20 ? 'Sale' : 'Très sale : image de l’antenne en jeu'))}</span>
-                  ${pending ? `<button type="button" onclick="window.game.openMissionDetails('${pending.id}'); document.getElementById('${modalId}').remove();" class="font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">🛠️ Mission logistique prévue</button>` : (ML && cl < 95 ? `
-                    <span class="flex gap-2">
-                      <button type="button" onclick="window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['wash_hand'] }); document.getElementById('${modalId}').remove();" class="font-black text-sky-700 hover:underline">🧽 À la main (gratuit)</button>
-                      <button type="button" onclick="window.ProtecMissionsLog.openCreateModal(window.game, { vehicleId: '${v.id}', tasks: ['wash_station'] }); document.getElementById('${modalId}').remove();" class="font-black text-sky-700 hover:underline">🚿 Station (${washPrice} €)</button>
-                    </span>` : '')}
-                </div>
-              </div>
-            `;
-          })()}
 
           <!-- Transmissions & Informatique Embarquée (Armement Facultatif) -->
           <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
@@ -29644,6 +30348,10 @@ class ProtecGame {
                         const day = i + 1;
                         const isToday = isViewingCurrentMonth && (day === todayDay);
                         const isSelected = (day === selectedDay);
+                        const isPast = (curYear < (this.clock ? this.clock.year : 2026)) ||
+                          (curYear === (this.clock ? this.clock.year : 2026) && curViewingMonth < (this.clock ? this.clock.month : 0)) ||
+                          (isViewingCurrentMonth && day < todayDay);
+
                         const dayMissions = vehicleMissions.filter(m => {
                           const md = getMissionDate(m);
                           return md.day === day && md.month === curViewingMonth && md.year === curYear;
@@ -29651,9 +30359,13 @@ class ProtecGame {
 
                         let bgClass = 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700/80 border-slate-200/80 dark:border-slate-700';
                         if (isSelected) {
-                          bgClass = 'bg-pc-blue/10 dark:bg-sky-950/60 border-pc-blue ring-2 ring-pc-blue/40 shadow-xs';
+                          bgClass = isPast
+                            ? 'bg-slate-200/80 dark:bg-slate-900/90 border-slate-400 dark:border-slate-600 ring-2 ring-slate-400/50 dark:ring-slate-500/50 opacity-70'
+                            : 'bg-pc-blue/10 dark:bg-sky-950/60 border-pc-blue ring-2 ring-pc-blue/40 shadow-xs';
                         } else if (isToday) {
                           bgClass = 'bg-amber-50/90 dark:bg-amber-950/50 border-amber-300 dark:border-amber-600 ring-1 ring-amber-300';
+                        } else if (isPast) {
+                          bgClass = 'bg-slate-100/60 dark:bg-slate-950/70 hover:bg-slate-100 dark:hover:bg-slate-900/80 border-slate-200/50 dark:border-slate-800/60 opacity-40 hover:opacity-70 transition-opacity';
                         }
 
                         return `
@@ -29664,13 +30376,13 @@ class ProtecGame {
                             title="${day} ${curMonthName} ${curYear} (${dayMissions.length} engagement(s))"
                           >
                             <div class="flex items-center justify-between w-full">
-                              <span class="text-[11px] sm:text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : 'text-slate-700 dark:text-slate-300 font-extrabold'}">
+                              <span class="text-[11px] sm:text-xs ${isToday ? 'text-amber-800 dark:text-amber-300 font-black' : isSelected ? 'text-pc-blue dark:text-sky-300 font-black' : isPast ? 'text-slate-400 dark:text-slate-500 font-semibold' : 'text-slate-700 dark:text-slate-300 font-extrabold'}">
                                 ${day}
                               </span>
                               ${isToday ? `<span class="px-1 py-0.2 rounded text-[7px] sm:text-[8px] font-black bg-amber-400 text-amber-950 uppercase shrink-0">AUJ.</span>` : ''}
                             </div>
 
-                            <div class="flex flex-col gap-0.5 w-full mt-1">
+                            <div class="flex flex-col gap-0.5 w-full mt-1 ${isPast && !isToday ? 'opacity-50 filter grayscale' : ''}">
                               ${dayMissions.slice(0, 2).map(m => {
                                 const info = getMissionInfo(m);
                                 return `
@@ -29778,8 +30490,8 @@ class ProtecGame {
           ` : ''}
 
           ${((v.armementLevel !== undefined && v.armementLevel < 100) || v.needsRearming || v.isRearmed === false || v.consumablesPercent < 100) ? (() => {
-            const caissesEnStock = station?.stock?.caisse_rearmement || 0;
-            const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === station.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
+            const caissesEnStock = st?.stock?.caisse_rearmement || 0;
+            const caissesEnRoute = (this.deliveries || []).filter(d => d.status === 'in_transit' && (d.stationId === st.id || !d.stationId)).reduce((sum, d) => sum + (d.items?.caisse_rearmement || 0), 0);
             const isUsingTransit = (caissesEnStock === 0 && caissesEnRoute > 0);
             const badgeExtra = isUsingTransit ? ` • ${caissesEnRoute} en commande 📦` : '';
             return `
@@ -30273,13 +30985,7 @@ class ProtecGame {
         window.ProtecLogistique.updateArmamentDomProgress();
       }
 
-      // Missions logistiques à la base (moteur dédié : début planifié, trajets, tâches combinées)
-      if (window.ProtecMissionsLog && typeof window.ProtecMissionsLog.tick === 'function') {
-        try { window.ProtecMissionsLog.tick(this); } catch (e) { console.warn('[Missions logistiques]', e); }
-      }
-
       this.missions.forEach(m => {
-        if (m.logV2) return;
         if (m.status === 'ongoing' || m.crisisTeamDeployments || m.volunteerTransit || m.type === 'crise' || m.isCrisis) {
           const timeStr = new Date(currentTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
           let hasCrisisChanges = false;
@@ -30814,7 +31520,7 @@ class ProtecGame {
 
         // 1b-2. Contrôle et départ automatique des missions planifiées (DPS, Maraudes, etc.)
         this.missions.forEach(m => {
-          if (m.status === 'planifie' && !m.logV2) {
+          if (m.status === 'planifie') {
             const targetHour = m.startHour || m.eventDate?.hour || 14;
             const targetMinute = m.startMinute || m.eventDate?.minute || 0;
             const durHours = m.durationHours || (m.durationSeconds ? m.durationSeconds / 3600 : 4);
@@ -31398,8 +32104,8 @@ class ProtecGame {
       // Synchronisation réactive continue (Argent, effectifs dispo, compteurs de badges)
       this.updateStatsUI();
 
-      // Détection automatique de tout changement d'état ou nouvelle mission pour Leaflet
-      const currentMissionSig = (this.missions || []).map(m => `${m.id}:${m.status}`).join('|');
+      // Détection automatique de tout changement d'état, minute d'horloge ou nouvelle mission pour Leaflet
+      const currentMissionSig = `${this.clock.day}:${this.clock.hour}:${this.clock.minute}|` + (this.missions || []).map(m => `${m.id}:${m.status}`).join('|');
       if (this._lastMissionSig !== currentMissionSig) {
         this._lastMissionSig = currentMissionSig;
         this.renderMissions();
