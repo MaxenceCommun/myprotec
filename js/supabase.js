@@ -1582,28 +1582,9 @@ window.ProtecSupabase = {
               ? window.ProtecServerEvents.filterInboxForSave(exSave.save_data.server_inbox)
               : exSave.save_data.server_inbox;
           }
-          // 2. Fusionner les missions injectées à distance pour ne jamais les écraser
-          //    (uniquement celles jamais vues sur cet appareil : une mission retirée, terminée ou
-          //    refusée par le joueur ne doit pas « ressusciter » à chaque sauvegarde)
-          if (Array.isArray(exSave.save_data.missions) && exSave.save_data.missions.length > 0) {
-            const currentIds = new Set((stateToSave.missions || []).map(m => m.id));
-            const mem = window.ProtecMissionMemory;
-            if (mem) mem.remember((stateToSave.missions || []).map(m => m && m.id));
-            exSave.save_data.missions.forEach(m => {
-              if (!m || !m.id) return;
-              if (mem && mem.isKnown(m.id) && !currentIds.has(m.id)) return; // déjà vue puis retirée localement
-              if (!currentIds.has(m.id)) {
-                if (mem) mem.remember([m.id]);
-                if (!Array.isArray(stateToSave.missions)) stateToSave.missions = [];
-                stateToSave.missions.unshift(m);
-                currentIds.add(m.id);
-                if (game && Array.isArray(game.missions) && !game.missions.some(gm => gm.id === m.id)) {
-                  game.missions.unshift(m);
-                  if (typeof game.renderMissions === 'function') game.renderMissions();
-                }
-              }
-            });
-          }
+          // 2. (Supprimé) Les missions ne sont plus réinjectées depuis la sauvegarde en ligne :
+          //    elles « ressuscitaient » après avoir été retirées. Les événements du serveur passent
+          //    par server_inbox (1c ci-dessus).
           // 3. Préserver les écussons
           if ((!stateToSave.localEcussons || stateToSave.localEcussons.length === 0) && exSave.save_data.localEcussons?.length > 0) {
             stateToSave.localEcussons = exSave.save_data.localEcussons;

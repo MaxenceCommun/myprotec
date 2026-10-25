@@ -845,8 +845,19 @@
 
       // --- SOUS-VIVIER B : GRANDS ÉVÉNEMENTS RÉELS DE LA RÉGION (CALÉS SUR LEUR BON MOIS) ---
       const regionalPool = this.REAL_REGIONAL_EVENTS[deptInfo.region] || [];
+      // Normalisation des noms de communes (casse, accents, tirets) pour vérifier le département
+      const normCity = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
       regionalPool.forEach((regEvt, rIdx) => {
         if (generatedEvents.length >= 12) return;
+        // Réalisme : seuls les grands événements situés DANS le département du joueur
+        // (la Foire de Metz relève de la Moselle, pas d'une antenne de Meurthe-et-Moselle)
+        const cityInDept = communes.find(c => normCity(c.nom) === normCity(regEvt.city));
+        if (!cityInDept) return;
+        // Réalisme : un organisateur sollicite un DPS au plus ~4 mois avant l'événement
+        if (regEvt.month !== undefined && regEvt.month !== null) {
+          const probe = this.createEventDateForSpecificMonth(regEvt.month, currentYear, currentMonth, currentDay, 14, regEvt.dur || 7, daysNames, monthsNames, true);
+          if (!probe || probe.daysAhead > 120) return;
+        }
         if (!usedEventTitles.has(regEvt.name)) {
           usedEventTitles.add(regEvt.name);
 
@@ -855,7 +866,7 @@
           const ris = this.calculateRis(pub, regEvt.env, 'élevé', 12);
           const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey, regEvt);
 
-          const regCommuneObj = communes.find(c => c.nom.toLowerCase().includes((regEvt.city || '').toLowerCase())) || communes[0];
+          const regCommuneObj = cityInDept;
           const lat = parseFloat(((regCommuneObj?.lat || station.lat) + (Math.random() - 0.5) * 0.02).toFixed(4));
           const lng = parseFloat(((regCommuneObj?.lng || station.lng) + (Math.random() - 0.5) * 0.02).toFixed(4));
 

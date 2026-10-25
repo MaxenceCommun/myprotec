@@ -1448,6 +1448,11 @@ window.ProtecNotifications = {
 
   // Synchronisation dynamique des missions reçues par Push / Supabase Cloud
   async syncCloudMissions() {
+    // Désactivé : ancien mécanisme qui recopiait des missions depuis la sauvegarde en ligne et
+    // affichait « Nouvelle Mission » pour des missions déjà retirées (boucle). Les événements
+    // arrivent désormais uniquement par le moteur du serveur (js/server_events_client.js).
+    return;
+    // eslint-disable-next-line no-unreachable
     if (!window.ProtecSupabase?.client || !window.game) return;
     let cachedUser = null;
     try {
