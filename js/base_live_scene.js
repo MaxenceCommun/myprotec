@@ -418,15 +418,39 @@
       this.walls = this.model.walls || [];
       this.doors = this.model.doors || [];
       this.windows = this.model.windows || [];
-      this.furniture = (this.model.furniture || []).filter(f => f && isFinite(f.x) && isFinite(f.y) && f.w > 0 && f.d > 0);
+      this.furniture = (this.model.furniture || []).filter(f => f && isFinite(f.x) && isFinite(f.y) && f.w > 0 && f.d > 0).map(f => ({ ...f }));
       this.parking = this.model.parking || null;
       this.vehicles = vehicles || [];
+      this.pushFurnitureOutOfWalls();
       this.computeBounds();
       this.buildWallPieces();
       this.buildNav();
       this.buildPOIs();
       this.buildShelfItems();
       this.buildFloorStock();
+    }
+
+    // Mobilier ancien posé dans l'épaisseur d'un mur : recollé contre le nu du mur (rendu et navigation)
+    pushFurnitureOutOfWalls() {
+      const boxes = this.walls.map(w => {
+        const th = Number(w.th) || 0.15;
+        return { x0: Math.min(w.x1, w.x2) - th / 2, x1: Math.max(w.x1, w.x2) + th / 2, y0: Math.min(w.y1, w.y2) - th / 2, y1: Math.max(w.y1, w.y2) + th / 2 };
+      });
+      this.furniture.forEach(f => {
+        for (let pass = 0; pass < 3; pass++) {
+          let moved = false;
+          boxes.forEach(b => {
+            const ox = Math.min(f.x + f.w, b.x1) - Math.max(f.x, b.x0);
+            const oy = Math.min(f.y + f.d, b.y1) - Math.max(f.y, b.y0);
+            if (ox <= 0.001 || oy <= 0.001) return;
+            const wallVert = (b.x1 - b.x0) < (b.y1 - b.y0);
+            // Ne pousse que si le meuble ne fait qu'empiéter (pas s'il traverse le mur)
+            if (wallVert && ox < f.w * 0.6 && ox < 0.35) { f.x += (f.x + f.w / 2 > (b.x0 + b.x1) / 2) ? ox : -ox; moved = true; }
+            else if (!wallVert && oy < f.d * 0.6 && oy < 0.35) { f.y += (f.y + f.d / 2 > (b.y0 + b.y1) / 2) ? oy : -oy; moved = true; }
+          });
+          if (!moved) break;
+        }
+      });
     }
 
     // Contenu réel des étagères (storedInventory) posé niveau par niveau
@@ -642,15 +666,45 @@
         return res.sort((p, q) => p.a - q.a);
       };
 
+      const isVert = (w) => Math.abs(w.x1 - w.x2) < 0.01;
+      const isHorz = (w) => Math.abs(w.y1 - w.y2) < 0.01;
+      const isTall = (w) => !!w.outer && (isVert(w) ? w.x1 <= b.cx : w.y1 <= b.cy);
+      // Retour > 0 : raccourcir le tronçon à cette extrémité ; < 0 : le prolonger
+      const endAdjust = (w, vertical, t, tall) => {
+        const px = vertical ? w.x1 : t, py = vertical ? t : w.y1;
+        let trim = 0, ext = 0;
+        this.walls.forEach(q => {
+          if (q === w) return;
+          if (vertical ? !isHorz(q) : !isVert(q)) return;
+          const qth = Number(q.th) || 0.15;
+          const along = vertical ? py : px;          // position sur l'axe perpendiculaire de q
+          const qLine = vertical ? q.y1 : q.x1;
+          if (Math.abs(qLine - along) > 0.06) return;
+          const qa = vertical ? Math.min(q.x1, q.x2) : Math.min(q.y1, q.y2);
+          const qb = vertical ? Math.max(q.x1, q.x2) : Math.max(q.y1, q.y2);
+          const c = vertical ? px : py;
+          if (c < qa - 0.06 || c > qb + 0.06) return;
+          const interior = c > qa + 0.06 && c < qb - 0.06;
+          if (interior) { trim = Math.max(trim, qth / 2); return; }
+          // Angle : le mur le plus haut (sinon l'horizontal) prend le carré d'angle
+          const qTall = isTall(q);
+          const mine = (tall && !qTall) || (tall === qTall && !vertical);
+          if (mine) ext = Math.max(ext, qth / 2); else trim = Math.max(trim, qth / 2);
+        });
+        return trim > 0 ? trim : -ext;
+      };
+
       this.walls.forEach(w => {
-        const vertical = Math.abs(w.x1 - w.x2) < 0.01;
-        const horizontal = Math.abs(w.y1 - w.y2) < 0.01;
+        const vertical = isVert(w);
+        const horizontal = isHorz(w);
         if (!vertical && !horizontal) return;
         const th = Number(w.th) || 0.15;
-        const lo = vertical ? Math.min(w.y1, w.y2) : Math.min(w.x1, w.x2);
-        const hi = vertical ? Math.max(w.y1, w.y2) : Math.max(w.x1, w.x2);
-        const isBack = !!w.outer && (vertical ? w.x1 <= b.cx : w.y1 <= b.cy);
-        const tall = isBack;
+        let lo = vertical ? Math.min(w.y1, w.y2) : Math.min(w.x1, w.x2);
+        let hi = vertical ? Math.max(w.y1, w.y2) : Math.max(w.x1, w.x2);
+        const tall = isTall(w);
+        // Jonctions : angle plein (pas d'encoche ni de recouvrement), cloison en T arrêtée au nu du mur
+        lo += endAdjust(w, vertical, lo, tall);
+        hi -= endAdjust(w, vertical, hi, tall);
         const holes = segOverlaps(w, this.doors).map(h => ({ ...h, kind: 'door' }))
           .concat(segOverlaps(w, this.windows).map(h => ({ ...h, kind: 'window' })))
           .sort((p, q) => p.a - q.a);
@@ -1985,6 +2039,83 @@
     poly(ctx, [P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], top, edge, 0.6);
   }
 
+
+  // =========================================================================
+  // Tri de profondeur des volumes (peintre isométrique exact)
+  // Un volume = pavé {x0,y0,z0,x1,y1,z1}. La caméra regarde selon (-1,-1,-1) :
+  // si deux pavés sont séparés sur un axe, celui du côté positif est devant.
+  // =========================================================================
+  function partScreen(p) {
+    // Projections sur les 3 normales des arêtes de l'hexagone écran (test de recouvrement exact)
+    p._u0 = p.x0 - p.y1; p._u1 = p.x1 - p.y0;
+    p._a0 = p.x0 - p.z1 * HZ; p._a1 = p.x1 - p.z0 * HZ;
+    p._b0 = p.y0 - p.z1 * HZ; p._b1 = p.y1 - p.z0 * HZ;
+    p._d = (p.x0 + p.x1) / 2 + (p.y0 + p.y1) / 2 + (p.z0 + p.z1) / 2 * HZ;
+    return p;
+  }
+  function partsOverlap(A, B) {
+    const e = 0.002;
+    return A._u0 < B._u1 - e && B._u0 < A._u1 - e && A._a0 < B._a1 - e && B._a0 < A._a1 - e && A._b0 < B._b1 - e && B._b0 < A._b1 - e;
+  }
+  // < 0 : A est dessiné avant B
+  function cmpParts(A, B) {
+    const e = 0.002;
+    if (A.x1 <= B.x0 + e) return -1; if (B.x1 <= A.x0 + e) return 1;
+    if (A.y1 <= B.y0 + e) return -1; if (B.y1 <= A.y0 + e) return 1;
+    if (A.z1 <= B.z0 + e) return -1; if (B.z1 <= A.z0 + e) return 1;
+    // Volumes qui s'interpénètrent : axe de plus faible pénétration
+    const ox = Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0);
+    const oy = Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0);
+    const oz = (Math.min(A.z1, B.z1) - Math.max(A.z0, B.z0)) * HZ;
+    let d;
+    if (ox <= oy && ox <= oz) d = (A.x0 + A.x1) - (B.x0 + B.x1);
+    else if (oy <= oz) d = (A.y0 + A.y1) - (B.y0 + B.y1);
+    else d = (A.z0 + A.z1) - (B.z0 + B.z1);
+    if (Math.abs(d) < 1e-6) d = A._d - B._d;
+    return d < 0 ? -1 : 1;
+  }
+  // Graphe « dessiné avant » limité aux paires qui se recouvrent à l'écran
+  function buildPartDeps(parts) {
+    const n = parts.length;
+    const deps = parts.map(() => []);
+    const idx = parts.map((p, i) => i).sort((a, b) => parts[a]._u0 - parts[b]._u0);
+    for (let ii = 0; ii < n; ii++) {
+      const i = idx[ii], A = parts[i];
+      for (let jj = ii + 1; jj < n; jj++) {
+        const j = idx[jj], B = parts[j];
+        if (B._u0 >= A._u1) break;
+        if (!partsOverlap(A, B)) continue;
+        if (cmpParts(A, B) < 0) deps[j].push(i); else deps[i].push(j);
+      }
+    }
+    return deps;
+  }
+  // Tri topologique (DFS), départ par profondeur croissante ; les cycles résiduels sont rompus
+  function topoOrder(n, depsOf, seed) {
+    const mark = new Uint8Array(n);
+    const out = [];
+    const stack = [];
+    seed.forEach(start => {
+      if (mark[start]) return;
+      stack.push([start, 0]); mark[start] = 1;
+      while (stack.length) {
+        const top = stack[stack.length - 1];
+        const d = depsOf(top[0]);
+        if (top[1] < d.length) {
+          const nx = d[top[1]++];
+          if (!mark[nx]) { mark[nx] = 1; stack.push([nx, 0]); }
+        } else { stack.pop(); out.push(top[0]); }
+      }
+    });
+    return out;
+  }
+  function sortParts(parts) {
+    parts.forEach(partScreen);
+    const deps = buildPartDeps(parts);
+    const seed = parts.map((p, i) => i).sort((a, b) => parts[a]._d - parts[b]._d);
+    return topoOrder(parts.length, i => deps[i], seed).map(i => parts[i]);
+  }
+
   // =========================================================================
   // 7. SCÈNE VIVANTE (moteur principal)
   // =========================================================================
@@ -2156,7 +2287,9 @@
       this.selected = null;
       this.showLabels = this.pref('labels', true);
       this.wallsUp = this.pref('wallsUp', false);
-      this.rotationMode = (function () { try { return localStorage.getItem('protec_live_rot') || 'auto'; } catch (e) { return 'auto'; } })();
+      // Caméra fixe : orientation automatique (cour face à la caméra), plus de pivot manuel
+      this.rotationMode = 'auto';
+      try { localStorage.removeItem('protec_live_rot'); } catch (e) { /* stockage indisponible */ }
       this.firstSync = true;
       this.isNight = false;
       this._loop = this.loop.bind(this);
@@ -2199,12 +2332,6 @@
       this.groundCache = null;
       this.userMoved = false;
       this.fitted = false;
-    }
-
-    rotate() {
-      const cur = this.currentRot || 0;
-      this.rotationMode = String((cur + 1) % 4);
-      try { localStorage.setItem('protec_live_rot', this.rotationMode); } catch (e) { /* stockage indisponible */ }
     }
 
     vehicleLayout(game, model) {
@@ -2921,41 +3048,20 @@
 
     }
 
-    // Liste des volumes statiques triés topologiquement (murs, mobilier)
+    // Volumes statiques (murs, sous-volumes du mobilier, stocks au sol) et leur graphe d'ordre
     buildStaticDrawables() {
       const W = this.world;
-      const items = [];
-      W.wallPieces.forEach(p => items.push({ kind: 'wall', x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1, ref: p }));
-      W.furniture.forEach(f => items.push({ kind: 'furn', x0: f.x, y0: f.y, x1: f.x + f.w, y1: f.y + f.d, ref: f }));
-      (W.floorStacks || []).forEach(sk => items.push({ kind: 'stock', x0: sk.x, y0: sk.y, x1: sk.x + sk.w, y1: sk.y + sk.d, ref: sk }));
-      // Tri topologique : A devant B si séparé sur un axe avec A du côté +x ou +y
-      const n = items.length;
-      const behind = items.map(() => []);
-      for (let i = 0; i < n; i++) {
-        for (let j = 0; j < n; j++) {
-          if (i === j) continue;
-          const A = items[i], B = items[j];
-          // B derrière A ?
-          const aFront = (A.x0 >= B.x1 - 0.001 && !(A.y1 <= B.y0 + 0.001)) || (A.y0 >= B.y1 - 0.001 && !(A.x1 <= B.x0 + 0.001));
-          if (aFront) behind[i].push(j);
-        }
-      }
-      const order = [];
-      const mark = new Uint8Array(n);
-      const visit = (i) => {
-        if (mark[i] === 2) return;
-        if (mark[i] === 1) return; // cycle : on ignore
-        mark[i] = 1;
-        behind[i].forEach(visit);
-        mark[i] = 2;
-        order.push(items[i]);
-      };
-      // Ordre de départ stable par profondeur pour limiter les artefacts
-      const seed = items.map((it, i) => i).sort((a, b) => (items[a].x0 + items[a].y0) - (items[b].x0 + items[b].y0));
-      seed.forEach(visit);
-      order.forEach((it, i) => { it.order = i; });
-      this.staticItems = order;
-      this.staticSig = this.worldSig;
+      const parts = [];
+      W.wallPieces.forEach(p => {
+        const H = (p.tall || this.wallsUp) ? WALL_H : WALL_CUT;
+        parts.push({ kind: 'wall', x0: p.x0, y0: p.y0, z0: 0, x1: p.x1, y1: p.y1, z1: p.windowPane && H > SILL_H ? Math.max(H, 0.9) : H, ref: p, draw: (ctx) => this.drawWall(ctx, p) });
+      });
+      W.furniture.forEach(f => this.furnParts(f).forEach(q => parts.push(q)));
+      (W.floorStacks || []).forEach(sk => this.stackParts(sk).forEach(q => parts.push(q)));
+      parts.forEach(partScreen);
+      this.staticItems = parts;
+      this.staticDeps = buildPartDeps(parts);
+      this.staticSig = this.worldSig + '|' + (this.wallsUp ? 1 : 0);
     }
 
     render() {
@@ -2988,7 +3094,7 @@
         ctx.drawImage(gc.canvas, iso.ox + gc.minSX * f, iso.oy + gc.minSY * f, gc.canvas.width * f, gc.canvas.height * f);
       }
 
-      if (this.staticSig !== this.worldSig || !this.staticItems) this.buildStaticDrawables();
+      if (this.staticSig !== this.worldSig + '|' + (this.wallsUp ? 1 : 0) || !this.staticItems || !this.staticDeps) this.buildStaticDrawables();
 
       this.drawAwayVehicles(ctx);
       const editing = !!(this.edit && this.edit.active);
@@ -3005,76 +3111,59 @@
       });
       ctx.globalAlpha = 1;
 
-      // Insertion des éléments dynamiques (avatars, véhicules) dans l'ordre statique
-      const statics = this.staticItems;
-      const buckets = new Map();
-      const insert = (item, px0, py0, px1, py1) => {
-        let idx = -1;
-        for (let i = statics.length - 1; i >= 0; i--) {
-          const s = statics[i];
-          const front = (px0 >= s.x1 - 0.001) || (py0 >= s.y1 - 0.001);
-          if (front && this.screenOverlap(s, px0, py0, px1, py1)) { idx = i; break; }
-        }
-        // Assis / couché sur ce meuble : dessiné au-dessus
-        if (item.agent && item.agent.seatOn) {
-          const si = statics.findIndex(s => s.kind === 'furn' && s.ref.id === item.agent.seatOn);
-          if (si > idx) idx = si;
-        }
-        item.idx = idx;
-        pending.push(item);
-      };
-      const pending = [];
-      // Véhicules
+      // Éléments dynamiques (véhicules, avatars) insérés dans le graphe d'ordre des volumes statiques
+      const statics = this.staticItems, sDeps = this.staticDeps, S = statics.length;
+      const dyn = [];
       this.world.vehicles.forEach(v => {
         const vs = this.vehStates.get(v.id) || { anim: v.present ? 'parked' : 'away', offset: 0 };
         if (vs.anim === 'away') return;
         const [dx, dy] = this.vehicleOffset(v, vs.offset || 0);
         const b = v.box;
-        insert({ veh: v, vs, dx, dy, depth: (b.x1 + dx) + (b.y1 + dy), box: { x0: b.x0 + dx, y0: b.y0 + dy, x1: b.x1 + dx, y1: b.y1 + dy } }, b.x0 + dx, b.y0 + dy, b.x1 + dx, b.y1 + dy);
+        dyn.push(partScreen({ kind: 'veh', x0: b.x0 + dx, y0: b.y0 + dy, z0: 0, x1: b.x1 + dx, y1: b.y1 + dy, z1: 2.5, draw: (cx) => this.drawVehicle(cx, v, vs, dx, dy) }));
       });
-      if (!editing) this.agents.forEach(a => insert({ agent: a, depth: a.x + a.y }, a.x, a.y, a.x, a.y));
-      // Avatars proches d'un véhicule : même groupe de dessin que lui (ordre relatif garanti)
-      const vehItems = pending.filter(it => it.veh);
-      pending.forEach(it => {
-        if (!it.agent) return;
-        vehItems.forEach(vi => {
-          const b = vi.box;
-          if (it.agent.x > b.x0 - 1.5 && it.agent.x < b.x1 + 1.5 && it.agent.y > b.y0 - 1.5 && it.agent.y < b.y1 + 1.5) {
-            const m = Math.max(it.idx, vi.idx);
-            it.idx = m; vi.idx = m;
-          }
-        });
+      if (!editing) this.agents.forEach(a => {
+        const r = 0.17, lying = a.pose === 'sleep';
+        dyn.push(partScreen({ kind: 'agent', agent: a, x0: a.x - r, y0: a.y - r, z0: 0, x1: a.x + r, y1: a.y + r, z1: lying ? 0.75 : 1.75, draw: (cx) => this.drawAgent(cx, a) }));
       });
-      pending.forEach(it => { if (!buckets.has(it.idx)) buckets.set(it.idx, []); buckets.get(it.idx).push(it); });
-
-      const drawBucket = (idx) => {
-        const list = buckets.get(idx);
-        if (!list) return;
-        // Avatar devant un véhicule s'il le dépasse côté +x ou +y ; sinon ordre de profondeur
-        const before = (p, q) => {
-          if (p.agent && q.veh) { const b = q.box; return !(p.agent.x >= b.x1 || p.agent.y >= b.y1); }
-          if (p.veh && q.agent) { const b = p.box; return (q.agent.x >= b.x1 || q.agent.y >= b.y1); }
-          return p.depth < q.depth;
-        };
-        list.sort((p, q) => p.depth - q.depth);
-        for (let i = 1; i < list.length; i++) {
-          const cur = list[i];
-          let j = i - 1;
-          while (j >= 0 && before(cur, list[j]) && !before(list[j], cur)) { list[j + 1] = list[j]; j--; }
-          list[j + 1] = cur;
-        }
-        list.forEach(it => {
-          if (it.agent) this.drawAgent(ctx, it.agent);
-          else this.drawVehicle(ctx, it.veh, it.vs, it.dx, it.dy);
-        });
+      const extra = new Map();
+      const dDeps = dyn.map(() => []);
+      const order = (d, s) => {
+        // Assis / couché : toujours au-dessus de l'assise ou du matelas du meuble occupé
+        if (d.agent && d.agent.seatOn && s.ref && s.ref.id === d.agent.seatOn && s.z1 <= 0.62) return 1;
+        return cmpParts(d, s);
       };
-      drawBucket(-1);
-      statics.forEach((s, i) => {
-        if (s.kind === 'wall') this.drawWall(ctx, s.ref);
-        else if (s.kind === 'stock') this.drawStack(ctx, s.ref);
-        else if (!(editing && this.edit.drag && s.ref.id === this.edit.drag.id)) this.drawFurniture(ctx, s.ref);
-        drawBucket(i);
+      dyn.forEach((d, k) => {
+        for (let i = 0; i < S; i++) {
+          const s = statics[i];
+          if (s._u0 >= d._u1 || d._u0 >= s._u1 || !partsOverlap(d, s)) continue;
+          if (order(d, s) < 0) { if (!extra.has(i)) extra.set(i, []); extra.get(i).push(S + k); }
+          else dDeps[k].push(i);
+        }
+        for (let k2 = k + 1; k2 < dyn.length; k2++) {
+          const e = dyn[k2];
+          if (!partsOverlap(d, e)) continue;
+          if (cmpParts(d, e) < 0) dDeps[k2].push(S + k); else dDeps[k].push(S + k2);
+        }
       });
+      const nodeOf = (i) => (i < S ? statics[i] : dyn[i - S]);
+      const depsOf = (i) => (i < S ? (extra.has(i) ? sDeps[i].concat(extra.get(i)) : sDeps[i]) : dDeps[i - S]);
+      const seed = [];
+      for (let i = 0; i < S + dyn.length; i++) seed.push(i);
+      seed.sort((p, q) => nodeOf(p)._d - nodeOf(q)._d);
+      const dragId = editing && this.edit.drag ? this.edit.drag.id : null;
+      topoOrder(S + dyn.length, depsOf, seed).forEach(i => {
+        const n = nodeOf(i);
+        if (dragId && n.kind === 'furn' && n.ref && n.ref.id === dragId) return;
+        n.draw(ctx);
+      });
+      // Survol : contour au sol du meuble / du stock pointé
+      if (this.hover && (this.hover.furn || this.hover.stack)) {
+        const h = this.hover.furn || this.hover.stack;
+        ctx.save();
+        ctx.setLineDash([6, 4]);
+        poly(ctx, [iso.p(h.x, h.y, 0), iso.p(h.x + h.w, h.y, 0), iso.p(h.x + h.w, h.y + h.d, 0), iso.p(h.x, h.y + h.d, 0)], null, '#38bdf8', Math.max(2, iso.k * 0.05));
+        ctx.restore();
+      }
 
       // Éclairage nocturne : halos chauds dans les pièces occupées
       if (night) {
@@ -3254,174 +3343,248 @@
       });
     }
 
-    drawFurniture(ctx, f) {
+    // Mobilier découpé en volumes élémentaires (pieds, plateau, assise, dossier, montants, niveaux, objets…)
+    // Chaque volume est trié séparément : une chaise glissée sous un bureau, un objet sur une étagère
+    // ou un meuble collé à un mur s'affichent dans le bon ordre.
+    furnParts(f) {
       const iso = this.iso;
       const st = FURN_STYLE[f.type] || { h: 0.8, kind: 'box', color: f.color || '#8a9bb0' };
       const col = f.color || st.color;
       const x0 = f.x, y0 = f.y, x1 = f.x + f.w, y1 = f.y + f.d;
-      const hov = this.hover && this.hover.furn === f;
       const P = (x, y, z) => iso.p(x, y, z);
+      const parts = [];
+      const add = (bx0, by0, bz0, bx1, by1, bz1, draw) => parts.push({ x0: bx0, y0: by0, z0: bz0, x1: bx1, y1: by1, z1: bz1, draw, ref: f, kind: 'furn' });
+      const box = (bx0, by0, bz0, bx1, by1, bz1, color, opts) => add(bx0, by0, bz0, bx1, by1, bz1, (ctx) => drawBox(ctx, iso, bx0, by0, bx1, by1, bz0, bz1, color, opts));
+      const longIsW = f.w >= f.d;
       switch (st.kind) {
         case 'table': {
-          const z = st.h;
-          const lg = 0.06;
-          [[x0 + 0.05, y0 + 0.05], [x1 - 0.05 - lg, y0 + 0.05], [x0 + 0.05, y1 - 0.05 - lg], [x1 - 0.05 - lg, y1 - 0.05 - lg]].forEach(([lx, ly]) => drawBox(ctx, iso, lx, ly, lx + lg, ly + lg, 0, z - 0.04, '#334155', { edge: null }));
-          drawBox(ctx, iso, x0, y0, x1, y1, z - 0.05, z, col);
+          const z = st.h, lg = 0.06;
+          [[x0 + 0.05, y0 + 0.05], [x1 - 0.05 - lg, y0 + 0.05], [x0 + 0.05, y1 - 0.05 - lg], [x1 - 0.05 - lg, y1 - 0.05 - lg]]
+            .forEach(([lx, ly]) => box(lx, ly, 0, lx + lg, ly + lg, z - 0.05, '#334155', { edge: null }));
+          box(x0, y0, z - 0.05, x1, y1, z, col);
           if (f.type === 'bureau') {
-            // Écran + clavier
+            // Écran au fond du bureau, côté opposé à la chaise ; clavier devant la place assise
+            const side = this.chairSideOf(f) || 'N';
             const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-            drawBox(ctx, iso, cx - 0.25, cy - 0.04, cx + 0.25, cy + 0.02, z, z + 0.38, '#0f172a', { top: '#1e293b' });
-            drawBox(ctx, iso, cx - 0.2, cy + 0.12, cx + 0.2, cy + 0.26, z, z + 0.02, '#e2e8f0', { edge: null });
+            const scrDark = '#0f172a', scrTop = { top: '#1e293b' };
+            if (side === 'N' || side === 'S') {
+              const sy = side === 'N' ? y1 - 0.16 : y0 + 0.1;
+              const ky = side === 'N' ? y0 + 0.14 : y1 - 0.28;
+              box(cx - 0.25, sy, z, cx + 0.25, sy + 0.06, z + 0.38, scrDark, scrTop);
+              box(cx - 0.2, ky, z, cx + 0.2, ky + 0.14, z + 0.02, '#e2e8f0', { edge: null });
+            } else {
+              const sx = side === 'W' ? x1 - 0.16 : x0 + 0.1;
+              const kx = side === 'W' ? x0 + 0.14 : x1 - 0.28;
+              box(sx, cy - 0.25, z, sx + 0.06, cy + 0.25, z + 0.38, scrDark, scrTop);
+              box(kx, cy - 0.2, z, kx + 0.14, cy + 0.2, z + 0.02, '#e2e8f0', { edge: null });
+            }
           } else if (f.type === 'table_formation') {
-            // Classeurs & supports pédagogiques
             const rng = mulberry32(hashStr(f.id));
             for (let i = 0; i < 3; i++) {
               const px = lerp(x0 + 0.2, x1 - 0.4, rng()), py = lerp(y0 + 0.15, y1 - 0.35, rng());
-              drawBox(ctx, iso, px, py, px + 0.22, py + 0.3, z, z + 0.015, ['#fde68a', '#bfdbfe', '#fecaca'][i], { edge: null });
+              box(px, py, z, px + 0.22, py + 0.3, z + 0.015, ['#fde68a', '#bfdbfe', '#fecaca'][i], { edge: null });
             }
           }
           break;
         }
         case 'chair': {
-          drawBox(ctx, iso, x0 + 0.05, y0 + 0.05, x1 - 0.05, y1 - 0.05, 0.4, 0.46, col);
-          drawBox(ctx, iso, (x0 + x1) / 2 - 0.02, (y0 + y1) / 2 - 0.02, (x0 + x1) / 2 + 0.02, (y0 + y1) / 2 + 0.02, 0, 0.4, '#334155', { edge: null });
-          drawBox(ctx, iso, x0 + 0.05, y0 + 0.05, x1 - 0.05, y0 + 0.1, 0.46, 0.9, shade(col, -0.1));
+          // Assise face à la table voisine : le dossier est du côté opposé
+          const back = this.chairBackSide(f);
+          const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+          box(cx - 0.16, cy - 0.16, 0, cx + 0.16, cy + 0.16, 0.04, '#1f2937', { edge: null });
+          box(cx - 0.02, cy - 0.02, 0.04, cx + 0.02, cy + 0.02, 0.4, '#334155', { edge: null });
+          box(x0 + 0.05, y0 + 0.05, 0.4, x1 - 0.05, y1 - 0.05, 0.46, col);
+          const bc = shade(col, -0.1);
+          if (back === 'N') box(x0 + 0.05, y0 + 0.05, 0.46, x1 - 0.05, y0 + 0.1, 0.9, bc);
+          else if (back === 'S') box(x0 + 0.05, y1 - 0.1, 0.46, x1 - 0.05, y1 - 0.05, 0.9, bc);
+          else if (back === 'W') box(x0 + 0.05, y0 + 0.05, 0.46, x0 + 0.1, y1 - 0.05, 0.9, bc);
+          else box(x1 - 0.1, y0 + 0.05, 0.46, x1 - 0.05, y1 - 0.05, 0.9, bc);
           break;
         }
         case 'sofa': {
-          drawBox(ctx, iso, x0, y0, x1, y1, 0, 0.42, col);
-          const fr = f._front || 'S';
-          const t = 0.22;
-          if (fr === 'S') drawBox(ctx, iso, x0, y0, x1, y0 + t, 0.42, 0.85, shade(col, -0.08));
-          else if (fr === 'N') drawBox(ctx, iso, x0, y1 - t, x1, y1, 0.42, 0.85, shade(col, -0.08));
-          else if (fr === 'E') drawBox(ctx, iso, x0, y0, x0 + t, y1, 0.42, 0.85, shade(col, -0.08));
-          else drawBox(ctx, iso, x1 - t, y0, x1, y1, 0.42, 0.85, shade(col, -0.08));
+          box(x0, y0, 0, x1, y1, 0.42, col);
+          const fr = f._front || 'S', t = 0.22, bc = shade(col, -0.08);
+          if (fr === 'S') box(x0, y0, 0.42, x1, y0 + t, 0.85, bc);
+          else if (fr === 'N') box(x0, y1 - t, 0.42, x1, y1, 0.85, bc);
+          else if (fr === 'E') box(x0, y0, 0.42, x0 + t, y1, 0.85, bc);
+          else box(x1 - t, y0, 0.42, x1, y1, 0.85, bc);
           break;
         }
         case 'bed':
         case 'bunk': {
-          drawBox(ctx, iso, x0, y0, x1, y1, 0, 0.3, '#475569');
-          drawBox(ctx, iso, x0 + 0.04, y0 + 0.04, x1 - 0.04, y1 - 0.04, 0.3, 0.45, '#f8fafc', { top: '#ffffff' });
-          const longIsW = f.w >= f.d;
-          if (longIsW) drawBox(ctx, iso, x0 + 0.08, y0 + 0.12, x0 + 0.45, y1 - 0.12, 0.45, 0.53, '#e0e7ff');
-          else drawBox(ctx, iso, x0 + 0.12, y0 + 0.08, x1 - 0.12, y0 + 0.45, 0.45, 0.53, '#e0e7ff');
+          box(x0, y0, 0, x1, y1, 0.3, '#475569');
+          box(x0 + 0.06, y0 + 0.06, 0.3, x1 - 0.06, y1 - 0.06, 0.45, '#f8fafc', { top: '#ffffff' });
+          if (longIsW) box(x0 + 0.1, y0 + 0.12, 0.45, x0 + 0.45, y1 - 0.12, 0.53, '#e0e7ff');
+          else box(x0 + 0.12, y0 + 0.1, 0.45, x1 - 0.12, y0 + 0.45, 0.53, '#e0e7ff');
           if (st.kind === 'bunk') {
-            [[x0, y0], [x1 - 0.06, y0], [x0, y1 - 0.06], [x1 - 0.06, y1 - 0.06]].forEach(([lx, ly]) => drawBox(ctx, iso, lx, ly, lx + 0.06, ly + 0.06, 0, 1.6, '#334155', { edge: null }));
-            drawBox(ctx, iso, x0, y0, x1, y1, 1.25, 1.4, col);
-            drawBox(ctx, iso, x0 + 0.04, y0 + 0.04, x1 - 0.04, y1 - 0.04, 1.4, 1.52, '#f8fafc', { top: '#ffffff' });
+            [[x0, y0], [x1 - 0.06, y0], [x0, y1 - 0.06], [x1 - 0.06, y1 - 0.06]].forEach(([lx, ly]) => {
+              box(lx, ly, 0.3, lx + 0.06, ly + 0.06, 1.25, '#334155', { edge: null });
+              box(lx, ly, 1.4, lx + 0.06, ly + 0.06, 1.62, '#334155', { edge: null });
+            });
+            box(x0, y0, 1.25, x1, y1, 1.4, col);
+            box(x0 + 0.06, y0 + 0.06, 1.4, x1 - 0.06, y1 - 0.06, 1.52, '#f8fafc', { top: '#ffffff' });
           }
           break;
         }
         case 'shelf': {
-          const H = st.h;
-          const posts = [[x0, y0], [x1 - 0.05, y0], [x0, y1 - 0.05], [x1 - 0.05, y1 - 0.05]];
-          const levels = [0.08, 0.6, 1.15, 1.7].filter(z => z < H);
-          const rng = mulberry32(hashStr(f.id));
-          const lv = f.type === 'rack_palettes_lourd' ? [0.1, 0.85, 1.6] : [0.08, 0.6, 1.15, 1.7];
-          void levels; void rng;
-          // Étagère : le matériel réellement rangé (storedInventory) est posé sur les niveaux
-          lv.filter(z => z < H).forEach(z => {
-            drawBox(ctx, iso, x0, y0, x1, y1, z, z + 0.04, col, { edge: null });
-            (f._items || []).filter(it => Math.abs(it.z - (z + 0.04)) < 0.01).forEach(it => drawItemModel(ctx, iso, it.m, it.x, it.y, it.z, it.w, it.d, it.h));
-          });
-          posts.forEach(([px, py]) => drawBox(ctx, iso, px, py, px + 0.05, py + 0.05, 0, H, shade(col, -0.2), { edge: null }));
+          const H = st.h, pw = 0.05;
+          const lv = (f.type === 'rack_palettes_lourd' ? [0.1, 0.85, 1.6] : [0.08, 0.6, 1.15, 1.7]).filter(z => z < H);
+          const pc = shade(col, -0.2);
+          const posts = [[x0, y0], [x1 - pw, y0], [x0, y1 - pw], [x1 - pw, y1 - pw]];
+          // Montants découpés entre les niveaux (aucun volume ne se traverse)
+          const bands = [];
+          let zc = 0;
+          lv.forEach(z => { if (z > zc + 0.001) bands.push([zc, z]); zc = z + 0.04; });
+          if (H > zc + 0.001) bands.push([zc, H]);
+          posts.forEach(([px, py]) => bands.forEach(([a, b]) => box(px, py, a, px + pw, py + pw, b, pc, { edge: null })));
+          // Niveaux (plateaux intérieurs aux montants) et matériel réellement rangé
+          lv.forEach(z => box(x0, y0, z, x1, y1, z + 0.04, col, { edge: null }));
+          (f._items || []).forEach(it => add(it.x, it.y, it.z, it.x + it.w, it.y + it.d, it.z + it.h, (ctx) => drawItemModel(ctx, iso, it.m, it.x, it.y, it.z, it.w, it.d, it.h)));
           break;
         }
         case 'lockers':
         case 'cabinet':
         case 'vending': {
           const H = st.h;
-          drawBox(ctx, iso, x0, y0, x1, y1, 0, H, col);
-          // Portes sur les faces visibles
-          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-          ctx.lineWidth = Math.max(1, iso.k * 0.02);
-          const longIsW = f.w >= f.d;
-          const L = longIsW ? f.w : f.d;
-          const n = st.kind === 'lockers' ? Math.max(2, Math.round(L / 0.4)) : 2;
-          for (let i = 1; i < n; i++) {
-            const u = i / n;
-            let a, b;
-            if (longIsW) { a = P(x0 + u * f.w, y1, 0.05); b = P(x0 + u * f.w, y1, H - 0.05); }
-            else { a = P(x1, y0 + u * f.d, 0.05); b = P(x1, y0 + u * f.d, H - 0.05); }
-            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-          }
-          if (st.kind === 'cabinet' && f.type === 'armoire_pharmacie') {
-            const [cx, cy] = longIsW ? P((x0 + x1) / 2, y1, H * 0.62) : P(x1, (y0 + y1) / 2, H * 0.62);
-            ctx.fillStyle = '#ffffff';
-            const s = iso.k * 0.09;
-            ctx.fillRect(cx - s, cy - s * 0.3, s * 2, s * 0.6);
-            ctx.fillRect(cx - s * 0.3, cy - s, s * 0.6, s * 2);
-          }
-          if (st.kind === 'vending') {
-            ctx.globalAlpha = 0.7;
-            if (longIsW) poly(ctx, [P(x0 + 0.1, y1, 0.7), P(x1 - 0.35, y1, 0.7), P(x1 - 0.35, y1, 1.65), P(x0 + 0.1, y1, 1.65)], '#bae6fd');
-            else poly(ctx, [P(x1, y0 + 0.1, 0.7), P(x1, y1 - 0.35, 0.7), P(x1, y1 - 0.35, 1.65), P(x1, y0 + 0.1, 1.65)], '#bae6fd');
-            ctx.globalAlpha = 1;
-          }
+          add(x0, y0, 0, x1, y1, H, (ctx) => {
+            drawBox(ctx, iso, x0, y0, x1, y1, 0, H, col);
+            ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+            ctx.lineWidth = Math.max(1, iso.k * 0.02);
+            const L = longIsW ? f.w : f.d;
+            const n = st.kind === 'lockers' ? Math.max(2, Math.round(L / 0.4)) : 2;
+            for (let i = 1; i < n; i++) {
+              const u = i / n;
+              const a = longIsW ? P(x0 + u * f.w, y1, 0.05) : P(x1, y0 + u * f.d, 0.05);
+              const b = longIsW ? P(x0 + u * f.w, y1, H - 0.05) : P(x1, y0 + u * f.d, H - 0.05);
+              ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            }
+            if (st.kind === 'cabinet' && f.type === 'armoire_pharmacie') {
+              const [cx, cy] = longIsW ? P((x0 + x1) / 2, y1, H * 0.62) : P(x1, (y0 + y1) / 2, H * 0.62);
+              ctx.fillStyle = '#ffffff';
+              const s = iso.k * 0.09;
+              ctx.fillRect(cx - s, cy - s * 0.3, s * 2, s * 0.6);
+              ctx.fillRect(cx - s * 0.3, cy - s, s * 0.6, s * 2);
+            }
+            if (st.kind === 'vending') {
+              ctx.globalAlpha = 0.7;
+              if (longIsW) poly(ctx, [P(x0 + 0.1, y1, 0.7), P(x1 - 0.35, y1, 0.7), P(x1 - 0.35, y1, 1.65), P(x0 + 0.1, y1, 1.65)], '#bae6fd');
+              else poly(ctx, [P(x1, y0 + 0.1, 0.7), P(x1, y1 - 0.35, 0.7), P(x1, y1 - 0.35, 1.65), P(x1, y0 + 0.1, 1.65)], '#bae6fd');
+              ctx.globalAlpha = 1;
+            }
+          });
           break;
         }
         case 'panel': {
           const z0 = st.z0 || 0.8;
-          drawBox(ctx, iso, x0, y0, x1, y1, z0, st.h, f.type === 'tableau_blanc' ? '#94a3b8' : '#0f172a', { top: '#475569' });
-          // Surface d'écriture / écran
-          const longIsW = f.w >= f.d;
-          const scr = f.type === 'tableau_blanc' ? '#ffffff' : (this.isNight ? '#38bdf8' : '#1d4ed8');
-          if (longIsW) poly(ctx, [P(x0 + 0.06, y1 + 0.001, z0 + 0.06), P(x1 - 0.06, y1 + 0.001, z0 + 0.06), P(x1 - 0.06, y1 + 0.001, st.h - 0.06), P(x0 + 0.06, y1 + 0.001, st.h - 0.06)], scr);
-          else poly(ctx, [P(x1 + 0.001, y0 + 0.06, z0 + 0.06), P(x1 + 0.001, y1 - 0.06, z0 + 0.06), P(x1 + 0.001, y1 - 0.06, st.h - 0.06), P(x1 + 0.001, y0 + 0.06, st.h - 0.06)], scr);
+          add(x0, y0, z0, x1, y1, st.h, (ctx) => {
+            drawBox(ctx, iso, x0, y0, x1, y1, z0, st.h, f.type === 'tableau_blanc' ? '#94a3b8' : '#0f172a', { top: '#475569' });
+            const scr = f.type === 'tableau_blanc' ? '#ffffff' : (this.isNight ? '#38bdf8' : '#1d4ed8');
+            if (longIsW) poly(ctx, [P(x0 + 0.06, y1 + 0.001, z0 + 0.06), P(x1 - 0.06, y1 + 0.001, z0 + 0.06), P(x1 - 0.06, y1 + 0.001, st.h - 0.06), P(x0 + 0.06, y1 + 0.001, st.h - 0.06)], scr);
+            else poly(ctx, [P(x1 + 0.001, y0 + 0.06, z0 + 0.06), P(x1 + 0.001, y1 - 0.06, z0 + 0.06), P(x1 + 0.001, y1 - 0.06, st.h - 0.06), P(x1 + 0.001, y0 + 0.06, st.h - 0.06)], scr);
+            if (f.type === 'tableau_blanc') {
+              ctx.strokeStyle = '#ef4444'; ctx.lineWidth = Math.max(1, iso.k * 0.02);
+              const a = longIsW ? P(x0 + 0.3, y1, z0 + 0.6) : P(x1, y0 + 0.3, z0 + 0.6);
+              const b = longIsW ? P(x0 + 1.0, y1, z0 + 0.75) : P(x1, y0 + 1.0, z0 + 0.75);
+              ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            }
+          });
+          // Pieds du tableau sur roulettes (posé au sol)
           if (f.type === 'tableau_blanc') {
-            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = Math.max(1, iso.k * 0.02);
-            const a = longIsW ? P(x0 + 0.3, y1, z0 + 0.6) : P(x1, y0 + 0.3, z0 + 0.6);
-            const b = longIsW ? P(x0 + 1.0, y1, z0 + 0.75) : P(x1, y0 + 1.0, z0 + 0.75);
-            ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+            if (longIsW) { box(x0 + 0.1, y0, 0, x0 + 0.15, y1, z0, '#64748b', { edge: null }); box(x1 - 0.15, y0, 0, x1 - 0.1, y1, z0, '#64748b', { edge: null }); }
+            else { box(x0, y0 + 0.1, 0, x1, y0 + 0.15, z0, '#64748b', { edge: null }); box(x0, y1 - 0.15, 0, x1, y1 - 0.1, z0, '#64748b', { edge: null }); }
           }
           break;
         }
         case 'mannequin': {
-          drawBox(ctx, iso, x0 - 0.1, y0 - 0.05, x1 + 0.1, y1 + 0.05, 0, 0.03, '#2563eb', { edge: null });
-          this.drawMannequinFlat(ctx, f);
+          add(x0 - 0.1, y0 - 0.05, 0, x1 + 0.1, y1 + 0.05, 0.12, (ctx) => {
+            drawBox(ctx, iso, x0 - 0.1, y0 - 0.05, x1 + 0.1, y1 + 0.05, 0, 0.03, '#2563eb', { edge: null });
+            this.drawMannequinFlat(ctx, f);
+          });
           break;
         }
         case 'gametable': {
-          [[x0 + 0.1, y0 + 0.1], [x1 - 0.18, y0 + 0.1], [x0 + 0.1, y1 - 0.18], [x1 - 0.18, y1 - 0.18]].forEach(([lx, ly]) => drawBox(ctx, iso, lx, ly, lx + 0.08, ly + 0.08, 0, st.h - 0.1, '#334155', { edge: null }));
-          drawBox(ctx, iso, x0, y0, x1, y1, st.h - 0.12, st.h, col, { top: f.type === 'ping_pong' ? '#1d4ed8' : '#15803d' });
+          const top0 = st.h - 0.12;
+          [[x0 + 0.1, y0 + 0.1], [x1 - 0.18, y0 + 0.1], [x0 + 0.1, y1 - 0.18], [x1 - 0.18, y1 - 0.18]].forEach(([lx, ly]) => box(lx, ly, 0, lx + 0.08, ly + 0.08, top0, '#334155', { edge: null }));
+          box(x0, y0, top0, x1, y1, st.h, col, { top: f.type === 'ping_pong' ? '#1d4ed8' : '#15803d' });
           if (f.type === 'ping_pong') {
-            const longIsW = f.w >= f.d;
-            if (longIsW) drawBox(ctx, iso, (x0 + x1) / 2 - 0.01, y0, (x0 + x1) / 2 + 0.01, y1, st.h, st.h + 0.15, '#f8fafc', { edge: null });
-            else drawBox(ctx, iso, x0, (y0 + y1) / 2 - 0.01, x1, (y0 + y1) / 2 + 0.01, st.h, st.h + 0.15, '#f8fafc', { edge: null });
+            if (longIsW) box((x0 + x1) / 2 - 0.01, y0, st.h, (x0 + x1) / 2 + 0.01, y1, st.h + 0.15, '#f8fafc', { edge: null });
+            else box(x0, (y0 + y1) / 2 - 0.01, st.h, x1, (y0 + y1) / 2 + 0.01, st.h + 0.15, '#f8fafc', { edge: null });
           }
           break;
         }
         case 'counter': {
-          drawBox(ctx, iso, x0, y0, x1, y1, 0, st.h, col, { top: '#e7e5e4' });
+          box(x0, y0, 0, x1, y1, st.h, col, { top: '#e7e5e4' });
           break;
         }
         default: {
           const z0 = st.z0 || 0;
-          drawBox(ctx, iso, x0, y0, x1, y1, z0, st.h, col);
-          if (f.type === 'machine_cafe') {
-            const [cx, cy] = P((x0 + x1) / 2, (y0 + y1) / 2, st.h + 0.15);
-            ctx.font = `${Math.max(10, iso.k * 0.32)}px sans-serif`;
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('☕', cx, cy);
-          }
+          add(x0, y0, z0, x1, y1, st.h, (ctx) => {
+            drawBox(ctx, iso, x0, y0, x1, y1, z0, st.h, col);
+            if (f.type === 'machine_cafe') {
+              const [cx, cy] = P((x0 + x1) / 2, (y0 + y1) / 2, st.h + 0.15);
+              ctx.font = `${Math.max(10, iso.k * 0.32)}px sans-serif`;
+              ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+              ctx.fillText('☕', cx, cy);
+            }
+          });
         }
       }
-      if (hov) {
-        ctx.save();
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = Math.max(2, iso.k * 0.05);
-        ctx.setLineDash([6, 4]);
-        poly(ctx, [P(x0, y0, 0), P(x1, y0, 0), P(x1, y1, 0), P(x0, y1, 0)], null, '#38bdf8', Math.max(2, iso.k * 0.05));
-        ctx.restore();
-      }
+      return parts;
     }
 
-    drawStack(ctx, sk) {
-      for (let i = 0; i < sk.n; i++) drawItemModel(ctx, this.iso, sk.m, sk.x, sk.y, i * sk.h, sk.w, sk.d, sk.h * 0.98);
-      if (this.hover && this.hover.stack && this.hover.stack.id === sk.id) {
-        const iso = this.iso;
-        poly(ctx, [iso.p(sk.x, sk.y), iso.p(sk.x + sk.w, sk.y), iso.p(sk.x + sk.w, sk.y + sk.d), iso.p(sk.x, sk.y + sk.d)], null, '#38bdf8', Math.max(2, iso.k * 0.04));
+    // Table / bureau voisin d'une chaise (contact ou glissée dessous)
+    chairTableOf(ch) {
+      const W = this.world;
+      if (!W) return null;
+      if (ch._tableRef !== undefined && ch._tableSig === this.worldSig) return ch._tableRef;
+      const cx = ch.x + ch.w / 2, cy = ch.y + ch.d / 2;
+      let best = null, bestD = 0.45;
+      W.furniture.forEach(t => {
+        const ts = FURN_STYLE[t.type];
+        if (!ts || (ts.kind !== 'table' && ts.kind !== 'gametable')) return;
+        const dx = Math.max(t.x - cx, 0, cx - (t.x + t.w)), dy = Math.max(t.y - cy, 0, cy - (t.y + t.d));
+        const d = Math.max(dx, dy) - Math.min(ch.w, ch.d) / 2;
+        if (d < bestD) { bestD = d; best = t; }
+      });
+      ch._tableRef = best; ch._tableSig = this.worldSig;
+      return best;
+    }
+
+    // Côté du dossier : opposé à la table (N = vers y0, S = vers y1, W = vers x0, E = vers x1)
+    chairBackSide(ch) {
+      const t = this.chairTableOf(ch);
+      if (!t) return 'N';
+      const cx = ch.x + ch.w / 2, cy = ch.y + ch.d / 2;
+      const tx = t.x + t.w / 2, ty = t.y + t.d / 2;
+      // Distance normalisée aux bords de la table sur chaque axe
+      const nx = (cx - tx) / (t.w / 2 + 0.001), ny = (cy - ty) / (t.d / 2 + 0.001);
+      if (Math.abs(ny) >= Math.abs(nx)) return ny > 0 ? 'S' : 'N';
+      return nx > 0 ? 'E' : 'W';
+    }
+
+    // Côté où est assis l'utilisateur du bureau (N/S/W/E), d'après la chaise associée
+    chairSideOf(desk) {
+      const W = this.world;
+      if (!W) return null;
+      const ch = W.furniture.find(c => (FURN_STYLE[c.type] || {}).kind === 'chair' && this.chairTableOf(c) === desk);
+      if (!ch) return null;
+      const s = this.chairBackSide(ch);
+      return s;
+    }
+
+    stackParts(sk) {
+      const iso = this.iso, parts = [];
+      for (let i = 0; i < sk.n; i++) {
+        const z = i * sk.h;
+        parts.push({ x0: sk.x, y0: sk.y, z0: z, x1: sk.x + sk.w, y1: sk.y + sk.d, z1: z + sk.h * 0.98, kind: 'stock', ref: sk, draw: (ctx) => drawItemModel(ctx, iso, sk.m, sk.x, sk.y, z, sk.w, sk.d, sk.h * 0.98) });
       }
+      return parts;
+    }
+
+    // Compatibilité : dessin direct d'un meuble complet (ordre interne trié)
+    drawFurniture(ctx, f) {
+      const parts = this.furnParts(f);
+      sortParts(parts).forEach(p => p.draw(ctx));
     }
 
     drawMannequinFlat(ctx, f) {
@@ -4422,7 +4585,6 @@
       bar.innerHTML = [
         `<span class="plt-live" style="height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:10px;background:#dc2626;color:#fff;font:800 11px 'Plus Jakarta Sans',system-ui,sans-serif;box-shadow:0 2px 6px rgba(220,38,38,.35);"><span style="width:7px;height:7px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite"></span>LIVE</span>`,
         btn('walls', this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 30 cm', 'Basculer : murs à hauteur réelle (2,50 m) / cloisons coupées à 30 cm'),
-        btn('rotate', '🔄 Pivoter', 'Faire pivoter la vue d’un quart de tour'),
         btn('labels', '🏷️ Étiquettes', 'Afficher les noms des pièces et véhicules'),
         this.slot === 'base' ? `<button type="button" data-act="edit" title="Aménager les locaux : placer, déplacer, pivoter le mobilier" class="plt-btn plt-primary">✏️ Aménager</button>` : ''
       ].join('');
@@ -4431,7 +4593,6 @@
         if (!b) return;
         const act = b.dataset.act;
         if (act === 'walls') { this.wallsUp = !this.wallsUp; this.savePref('wallsUp', this.wallsUp); b.textContent = this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 30 cm'; }
-        if (act === 'rotate') { this.rotate(); }
         if (act === 'labels') { this.showLabels = !this.showLabels; this.savePref('labels', this.showLabels); }
         if (act === 'edit') { this.editToggle(); }
       });
@@ -4444,7 +4605,7 @@
       const b = this.toolbar.querySelector('[data-act="edit"]');
       const on = !!(this.edit && this.edit.active);
       if (b) { b.textContent = on ? '✅ Terminer l’aménagement' : '✏️ Aménager'; b.classList.toggle('plt-on', on); }
-      ['walls', 'rotate', 'labels'].forEach(k => { const x = this.toolbar.querySelector(`[data-act="${k}"]`); if (x) x.style.display = ''; });
+      ['walls', 'labels'].forEach(k => { const x = this.toolbar.querySelector(`[data-act="${k}"]`); if (x) x.style.display = ''; });
       const live = this.toolbar.querySelector('.plt-live');
       if (live) live.style.display = on ? 'none' : '';
     }
