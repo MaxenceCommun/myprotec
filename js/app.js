@@ -7029,8 +7029,9 @@ class ProtecGame {
       requiredLots = ['lot_a', 'lot_b'];
     }
 
-    const requiredCP = (requiredLots.includes('lot_a') || minVolunteers >= 6) ? 1 : 0;
-    const requiredCE = Math.max(1, Math.ceil(minVolunteers / 4));
+    const stReq = this.computeDpsStaffing(minVolunteers, requiredScale);
+    const requiredCP = stReq.cp;
+    const requiredCE = stReq.ce;
 
     const dur = devis.durationHours || 4;
     const persCost = minVolunteers * dur * 18;
@@ -7076,15 +7077,8 @@ class ProtecGame {
     devis.configuredVolunteers = req.minVolunteers;
     devis.configuredCP = req.requiredCP;
     devis.configuredCE = req.requiredCE;
-    devis.configuredRoles = {
-      log: req.requiredScale === 'DPS-GE' || req.requiredScale === 'DPS-ME' ? 1 : 0,
-      pse1: Math.max(0, Math.floor((req.minVolunteers - req.requiredCE - req.requiredCP) * 0.35)),
-      pse2: Math.max(0, req.minVolunteers - req.requiredCE - req.requiredCP - (req.requiredScale === 'DPS-GE' || req.requiredScale === 'DPS-ME' ? 1 : 0) - Math.max(0, Math.floor((req.minVolunteers - req.requiredCE - req.requiredCP) * 0.35))),
-      ce: req.requiredCE,
-      cp: req.requiredCP,
-      cs: req.requiredScale === 'DPS-GE' ? 1 : 0,
-      cd: req.requiredScale === 'DPS-GE' ? 1 : 0
-    };
+    const stReco = this.computeDpsStaffing(req.minVolunteers, req.requiredScale);
+    devis.configuredRoles = { log: stReco.log, pse1: stReco.pse1, pse2: stReco.pse2, ce: stReco.ce, cp: stReco.cp, cs: stReco.cs, cd: stReco.cd };
     this.ensureDevisPersonnelCounts(devis);
     devis.configuredVehicles = [...req.requiredVehicles];
     devis.configuredVehicleCounts = {};
@@ -7107,6 +7101,36 @@ class ProtecGame {
     this.openModule('devis', true);
   }
 
+  // Répartition réglementaire des personnels d'un dispositif (règle validée) :
+  // - une équipe = 1 CE + 2 PSE2 + 1 PSE1 (PAPS = 1 CE + 1 PSE2) ;
+  // - 1 poste par tranche de 3 équipes, 1 CP par poste (pas de CP pour une seule équipe) ;
+  // - 1 CD dès qu'il y a plusieurs CP ; 1 CS par tranche de 3 postes ;
+  // - logisticiens : 1 pour un DPS-ME, 1 par poste pour un DPS-GE.
+  computeDpsStaffing(total, scale = null) {
+    const N = Math.max(2, Math.round(Number(total) || 0));
+    const sc = String(scale || '').toUpperCase();
+    if (N <= 2) return { ce: 1, pse2: N - 1, pse1: 0, cp: 0, cd: 0, cs: 0, log: 0, postes: 0, equipes: 1 };
+    // Plus petit nombre de postes tel que chaque poste encadre au plus 3 équipes
+    let postes = 0, cp = 0, cd = 0, cs = 0, log = 0, rest = N, teams = 1;
+    for (let p = 0; p <= 60; p++) {
+      cp = p;
+      cd = cp >= 2 ? 1 : 0;
+      cs = p >= 3 ? Math.floor(p / 3) : 0;
+      log = sc === 'DPS-GE' ? Math.max(1, p) : (sc === 'DPS-ME' ? 1 : 0);
+      rest = Math.max(1, N - cp - cd - cs - log);
+      teams = Math.ceil(rest / 4);
+      postes = p;
+      if (p === 0 ? teams <= 1 : teams <= 3 * p) break;
+    }
+    // Remplissage équipe par équipe : CE, PSE2, PSE2, PSE1
+    const r = { ce: 0, pse2: 0, pse1: 0, cp, cd, cs, log, postes, equipes: teams };
+    for (let i = 0; i < rest; i++) {
+      const pos = i % 4;
+      if (pos === 0) r.ce++; else if (pos === 3) r.pse1++; else r.pse2++;
+    }
+    return r;
+  }
+
   // Garantit la cohérence des effectifs par rôle et du total des personnels sur un devis
   ensureDevisPersonnelCounts(devis) {
     if (!devis.configuredRoles || typeof devis.configuredRoles !== 'object') {
@@ -7125,32 +7149,8 @@ class ProtecGame {
     const target = devis.configuredVolunteers || devis.requiredVolunteers || 0;
 
     if (sum === 0 && target > 0) {
-      if (target <= 2) {
-        r.ce = 1;
-        r.pse2 = Math.max(0, target - 1);
-      } else if (target <= 6) {
-        r.ce = Math.max(1, devis.configuredCE || 1);
-        r.cp = devis.configuredCP || 0;
-        const remainder = Math.max(0, target - r.ce - r.cp);
-        r.pse2 = Math.ceil(remainder * 0.6);
-        r.pse1 = remainder - r.pse2;
-      } else if (target <= 12) {
-        r.cp = 1;
-        r.ce = 2;
-        r.log = 1;
-        const rem = Math.max(0, target - 4);
-        r.pse2 = Math.ceil(rem * 0.65);
-        r.pse1 = rem - r.pse2;
-      } else {
-        r.cd = 1;
-        r.cs = 1;
-        r.cp = 2;
-        r.ce = Math.max(2, Math.floor(target / 4));
-        r.log = 1;
-        const rem = Math.max(0, target - (r.cd + r.cs + r.cp + r.ce + r.log));
-        r.pse2 = Math.ceil(rem * 0.7);
-        r.pse1 = rem - r.pse2;
-      }
+      const st = this.computeDpsStaffing(target, devis.configuredScale || devis.scaleKey || null);
+      ['ce', 'pse2', 'pse1', 'cp', 'cd', 'cs', 'log'].forEach(k => { r[k] = st[k]; });
       sum = (r.log || 0) + (r.pse1 || 0) + (r.pse2 || 0) + (r.ce || 0) + (r.cp || 0) + (r.cs || 0) + (r.cd || 0);
     }
 
@@ -7173,14 +7173,11 @@ class ProtecGame {
     if (!devis.configuredRoles || typeof devis.configuredRoles !== 'object') {
       devis.configuredRoles = {};
     }
-    if (scaleType === 'PAPS') {
-      devis.configuredRoles = { log: 0, pse1: 0, pse2: 1, ce: 1, cp: 0, cs: 0, cd: 0 };
-    } else if (scaleType === 'DPS-PE') {
-      devis.configuredRoles = { log: 0, pse1: 1, pse2: 2, ce: 1, cp: 0, cs: 0, cd: 0 };
-    } else if (scaleType === 'DPS-ME') {
-      devis.configuredRoles = { log: 1, pse1: 2, pse2: 4, ce: 2, cp: 1, cs: 0, cd: 0 };
-    } else if (scaleType === 'DPS-GE') {
-      devis.configuredRoles = { log: 1, pse1: 3, pse2: 8, ce: 4, cp: 2, cs: 1, cd: 1 };
+    const reqVols = Number(devis.hiddenMinVolunteers || devis.requiredVolunteers) || 0;
+    const baseTotal = scaleType === 'PAPS' ? 2 : (scaleType === 'DPS-PE' ? 4 : (scaleType === 'DPS-ME' ? Math.max(8, reqVols) : (scaleType === 'DPS-GE' ? Math.max(16, reqVols) : 0)));
+    if (baseTotal > 0) {
+      const st = this.computeDpsStaffing(baseTotal, scaleType);
+      devis.configuredRoles = { log: st.log, pse1: st.pse1, pse2: st.pse2, ce: st.ce, cp: st.cp, cs: st.cs, cd: st.cd };
     }
     this.ensureDevisPersonnelCounts(devis);
     const bareme = this.calculateDynamicBareme(devis);
