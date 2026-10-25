@@ -646,6 +646,17 @@ class Database {
     user.isAdmin = (newRole === 'admin');
     user.isGestionnaire = (newRole === 'gestionnaire');
 
+    // Rôle Adhérent ProtecLive 2027 : 1536497826492579840
+    if (roleList.includes('1536497826492579840')) {
+      const saveRecord = this.data.savedGames[userId];
+      if (saveRecord && saveRecord.data) {
+        if (!Array.isArray(saveRecord.data.localEcussons)) saveRecord.data.localEcussons = [];
+        if (!saveRecord.data.localEcussons.some(l => l.code === 'badge_adherent_2027')) {
+          saveRecord.data.localEcussons.push({ code: 'badge_adherent_2027', quantite: 1 });
+        }
+      }
+    }
+
     // Mettre à jour les sessions actives en cache
     Object.values(this.data.sessions).forEach(sess => {
       if (sess && sess.userId === userId) {
@@ -1280,6 +1291,45 @@ class Database {
       return true;
     }
     return false;
+  }
+
+  // Réinitialisation intégrale de la BDD locale (Wipe Total Admin)
+  masterReset() {
+    this.data.savedGames = {};
+    this.data.resetArchives = [];
+    this.data.allianceStations = [];
+    this.data.renforts = [];
+    this.data.formationsSpeciales = [];
+    this.data.chatMessages = [];
+    this.data.marketplace = [];
+    this.data.communityEvents = [];
+    this.data.referralLogs = [];
+    this.data.fraudLogs = [];
+    this.data.pushSubscriptions = {};
+    this.data.sessions = {};
+    this.data.departments = {};
+    this.data.users = {};
+
+    // Recréer le compte Admin système propre
+    this.ensureAdminUser();
+
+    // Vider tout état de partie résiduel sur le compte admin
+    if (this.data.savedGames['usr_admin_master']) {
+      delete this.data.savedGames['usr_admin_master'];
+    }
+
+    // Sauvegarde synchrone immédiate sur disque
+    try {
+      if (this.saveTimeout) clearTimeout(this.saveTimeout);
+      const tmpFile = DB_FILE + '.tmp';
+      fs.writeFileSync(tmpFile, JSON.stringify(this.data, null, 2), 'utf8');
+      fs.renameSync(tmpFile, DB_FILE);
+      console.log('✅ [DB] Master reset exécuté : db.json entièrement remis à zéro.');
+      return { success: true };
+    } catch (err) {
+      console.error('❌ [DB] Erreur sauvegarde masterReset:', err);
+      return { success: false, error: err.message };
+    }
   }
 }
 

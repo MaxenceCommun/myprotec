@@ -82,6 +82,10 @@ window.ProtecAuth = {
             }
           }
 
+          if (window.ProtecEcussons && typeof window.ProtecEcussons.checkDiscordRoleEcussons === 'function') {
+            await window.ProtecEcussons.checkDiscordRoleEcussons(user, targetGame);
+          }
+
           if (action === 'login') {
             await this.checkCloudSaveOnLogin(targetGame);
             if (targetGame && typeof targetGame.returnToMyAntenna === 'function' && Array.isArray(targetGame.stations) && targetGame.stations.length > 0) {
@@ -936,6 +940,10 @@ window.ProtecAuth = {
           targetGame.player.isAdmin = !!userData.isAdmin;
           targetGame.player.isGestionnaire = !!userData.isGestionnaire;
           targetGame.player.discord = userData.discord;
+        }
+
+        if (window.ProtecEcussons && typeof window.ProtecEcussons.checkDiscordRoleEcussons === 'function') {
+          await window.ProtecEcussons.checkDiscordRoleEcussons(userData, targetGame);
         }
 
         // Persistance Supabase si connecté

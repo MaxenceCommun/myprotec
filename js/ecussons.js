@@ -16,6 +16,7 @@ const KNOWN_BADGE_IMAGES = new Set([
   'images/badges/badge_admin.png',
   'images/badges/badge_def_est.png',
   'images/badges/badge_meurthe_et_moselle_54.png',
+  'images/badges/ecusson_adherent_2027.png',
   'images/badge_admin.png',
   'images/badge_def_est.png',
   'images/badge_def_nord.png',
@@ -23,6 +24,7 @@ const KNOWN_BADGE_IMAGES = new Set([
   'images/badge_fondateur_reflet.png',
   'images/ecusson_chat_noir.png',
   'images/ecusson_chat_blanc.png',
+  'images/ecusson_adherent_2027.png',
   'images/écusson_chat_noir.png',
   'images/écusson_chat_blanc.png'
 ]);
@@ -36,6 +38,7 @@ function isValidBadgeImage(url) {
   const clean = trimmed.replace(/^\.?\//, '');
   if (clean.includes('ecusson_inconnu') || clean.includes('badge_inconnu')) return true;
   if (clean.includes('membre_fondateur') || clean.includes('badge_fondateur')) return true;
+  if (clean.includes('adherent_2027')) return true;
   return KNOWN_BADGE_IMAGES.has(clean) || KNOWN_BADGE_IMAGES.has('images/' + clean) || KNOWN_BADGE_IMAGES.has('images/badges/' + clean);
 }
 
@@ -146,6 +149,8 @@ window.ProtecEcussons = {
     { id: 'ec-zonal-sudouest', code: 'badge_def_sudouest', nom: 'Zone de Défense et de Sécurité Sud-Ouest', description: 'Coordination zonale des moyens de sécurité civile du Sud-Ouest (Nouvelle-Aquitaine).', categorie: 'renfort', rarete: 'epique', icon: 'compass', color: '#0284c7', imageUrl: 'images/badge_def_sudouest.png' },
     { id: 'ec-chat-noir', code: 'badge_chat_noir', nom: 'Écusson Chat Noir', description: 'Distinction officielle de terrain face aux situations complexes et aux défis imprévus (Attribué par l’État-Major / Objectifs à venir).', categorie: 'distinction', rarete: 'epique', icon: 'cat', color: '#18181b', imageUrl: 'images/ecusson_chat_noir.png', adminOnly: true },
     { id: 'ec-chat-blanc', code: 'badge_chat_blanc', nom: 'Écusson Chat Blanc', description: 'Distinction officielle récompensant la bienveillance et le déroulement exemplaire des opérations (Attribué par l’État-Major / Objectifs à venir).', categorie: 'distinction', rarete: 'epique', icon: 'cat', color: '#f8fafc', imageUrl: 'images/ecusson_chat_blanc.png', adminOnly: true }
+    ,
+    { id: 'ec-adherent-2027', code: 'badge_adherent_2027', nom: 'Adhérent ProtecLive 2027', description: 'Insigne d’honneur officiel remis aux adhérents et soutiens de la communauté ProtecLive pour la saison 2027 (Attribué via le rôle Discord certifié).', categorie: 'distinction', rarete: 'epique', icon: 'gamepad-2', color: '#ea580c', imageUrl: 'images/badges/ecusson_adherent_2027.png', discordRoleId: '1536497826492579840' }
   ],
 
   // --- INITIALISATION DU MODULE & SYNCHRONISATION ---
@@ -195,6 +200,9 @@ window.ProtecEcussons = {
             } else if (item.code === 'badge_chat_blanc' || (nom && nom.toLowerCase().includes('chat blanc'))) {
               nom = 'Écusson Chat Blanc';
               img = 'images/ecusson_chat_blanc.png';
+            } else if (item.code === 'badge_adherent_2027' || (nom && nom.includes('Adhérent ProtecLive 2027'))) {
+              nom = 'Adhérent ProtecLive 2027';
+              img = 'images/badges/ecusson_adherent_2027.png';
             }
             if (!isValidBadgeImage(img)) {
               img = 'images/badges/ecusson_inconnu.png';
@@ -214,6 +222,7 @@ window.ProtecEcussons = {
 
     // 2. Charger les écussons du joueur (par défaut, aucun écusson attribué)
     await this.refreshPlayerEcussons(game);
+    await this.checkDiscordRoleEcussons(null, game);
 
     this.isInitialized = true;
   },
@@ -256,6 +265,7 @@ window.ProtecEcussons = {
               }
             };
           });
+          await this.checkDiscordRoleEcussons(null, game);
           return;
         }
       } catch (e) {
@@ -276,7 +286,31 @@ window.ProtecEcussons = {
         ecusson: ec
       };
     });
+    await this.checkDiscordRoleEcussons(null, game);
   },
+  // --- VÉRIFICATION & ATTRIBUTION AUTOMATIQUE SELON RÔLES DISCORD ---
+  async checkDiscordRoleEcussons(userOrPlayer = null, game = null) {
+    if (!game) game = window.game;
+    const player = userOrPlayer || game?.player || window.ProtecAuth?.currentUser;
+    if (!player) return;
+
+    const discordData = player.discord || window.ProtecAuth?.currentUser?.discord;
+    const roles = Array.isArray(discordData?.roles) ? discordData.roles : [];
+
+    // Rôle Adhérent ProtecLive 2027 : 1536497826492579840
+    if (roles.includes('1536497826492579840')) {
+      const badgeCode = 'badge_adherent_2027';
+      const hasInPlayerEcussons = (this.playerEcussons || []).some(pe => pe.ecusson?.code === badgeCode || pe.ecusson_id === 'ec-adherent-2027');
+      const hasInLocal = (game?.localEcussons || []).some(le => le.code === badgeCode);
+
+      if (!hasInPlayerEcussons && !hasInLocal) {
+        await this.attribuerEcusson(badgeCode, null, true);
+        console.log('🎖️ Écusson Adhérent ProtecLive 2027 débloqué avec succès via le rôle Discord 1536497826492579840.');
+      }
+    }
+  },
+
+
 
   getAntenneId(game) {
     if (!game) game = window.game;
@@ -422,6 +456,8 @@ window.ProtecEcussons = {
         imgSrc = 'images/ecusson_chat_noir.png';
       } else if (badge.code === 'badge_chat_blanc' || (badge.nom && badge.nom.toLowerCase().includes('chat blanc'))) {
         imgSrc = 'images/ecusson_chat_blanc.png';
+      } else if (badge.code === 'badge_adherent_2027' || (badge.nom && badge.nom.includes('Adhérent ProtecLive 2027'))) {
+        imgSrc = 'images/badges/ecusson_adherent_2027.png';
       } else {
         imgSrc = unknownImg;
       }
@@ -481,7 +517,8 @@ window.ProtecEcussons = {
       { id: 'specialite', label: 'Spécialités' },
       { id: 'mission', label: 'Missions' },
       { id: 'departement', label: 'Départements' },
-      { id: 'renfort', label: 'Renforts' }
+      { id: 'renfort', label: 'Renforts' },
+      { id: 'distinction', label: 'Distinctions' }
     ];
 
     target.innerHTML = `

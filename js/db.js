@@ -693,6 +693,17 @@ class Database {
     user.isAdmin = (newRole === 'admin');
     user.isGestionnaire = (newRole === 'gestionnaire');
 
+    // Rôle Adhérent ProtecLive 2027 : 1536497826492579840
+    if (roleList.includes('1536497826492579840')) {
+      const saveRecord = this.data.savedGames[userId];
+      if (saveRecord && saveRecord.data) {
+        if (!Array.isArray(saveRecord.data.localEcussons)) saveRecord.data.localEcussons = [];
+        if (!saveRecord.data.localEcussons.some(l => l.code === 'badge_adherent_2027')) {
+          saveRecord.data.localEcussons.push({ code: 'badge_adherent_2027', quantite: 1 });
+        }
+      }
+    }
+
     // Mettre à jour les sessions actives en cache
     Object.values(this.data.sessions).forEach(sess => {
       if (sess && sess.userId === userId) {
