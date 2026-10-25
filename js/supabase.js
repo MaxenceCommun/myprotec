@@ -1,3 +1,26 @@
+// Mémoire des missions déjà vues sur cet appareil (évite qu'une mission retirée revienne en boucle)
+(function () {
+  const KEY = 'protec_known_mission_ids';
+  let ids = null;
+  const load = () => {
+    if (ids) return ids;
+    try { ids = new Set(JSON.parse(localStorage.getItem(KEY) || '[]')); } catch (e) { ids = new Set(); }
+    return ids;
+  };
+  window.ProtecMissionMemory = {
+    isKnown(id) { return !!id && load().has(String(id)); },
+    remember(list) {
+      const set = load();
+      let changed = false;
+      (list || []).forEach(id => { if (id && !set.has(String(id))) { set.add(String(id)); changed = true; } });
+      if (!changed) return;
+      const arr = [...set].slice(-1500);
+      ids = new Set(arr);
+      try { localStorage.setItem(KEY, JSON.stringify(arr)); } catch (e) { /* stockage indisponible */ }
+    }
+  };
+})();
+
 /**
  * PROTEC LIVE - GESTIONNAIRE DE BASE DE DONNÉES CLOUD SUPABASE (POSTGRESQL)
  * 
@@ -1560,10 +1583,17 @@ window.ProtecSupabase = {
               : exSave.save_data.server_inbox;
           }
           // 2. Fusionner les missions injectées à distance pour ne jamais les écraser
+          //    (uniquement celles jamais vues sur cet appareil : une mission retirée, terminée ou
+          //    refusée par le joueur ne doit pas « ressusciter » à chaque sauvegarde)
           if (Array.isArray(exSave.save_data.missions) && exSave.save_data.missions.length > 0) {
             const currentIds = new Set((stateToSave.missions || []).map(m => m.id));
+            const mem = window.ProtecMissionMemory;
+            if (mem) mem.remember((stateToSave.missions || []).map(m => m && m.id));
             exSave.save_data.missions.forEach(m => {
+              if (!m || !m.id) return;
+              if (mem && mem.isKnown(m.id) && !currentIds.has(m.id)) return; // déjà vue puis retirée localement
               if (!currentIds.has(m.id)) {
+                if (mem) mem.remember([m.id]);
                 if (!Array.isArray(stateToSave.missions)) stateToSave.missions = [];
                 stateToSave.missions.unshift(m);
                 currentIds.add(m.id);
