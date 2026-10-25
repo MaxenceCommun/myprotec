@@ -2813,6 +2813,12 @@ class ProtecGame {
         this.missions = this.missions.filter(m => !invalidAlertDps.includes(m));
       }
 
+      // 3-bis. Assainissement des grands événements régionaux irréalistes (hors département ou trop lointains)
+      if (typeof this.isRealisticTerritoryEvent === 'function') {
+        if (Array.isArray(this.devis)) this.devis = this.devis.filter(d => d.status !== 'pending' || this.isRealisticTerritoryEvent(d));
+        if (Array.isArray(this.territoryEventsPool)) this.territoryEventsPool = this.territoryEventsPool.filter(e => this.isRealisticTerritoryEvent(e));
+      }
+
       // 4. Assainissement progression nouvelle antenne : pas de devis pending sans visibilité
       const hasComm = !!(this.resources?.campaigns?.social || this.resources?.campaigns?.posters || this.resources?.campaigns?.presse || (this.activeCampaigns || []).length > 0);
       const hasSite = !!(this.antenneWebsite && this.antenneWebsite.published && (this.antenneWebsite.freshness || 0) >= 40);
@@ -5221,6 +5227,23 @@ class ProtecGame {
     return [...counts.entries()].map(([k, n]) => (n > 1 ? `${n} x ${k}` : k)).join(', ');
   }
 
+  // Grand événement régional réaliste pour cette antenne : dans le département et sollicité au plus ~4 mois avant
+  isRealisticTerritoryEvent(e) {
+    if (!e || e.realEventCategory !== 'grand_evenement_regional') return true;
+    const deptCode = String(this.stations?.[0]?.departmentCode || this.currentDepartmentCode || this.player?.departmentCode || '');
+    const norm = (t) => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const city = (e.regionalMeta && e.regionalMeta.originalCity) || e.commune;
+    const communes = (deptCode && window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
+      ? (window.ProtecDepartements.getCommunesForDepartment(deptCode) || []) : [];
+    if (communes.length && city && !communes.some(c => norm(c.nom) === norm(city))) return false;
+    const ed = e.eventDate;
+    if (ed && ed.year !== undefined) {
+      const evMs = new Date(Number(ed.year), Number(ed.month) || 0, Number(ed.day) || 1).getTime();
+      if (isFinite(evMs) && (evMs - Date.now()) / 86400000 > 120) return false;
+    }
+    return true;
+  }
+
   getSectorAntennas() {
     const own = (this.stations || []).filter(s => s && isFinite(s.lat) && isFinite(s.lng)).map(s => ({ id: s.id, lat: Number(s.lat), lng: Number(s.lng), own: true, ref: s }));
     const ownIds = new Set(own.map(a => String(a.id)));
@@ -6184,7 +6207,8 @@ class ProtecGame {
     if (this.territoryEventsPool && this.territoryEventsPool.length > 0) {
       const existingNames = new Set((this.devis || []).map(d => (d.eventName || '').trim().toLowerCase()));
       const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase())
-        && (!isFinite(e.lat) || !isFinite(e.lng) || typeof this.isInMySector !== 'function' || this.isInMySector(e.lat, e.lng)));
+        && (!isFinite(e.lat) || !isFinite(e.lng) || typeof this.isInMySector !== 'function' || this.isInMySector(e.lat, e.lng))
+        && (typeof this.isRealisticTerritoryEvent !== 'function' || this.isRealisticTerritoryEvent(e)));
       if (nextRealIndex !== -1) {
         const pickedReal = this.territoryEventsPool.splice(nextRealIndex, 1)[0];
         this.ensureFutureDevisDate(pickedReal);
