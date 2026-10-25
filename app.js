@@ -1533,26 +1533,40 @@ class ProtecGame {
       return [...active, ...previ];
     };
 
+    const candidateMissions = getCandidateEvents();
+    const currentMissionId = (this._allianceDrawerDraft && this._allianceDrawerDraft.missionId) || selectedMissionId || (candidateMissions[0]?.id) || '';
+    const currentMission = candidateMissions.find(m => String(m.id) === String(currentMissionId)) || candidateMissions[0] || null;
+    const currentDestination = (this._allianceDrawerDraft && this._allianceDrawerDraft.destinationMode) || 'base';
+
+    const apcData = (window.ProtecAPC && typeof window.ProtecAPC.getDeptRenfortIndemniteBase === 'function')
+      ? window.ProtecAPC.getDeptRenfortIndemniteBase(this, { targetStation: st, mission: currentMission?.raw, destination: currentDestination })
+      : { computed: 150, baseFixed: 150, distKm: 0, deptCode: this.stations?.[0]?.departmentCode || '54' };
+
     if (!this._allianceDrawerDraft || this._allianceDrawerDraft.stationId !== st.id) {
-      const candidateMissions = getCandidateEvents();
-      const defaultMission = candidateMissions.find(m => m.id === selectedMissionId) || candidateMissions[0] || null;
-      const defaultNeeded = defaultMission
-        ? Math.max(1, defaultMission.reqCount - defaultMission.regCount)
+      const defaultNeeded = currentMission
+        ? Math.max(1, currentMission.reqCount - currentMission.regCount)
         : 2;
       this._allianceDrawerDraft = {
         stationId: st.id,
-        missionId: defaultMission ? defaultMission.id : '',
+        missionId: currentMission ? currentMission.id : '',
+        destinationMode: 'base',
         volunteersCount: defaultNeeded,
-        vehicleCounts: defaultMission && Array.isArray(defaultMission.requiredVehicles) && defaultMission.requiredVehicles.includes('VPSP') ? { VPSP: 1 } : {},
+        vehicleCounts: currentMission && Array.isArray(currentMission.requiredVehicles) && currentMission.requiredVehicles.includes('VPSP') ? { VPSP: 1 } : {},
         lotCounts: {},
-        indemnite: 180
+        indemnite: apcData.computed,
+        apcDefaultIndemnite: apcData.computed,
+        _manualIndemnite: false
       };
     } else if (selectedMissionId) {
       this._allianceDrawerDraft.missionId = selectedMissionId;
     }
 
     const draft = this._allianceDrawerDraft;
-    const candidateMissions = getCandidateEvents();
+    if (draft.indemnite === undefined || draft.indemnite === null) {
+      draft.indemnite = apcData.computed;
+    }
+    draft.apcDefaultIndemnite = apcData.computed;
+    if (!draft.destinationMode) draft.destinationMode = 'base';
     const targetMission = candidateMissions.find(m => String(m.id) === String(draft.missionId)) || null;
     const vehCatalog = this.getAvailableVehicleTypesCatalog();
     const lotCatalog = this.getAvailableLotsCatalog();
@@ -1696,14 +1710,39 @@ class ProtecGame {
         </div>
 
         <!-- 5. Indemnité proposée -->
-        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 flex items-center justify-between gap-2 shadow-2xs">
-          <div>
-            <span class="block text-[11px] font-black text-slate-800 uppercase">5. Indemnité de Déplacement</span>
-            <span class="text-[10px] text-slate-500">Défraiement versé à l'antenne alliée</span>
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-2xs">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="block text-[11px] font-black text-slate-800 uppercase">5. Indemnité de Déplacement</span>
+              <span class="text-[10px] text-slate-500">
+                Fixée par l'APC (${apcData.deptCode}) par défaut • Modifiable
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <input type="number" min="0" max="5000" step="10" value="${draft.indemnite ?? apcData.computed}" onchange="window.game.setAllianceDrawerIndemnite(this.value)" class="w-24 py-1 px-2.5 text-right font-mono font-black text-xs rounded-lg border border-slate-300 bg-slate-50 text-emerald-700 focus:bg-white focus:ring-2 focus:ring-emerald-500">
+              <span class="text-xs font-black text-slate-700">€</span>
+            </div>
           </div>
-          <div class="flex items-center gap-1.5">
-            <input type="number" min="0" max="5000" step="20" value="${draft.indemnite ?? 180}" onchange="window.game.setAllianceDrawerIndemnite(this.value)" class="w-20 py-1 px-2 text-right font-mono font-black text-xs rounded-lg border border-slate-300 bg-slate-50 text-emerald-700">
-            <span class="text-xs font-black text-slate-700">€</span>
+
+          <!-- Ralliement / Destination & Barème de référence APC -->
+          <div class="pt-1.5 border-t border-slate-100 flex items-center justify-between gap-2 flex-wrap text-[11px]">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[10px] font-bold text-slate-400 uppercase">Ralliement :</span>
+              <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                <button type="button" onclick="window.game.setAllianceDrawerDestination('base')" class="px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${draft.destinationMode === 'base' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                  🏢 Sur la Base
+                </button>
+                <button type="button" onclick="window.game.setAllianceDrawerDestination('site')" class="px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer ${draft.destinationMode === 'site' ? 'bg-indigo-600 text-white shadow-2xs' : 'text-slate-600 hover:text-slate-900'}">
+                  📍 Sur Site Poste
+                </button>
+              </div>
+              ${apcData.distKm > 0 ? `<span class="text-[10px] text-slate-400 font-semibold">(${apcData.distKm} km)</span>` : ''}
+            </div>
+
+            <button type="button" onclick="window.game.resetAllianceDrawerIndemniteToAPC()" class="text-[10.5px] font-bold text-pc-blue hover:underline cursor-pointer flex items-center gap-1" title="Rétablir le barème officiel calculé par l'APC">
+              <span>🏛️ Base APC : <strong>${apcData.computed} €</strong></span>
+              <span class="text-[9px] text-slate-400">(Rétablir)</span>
+            </button>
           </div>
         </div>
       </div>
@@ -1733,6 +1772,18 @@ class ProtecGame {
     if (m) {
       const deficit = Math.max(0, (m.requiredVolunteers || 4) - (m.registeredVolunteers?.length || 0));
       if (deficit > 0) this._allianceDrawerDraft.volunteersCount = deficit;
+    }
+    // Si l'utilisateur n'a pas fixé d'indemnité manuelle personnalisée, mettre à jour selon la mission sélectionnée
+    if (this._activeAllianceDrawerStation && window.ProtecAPC?.getDeptRenfortIndemniteBase) {
+      const apc = window.ProtecAPC.getDeptRenfortIndemniteBase(this, {
+        targetStation: this._activeAllianceDrawerStation,
+        mission: m,
+        destination: this._allianceDrawerDraft.destinationMode || 'base'
+      });
+      this._allianceDrawerDraft.apcDefaultIndemnite = apc.computed;
+      if (!this._allianceDrawerDraft._manualIndemnite) {
+        this._allianceDrawerDraft.indemnite = apc.computed;
+      }
     }
     if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation, missionId);
   }
@@ -1798,9 +1849,37 @@ class ProtecGame {
     if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
   }
 
+  setAllianceDrawerDestination(dest) {
+    if (!this._allianceDrawerDraft) return;
+    this._allianceDrawerDraft.destinationMode = dest; // 'base' ou 'site'
+    if (this._activeAllianceDrawerStation && window.ProtecAPC?.getDeptRenfortIndemniteBase) {
+      const m = (this.missions || []).find(mis => String(mis.id) === String(this._allianceDrawerDraft.missionId));
+      const apc = window.ProtecAPC.getDeptRenfortIndemniteBase(this, {
+        targetStation: this._activeAllianceDrawerStation,
+        mission: m,
+        destination: dest
+      });
+      this._allianceDrawerDraft.apcDefaultIndemnite = apc.computed;
+      this._allianceDrawerDraft.indemnite = apc.computed;
+      this._allianceDrawerDraft._manualIndemnite = false;
+      this.showToast('Barème APC Actualisé', `Indemnité pour ralliement ${dest === 'base' ? 'sur la base' : 'sur site'} : ${apc.computed} €.`, 'blue');
+    }
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
+  resetAllianceDrawerIndemniteToAPC() {
+    if (!this._allianceDrawerDraft) return;
+    const base = this._allianceDrawerDraft.apcDefaultIndemnite || 150;
+    this._allianceDrawerDraft.indemnite = base;
+    this._allianceDrawerDraft._manualIndemnite = false;
+    this.showToast('Base APC Rétablie', `L'indemnité par défaut fixée par l'APC (${base} €) a été réinitialisée.`, 'green');
+    if (this._activeAllianceDrawerStation) this.openAllianceStationDetails(this._activeAllianceDrawerStation);
+  }
+
   setAllianceDrawerIndemnite(val) {
     if (!this._allianceDrawerDraft) return;
     this._allianceDrawerDraft.indemnite = Math.max(0, Math.min(5000, parseInt(val, 10) || 0));
+    this._allianceDrawerDraft._manualIndemnite = true;
   }
 
   requestDirectRenfort(targetStationId, targetStationName) {
@@ -1868,7 +1947,7 @@ class ProtecGame {
       allianceId: this.player.allianceId,
       allianceTag: 'FNPC',
       title: `Renfort pour « ${mission.title} »`,
-      desc: `Demande ciblée vers ${targetStationName} pour l'événement « ${mission.title} » : ${unitRequested}.`,
+      desc: `Demande ciblée vers ${targetStationName} pour l'événement « ${mission.title} » (${draft.destinationMode === 'site' ? 'sur site du dispositif' : 'ralliement à la base'}) : ${unitRequested}. Indemnité : ${draft.indemnite ?? 150} €.`,
       targetStationId: targetStationId,
       targetStationName: targetStationName,
       unitRequested: unitRequested,
@@ -1876,7 +1955,9 @@ class ProtecGame {
       requiredVehicles: requiredVehicles,
       requestedVehicleTypes: Object.entries(vehCounts).filter(([, c]) => c > 0).map(([type, count]) => ({ type, count })),
       requestedLots: requestedLots,
-      indemnite: draft.indemnite !== undefined ? draft.indemnite : 180,
+      destinationMode: draft.destinationMode || 'base',
+      indemnite: draft.indemnite !== undefined ? Number(draft.indemnite) : (draft.apcDefaultIndemnite || 150),
+      apcBaseIndemnite: draft.apcDefaultIndemnite || 150,
       lat: mission.lat || mySt?.lat || 48.8566,
       lng: mission.lng || mySt?.lng || 2.3522,
       status: 'open',

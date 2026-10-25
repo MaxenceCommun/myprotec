@@ -250,7 +250,10 @@ window.ProtecMultiplayer = {
     }
     if (totalLogNeeded > 0) {
       const radioBase = document.querySelector('input[name="renfort-consigne-route"][value="base"]');
-      if (radioBase) radioBase.checked = true;
+      if (radioBase) {
+        radioBase.checked = true;
+        this.updateApcTariffSuggestion('base');
+      }
       const notice = document.getElementById('renfort-consigne-auto-notice');
       if (notice) notice.classList.remove('hidden');
     }
@@ -261,9 +264,36 @@ window.ProtecMultiplayer = {
     if (logInput) logInput.value = Math.max(0, count);
     if (count > 0) {
       const radioBase = document.querySelector('input[name="renfort-consigne-route"][value="base"]');
-      if (radioBase) radioBase.checked = true;
+      if (radioBase) {
+        radioBase.checked = true;
+        this.updateApcTariffSuggestion('base');
+      }
       const notice = document.getElementById('renfort-consigne-auto-notice');
       if (notice) notice.classList.remove('hidden');
+    }
+  },
+
+  updateApcTariffSuggestion(route) {
+    const game = window.game;
+    if (!game) return;
+    const dest = (route === 'base') ? 'base' : 'site';
+    const mission = this._currentRenfortMission;
+    const apcData = window.ProtecAPC ? window.ProtecAPC.getDeptRenfortIndemniteBase(game, {
+      mission: mission,
+      destination: dest
+    }) : { baseDept: 150, travelAllowance: 20, distanceKm: 15, destination: dest, kmRate: 0.65, computed: 170 };
+
+    const infoSpan = document.getElementById('renfort-apc-base-info');
+    if (infoSpan) {
+      infoSpan.innerHTML = `Barème APC : <strong>${apcData.baseDept} €</strong> forfait + trajet <strong>${apcData.travelAllowance} €</strong> (${apcData.distanceKm} km A/R à ${apcData.kmRate} €/km) = <strong>${apcData.computed} €</strong>`;
+    }
+    const btnReset = document.getElementById('renfort-reset-apc-btn');
+    if (btnReset) {
+      btnReset.onclick = () => {
+        const inp = document.getElementById('renfort-custom-tariff');
+        if (inp) inp.value = apcData.computed;
+      };
+      btnReset.textContent = `🏛️ Rétablir base APC (${apcData.computed} €)`;
     }
   },
 
@@ -374,6 +404,12 @@ window.ProtecMultiplayer = {
     if (expectedLotsList.length === 0) {
       expectedLotsList.push({ id: 'lot_secours_b', name: 'Lot B (Secours d’Urgence)', reason: 'Dotation secourisme' });
     }
+
+    this._currentRenfortMission = mission;
+    const apcIndemniteData = window.ProtecAPC ? window.ProtecAPC.getDeptRenfortIndemniteBase(game, {
+      mission,
+      destination: 'site'
+    }) : { baseDept: 150, travelAllowance: 32, distanceKm: 25, destination: 'site', kmRate: 0.65, computed: 182 };
 
     // Modal DOM
     let modal = document.getElementById('renfort-zone-modal');
@@ -644,14 +680,14 @@ window.ProtecMultiplayer = {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-slate-200 hover:border-indigo-400 shadow-xs transition">
-              <input type="radio" name="renfort-consigne-route" value="sur_place" checked class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+              <input type="radio" name="renfort-consigne-route" value="sur_place" checked onchange="window.ProtecMultiplayer.updateApcTariffSuggestion(this.value)" class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
               <div>
                 <span class="font-black text-slate-900 block">📍 Directement sur place</span>
                 <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts convergent directement sur le lieu d'intervention sans détour.</p>
               </div>
             </label>
             <label class="flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer bg-white border-slate-200 hover:border-indigo-400 shadow-xs transition">
-              <input type="radio" name="renfort-consigne-route" value="base" class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+              <input type="radio" name="renfort-consigne-route" value="base" onchange="window.ProtecMultiplayer.updateApcTariffSuggestion(this.value)" class="mt-0.5 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
               <div>
                 <span class="font-black text-slate-900 block">🏢 Passer par la base</span>
                 <p class="text-[11px] text-slate-500 leading-tight mt-0.5">Les renforts font halte à notre antenne locale (charger matériel en stock / départ groupé).</p>
@@ -660,17 +696,27 @@ window.ProtecMultiplayer = {
           </div>
         </div>
 
-        <!-- 6. TARIF D'INDEMNISATION PROPOSÉ (€) -->
+        <!-- 6. TARIF D'INDEMNISATION DE DÉPLACEMENT (€) -->
         <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
-          <div class="flex items-center justify-between">
-            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">6. Tarif d'Indemnisation Proposé (€) :</label>
-            <span class="text-[10px] text-slate-500 font-semibold">Versé à l'antenne qui apporte son concours</span>
+          <div class="flex items-center justify-between flex-wrap gap-1">
+            <label class="block text-xs font-black text-slate-800 uppercase tracking-wider">6. Indemnité de Déplacement Proposée (€) :</label>
+            <span class="text-[10px] text-slate-500 font-semibold">Fixé par l'APC ou personnalisé</span>
           </div>
-          <div class="relative rounded-xl shadow-xs">
-            <input type="number" id="renfort-custom-tariff" value="${Math.max(120, needed * 45 + 60)}" min="50" max="10000" step="10" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-mono font-black text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500">
-            <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+          <div class="flex items-center gap-2">
+            <div class="relative rounded-xl shadow-xs flex-1">
+              <input type="number" id="renfort-custom-tariff" value="${apcIndemniteData.computed}" min="20" max="10000" step="5" class="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 font-mono font-black text-sm text-slate-900 focus:ring-2 focus:ring-indigo-500">
+              <span class="absolute right-3.5 top-2.5 text-slate-400 font-bold">€</span>
+            </div>
+            <button type="button" id="renfort-reset-apc-btn" onclick="const inp=document.getElementById('renfort-custom-tariff'); if(inp) inp.value=${apcIndemniteData.computed};" class="px-3 py-2.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800 text-xs font-black transition cursor-pointer flex items-center gap-1 shrink-0" title="Rétablir le barème officiel calculé par l'APC départementale">
+              🏛️ Rétablir base APC (${apcIndemniteData.computed} €)
+            </button>
           </div>
-          <p class="text-[11px] text-slate-500">Montant indicatif conseillé pour mobiliser rapidement des renforts volontaires.</p>
+          <div class="flex items-center justify-between text-[11px] text-slate-500 flex-wrap gap-2 pt-0.5">
+            <span id="renfort-apc-base-info">
+              Barème APC : <strong>${apcIndemniteData.baseDept} €</strong> forfait + trajet <strong>${apcIndemniteData.travelAllowance} €</strong> (${apcIndemniteData.distanceKm} km A/R à ${apcIndemniteData.kmRate} €/km) = <strong>${apcIndemniteData.computed} €</strong>
+            </span>
+            <span class="text-[10px] font-bold text-slate-400">Modifiable librement</span>
+          </div>
         </div>
 
         <!-- 7. SÉLECTION DE L'ÉCHELON DE MOBILISATION -->

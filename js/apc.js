@@ -637,6 +637,74 @@ window.ProtecAPC = {
     this.renderModal(game);
   },
 
+  // Modification du barème de défraiement / indemnité de déplacement pour les renforts (APC départementale)
+  async updateRenfortIndemnite(newAmount, game) {
+    const apc = await this.getAPCData(game);
+    const pid = game.player?.id;
+    const isTreasurer = (apc.treasurerId === pid);
+    const isPresidentSolo = (apc.presidentId === pid && !apc.treasurerId);
+
+    if (!isTreasurer && !isPresidentSolo) {
+      if (window.ProtecDialog) await window.ProtecDialog.alert('La fixation du barème départemental de renfort est réservée au Trésorier.', 'Accès Réservé');
+      return;
+    }
+
+    const cleanVal = Math.max(50, Math.min(2000, Number(newAmount || 150)));
+    apc.renfortIndemniteBase = cleanVal;
+    await this.saveAPC(apc);
+    game.showToast('Barème Renfort APC Actualisé', `L'indemnité de base fixée par l'APC pour les renforts départementaux est désormais de ${cleanVal} €.`, 'green');
+    this.renderModal(game);
+  },
+
+  // Récupère l'indemnité de déplacement de base fixée par l'APC pour un renfort
+  getDeptRenfortIndemniteBase(game, options = {}) {
+    const deptCode = String(game?.player?.departmentCode || game?.currentDepartmentCode || '54').trim().toUpperCase();
+    let apc = this.cachedAPC;
+    if (!apc || apc.departmentCode !== deptCode) {
+      try {
+        apc = JSON.parse(localStorage.getItem(`protec_apc_${deptCode}`) || 'null');
+      } catch (e) {}
+    }
+    const baseFixed = (apc && Number(apc.renfortIndemniteBase) > 0) ? Number(apc.renfortIndemniteBase) : 150;
+
+    const targetStation = options.targetStation;
+    const myStation = game?.stations?.[0];
+    const destination = options.destination || 'base'; // 'base' (sur la base locale) ou 'site' (sur site mission)
+    let distKm = 0;
+
+    if (targetStation && targetStation.lat && targetStation.lng) {
+      if (destination === 'base' && myStation && myStation.lat && myStation.lng) {
+        distKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(targetStation.lat, targetStation.lng, myStation.lat, myStation.lng)
+          : Math.hypot((targetStation.lat - myStation.lat) * 111, (targetStation.lng - myStation.lng) * 75);
+      } else if (destination === 'site' && options.mission && options.mission.lat && options.mission.lng) {
+        distKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(targetStation.lat, targetStation.lng, options.mission.lat, options.mission.lng)
+          : Math.hypot((targetStation.lat - options.mission.lat) * 111, (targetStation.lng - options.mission.lng) * 75);
+      } else if (myStation && myStation.lat && myStation.lng) {
+        distKm = (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function')
+          ? window.ProtecDepartements.calculateDistance(targetStation.lat, targetStation.lng, myStation.lat, myStation.lng)
+          : Math.hypot((targetStation.lat - myStation.lat) * 111, (targetStation.lng - myStation.lng) * 75);
+      }
+    }
+
+    // Barème kilométrique APC : Base forfaitaire + indemnité kilométrique au-delà de 8 km (0.45 €/km A/R)
+    let totalComputed = baseFixed;
+    if (distKm > 8) {
+      const extraKm = Math.round(distKm * 2);
+      totalComputed += Math.round(extraKm * 0.45);
+    }
+
+    const rounded = Math.round(totalComputed / 10) * 10;
+    return {
+      baseFixed: baseFixed,
+      computed: rounded,
+      distKm: Math.round(distKm),
+      destination: destination,
+      deptCode: deptCode
+    };
+  },
+
   // Achat d'un matériel lourd mutualisé par la caisse départementale
   async buyMutualEquipment(materialId, game) {
     const apc = await this.getAPCData(game);
@@ -1702,6 +1770,32 @@ window.ProtecAPC = {
             ${isMasterOfFinance ? `
               <button onclick="window.ProtecAPC.updateDailyContribution(document.getElementById('apc-input-contribution').value, window.game)" class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs shadow-md transition cursor-pointer self-end sm:self-auto">
                 Appliquer le Tarif
+              </button>
+            ` : `
+              <span class="text-[10px] text-slate-400 italic">Modification réservée au Trésorier élu ou au Président.</span>
+            `}
+          </div>
+        </div>
+
+        <!-- BARÈME OFFICIEL APC : INDEMNITÉ DE DÉPLACEMENT POUR LES RENFORTS -->
+        <div class="p-4 rounded-2xl bg-white border border-slate-200 space-y-3">
+          <div class="flex items-center justify-between">
+            <h5 class="text-xs font-black uppercase tracking-wider text-slate-800">Barème d'Indemnité de Déplacement Renfort (APC)</h5>
+            <span class="text-[10px] text-slate-400 font-bold">Base Départementale</span>
+          </div>
+          <p class="text-[11px] text-slate-500">
+            Défraiement de base préconisé par l'APC pour un renfort inter-antennes (déplacement vers la base ou sur le dispositif). Chaque antenne reste libre d'ajuster ce montant lors de la demande.
+          </p>
+
+          <div class="flex flex-col sm:flex-row items-center gap-3">
+            <div class="flex-1 w-full">
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">Base forfaitaire par défaut (€) :</label>
+              <input type="number" id="apc-input-renfort-indemnite" min="50" max="1000" step="10" value="${apc.renfortIndemniteBase || 150}" ${isMasterOfFinance ? '' : 'disabled'}
+                class="w-full px-3 py-2 rounded-xl border border-slate-300 font-extrabold text-sm text-slate-800 bg-slate-50 focus:bg-white focus:outline-none" />
+            </div>
+            ${isMasterOfFinance ? `
+              <button onclick="window.ProtecAPC.updateRenfortIndemnite(document.getElementById('apc-input-renfort-indemnite').value, window.game)" class="px-5 py-2.5 rounded-xl bg-pc-blue hover:brightness-110 text-white font-black text-xs shadow-md transition cursor-pointer self-end sm:self-auto">
+                Enregistrer la Base APC
               </button>
             ` : `
               <span class="text-[10px] text-slate-400 italic">Modification réservée au Trésorier élu ou au Président.</span>
