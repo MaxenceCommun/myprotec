@@ -6452,6 +6452,94 @@ class ProtecGame {
     }) || null;
   }
 
+  // Détermination officielle et harmonisée des indicateurs RNMSC d'un événement / devis
+  getDevisRnmscIndicators(devis) {
+    if (!devis) {
+      return {
+        p1: 2500,
+        p2: 0.30,
+        e1: 0.30,
+        e2: 0.30,
+        p2Label: '0,30 - Public debout (exposition, foire, salon, comice)',
+        e1Label: '0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m',
+        e2Label: '0,30 - Délais de 10 à 20 minutes'
+      };
+    }
+
+    let p1 = 2500;
+    if (devis.rawPublicCount) {
+      p1 = Number(devis.rawPublicCount);
+    } else if (devis.publicCount) {
+      const parsed = parseInt(String(devis.publicCount).replace(/\D/g, ''), 10);
+      if (!isNaN(parsed) && parsed > 0) p1 = parsed;
+    }
+
+    let p2 = 0.30;
+    const nameLower = (devis.eventName || '').toLowerCase();
+    const envLower = (devis.environment || '').toLowerCase();
+
+    if (devis.rnmscP2 !== undefined && devis.rnmscP2 !== null) {
+      p2 = Number(devis.rnmscP2);
+    } else if (nameLower.includes('concert') || nameLower.includes('danse') || nameLower.includes('férias') || nameLower.includes('carnaval') || nameLower.includes('fête') || nameLower.includes('festival') || nameLower.includes('rave') || nameLower.includes('soirée') || nameLower.includes('marathon') || nameLower.includes('nocturne')) {
+      p2 = 0.40;
+    } else if (nameLower.includes('cross') || nameLower.includes('trail') || nameLower.includes('course') || nameLower.includes('match') || nameLower.includes('foot') || nameLower.includes('rugby') || nameLower.includes('athlétisme') || nameLower.includes('combat') || nameLower.includes('boxe') || nameLower.includes('enduro') || nameLower.includes('derby') || nameLower.includes('triathlon')) {
+      p2 = 0.35;
+    } else if (nameLower.includes('théâtre') || nameLower.includes('conférence') || nameLower.includes('cérémonie') || nameLower.includes('spectacle') || nameLower.includes('commémoration') || nameLower.includes('réunion') || nameLower.includes('voeux') || nameLower.includes('inauguration')) {
+      p2 = 0.25;
+    }
+
+    const p2Labels = {
+      0.25: '0,25 - Public assis (spectacle, cérémonie, réunion, sport)',
+      0.30: '0,30 - Public debout (exposition, foire, salon, comice)',
+      0.35: '0,35 - Public debout statique (fête foraine, fête avec protection)',
+      0.40: '0,40 - Public debout dynamique (danse, féria, carnaval, multi-jours)'
+    };
+    const p2Label = p2Labels[p2] || '0,30 - Public debout (exposition, foire, salon, comice)';
+
+    let e1 = 0.30;
+    if (devis.rnmscE1 !== undefined && devis.rnmscE1 !== null) {
+      e1 = Number(devis.rnmscE1);
+    } else if (envLower.includes('espace > 5 ha') || envLower.includes('forêt') || envLower.includes('relief') || envLower.includes('montagne') || envLower.includes('dynamique_course') || envLower.includes('trail') || envLower.includes('nature') || envLower.includes('ouvert_nature') || envLower.includes('plan_eau') || envLower.includes('plage')) {
+      e1 = 0.40;
+    } else if (envLower.includes('2 à 5 ha') || envLower.includes('parc') || envLower.includes('pente') || envLower.includes('urbain') || envLower.includes('ouvert_urbain')) {
+      e1 = 0.30;
+    } else if (envLower.includes('enclos') || envLower.includes('bâtiment') || envLower.includes('dur') || envLower.includes('salle') || envLower.includes('ferme') || envLower.includes('gymnase') || envLower.includes('centre_commercial')) {
+      e1 = 0.25;
+    }
+
+    const e1Labels = {
+      0.25: '0,25 - Bâtiment en dur, rues avec accès dégagés',
+      0.30: '0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m',
+      0.35: '0,35 - Espace 2 à 5 ha, brancardage 300 à 600m, pente > 150m',
+      0.40: '0,40 - Espace > 5 ha, brancardage > 600m, talus ou escaliers'
+    };
+    const e1Label = e1Labels[e1] || '0,30 - Gradins/chapiteaux, terrain ≤ 2 ha, brancardage ≤ 300m';
+
+    let e2 = 0.30;
+    const accLower = (devis.emergencyAccess || '').toLowerCase();
+    if (devis.rnmscE2 !== undefined && devis.rnmscE2 !== null) {
+      e2 = Number(devis.rnmscE2);
+    } else if (accLower.includes('< 10') || accLower.includes('immédiat') || accLower.includes('centre-ville') || devis.isLastMinute) {
+      e2 = 0.25;
+    } else if (accLower.includes('> 30') || accLower.includes('isolé') || envLower.includes('forêt') || envLower.includes('montagne')) {
+      e2 = 0.40;
+    } else if (accLower.includes('20 à 30')) {
+      e2 = 0.35;
+    } else {
+      e2 = 0.30;
+    }
+
+    const e2Labels = {
+      0.25: '0,25 - Délais ≤ 10 minutes',
+      0.30: '0,30 - Délais de 10 à 20 minutes',
+      0.35: '0,35 - Délais de 20 à 30 minutes',
+      0.40: '0,40 - Délais > 30 minutes (zone isolée)'
+    };
+    const e2Label = e2Labels[e2] || '0,30 - Délais de 10 à 20 minutes';
+
+    return { p1, p2, e1, e2, p2Label, e1Label, e2Label };
+  }
+
   // Évaluation en arrière-plan des exigences strictes RNMSC (restent masquées au joueur)
   evaluateHiddenRnmscRequirements(devis) {
     const numMatch = (devis.publicCount || '').match(/\d[\d\s]*/);
@@ -24765,52 +24853,71 @@ class ProtecGame {
                   </div>
 
                   <!-- 1. DONNÉES DU RASSEMBLEMENT (DÉDUCTION DU RISQUE ET DES BESOINS) -->
-                  <div class="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2">
-                    <div class="flex items-center justify-between">
-                      <span class="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-1.5">
-                        <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
-                        Données de l'Événement & Configuration du Site
-                      </span>
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <button type="button" onclick="if(window.ProtecRNMSC) window.ProtecRNMSC.loadDevisIntoSimulator('${d.id}')" class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-white/95 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-sky-300 dark:border-sky-600 shadow-2xs transition cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95" title="Injecter les données de cette demande directement dans le Calculateur RIS à droite">
-                          <span>📐 Tester dans le RIS</span>
-                        </button>
-                        <span class="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-white/60 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-sky-200 dark:border-sky-700/60 hidden sm:inline-block">
-                          Analyse Risque RNMSC
-                        </span>
-                      </div>
-                    </div>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-slate-700">
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Public attendu (N)</span>
-                        <strong class="text-slate-900">${this.formatRoundedPublic(d.publicCount)}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Configuration du site</span>
-                        <strong class="text-slate-900">${d.environment || (d.eventName.toLowerCase().includes('trail') || d.eventName.toLowerCase().includes('cross') ? 'Plein air / Relief' : 'Enclos / Salle')}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Accès Secours Extérieurs</span>
-                        <strong class="text-slate-900">${d.emergencyAccess || (d.isLastMinute ? '< 10 min (Centre-ville)' : '10 à 20 min')}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100">
-                        <span class="text-slate-400 block text-[9px] uppercase font-bold">Durée du dispositif</span>
-                        <strong class="text-slate-900">${this.formatHoursAndMinutes(d.durationHours)}</strong>
-                      </div>
-                      <div class="p-2 bg-white rounded-xl border border-sky-100 col-span-2 sm:col-span-4 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                          <span class="text-sm">${d.mealsProvidedByOrganizer ? '🍽️' : '🥪'}</span>
-                          <span class="text-slate-700 font-bold text-[10px]">Restauration secouristes :</span>
+                  ${(() => {
+                    const rnmscInd = this.getDevisRnmscIndicators(d);
+                    return `
+                      <div class="p-3.5 rounded-2xl bg-sky-50/70 border border-sky-200 space-y-2.5">
+                        <div class="flex items-center justify-between">
+                          <span class="text-xs font-black text-sky-950 uppercase tracking-wide flex items-center gap-1.5">
+                            <i data-lucide="info" class="w-4 h-4 text-sky-600"></i>
+                            Données de l'Événement & Configuration du Site
+                          </span>
+                          <div class="flex items-center gap-1.5 flex-wrap">
+                            <button type="button" onclick="if(window.ProtecRNMSC) window.ProtecRNMSC.loadDevisIntoSimulator('${d.id}')" class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-white/95 dark:bg-slate-800 hover:bg-sky-50 dark:hover:bg-slate-700 px-2.5 py-1 rounded-lg border border-sky-300 dark:border-sky-600 shadow-2xs transition cursor-pointer flex items-center gap-1 hover:scale-105 active:scale-95" title="Injecter les données de cette demande directement dans le Calculateur RIS à droite">
+                              <span>📐 Tester dans le RIS</span>
+                            </button>
+                            <span class="text-[10px] font-bold text-sky-700 dark:text-sky-300 bg-white/60 dark:bg-slate-800/80 px-2 py-0.5 rounded-lg border border-sky-200 dark:border-sky-700/60 hidden sm:inline-block">
+                              Analyse Risque RNMSC
+                            </span>
+                          </div>
                         </div>
-                        <span class="px-2 py-0.5 rounded text-[10px] font-black ${d.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
-                          ${d.mealsProvidedByOrganizer ? 'Prise en charge par l’organisateur (0€ NDF)' : `À la charge antenne (Forfait NDF : ${this.mealAllowancePerVolunteer || 15}€/repas)`}
-                        </span>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 text-[11px] text-slate-700">
+                          <!-- 1. Public attendu (P1) -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Public attendu (P₁)</span>
+                            <strong class="text-slate-900 dark:text-white text-xs block truncate">${this.formatRoundedPublic(d.publicCount)}</strong>
+                          </div>
+
+                          <!-- 2. Activité du rassemblement (P2) -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Activité du rassemblement (P₂)</span>
+                            <strong class="text-slate-900 dark:text-white text-xs block leading-snug" title="${rnmscInd.p2Label}">${rnmscInd.p2Label}</strong>
+                          </div>
+
+                          <!-- 3. Environnement & Accessibilité (E1) -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Environnement & Accessibilité (E₁)</span>
+                            <strong class="text-slate-900 dark:text-white text-xs block leading-snug" title="${rnmscInd.e1Label}">${rnmscInd.e1Label}</strong>
+                          </div>
+
+                          <!-- 4. Délai Secours Publics (E2) -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Délai Secours Publics (E₂)</span>
+                            <strong class="text-slate-900 dark:text-white text-xs block leading-snug" title="${rnmscInd.e2Label}">${rnmscInd.e2Label}</strong>
+                          </div>
+
+                          <!-- 5. Durée du dispositif -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Durée du dispositif</span>
+                            <strong class="text-slate-900 dark:text-white text-xs block">${this.formatHoursAndMinutes(d.durationHours)}</strong>
+                          </div>
+
+                          <!-- 6. Restauration secouristes -->
+                          <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5 flex flex-col justify-between">
+                            <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Restauration secouristes</span>
+                            <span class="px-2 py-0.5 rounded text-[10px] font-black self-start ${d.mealsProvidedByOrganizer ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
+                              ${d.mealsProvidedByOrganizer ? '🍽️ Organisateur (0€ NDF)' : `🥪 À la charge antenne (${this.mealAllowancePerVolunteer || 15}€ NDF)`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p class="text-[10px] text-sky-800 italic pt-0.5">
+                          ℹ️ <strong>Règle Opérationnelle :</strong> Déduisez les moyens humains (secouristes, encadrement CE/CP), les vecteurs (VPSP/VL/VPS) et le matériel (Lot A/B) nécessaires selon le risque. Le barème réglementaire minimum reste masqué pour le joueur et sera audité à la validation.
+                        </p>
                       </div>
-                    </div>
-                    <p class="text-[10px] text-sky-800 italic">
-                      ℹ️ <strong>Règle Opérationnelle :</strong> Déduisez les moyens humains (secouristes, encadrement CE/CP), les vecteurs (VPSP/VL/VPS) et le matériel (Lot A/B) nécessaires selon le risque. Le barème réglementaire minimum reste masqué pour le joueur et sera audité à la validation.
-                    </p>
-                  </div>
+                    `;
+                  })()}
 
                   <!-- 2. OPTION AUTO-REMPLISSAGE OPÉRATIONNEL -->
                   ${(() => {
