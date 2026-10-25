@@ -470,7 +470,7 @@ window.ProtecMultiplayer = {
             <div class="p-3 rounded-xl bg-white border border-slate-200 shadow-2xs space-y-1">
               <span class="text-[10px] font-black uppercase tracking-wider text-slate-400 block">🚑 Véhicules Opérationnels</span>
               <div class="font-black text-slate-900 text-xs truncate">
-                ${reqVehicles.join(', ')}
+                ${(window.game && typeof window.game.formatVehicleSummary === 'function' ? window.game.formatVehicleSummary(reqVehicles) : (reqVehicles).join(', '))}
               </div>
               <p class="text-[10px] text-slate-500">VPSP pour transport sanitaire, VTU/VLHR pour soutien logistique.</p>
             </div>
@@ -3143,7 +3143,7 @@ window.ProtecMultiplayer = {
                       <span>Durée : <strong>${e.durationHours}h</strong></span>
                       <span class="text-emerald-700 font-bold">Taux : 15 €/h/sec.</span>
                     </div>
-                    <div class="text-slate-500 truncate">Véhicules : <strong>${e.requiredVehicles?.join(', ')}</strong></div>
+                    <div class="text-slate-500 truncate">Véhicules : <strong>${(window.game && typeof window.game.formatVehicleSummary === 'function' ? window.game.formatVehicleSummary(e.requiredVehicles || []) : (e.requiredVehicles || []).join(', '))}</strong></div>
                   </div>
 
                   <!-- Vitrine de l'Écusson à débloquer -->

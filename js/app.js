@@ -1638,7 +1638,7 @@ class ProtecGame {
             ${targetMission ? `
               <div class="text-[10.5px] text-slate-500 flex items-center justify-between pt-0.5">
                 <span>Effectif ${targetMission.isPrevi ? 'sondé disponible' : 'inscrit'} : <strong>${targetMission.regCount}/${targetMission.reqCount}</strong></span>
-                <span>Véhicules ${targetMission.isPrevi ? 'requis devis' : 'affectés'} : <strong>${targetMission.isPrevi ? (targetMission.requiredVehicles.join(', ') || '1 VPSP') : targetMission.assignedVehCount}</strong></span>
+                <span>Véhicules ${targetMission.isPrevi ? 'requis devis' : 'affectés'} : <strong>${targetMission.isPrevi ? (this.formatVehicleSummary(targetMission.requiredVehicles) || '1 VPSP') : targetMission.assignedVehCount}</strong></span>
               </div>
             ` : ''}
           `}
@@ -5206,7 +5206,96 @@ class ProtecGame {
   // Règle : Les missions doivent être réparties dans le département. Si plusieurs antennes sont implantées dans le département,
   // la mission est générée à proximité de l'antenne concernée (son bassin de vie).
   // --- GÉOLOCALISATION RÉALISTE & COHÉRENTE DES MISSIONS (ANTI-EAU, ANTI-FORÊT, ANTI-AUTOROUTE, SPÉCIFIQUE GARE) ---
+  // ---------------------------------------------------------------------------
+  // SECTORISATION : un DPS, une inter SAMU ou SDIS revient toujours à l'antenne la
+  // plus proche (mes antennes + celles des autres joueurs). Les crises gardent leurs
+  // propres règles départementales.
+  // ---------------------------------------------------------------------------
+  // Résumé compact des véhicules : « 6 x VPSP, 3 x VTU, 2 x VTP, PCM, VL »
+  formatVehicleSummary(list) {
+    const counts = new Map();
+    (Array.isArray(list) ? list : []).forEach(v => {
+      const k = String((v && typeof v === 'object') ? (v.type || v.name || '') : (v || '')).trim();
+      if (k) counts.set(k, (counts.get(k) || 0) + 1);
+    });
+    return [...counts.entries()].map(([k, n]) => (n > 1 ? `${n} x ${k}` : k)).join(', ');
+  }
+
+  getSectorAntennas() {
+    const own = (this.stations || []).filter(s => s && isFinite(s.lat) && isFinite(s.lng)).map(s => ({ id: s.id, lat: Number(s.lat), lng: Number(s.lng), own: true, ref: s }));
+    const ownIds = new Set(own.map(a => String(a.id)));
+    const myId = this.player && this.player.id;
+    const others = (this.allianceStations || []).filter(a => a && isFinite(a.lat) && isFinite(a.lng)
+      && !ownIds.has(String(a.id)) && !(myId && a.playerId === myId)
+      && !own.some(o => Math.abs(o.lat - a.lat) < 1e-5 && Math.abs(o.lng - a.lng) < 1e-5))
+      .map(a => ({ id: a.id, lat: Number(a.lat), lng: Number(a.lng), own: false, ref: a }));
+    return own.concat(others);
+  }
+
+  sectorDistanceKm(lat1, lng1, lat2, lng2) {
+    if (window.ProtecDepartements && typeof window.ProtecDepartements.calculateDistance === 'function') {
+      return window.ProtecDepartements.calculateDistance(lat1, lng1, lat2, lng2);
+    }
+    const R = 6371, toR = Math.PI / 180;
+    const dLat = (lat2 - lat1) * toR, dLng = (lng2 - lng1) * toR;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // Antenne la plus proche d'un point (toutes antennes confondues)
+  nearestSectorAntenna(lat, lng, antennas = null) {
+    const list = antennas || this.getSectorAntennas();
+    let best = null, bestD = Infinity;
+    list.forEach(a => { const d = this.sectorDistanceKm(lat, lng, a.lat, a.lng); if (d < bestD) { bestD = d; best = a; } });
+    return best ? { antenna: best, distanceKm: bestD } : null;
+  }
+
+  // Le point est-il dans mon secteur (une de mes antennes est la plus proche) ?
+  isInMySector(lat, lng, antennas = null) {
+    if (!isFinite(lat) || !isFinite(lng)) return false;
+    const n = this.nearestSectorAntenna(lat, lng, antennas);
+    return !n || n.antenna.own;
+  }
+
+  // Ma propre antenne la plus proche (rattachement de la mission)
+  nearestOwnStation(lat, lng) {
+    const own = (this.stations || []).filter(s => s && isFinite(s.lat) && isFinite(s.lng));
+    let best = null, bestD = Infinity;
+    own.forEach(s => { const d = this.sectorDistanceKm(lat, lng, Number(s.lat), Number(s.lng)); if (d < bestD) { bestD = d; best = s; } });
+    return best || (this.stations || [])[0] || null;
+  }
+
   calculateRealisticMissionLocation(baseStation = null, missionType = 'dps', missionContext = null) {
+    const sectorized = ['dps', 'samu', 'pompiers'].includes(missionType);
+    if (!sectorized) return this._calculateRealisticMissionLocationRaw(baseStation, missionType, missionContext);
+    const antennas = this.getSectorAntennas();
+    let res = null;
+    // Le lieu peut être n'importe où dans le département, mais doit relever de mon secteur
+    for (let attempt = 0; attempt < 30; attempt++) {
+      res = this._calculateRealisticMissionLocationRaw(baseStation, missionType, missionContext);
+      if (res && this.isInMySector(res.lat, res.lng, antennas)) break;
+      res = null;
+    }
+    if (!res) {
+      // Repli : une commune réelle du département située dans mon secteur, sinon les abords de mon antenne
+      const deptCode = String((baseStation && baseStation.departmentCode) || this.currentDepartmentCode || this.player?.departmentCode || '54');
+      const communes = (window.ProtecDepartements && typeof window.ProtecDepartements.getCommunesForDepartment === 'function')
+        ? (window.ProtecDepartements.getCommunesForDepartment(deptCode) || []) : [];
+      const mine = communes.filter(c => c && isFinite(c.lat) && isFinite(c.lng) && this.isInMySector(c.lat, c.lng, antennas));
+      if (mine.length) {
+        const c = mine[Math.floor(Math.random() * mine.length)];
+        res = { lat: parseFloat((c.lat + (Math.random() - 0.5) * 0.004).toFixed(5)), lng: parseFloat((c.lng + (Math.random() - 0.5) * 0.006).toFixed(5)), commune: c.nom, postcode: c.cp };
+      } else {
+        const st = baseStation || (this.stations || [])[0] || { lat: 48.6921, lng: 6.1844, city: 'Nancy' };
+        res = { lat: parseFloat((Number(st.lat) + (Math.random() - 0.5) * 0.01).toFixed(5)), lng: parseFloat((Number(st.lng) + (Math.random() - 0.5) * 0.014).toFixed(5)), commune: st.city };
+      }
+    }
+    const ownSt = this.nearestOwnStation(res.lat, res.lng);
+    if (ownSt) res.sectorStationId = ownSt.id;
+    return res;
+  }
+
+  _calculateRealisticMissionLocationRaw(baseStation = null, missionType = 'dps', missionContext = null) {
     const deptCode = this.currentDepartmentCode || this.player?.departmentCode || '54';
     const dept = window.ProtecDepartements ? window.ProtecDepartements.getByCode(deptCode) : null;
     const stationsInDept = (this.stations || []).filter(s => s.departmentCode === deptCode || !s.departmentCode);
@@ -6094,7 +6183,8 @@ class ProtecGame {
     // 2. Repli vers le vivier d'événements réels du territoire (clubs, festivals, salons)
     if (this.territoryEventsPool && this.territoryEventsPool.length > 0) {
       const existingNames = new Set((this.devis || []).map(d => (d.eventName || '').trim().toLowerCase()));
-      const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase()));
+      const nextRealIndex = this.territoryEventsPool.findIndex(e => !existingNames.has((e.eventName || '').trim().toLowerCase())
+        && (!isFinite(e.lat) || !isFinite(e.lng) || typeof this.isInMySector !== 'function' || this.isInMySector(e.lat, e.lng)));
       if (nextRealIndex !== -1) {
         const pickedReal = this.territoryEventsPool.splice(nextRealIndex, 1)[0];
         this.ensureFutureDevisDate(pickedReal);
@@ -6221,6 +6311,7 @@ class ProtecGame {
       durationHours: pick.dur,
       lat: missionCoords.lat,
       lng: missionCoords.lng,
+      stationId: missionCoords.sectorStationId || undefined,
       publicCount: pick.pub,
       scale: pick.scale,
       requiredVolunteers: pick.reqV,
@@ -9679,6 +9770,7 @@ class ProtecGame {
       desc: `Couverture sanitaire pour ${roundedPubText}. Moyens devis : ${vehsSummary}. ${scaleChosen}.`,
       lat: devis.lat,
       lng: devis.lng,
+      stationId: devis.stationId || (typeof this.nearestOwnStation === 'function' && isFinite(devis.lat) ? (this.nearestOwnStation(devis.lat, devis.lng) || {}).id : undefined),
       scale: scaleChosen,
       eventDate: devis.eventDate,
       durationHours: devis.durationHours,
@@ -27049,7 +27141,7 @@ class ProtecGame {
                                         <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
                                         <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
                                       </p>
-                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : '1 VPSP (acheminement)'}</strong></p>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? this.formatVehicleSummary(m.requiredVehicles) : '1 VPSP (acheminement)'}</strong></p>
                                     </div>
 
                                     <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
@@ -33320,6 +33412,7 @@ class ProtecGame {
       desc: pick.desc,
       lat: samuCoords.lat,
       lng: samuCoords.lng,
+      stationId: samuCoords.sectorStationId || undefined,
       scale: `Départ Réflexe (${reqVol} secouristes)`,
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,
@@ -33490,6 +33583,7 @@ class ProtecGame {
       desc: pick.desc,
       lat: samuCoords.lat,
       lng: samuCoords.lng,
+      stationId: samuCoords.sectorStationId || undefined,
       scale: 'Vecteur VPSP Renfort (Facultatif)',
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,
@@ -34206,6 +34300,7 @@ class ProtecGame {
       desc: pick.desc,
       lat: sdisCoords.lat,
       lng: sdisCoords.lng,
+      stationId: sdisCoords.sectorStationId || undefined,
       scale: 'VPSP Caserne Pompiers (3 secouristes)',
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,
@@ -34345,6 +34440,7 @@ class ProtecGame {
       desc: pick.desc,
       lat: sdisCoords.lat,
       lng: sdisCoords.lng,
+      stationId: sdisCoords.sectorStationId || undefined,
       scale: 'Vecteur VPSP Renfort (Facultatif)',
       eventDate: { ...this.clock, hour: this.clock.hour },
       durationSeconds: pick.durMin * 60,

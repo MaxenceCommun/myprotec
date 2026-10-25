@@ -584,7 +584,7 @@
         else if (m.status === 'ongoing') iconName = 'truck';
 
         const vehList = (m.requiredVehicles && m.requiredVehicles.length > 0)
-          ? m.requiredVehicles.join(', ')
+          ? (window.game && typeof window.game.formatVehicleSummary === 'function' ? window.game.formatVehicleSummary(m.requiredVehicles) : (m.requiredVehicles).join(', '))
           : (m.scale || 'Dispositif');
 
         return `

@@ -1463,6 +1463,8 @@ window.ProtecNotifications = {
         const game = window.game;
         const currentIds = new Set((game.missions || []).map(m => m.id));
         const newValidMissions = [];
+        const mem = window.ProtecMissionMemory;
+        if (mem) mem.remember([...currentIds]);
 
         // Helper pour valider si une mission cloud est réellement active et non terminée/périmée
         const isMissionValidAndActive = (m) => {
@@ -1521,7 +1523,10 @@ window.ProtecNotifications = {
         };
 
         supaSave.save_data.missions.forEach(m => {
+          // Mission déjà vue puis retirée par le jeu : ce n'est pas une nouvelle mission
+          if (m && mem && mem.isKnown(m.id) && !currentIds.has(m.id)) return;
           if (!currentIds.has(m.id) && isMissionValidAndActive(m)) {
+            if (mem) mem.remember([m.id]);
             if (!Array.isArray(game.missions)) game.missions = [];
             game.missions.unshift(m);
             currentIds.add(m.id);
