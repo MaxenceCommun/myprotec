@@ -5808,14 +5808,14 @@ class ProtecGame {
     if (allowedTier === 1) {
       // Débutant (PAPS : 2 à 3 secouristes, durées 2h à 4h)
       eventsList = [
-        { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
-        { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
-        { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
-        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
-        { name: 'Kermesse des Écoles & Fête Laïque', client: 'Association Parents Élèves', cType: 'association', dur: 3, pub: '550 familles', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 12 },
-        { name: 'Course d’Orientation & Marche Nordique', client: 'Ligue Randonnée Pédestre', cType: 'club_sportif', dur: 4, pub: '400 marcheurs', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 18 },
-        { name: 'Tournoi Départemental de Gymnastique', client: 'Comité de Gymnastique', cType: 'club_sportif', dur: 4, pub: '750 spectateurs', scale: 'PAPS (3 secouristes)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: cap.vpspCount > 0 ? ['VPSP'] : [], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
-        { name: 'Rencontre Régionale d’Échecs Géants', client: 'Ligue Échiquéenne', cType: 'association', dur: 3, pub: '350 participants', scale: 'PAPS (2 secouristes)', reqV: 2, ranks: ['PSE1'], reqVeh: [], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 10 }
+        { name: 'Cross du Collège Pasteur', client: 'Éducation Nationale', cType: 'association', dur: 3, pub: '450 élèves', scale: 'PAPS (2 secouristes + VPSP)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Brocante de Quartier des Berges', client: 'Comité des Fêtes', cType: 'association', dur: 4, pub: '1 200 chineurs', scale: 'PAPS (2 secouristes + VPSP)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Tournoi Minimes de Handball', client: 'Club Omnisports', cType: 'club_sportif', dur: 3, pub: '600 personnes', scale: 'PAPS (3 secouristes + VPSP)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
+        { name: 'Fête de Quartier & Olympiades', client: 'Maison de Quartier', cType: 'association', dur: 4, pub: '800 habitants', scale: 'PAPS (2 secouristes + VPSP)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 15 },
+        { name: 'Kermesse des Écoles & Fête Laïque', client: 'Association Parents Élèves', cType: 'association', dur: 3, pub: '550 familles', scale: 'PAPS (2 secouristes + VPSP)', reqV: 2, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 12 },
+        { name: 'Course d’Orientation & Marche Nordique', client: 'Ligue Randonnée Pédestre', cType: 'club_sportif', dur: 4, pub: '400 marcheurs', scale: 'PAPS (3 secouristes + VPSP)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 18 },
+        { name: 'Tournoi Départemental de Gymnastique', client: 'Comité de Gymnastique', cType: 'club_sportif', dur: 4, pub: '750 spectateurs', scale: 'PAPS (3 secouristes + VPSP)', reqV: 3, ranks: ['PSE1', 'PSE2'], reqVeh: ['VPSP'], hiddenMin: 3, hiddenSkills: ['PSE2'], matCost: 20 },
+        { name: 'Rencontre Régionale d’Échecs Géants', client: 'Ligue Échiquéenne', cType: 'association', dur: 3, pub: '350 participants', scale: 'PAPS (2 secouristes + VPSP)', reqV: 2, ranks: ['PSE1'], reqVeh: ['VPSP'], hiddenMin: 2, hiddenSkills: ['PSE1'], matCost: 10 }
       ];
     } else if (allowedTier === 2) {
       // Opérationnel (DPS-PE : 4 à 6 secouristes, 1 VPSP, durées 4h à 6h)
@@ -6722,11 +6722,24 @@ class ProtecGame {
     if (!devis) return {};
     if (!devis.configuredVehicleCounts || typeof devis.configuredVehicleCounts !== 'object') {
       devis.configuredVehicleCounts = {};
-      if (Array.isArray(devis.configuredVehicles)) {
+      if (Array.isArray(devis.configuredVehicles) && devis.configuredVehicles.length > 0) {
         devis.configuredVehicles.forEach(t => {
           devis.configuredVehicleCounts[t] = (devis.configuredVehicleCounts[t] || 0) + 1;
         });
+      } else if (Array.isArray(devis.requiredVehicles) && devis.requiredVehicles.length > 0) {
+        devis.requiredVehicles.forEach(t => {
+          devis.configuredVehicleCounts[t] = (devis.configuredVehicleCounts[t] || 0) + 1;
+        });
       }
+    }
+    // RÈGLE MÉTIER ABSOLUE PROTECTION CIVILE :
+    // Un dispositif de secours ne peut pas être sans véhicule (acheminement du personnel et des lots obligatoires)
+    const totalVehicles = Object.values(devis.configuredVehicleCounts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+    if (totalVehicles === 0) {
+      const defaultType = (Array.isArray(devis.requiredVehicles) && devis.requiredVehicles[0]) 
+        || (devis.scale && (devis.scale.includes('ME') || devis.scale.includes('GE') || devis.scale.includes('PE')) ? 'VPSP' : 'VPSP');
+      devis.configuredVehicleCounts[defaultType] = 1;
+      this.syncDevisConfiguredVehicles(devis);
     }
     return devis.configuredVehicleCounts;
   }
@@ -6745,14 +6758,15 @@ class ProtecGame {
     return list;
   }
 
-  // Résumé lisible des véhicules du devis (ex: "3 VPSP, 1 VTU")
+  // Résumé lisible des véhicules du devis (ex: "1 VPSP" ou "1 VPSP, 1 VTU")
   formatDevisVehiclesSummary(devis) {
-    if (!devis) return 'pédestre';
+    if (!devis) return '1 VPSP';
     const counts = this.ensureDevisVehicleCounts(devis);
     const parts = [];
     Object.entries(counts).forEach(([type, count]) => {
-      if (count > 0) {
-        parts.push(`${count} ${type}`);
+      const n = parseInt(count, 10) || 0;
+      if (n > 0) {
+        parts.push(`${n} ${type}`);
       }
     });
     if (parts.length === 0) {
@@ -6761,7 +6775,7 @@ class ProtecGame {
         devis.configuredVehicles.forEach(t => { temp[t] = (temp[t] || 0) + 1; });
         return Object.entries(temp).map(([t, c]) => `${c} ${t}`).join(', ');
       }
-      return 'pédestre';
+      return '1 VPSP (acheminement requis)';
     }
     return parts.join(', ');
   }
@@ -6784,7 +6798,12 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
+    const totalVehicles = Object.values(counts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
     if (counts[vehType] && counts[vehType] > 0) {
+      if (totalVehicles <= counts[vehType]) {
+        this.showToast('Véhicule Obligatoire 🚗', 'Impossible de désélectionner tous les véhicules : il faut au moins 1 véhicule pour acheminer les secouristes et le matériel.', 'orange');
+        return;
+      }
       delete counts[vehType];
     } else {
       counts[vehType] = 1;
@@ -6800,8 +6819,13 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
+    const totalVehicles = Object.values(counts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
     const current = counts[vehType] || 0;
-    const next = Math.max(0, Math.min(50, current + delta));
+    const next = current + delta;
+    if (next <= 0 && totalVehicles <= current) {
+      this.showToast('Véhicule Obligatoire 🚗', 'Impossible de retirer tous les véhicules : il faut au moins 1 véhicule pour acheminer les secouristes et le matériel sur le poste.', 'orange');
+      return;
+    }
     if (next <= 0) {
       delete counts[vehType];
     } else {
@@ -6818,8 +6842,17 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     const counts = this.ensureDevisVehicleCounts(devis);
+    const totalVehicles = Object.values(counts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+    const current = counts[vehType] || 0;
     const parsed = parseInt(value, 10);
     const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(50, parsed));
+    if (count <= 0 && totalVehicles <= current) {
+      this.showToast('Véhicule Obligatoire 🚗', 'Impossible de supprimer ce véhicule : un dispositif exige au minimum 1 véhicule pour acheminer les secouristes et le matériel.', 'orange');
+      counts[vehType] = 1;
+      this.syncDevisConfiguredVehicles(devis);
+      this.openModule('devis', true);
+      return;
+    }
     if (count <= 0) {
       delete counts[vehType];
       if (Array.isArray(devis.configuredVehicles)) {
@@ -6943,6 +6976,12 @@ class ProtecGame {
         if (mission.requiredAssets.vtp > 0) mission.configuredVehicleCounts['VTP'] = mission.requiredAssets.vtp;
       }
     }
+    // Règle opérationnelle : Tout dispositif DPS requiert au moins 1 véhicule pour l'acheminement de l'équipe et du matériel
+    const totalVehicles = Object.values(mission.configuredVehicleCounts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+    if (totalVehicles === 0 && (mission.type === 'dps' || mission.scale)) {
+      mission.configuredVehicleCounts['VPSP'] = 1;
+      this.syncMissionRequiredVehicles(mission);
+    }
     return mission.configuredVehicleCounts;
   }
 
@@ -6972,8 +7011,13 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
     const counts = this.ensureMissionVehicleCounts(mission);
+    const totalVehicles = Object.values(counts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
     const current = counts[vehType] || 0;
-    const next = Math.max(0, Math.min(30, current + delta));
+    const next = current + delta;
+    if (next <= 0 && totalVehicles <= current && (mission.type === 'dps' || mission.scale)) {
+      this.showToast('Véhicule Obligatoire 🚗', 'Impossible de retirer tous les véhicules : il faut au moins 1 véhicule pour acheminer les secouristes et le matériel sur le poste.', 'orange');
+      return;
+    }
     if (next <= 0) delete counts[vehType];
     else counts[vehType] = next;
     this.syncMissionRequiredVehicles(mission);
@@ -6985,8 +7029,17 @@ class ProtecGame {
     const mission = this.missions.find(m => m.id === missionId);
     if (!mission) return;
     const counts = this.ensureMissionVehicleCounts(mission);
+    const totalVehicles = Object.values(counts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+    const current = counts[vehType] || 0;
     const parsed = parseInt(value, 10);
     const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(30, parsed));
+    if (count <= 0 && totalVehicles <= current && (mission.type === 'dps' || mission.scale)) {
+      this.showToast('Véhicule Obligatoire 🚗', 'Impossible de retirer tous les véhicules : il faut au moins 1 véhicule pour acheminer les secouristes et le matériel sur le poste.', 'orange');
+      counts[vehType] = 1;
+      this.syncMissionRequiredVehicles(mission);
+      this.openMissionDetails(missionId);
+      return;
+    }
     if (count <= 0) delete counts[vehType];
     else counts[vehType] = count;
     this.syncMissionRequiredVehicles(mission);
@@ -8863,6 +8916,14 @@ class ProtecGame {
 
     if (!price || isNaN(price) || price <= 0) {
       this.showToast('Tarif Requis ⚠️', 'Veuillez saisir votre tarif proposé en euros pour cet événement.', 'orange');
+      return;
+    }
+
+    // Contrôle obligatoire d'au moins un véhicule d'acheminement (secouristes & matériel)
+    const vehCounts = this.ensureDevisVehicleCounts(devis);
+    const totalVehicles = Object.values(vehCounts).reduce((sum, c) => sum + (parseInt(c, 10) || 0), 0);
+    if (totalVehicles <= 0) {
+      this.showToast('Véhicule Obligatoire 🚗', 'Impossible de valider le devis sans véhicule : au moins un vecteur pour transporter le personnel et le matériel est obligatoire.', 'orange');
       return;
     }
 
@@ -18354,7 +18415,7 @@ class ProtecGame {
                         tags.push(`<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 dark:bg-amber-950/70 text-amber-900 dark:text-amber-300 border border-amber-300 dark:border-amber-700">🐕 Cyno (${cynoCount} équipe${cynoCount > 1 ? 's' : ''})</span>`);
                       }
                       if (tags.length === 0) {
-                        return `<span class="text-[10px] text-slate-500 dark:text-slate-400">Poste fixe / Pédestre (${mission.requiredVolunteers || 4} secouristes)</span>`;
+                        return `<span class="text-[10px] text-slate-600 dark:text-slate-300 font-semibold">Dispositif terrestre standard (${mission.requiredVolunteers || 4} secouristes)</span>`;
                       }
                       return tags.join('');
                     })()}
@@ -19380,8 +19441,8 @@ class ProtecGame {
                       if (cards.length === 0) {
                         return `
                           <div class="col-span-full p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-xs flex items-center gap-2">
-                            <span>🚶</span>
-                            <span>${isCrisisMission ? "Dispositif à pied d'œuvre (aucun véhicule imposé). Vous pouvez engager librement vos engins pour acheminer vos bénévoles et votre matériel." : "Dispositif pédestre / poste fixe (aucun véhicule requis au devis)."}</span>
+                            <span>🚑</span>
+                            <span>${isCrisisMission ? "Acheminement libre (engagez au moins un véhicule pour transporter les secouristes et le matériel)." : "Véhicule d'acheminement requis (au moins 1 véhicule pour transporter l'équipe et les matériels sur le poste)."}</span>
                           </div>
                         `;
                       }
@@ -19432,7 +19493,7 @@ class ProtecGame {
                           ${vehCatalog.map(v => `<option value="${v.type}">${v.emoji} ${v.name} [${v.funcBadge}]</option>`).join('')}
                         </select>
                         ${selectedReqVehs.length === 0 ? `
-                          <div class="text-[11px] text-slate-500 italic">Aucun type de véhicule imposé (dispositif pédestre ou libre).</div>
+                          <div class="text-[11px] text-amber-700 font-bold">⚠️ Aucun véhicule imposé : engagez au moins 1 véhicule d'acheminement (VPSP, VTU, VTP...) ci-dessus.</div>
                         ` : `
                           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-0.5">
                             ${selectedReqVehs.map(([vType, count]) => {
@@ -24813,14 +24874,14 @@ class ProtecGame {
                       <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700 space-y-2.5">
                         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                           <label class="block text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">
-                            Véhicules proposés au devis :
+                            Véhicules d'acheminement & Dispositif proposés au devis :
                           </label>
                           <span class="text-[10px] font-black text-pc-blue dark:text-sky-300 bg-blue-50 dark:bg-sky-950/60 px-2.5 py-0.5 rounded-lg border border-blue-200 dark:border-sky-500/40 self-start sm:self-auto">
                             Moyens : <strong>${this.formatDevisVehiclesSummary(d)}</strong>
                           </span>
                         </div>
                         <p class="text-[10px] text-slate-500 dark:text-slate-400">
-                          Sélectionnez les véhicules souhaités dans la liste déroulante ci-dessous, puis ajustez la quantité avec <strong>-</strong> et <strong>+</strong>.
+                          Tout dispositif de secours exige au minimum un véhicule pour acheminer les secouristes et le matériel sur le poste. Ajustez les quantités avec <strong>-</strong> et <strong>+</strong>.
                         </p>
                         ${(() => {
                           const vehCatalog = this.getAvailableVehicleTypesCatalog();
@@ -24833,9 +24894,9 @@ class ProtecGame {
                             </select>
 
                             ${selectedVehs.length === 0 ? `
-                              <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                                <span>🚶</span>
-                                <span>Aucun véhicule ajouté (Dispositif pédestre / poste fixe). Utilisez le menu déroulant pour engager un véhicule.</span>
+                              <div class="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-dashed border-amber-300 dark:border-amber-700 text-[11px] text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                <span>⚠️</span>
+                                <span><strong>Véhicule obligatoire :</strong> Aucun véhicule sélectionné. Veuillez choisir au moins un véhicule pour acheminer les secouristes et le matériel sur le poste.</span>
                               </div>
                             ` : `
                               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-0.5">
@@ -26345,7 +26406,7 @@ class ProtecGame {
                                         <i data-lucide="map-pin" class="w-3 h-3 text-pc-blue flex-shrink-0"></i>
                                         <span>${m.address || (m.lat && m.lng ? `Point GPS: ${m.lat.toFixed(4)}, ${m.lng.toFixed(4)}` : 'Adresse sur site')}</span>
                                       </p>
-                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : 'Poste fixe / pédestre'}</strong></p>
+                                      <p class="text-[11px] text-slate-500 dark:text-slate-400">${m.scale || 'DPS'} • Durée : <strong>${this.formatHoursAndMinutes(m.durationSeconds || (m.durationHours ? m.durationHours * 3600 : 14400), true)}</strong> • Véhicules : <strong>${(m.requiredVehicles && m.requiredVehicles.length > 0) ? m.requiredVehicles.join(', ') : '1 VPSP (acheminement)'}</strong></p>
                                     </div>
 
                                     <div class="pt-2 border-t border-slate-100 dark:border-slate-700/80 space-y-1.5">
