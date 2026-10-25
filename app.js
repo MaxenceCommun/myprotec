@@ -4528,7 +4528,7 @@ class ProtecGame {
       marker.on('click', handleMissionClick);
 
       const tooltipText = isPrevisionnel
-        ? `<b>⏳ [PRÉVISIONNEL] ${mission.title}</b><br/><span style="color:#b45309; font-weight:700;">Option en cours • Risque perte : ${Math.round((mission.riskRate || 0.20)*100)}%</span><br/><span>📍 ${mission.address || 'Point cartographique'} • ${(mission.registeredVolunteers || []).length}/${mission.requiredVolunteers || 4} sondés</span><br/><span style="color:#4f46e5; font-size:10px; font-weight:700;">👉 Cliquez pour gérer l'option / renforts</span>`
+        ? `<b>⏳ [PRÉVISIONNEL] ${mission.title}</b><br/><span style="color:#b45309; font-weight:700;">Option en cours • Sondage équipage</span><br/><span>📍 ${mission.address || 'Point cartographique'} • ${(mission.registeredVolunteers || []).length}/${mission.requiredVolunteers || 4} sondés</span><br/><span style="color:#4f46e5; font-size:10px; font-weight:700;">👉 Cliquez pour gérer l'option / renforts</span>`
         : ((mission.type === 'social' || mission.isSector)
           ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
           : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`);
@@ -18162,7 +18162,7 @@ class ProtecGame {
                 <span>⏳</span> <span>Dispositif en Option Prévisionnelle</span>
               </span>
               <span class="text-xs font-black text-amber-900 bg-amber-200/60 px-2 py-0.5 rounded-md">
-                Risque concurrence : ${Math.round((mission.riskRate || 0.20)*100)}%
+                ⏳ En attente de confirmation
               </span>
             </div>
             <p class="text-xs font-semibold leading-relaxed text-amber-900/90">
@@ -25084,20 +25084,14 @@ class ProtecGame {
                         </div>
                       </div>
 
-                      <!-- Encart Risque de Perte d'Option (Concurrence) -->
+                      <!-- Encart Statut d'Option (Concurrence) -->
                       <div class="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs flex items-center justify-between">
                         <div class="flex items-center gap-2">
                           <span class="text-base flex-shrink-0">⚠️</span>
                           <div>
-                            <span class="font-extrabold text-amber-950 block">Option Non Garantie face à la concurrence</span>
-                            <span class="text-[11px] text-amber-800">L'organisateur consulte en parallèle d'autres associations. Plus vous tardez à confirmer, plus il risque de signer ailleurs.</span>
+                            <span class="font-extrabold text-amber-950 block">Option Prévisionnelle Non Confirmée</span>
+                            <span class="text-[11px] text-amber-800">L'organisateur consulte en parallèle. Confirmez dès que vos effectifs et matériels sont prêts.</span>
                           </div>
-                        </div>
-                        <div class="text-right flex-shrink-0 pl-2">
-                          <span class="text-[10px] uppercase font-bold text-amber-800 block">Risque Perte</span>
-                          <span class="px-2.5 py-0.5 rounded-lg bg-amber-600 text-white font-black text-xs shadow-xs">
-                            ${Math.round((d.riskRate || 0.15) * 100)} %
-                          </span>
                         </div>
                       </div>
 
