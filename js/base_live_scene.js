@@ -66,7 +66,7 @@
   };
 
   const WALL_H = 2.5;        // Hauteur réelle sous plafond (m)
-  const WALL_CUT = 1.1;      // Hauteur de coupe des cloisons et façades avant (m)
+  const WALL_CUT = 0.3;      // Hauteur de coupe des cloisons et façades avant (m)
   const SILL_H = 0.9;        // Allège des fenêtres (m)
   const DOOR_H = 2.04;       // Hauteur de passage des portes (m)
   const CELL = 0.2;          // Taille de cellule de navigation (m)
@@ -3128,7 +3128,7 @@
       }
     }
 
-    // Murs : fond à 2,50 m, cloisons et façades avant coupées à 1,10 m (ou tout à 2,50 m via le bouton Murs)
+    // Murs : fond à 2,50 m, cloisons et façades avant coupées à 30 cm (ou tout à 2,50 m via le bouton Murs)
     drawWall(ctx, p) {
       const iso = this.iso;
       const night = this.isNight;
@@ -3141,6 +3141,11 @@
         ctx.globalAlpha = 0.5;
         drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, H, '#7dd3fc', { top: '#bae6fd' });
         ctx.globalAlpha = 1;
+        return;
+      }
+      if (p.windowPane && H <= SILL_H) {
+        // Coupe sous l'allège : simple muret
+        drawBox(ctx, iso, p.x0, p.y0, p.x1, p.y1, 0, H, base, cut);
         return;
       }
       if (p.windowPane) {
@@ -3834,9 +3839,15 @@
         ctx.save();
         ctx.translate(px, py); ctx.rotate(ang);
         if (kind === 'pc') {
-          ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(0, 0, 2.15, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#f7941d'; ctx.beginPath(); ctx.arc(0, 0, 1.75, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#1d3c8c'; ctx.beginPath(); ctx.moveTo(0, -1.25); ctx.lineTo(1.15, 0.85); ctx.lineTo(-1.15, 0.85); ctx.closePath(); ctx.fill();
+          // Logo officiel : disque orange, triangle blanc à côtés bombés, triangle bleu au centre
+          const R = 2.2;
+          ctx.fillStyle = '#f7941d'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+          const tA = [0, -R], tB = [R * 0.84, R * 0.55], tC = [-R * 0.84, R * 0.55];
+          const bulge = (p, q) => { const mx = (p[0] + q[0]) / 2, my = (p[1] + q[1]) / 2; const l = Math.hypot(mx, my) || 1; return [mx + mx / l * R * 0.2, my + my / l * R * 0.2]; };
+          ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.moveTo(tA[0], tA[1]);
+          [[tA, tB], [tB, tC], [tC, tA]].forEach(([p0, q0]) => { const c0 = bulge(p0, q0); ctx.quadraticCurveTo(c0[0], c0[1], q0[0], q0[1]); });
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle = '#004a8f'; ctx.beginPath(); ctx.moveTo(0, -R * 0.7); ctx.lineTo(R * 0.6, R * 0.39); ctx.lineTo(-R * 0.6, R * 0.39); ctx.closePath(); ctx.fill();
         } else if (deptPatch) {
           const img = deptPatch.img && deptPatch.img.complete && deptPatch.img.naturalWidth ? deptPatch.img : null;
           if (img) ctx.drawImage(img, -2.2, -2.6, 4.4, 5.2);
@@ -4409,7 +4420,7 @@
       const btn = (id, label, title) => `<button type="button" data-act="${id}" title="${title}" class="plt-btn">${narrow ? label.split(' ')[0] : label}</button>`;
       bar.innerHTML = [
         `<span class="plt-live" style="height:30px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:10px;background:#dc2626;color:#fff;font:800 11px 'Plus Jakarta Sans',system-ui,sans-serif;box-shadow:0 2px 6px rgba(220,38,38,.35);"><span style="width:7px;height:7px;border-radius:50%;background:#fff;animation:pulse 1.2s infinite"></span>LIVE</span>`,
-        btn('walls', this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 1,10 m', 'Basculer : murs à hauteur réelle (2,50 m) / cloisons coupées à 1,10 m'),
+        btn('walls', this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 30 cm', 'Basculer : murs à hauteur réelle (2,50 m) / cloisons coupées à 30 cm'),
         btn('rotate', '🔄 Pivoter', 'Faire pivoter la vue d’un quart de tour'),
         btn('labels', '🏷️ Étiquettes', 'Afficher les noms des pièces et véhicules'),
         this.slot === 'base' ? `<button type="button" data-act="edit" title="Aménager les locaux : placer, déplacer, pivoter le mobilier" class="plt-btn plt-primary">✏️ Aménager</button>` : ''
@@ -4418,7 +4429,7 @@
         const b = e.target.closest('button[data-act]');
         if (!b) return;
         const act = b.dataset.act;
-        if (act === 'walls') { this.wallsUp = !this.wallsUp; this.savePref('wallsUp', this.wallsUp); b.textContent = this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 1,10 m'; }
+        if (act === 'walls') { this.wallsUp = !this.wallsUp; this.savePref('wallsUp', this.wallsUp); b.textContent = this.wallsUp ? '🧱 Murs 2,50 m' : '🧱 Murs coupés 30 cm'; }
         if (act === 'rotate') { this.rotate(); }
         if (act === 'labels') { this.showLabels = !this.showLabels; this.savePref('labels', this.showLabels); }
         if (act === 'edit') { this.editToggle(); }
