@@ -393,9 +393,9 @@ window.ProtecPersonnel = {
       fatiguePerHour *= 1.5;
     }
 
-    // 2. Bonus intempéries (canicule, orage violent, pluie battante, grand froid, neige) : +50%
+    // 2. Bonus intempéries (canicule, orage violent, pluie battante, pluie & vent, grand froid, neige) : +50%
     const cond = weather?.condition || window.game?.weather?.condition || 'ensoleille';
-    const isBadWeather = ['canicule', 'pluie_battante', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
+    const isBadWeather = ['canicule', 'pluie_battante', 'pluie_vent', 'pluie', 'vent_fort', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
     if (isBadWeather) {
       fatiguePerHour *= 1.5;
     }

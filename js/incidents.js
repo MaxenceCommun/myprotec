@@ -602,8 +602,8 @@ window.ProtecIncidents = {
       }
     }
 
-    // Détection météo pluie battante / orage
-    if (!incidentData && game.weather && ['storm', 'rain', 'pluie_battante', 'orage_violent'].includes(game.weather.condition)) {
+    // Détection météo pluie battante / orage / intempéries
+    if (!incidentData && game.weather && ['storm', 'rain', 'pluie_battante', 'pluie_vent', 'pluie', 'orage_violent'].includes(game.weather.condition)) {
       if (Math.random() < 0.55) {
         incidentData = catalog.find(inc => inc.id === 'intemperies_glissade_trauma');
       }

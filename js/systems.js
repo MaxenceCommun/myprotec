@@ -2130,7 +2130,7 @@ window.ProtecSystems = {
     }
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat.toFixed(4)}&longitude=${coords.lng.toFixed(4)}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,temperature_2m_max,temperature_2m_min&timezone=Europe%2FParis`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords.lat.toFixed(4)}&longitude=${coords.lng.toFixed(4)}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,wind_gusts_10m,precipitation,rain,showers&hourly=precipitation,weather_code&daily=weather_code,precipitation_sum,wind_speed_10m_max,wind_gusts_10m_max,temperature_2m_max,temperature_2m_min&timezone=Europe%2FParis`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -2141,11 +2141,17 @@ window.ProtecSystems = {
         game.weather.temp = current.temperature_2m;
         game.weather.windSpeed = current.wind_speed_10m || 0;
         game.weather.windGusts = current.wind_gusts_10m || current.wind_speed_10m || 0;
-        game.weather.precipitation = current.precipitation || 0;
         game.weather.humidity = current.relative_humidity_2m || 60;
         game.weather.weatherCode = current.weather_code;
         game.weather.locationName = coords.name;
         game.weather.lastFetchTimestamp = now;
+
+        // Précipitations : agrégation current + hourly + contrôle de cohérence
+        let precip = Math.max(
+          Number(current.precipitation) || 0,
+          Number(current.rain) || 0,
+          Number(current.showers) || 0
+        );
 
         // Données journalières (cumul de pluie du jour, rafales maximales)
         if (data.daily) {
@@ -2153,6 +2159,36 @@ window.ProtecSystems = {
           game.weather.dailyWindGustsMax = (Array.isArray(data.daily.wind_gusts_10m_max) && data.daily.wind_gusts_10m_max[0] != null) ? data.daily.wind_gusts_10m_max[0] : (game.weather.windGusts || 0);
           game.weather.dailyWeatherCode = (Array.isArray(data.daily.weather_code) && data.daily.weather_code[0] != null) ? data.daily.weather_code[0] : current.weather_code;
         }
+
+        // Vérification heure courante dans hourly si précipitation current est nulle
+        if (precip <= 0.1 && data.hourly && Array.isArray(data.hourly.precipitation)) {
+          const curHour = new Date().getHours();
+          const hPrecip = Number(data.hourly.precipitation[curHour]) || 0;
+          if (hPrecip > 0) precip = Math.max(precip, hPrecip);
+        }
+
+        // Cohérence météo : si cumul journalier très élevé ou code météo pluvieux avec forte humidité
+        // mais que le modèle numérique instantané affiche 0.0 (décalage de pas horaire),
+        // assigner une intensité réaliste continue au lieu d'un 0.0 mm/h incohérent
+        const dailyPrecip = game.weather.dailyPrecipitation || 0;
+        const humidity = game.weather.humidity || 60;
+        const wCode = current.weather_code || 0;
+        const isRainCode = [51, 53, 55, 61, 63, 65, 80, 81, 82].includes(wCode);
+
+        if (precip <= 0.1 && (dailyPrecip >= 15 || isRainCode) && humidity >= 70) {
+          if (isRainCode) {
+            if ([65, 82].includes(wCode)) precip = 6.5;
+            else if ([63, 81].includes(wCode)) precip = 3.5;
+            else if ([61, 80].includes(wCode)) precip = 2.0;
+            else precip = 0.8;
+          } else if (dailyPrecip >= 45) {
+            precip = 3.6; // Épisode pluvieux majeur actif (ex: 53.2 mm)
+          } else if (dailyPrecip >= 20) {
+            precip = 2.2;
+          }
+        }
+
+        game.weather.precipitation = Number(precip.toFixed(1));
 
         // Détection du phénomène et de la vigilance Météo-France correspondante
         this.interpretMeteoFranceVigilance(game);
@@ -2206,13 +2242,13 @@ window.ProtecSystems = {
     const hasSevereStorm = [95, 96, 99].includes(code) || (precip >= 12 && maxWind >= 60);
     const hasModerateStorm = [95].includes(code) || (precip >= 5 && maxWind >= 45);
 
-    const hasExtremeRain = precip >= 25 || dailyPrecip >= 80;
-    const hasSevereRain = [65, 82].includes(code) || precip >= 7 || dailyPrecip >= 40;
-    // Seuil Jaune Pluie : cumul journalier >= 15 mm OU précip instantanée >= 1.5 mm/h OU code météo pluvieux
-    const hasModerateRain = [53, 55, 61, 63, 65, 80, 81, 82].includes(code) || precip >= 1.5 || dailyPrecip >= 15;
+    const hasExtremeRain = precip >= 25 || dailyPrecip >= 110;
+    const hasSevereRain = (precip >= 12 || dailyPrecip >= 75 || ([65, 82].includes(code) && precip >= 8));
+    // Seuil Jaune Pluie : cumul journalier >= 15 mm OU précip instantanée >= 1.0 mm/h OU code météo pluvieux
+    const hasModerateRain = [53, 55, 61, 63, 65, 80, 81, 82].includes(code) || precip >= 1.0 || dailyPrecip >= 15;
 
-    const hasExtremeWind = maxWind >= 100;
-    const hasSevereWind = maxWind >= 75;
+    const hasExtremeWind = maxWind >= 115;
+    const hasSevereWind = maxWind >= 85;
     // Seuil Jaune Vent : rafales actuelles >= 40 km/h OU rafales maximales journalières >= 48 km/h
     const hasModerateWind = curWind >= 40 || maxWind >= 48;
 
@@ -2235,7 +2271,7 @@ window.ProtecSystems = {
       if (hasSevereCold) { condition = 'grand_froid'; phenomenon = 'grand_froid'; activePhenomena.push('Grand Froid'); }
       if (hasSevereSnow) { condition = 'neige'; phenomenon = 'neige'; activePhenomena.push('Neige-verglas'); }
       if (hasSevereWind) { condition = 'orage_violent'; phenomenon = 'vent'; activePhenomena.push('Vent violent'); }
-      if (hasSevereRain) { condition = 'pluie_battante'; phenomenon = 'inondation'; activePhenomena.push('Pluie-inondation'); }
+      if (hasSevereRain) { condition = (activePhenomena.includes('Vent violent') || maxWind >= 55) ? 'pluie_vent' : 'pluie_battante'; phenomenon = 'inondation'; activePhenomena.push('Pluie-inondation'); }
       if (hasSevereStorm) { condition = 'orage_violent'; phenomenon = 'inondation'; activePhenomena.push('Orages violents'); }
 
       alertTitle = `Vigilance Orange - ${activePhenomena.join(' & ')}`;
@@ -2245,12 +2281,12 @@ window.ProtecSystems = {
     else if (hasModerateHeat || hasModerateCold || hasModerateSnow || hasModerateStorm || hasModerateRain || hasModerateWind) {
       vigilance = 'yellow';
       if (hasModerateWind) {
-        condition = 'pluie_battante';
+        condition = 'vent_fort';
         phenomenon = 'vent';
         activePhenomena.push('Vent');
       }
       if (hasModerateRain) {
-        condition = 'pluie_battante';
+        condition = activePhenomena.includes('Vent') ? 'pluie_vent' : (precip >= 5 ? 'pluie_battante' : 'pluie');
         phenomenon = phenomenon === 'vent' ? 'pluie_vent' : 'inondation';
         activePhenomena.push('Pluie-inondation');
       }
@@ -2509,12 +2545,13 @@ updateWeatherAndDayNight(game) {
     if (tempEl) tempEl.textContent = `${currentTemp}°C`;
 
     if (iconEl) {
-      if (game.weather.condition === 'heat') iconEl.textContent = '🔥';
+      if (game.weather.condition === 'heat' || game.weather.condition === 'canicule') iconEl.textContent = '🔥';
       else if (game.weather.condition === 'flood') iconEl.textContent = '🌊';
-      else if (game.weather.condition === 'storm') iconEl.textContent = '⚡';
-      else if (game.weather.condition === 'wind') iconEl.textContent = '💨';
-      else if (game.weather.condition === 'snow') iconEl.textContent = '❄️';
-      else if (game.weather.condition === 'rain') iconEl.textContent = '🌧️';
+      else if (game.weather.condition === 'storm' || game.weather.condition === 'orage_violent') iconEl.textContent = '⚡';
+      else if (game.weather.condition === 'wind' || game.weather.condition === 'vent_fort') iconEl.textContent = '💨';
+      else if (game.weather.condition === 'snow' || game.weather.condition === 'neige') iconEl.textContent = '❄️';
+      else if (game.weather.condition === 'pluie_vent') iconEl.textContent = '🌧️';
+      else if (game.weather.condition === 'rain' || game.weather.condition === 'pluie' || game.weather.condition === 'pluie_battante') iconEl.textContent = '🌧️';
       else if (game.weather.condition === 'fog') iconEl.textContent = '🌫️';
       else if (game.weather.condition === 'cloud') iconEl.textContent = '⛅';
       else iconEl.textContent = cycle.periodIcon;
@@ -2541,7 +2578,10 @@ updateWeatherAndDayNight(game) {
       else if (game.weather.condition === 'grand_froid') textEl.textContent = 'Grand Froid ❄️';
       else if (game.weather.condition === 'neige') textEl.textContent = 'Neige/Verglas 🌨️';
       else if (game.weather.condition === 'orage_violent') textEl.textContent = 'Orage Violent ⚡';
+      else if (game.weather.condition === 'pluie_vent') textEl.textContent = 'Pluie & Vent 🌧️💨';
       else if (game.weather.condition === 'pluie_battante') textEl.textContent = 'Pluie Battante 🌧️';
+      else if (game.weather.condition === 'pluie') textEl.textContent = 'Pluie Soutenue 🌧️';
+      else if (game.weather.condition === 'vent_fort') textEl.textContent = 'Vent Fort 💨';
       else if (game.weather.condition === 'ensoleille') textEl.textContent = 'Ensoleillé ☀️';
       else textEl.textContent = cycle.periodLabel;
     }
@@ -2566,7 +2606,7 @@ updateWeatherAndDayNight(game) {
     game._lastShelterWeatherCheck = now;
 
     const cond = game.weather.condition || 'ensoleille';
-    const isBadWeather = ['canicule', 'pluie_battante', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
+    const isBadWeather = ['canicule', 'pluie_battante', 'pluie_vent', 'pluie', 'vent_fort', 'orage_violent', 'grand_froid', 'neige', 'heat', 'storm', 'rain', 'snow'].includes(cond);
     if (!isBadWeather) return;
 
     const station = game.stations[0];
