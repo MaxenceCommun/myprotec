@@ -262,6 +262,7 @@ window.ProtecNotifications = {
       crise: 'sound_notif',
       samu: 'sound_notif',
       sdis: 'sound_notif',
+      astreinte: 'sound_notif',
       dps: 'sound_notif',
       rh: 'sound_notif',
       weather: 'sound_notif'
@@ -270,6 +271,7 @@ window.ProtecNotifications = {
       crise: 90,
       samu: 85,
       sdis: 80,
+      astreinte: 85,
       dps: 70,
       rh: 70,
       weather: 80
@@ -278,6 +280,7 @@ window.ProtecNotifications = {
       crise: 'alerte_crise.mp3',
       samu: 'attention.mp3',
       sdis: 'attention.mp3',
+      astreinte: 'attention.mp3',
       dps: 'info.mp3',
       rh: 'notif.mp3',
       weather: 'attention.mp3'
@@ -318,6 +321,12 @@ window.ProtecNotifications = {
       label: 'Gardes & Renforts SDIS',
       icon: '🚒',
       desc: 'Astreintes caserne et renforts Sapeurs-Pompiers'
+    },
+    {
+      id: 'astreinte',
+      label: 'Début d\'Astreinte & Prise de Garde',
+      icon: '⏰',
+      desc: 'Sonnerie et notification au démarrage des créneaux d\'astreinte et de garde'
     },
     {
       id: 'dps',
@@ -368,6 +377,7 @@ window.ProtecNotifications = {
       crise: 'alerte_crise.mp3',
       samu: 'attention.mp3',
       sdis: 'attention.mp3',
+      astreinte: 'attention.mp3',
       dps: 'info.mp3',
       rh: 'notif.mp3',
       weather: 'attention.mp3'

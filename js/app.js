@@ -31636,6 +31636,54 @@ class ProtecGame {
     }
   }
 
+  // --- DÉTECTION ET DÉCLENCHEMENT DE L'ALERTE DE DÉBUT D'ASTREINTE ---
+  checkAstreinteStartAlerts() {
+    if (!Array.isArray(this.missions)) return;
+    const curHour = this.clock?.hour !== undefined ? this.clock.hour : new Date().getHours();
+    const curMinute = this.clock?.minute !== undefined ? this.clock.minute : new Date().getMinutes();
+    const curDay = this.clock?.day || 1;
+    const curMonth = this.clock?.month !== undefined ? this.clock.month : 0;
+    const curYear = this.clock?.year || 2026;
+
+    // 1. Surveillance des créneaux de garde SAMU et SDIS planifiés
+    this.missions.forEach(m => {
+      if (m.type !== 'garde_samu' && m.type !== 'samu' && m.type !== 'pompiers' && m.type !== 'astreinte') return;
+      const ed = m.eventDate;
+      if (!ed) return;
+
+      const isSameDate = (ed.year === curYear && ed.month === curMonth && ed.day === curDay);
+      const isStartHour = (ed.hour === curHour);
+
+      // Si le créneau commence à cette heure et qu'aucune alerte n'a été émise pour cette mission
+      if (isSameDate && isStartHour && !m._astreinteAlertTriggered) {
+        m._astreinteAlertTriggered = true;
+        const slotLabel = m.slotId === 'nuit' ? 'de Nuit' : (m.slotId === 'jour' ? 'de Jour' : 'Opérationnelle');
+        const entityLabel = m.type === 'pompiers' ? 'SDIS (Pompiers)' : 'SAMU 15';
+        const crewCount = (m.registeredVolunteers || []).length;
+        const vehName = m.assignedCrew?.vehicles?.[0]?.name || (m.type === 'pompiers' ? 'Fourgon / VPSP' : 'Ambulance VPSP');
+
+        this.showToast(
+          '⏰ Début d’Astreinte : Prise de Garde Active',
+          `Vacation ${slotLabel} débutée pour le ${entityLabel}. Équipage mobilisé (${crewCount} secouriste(s), ${vehName}) prêt aux interventions.`,
+          'blue',
+          { type: 'astreinte', id: m.id }
+        );
+      }
+    });
+
+    // 2. Détection pour la garde SAMU active en cours si mode astreinte domicile
+    if (this.samuGarde && this.samuGarde.active && !this.samuGarde._startAlertFired) {
+      this.samuGarde._startAlertFired = true;
+      const modeLabel = this.samuGarde.mode === 'poste' ? 'en Caserne (Base)' : 'à Domicile (Astreinte)';
+      this.showToast(
+        '⏰ Début d’Astreinte : Garde SAMU 15 Active',
+        `Prise de garde active (${modeLabel}). Équipage VPSP en posture d’astreinte prêt pour les départs réflexes.`,
+        'blue',
+        { type: 'astreinte', id: 'samu_garde' }
+      );
+    }
+  }
+
   // --- GESTION DES REPAS EN MISSION & NOTES DE FRAIS (12h00 & 19h00) ---
   processMissionMeals(mealHour) {
     if (![12, 19].includes(mealHour)) return;
@@ -32509,6 +32557,9 @@ class ProtecGame {
       if (window.ProtecGardesSamu && typeof window.ProtecGardesSamu.syncPlanningGuards === 'function') {
         window.ProtecGardesSamu.syncPlanningGuards(this);
       }
+
+      // 1b-quint. DÉTECTION ET ALERTE DE DÉBUT D'ASTREINTE & PRISE DE GARDE
+      this.checkAstreinteStartAlerts();
 
       // 1c. GESTION DES PRÉALERTES ÉVOLUTIVES (Veille Opérationnelle AASC)
       this.missions.forEach(m => {
@@ -33750,7 +33801,7 @@ class ProtecGame {
     vpsp.status = 'samu_garde';
     team.forEach(v => { v.status = 'samu_garde'; });
 
-    this.showToast('Garde SAMU 15 Armée !', `Ambulance ${vpsp.name} et ${team.length} secouristes mis à disposition de la régulation départementale 15 (${this.samuGarde.mode === 'poste' ? 'Départ Auto' : 'Astreinte Manuel'}).`, 'green');
+    this.showToast('⏰ Début d’Astreinte : Garde SAMU 15 Armée', `Prise de garde active (${this.samuGarde.mode === 'poste' ? 'Départ Auto Caserne' : 'Astreinte Domicile'}). Ambulance ${vpsp.name} et ${team.length} secouristes prêts aux départs réflexes.`, 'blue', { type: 'astreinte', id: 'samu_garde' });
     this.saveGame();
     this.updateStatsUI();
     this.openModule('samu');
@@ -33902,7 +33953,12 @@ class ProtecGame {
       logInterventions: []
     };
 
-    this.showToast('Dispositif SDIS Armé !', `VPSP en caserne pompiers (${caserneCrew.length} secouristes) + Astreinte domicile (${astreinteCrew.length} secouristes) activées.`, 'green');
+    this.showToast(
+      '⏰ Début d’Astreinte : Prise de Garde SDIS',
+      `Dispositif armé pour ${selEvent.durationHours || 6}h (${caserneCrew.length} en caserne pompiers + ${astreinteCrew.length} en astreinte domicile). Équipage et VPSP ${vpsp.name} prêts aux départs réflexes.`,
+      'red',
+      { type: 'astreinte', id: 'sdis_garde' }
+    );
     this.saveGame();
     this.updateStatsUI();
     this.openModule('pompiers');
@@ -35119,8 +35175,10 @@ class ProtecGame {
       opCategory = 'crise';
     } else if (t.includes('samu') || m.includes('samu') || t.includes('départ réflexe') || t.includes('depart reflexe') || m.includes('départ réflexe') || m.includes('depart reflexe') || target?.type === 'samu' || target?.isSamu) {
       opCategory = 'samu';
-    } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || t.includes('garde') || m.includes('garde') || target?.type === 'pompiers' || target?.type === 'sdis' || target?.isSdis) {
+    } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || target?.type === 'pompiers' || target?.type === 'sdis' || target?.isSdis) {
       opCategory = 'sdis';
+    } else if (t.includes('astreinte') || m.includes('astreinte') || t.includes('prise de garde') || m.includes('prise de garde') || target?.type === 'astreinte') {
+      opCategory = 'astreinte';
     } else if (t.includes('dps') || m.includes('dps') || t.includes('devis') || m.includes('devis') || target?.type === 'dps' || target?.type === 'devis') {
       opCategory = 'dps';
     } else if (t.includes('candidature') || m.includes('candidature') || t.includes('recrutement') || m.includes('recrutement') || t.includes('bénévole') || m.includes('benevole') || target?.type === 'rh' || target?.type === 'personnel') {

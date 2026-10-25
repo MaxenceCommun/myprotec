@@ -337,6 +337,8 @@ window.ProtecAudio = {
         matchedCategory = 'samu';
       } else if (t.includes('sdis') || m.includes('sdis') || t.includes('pompier') || m.includes('pompier') || target?.type === 'pompiers') {
         matchedCategory = 'sdis';
+      } else if (t.includes('astreinte') || m.includes('astreinte') || t.includes('prise de garde') || m.includes('prise de garde') || target?.type === 'astreinte') {
+        matchedCategory = 'astreinte';
       } else if (t.includes('dps') || m.includes('dps') || t.includes('devis') || m.includes('devis') || target?.type === 'devis' || target?.type === 'dps') {
         matchedCategory = 'dps';
       } else if (t.includes('candidature') || m.includes('candidature') || t.includes('recrutement') || m.includes('recrutement') || target?.type === 'rh') {
