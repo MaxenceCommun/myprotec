@@ -4079,7 +4079,143 @@ class ProtecGame {
     return false;
   }
 
+  // Synchronise les devis prévisionnels dans this.missions pour affichage carte & gestion opérationnelle
+  syncPrevisionnelMissions() {
+    if (!Array.isArray(this.devis)) return;
+    if (!Array.isArray(this.missions)) this.missions = [];
+
+    // 1. Lister tous les devis actifs en statut 'previsionnel'
+    const previDevis = this.devis.filter(d => d && d.status === 'previsionnel');
+    const previDevisIds = new Set(previDevis.map(d => String(d.id)));
+
+    // 2. Nettoyer dans this.missions les missions prévi qui ne sont plus prévisionnelles
+    this.missions = this.missions.filter(m => {
+      if (m && (m.isPrevisionnel || m.status === 'previsionnel')) {
+        return previDevisIds.has(String(m.devisId || m.id));
+      }
+      return true;
+    });
+
+    // 3. Injecter ou mettre à jour chaque devis prévisionnel dans this.missions
+    previDevis.forEach(d => {
+      const existing = this.missions.find(m => String(m.id) === String(d.id) || String(m.devisId) === String(d.id));
+      const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
+      const regVols = Array.isArray(d.previsionnelVolunteers) ? d.previsionnelVolunteers : [];
+      const vehsReq = (d.configuredVehicles !== undefined && d.configuredVehicles.length > 0) 
+        ? d.configuredVehicles 
+        : (d.requiredVehicles && d.requiredVehicles.length > 0 ? d.requiredVehicles : ['VPSP']);
+
+      if (existing) {
+        existing.isPrevisionnel = true;
+        existing.status = 'previsionnel';
+        existing.title = d.eventName || 'Dispositif DPS (Prévisionnel)';
+        existing.requiredVolunteers = reqVols;
+        existing.registeredVolunteers = regVols;
+        existing.requiredVehicles = vehsReq;
+        existing.riskRate = d.riskRate || 20;
+        existing.previsionnelResponses = d.previsionnelResponses || {};
+        existing.scale = d.configuredScale || d.scale || 'DPS-PE';
+        existing.eventDate = d.eventDate;
+        existing.lat = d.lat;
+        existing.lng = d.lng;
+        existing.address = d.address || d.locationAddress || existing.address;
+      } else {
+        const previMission = {
+          id: d.id,
+          devisId: d.id,
+          isPrevisionnel: true,
+          status: 'previsionnel',
+          type: 'dps',
+          categoryLabel: 'DPS - Dispositif en Prévisionnel',
+          title: d.eventName || 'Dispositif DPS (Prévisionnel)',
+          desc: d.desc || `Dispositif prévisionnel sous réserve de validation de convention. Public : ${d.publicCount || 'Standard'}.`,
+          scale: d.configuredScale || d.scale || 'DPS-PE',
+          eventDate: d.eventDate,
+          durationHours: d.durationHours || 4,
+          lat: d.lat,
+          lng: d.lng,
+          address: d.address || d.locationAddress || 'Secteur Opérationnel',
+          requiredVolunteers: reqVols,
+          registeredVolunteers: regVols,
+          requiredVehicles: vehsReq,
+          assignedVehicleIds: [],
+          configuredLots: [...(d.configuredLots || [])],
+          configuredLotCounts: { ...(d.configuredLotCounts || {}) },
+          rewardMoney: d.proposedPrice || d.clientBudget || 0,
+          clientName: d.clientName,
+          riskRate: d.riskRate || 20,
+          previsionnelResponses: d.previsionnelResponses || {},
+          previsionnelStartedAt: d.previsionnelStartedAt || Date.now(),
+          mealsProvidedByOrganizer: d.mealsProvidedByOrganizer !== undefined ? d.mealsProvidedByOrganizer : true
+        };
+        this.missions.push(previMission);
+      }
+    });
+  }
+
+  // Annule un DPS prévisionnel, le retire des missions et alerte les responsables du réseau
+  cancelPrevisionnelDPS(devisId, reason = "Option annulée par le responsable d'antenne") {
+    const devis = (this.devis || []).find(d => String(d.id) === String(devisId));
+    const missionName = devis ? (devis.eventName || devis.title || 'DPS') : 'Dispositif';
+
+    if (devis) {
+      devis.status = devis.status === 'lost_option' ? 'lost_option' : 'declined';
+      devis.cancelledAt = Date.now();
+      devis.cancelReason = reason;
+    }
+
+    // 1. Retrait de this.missions
+    this.missions = (this.missions || []).filter(m => !(m && (String(m.id) === String(devisId) || String(m.devisId) === String(devisId))));
+
+    // 2. Fermeture tiroir si ouvert
+    if (this.selectedMissionId === devisId) {
+      this.closeDrawer();
+    }
+
+    // 3. Annulation et libération des renforts associés
+    let cancelledRenfortsCount = 0;
+    if (Array.isArray(this.renforts)) {
+      this.renforts.forEach(r => {
+        if (String(r.missionId) === String(devisId) || String(r.sourceDevisId) === String(devisId)) {
+          r.status = 'cancelled';
+          r.cancelReason = reason;
+          r.title = (r.title || '').replace(/\[PRÉVISIONNEL\]/gi, '[ANNULÉ]');
+          if (!r.title.includes('[ANNULÉ]')) {
+            r.title = `[ANNULÉ] ${r.title}`;
+          }
+          cancelledRenfortsCount++;
+        }
+      });
+    }
+
+    // 4. Alertes aux responsables
+    this.showToast('❌ DPS Prévisionnel Annulé', `Le DPS « ${missionName} » a été retiré des missions. Motif : ${reason}.`, 'orange');
+    if (cancelledRenfortsCount > 0) {
+      this.showToast('📢 Responsables Partenaires Avertis', `Alerte réseau transmise : le DPS « ${missionName} » ayant été annulé, tous les moyens partenaires sollicités sont libérés.`, 'slate');
+    }
+
+    if (window.ProtecNotifications) {
+      window.ProtecNotifications.recordNotification({
+        title: '❌ DPS Prévisionnel Annulé',
+        message: `« ${missionName} » a été retiré des missions (${reason}). Les antennes alliées et bénévoles sollicités ont été immédiatement libérés.`,
+        category: 'dps',
+        level: 'warning'
+      });
+    }
+
+    this.saveGame();
+    this.renderMissions();
+    this.updateStatsUI();
+    if (this.currentModalKey === 'devis') {
+      this.openModule('devis', true);
+    } else if (this.currentModalKey === 'planning') {
+      this.openModule('planning', true);
+    }
+  }
+
   renderMissions() {
+    this.syncPrevisionnelMissions();
+
     // Initialisation paresseuse du groupe de clustering de marqueurs Leaflet
     if (!this.missionsClusterGroup && typeof L !== 'undefined' && typeof L.markerClusterGroup === 'function') {
       try {
@@ -4221,10 +4357,17 @@ class ProtecGame {
       let pingClass = 'radar-ping-blue';
       let badgeHtml = '';
 
+      const isPrevisionnel = Boolean(mission.isPrevisionnel || mission.status === 'previsionnel');
       const isPrealerte = mission.status === 'prealerte' || mission.isPreAlert;
       const isAlerte = mission.status === 'declenche' || mission.status === 'alerte' || mission.isAlert;
 
-      if (isPrealerte) {
+      if (isPrevisionnel) {
+        // Dispositif en prévisionnel : repère ambre avec onde radar et badge PRÉVI
+        colorClass = 'bg-amber-500 border-2 border-dashed border-amber-200';
+        pingClass = 'radar-ping-orange';
+        badgeHtml = `<span class="badge-counter bg-amber-600 text-white font-black text-[9px] animate-pulse">PRÉVI</span>`;
+        iconName = 'clipboard-list';
+      } else if (isPrealerte) {
         // Préalerte : point orange et onde radar orange
         colorClass = 'bg-amber-500';
         pingClass = 'radar-ping-orange';
@@ -4292,9 +4435,11 @@ class ProtecGame {
 
       marker.on('click', handleMissionClick);
 
-      const tooltipText = (mission.type === 'social' || mission.isSector)
-        ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
-        : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`;
+      const tooltipText = isPrevisionnel
+        ? `<b>⏳ [PRÉVISIONNEL] ${mission.title}</b><br/><span style="color:#b45309; font-weight:700;">Option en cours • Risque perte : ${Math.round((mission.riskRate || 0.20)*100)}%</span><br/><span>📍 ${mission.address || 'Point cartographique'} • ${(mission.registeredVolunteers || []).length}/${mission.requiredVolunteers || 4} sondés</span><br/><span style="color:#4f46e5; font-size:10px; font-weight:700;">👉 Cliquez pour gérer l'option / renforts</span>`
+        : ((mission.type === 'social' || mission.isSector)
+          ? `<b>${mission.title}</b><br/><span style="color:#7c3aed;">🗺️ ${mission.sector || mission.address || 'Secteur de Maraude'}</span>`
+          : `<b>${mission.title}</b><br/><span>📍 ${mission.address || 'Point cartographique'}</span>`);
       marker.bindTooltip(tooltipText, { direction: 'top', offset: [0, -15] });
 
       if (this.missionsClusterGroup) {
@@ -8764,29 +8909,7 @@ class ProtecGame {
 
   // Refuser une demande de devis organisateur (retrait propre du planning sans pénalité)
   refuseDevis(devisId) {
-    const devis = this.devis.find(d => d.id === devisId);
-    if (!devis) return;
-
-    devis.status = 'declined';
-    devis.declinedAt = Date.now();
-    this.showToast('Devis Décliné ❌', `Vous avez refusé la prise en charge de « ${devis.eventName} ». L'organisateur a été notifié de votre indisponibilité.`, 'slate');
-
-    if (window.ProtecNotifications) {
-      window.ProtecNotifications.recordNotification({
-        title: '❌ Devis Décliné',
-        message: `Vous avez décliné la demande pour « ${devis.eventName} ». Le créneau a été libéré sur votre planning opérationnel.`,
-        category: 'dps',
-        level: 'info'
-      });
-    }
-
-    this.saveGame();
-    this.updateStatsUI();
-    if (this.currentModalKey === 'devis') {
-      this.openModule('devis', true);
-    } else if (this.currentModalKey === 'planning') {
-      this.openModule('planning', true);
-    }
+    this.cancelPrevisionnelDPS(devisId, "Demande déclinée par le responsable d'antenne");
   }
 
   // Mettre un devis en Prévisionnel (Option réservée : le joueur bloque la date et sonde ses bénévoles avant de signer)
@@ -9149,24 +9272,10 @@ class ProtecGame {
       const currentRisk = Math.min(65, (devis.riskRate || 20));
       const hasLostOption = (Math.random() * 100) < currentRisk;
       if (hasLostOption) {
-        devis.status = 'lost_option';
-        devis.lostReason = "L'organisateur ne pouvait plus attendre et a signé avec une association concurrente disponible immédiatement.";
-        this.showToast(
-          'Option Perdue ! ❌',
-          `Trop tard ! L'organisateur de « ${devis.eventName} » a retenu l'offre ferme d'une autre association pendant votre période de prévisionnel.`,
-          'red'
+        this.cancelPrevisionnelDPS(
+          devis.id,
+          "L'organisateur ne pouvait plus attendre et a signé avec une association concurrente disponible immédiatement"
         );
-        if (window.ProtecNotifications) {
-          window.ProtecNotifications.recordNotification({
-            title: '❌ Option Perdue au Prévisionnel',
-            message: `L'organisateur de « ${devis.eventName} » a contracté avec un concurrent face au délai d'attente.`,
-            category: 'dps',
-            level: 'danger'
-          });
-        }
-        this.saveGame();
-        this.updateStatsUI();
-        this.openModule('devis', true);
         return;
       }
     }
@@ -9468,22 +9577,41 @@ class ProtecGame {
       isSector: false
     };
 
+    // Retrait de l'ancienne version prévisionnelle dans this.missions
+    this.missions = (this.missions || []).filter(m => !(m && (m.id === devis.id || m.devisId === devis.id) && (m.isPrevisionnel || m.status === 'previsionnel')));
+
     newMission.sourceDevisId = devis.id;
+    let renfortsUpdatedCount = 0;
     if (Array.isArray(this.renforts)) {
       this.renforts.forEach(r => {
-        if (String(r.missionId) === String(devis.id)) {
+        if (String(r.missionId) === String(devis.id) || String(r.sourceDevisId) === String(devis.id)) {
           r.missionId = newMission.id;
+          r.sourceDevisId = devis.id;
           r.missionTitle = newMission.title;
+          r.isConfirmed = true;
+          r.statusLabel = 'CONFIRMÉ';
+          r.title = (r.title || '').replace(/\[PRÉVISIONNEL\]/gi, '[CONFIRMÉ]').replace(/\[PRÉVI\]/gi, '[CONFIRMÉ]');
+          if (!r.title.includes('[CONFIRMÉ]')) {
+            r.title = `[CONFIRMÉ] ${r.title}`;
+          }
+          renfortsUpdatedCount++;
         }
       });
     }
 
-    // Information diffusée au planning : les bénévoles s'inscriront au fil de l'eau
+    // Information diffusée au planning et alertes aux responsables que le DPS est confirmé
     this.showToast(
-      'DPS Publié au Planning 📋',
-      `« ${newMission.title} » est désormais planifié. L'information se diffuse auprès des bénévoles disponibles.`,
-      'blue'
+      '✅ DPS Confirmé & Planifié !',
+      `« ${newMission.title} » est officiellement validé ! La convention est signée. Le statut [PRÉVISIONNEL] a été retiré.`,
+      'green'
     );
+    if (renfortsUpdatedCount > 0) {
+      this.showToast(
+        '📢 Responsables Partenaires Alertés',
+        `Les directeurs alliés engagés en renfort ont été notifiés que « ${newMission.title} » est désormais confirmé ferme.`,
+        'blue'
+      );
+    }
 
     this.enrichMissionLocationWithCity(newMission);
     const curDay = (this.clock && this.clock.year) ? `${this.clock.year}-${this.clock.month}-${this.clock.day}` : new Date().toISOString().slice(0, 10);
@@ -17596,6 +17724,13 @@ class ProtecGame {
 
       let mission = this.missions.find(m => m.id === missionId);
       if (!mission) {
+        const devisMatch = (this.devis || []).find(d => String(d.id) === String(missionId));
+        if (devisMatch) {
+          this.syncPrevisionnelMissions();
+          mission = this.missions.find(m => String(m.id) === String(missionId) || String(m.devisId) === String(missionId));
+        }
+      }
+      if (!mission) {
         // Fallback de recherche dans communityEvents et renforts
         const commEvt = (this.communityEvents || []).find(e => e.id === missionId);
         if (commEvt) {
@@ -17654,8 +17789,12 @@ class ProtecGame {
       const isAlreadyOpen = !drawer.classList.contains('hidden');
       const savedScrollTop = (isAlreadyOpen && body) ? body.scrollTop : 0;
 
-      catBadge.textContent = mission.categoryLabel || 'MISSION';
-      title.textContent = mission.title || 'Dispositif de Secours';
+      const isPrevi = Boolean(mission.isPrevisionnel || mission.status === 'previsionnel');
+      catBadge.textContent = isPrevi ? 'OPTION PRÉVISIONNELLE' : (mission.categoryLabel || 'MISSION');
+      if (isPrevi) {
+        catBadge.className = 'text-[10px] uppercase font-black px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300';
+      }
+      title.textContent = (isPrevi && !mission.title.includes('PRÉVI') ? '⏳ [PRÉVISIONNEL] ' : '') + (mission.title || 'Dispositif de Secours');
       headerIcon.setAttribute('data-lucide', 'calendar');
       this.updateDrawerPinButton(mission.id);
 
@@ -17923,6 +18062,29 @@ class ProtecGame {
 
     body.innerHTML = `
       <div class="space-y-3">
+        <!-- ENCART DISPOSITIF EN PRÉVISIONNEL (OPTION NON FERME) -->
+        ${(mission.isPrevisionnel || mission.status === 'previsionnel') ? `
+          <div class="p-3.5 rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 text-amber-950 space-y-2 shadow-xs">
+            <div class="flex items-center justify-between">
+              <span class="px-2.5 py-0.5 rounded-md text-[10px] font-black bg-amber-500 text-white uppercase tracking-wider flex items-center gap-1">
+                <span>⏳</span> <span>Dispositif en Option Prévisionnelle</span>
+              </span>
+              <span class="text-xs font-black text-amber-900 bg-amber-200/60 px-2 py-0.5 rounded-md">
+                Risque concurrence : ${Math.round((mission.riskRate || 0.20)*100)}%
+              </span>
+            </div>
+            <p class="text-xs font-semibold leading-relaxed text-amber-900/90">
+              Ce poste de secours n'est pas encore confirmé par l'organisateur. Vous pouvez sonder la disponibilité de vos bénévoles et mobiliser des renforts du réseau pour vous assurer de couvrir le besoin (${mission.requiredVolunteers} secouristes requis).
+            </p>
+            <div class="flex items-center justify-between pt-1 border-t border-amber-200/80 text-[11px] font-bold">
+              <span>Sondage bénévoles : <strong>${(mission.registeredVolunteers || []).length} / ${mission.requiredVolunteers}</strong> disponibles</span>
+              <button onclick="window.game.requestAllianceRenfortForDevisPrevisionnel('${mission.devisId || mission.id}')" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-extrabold hover:bg-indigo-700 transition cursor-pointer flex items-center gap-1 text-[10px]">
+                <i data-lucide="users" class="w-3 h-3"></i> Demander Renfort
+              </button>
+            </div>
+          </div>
+        ` : ''}
+
         <!-- ENCART DEBUG ADMIN TÉLÉMÉTRIE -->
         ${this.getMissionDebugDataHTML(mission)}
 
@@ -20797,6 +20959,35 @@ class ProtecGame {
             `}
           `
         )}
+      `;
+    } else if (mission.isPrevisionnel || mission.status === 'previsionnel') {
+      footer.innerHTML = `
+        <div class="flex items-center gap-1.5 flex-wrap w-full justify-between">
+          <div class="flex items-center gap-1.5 flex-wrap">
+            <button onclick="window.game.closeDrawer()" class="px-3 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition whitespace-nowrap shrink-0">Fermer</button>
+            <button onclick="window.game.centerMapOnMission('${mission.id}')" class="px-2.5 py-2 rounded-xl text-xs font-black bg-slate-100 hover:bg-slate-200 text-slate-800 transition flex items-center justify-center gap-1" title="Centrer la carte sur la mission">
+              <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-700"></i>
+              <span>Carte</span>
+            </button>
+            <button onclick="window.game.sonderDisponibilitesPrevisionnel('${mission.devisId || mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-white hover:bg-slate-100 text-pc-blue border border-pc-blue/30 shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Sonder la disponibilité des bénévoles">
+              <i data-lucide="phone-call" class="w-3.5 h-3.5"></i>
+              <span>Sonder</span>
+            </button>
+            <button onclick="window.game.requestAllianceRenfortForDevisPrevisionnel('${mission.devisId || mission.id}')" class="px-3 py-2.5 rounded-xl text-xs font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Demander du renfort au réseau pour ce prévisionnel">
+              <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-600"></i>
+              <span>Renfort Réseau</span>
+            </button>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button onclick="window.game.submitCustomDevis('${mission.devisId || mission.id}')" class="px-3.5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-600 to-emerald-500 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer" title="Confirmer le dispositif et valider avec l'organisateur">
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+              <span>Confirmer & Signer</span>
+            </button>
+            <button onclick="window.game.cancelPrevisionnelDPS('${mission.devisId || mission.id}', 'Option annulée par le responsable')" class="px-2.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 border border-slate-200 transition cursor-pointer" title="Annuler l'Option">
+              ✕
+            </button>
+          </div>
+        </div>
       `;
     } else if (mission.status === 'ongoing') {
       footer.innerHTML = `
@@ -32259,19 +32450,7 @@ class ProtecGame {
             if (this.clock.second === 0 && d.previsionnelStartedAt && (currentTime - d.previsionnelStartedAt) > 120000) {
               const spontaneousLossProb = (d.riskRate / 100) * 0.005;
               if (Math.random() < spontaneousLossProb) {
-                d.status = 'lost_option';
-                d.lostReason = "Faute de confirmation ferme, l'organisateur a signé avec une association concurrente pour sécuriser son dispositif.";
-                this.showToast('Option Perdue ! ❌', `« ${d.eventName} » : L'organisateur a retenu un concurrent disponible immédiatement face à votre délai de réflexion en prévisionnel.`, 'orange');
-                if (window.ProtecNotifications) {
-                  window.ProtecNotifications.recordNotification({
-                    title: '❌ Option Prévisionnelle Perdue',
-                    message: `L'organisateur de « ${d.eventName} » a contracté avec une autre association de sécurité civile.`,
-                    category: 'dps',
-                    level: 'danger'
-                  });
-                }
-                this.updateStatsUI();
-                if (this.currentModalKey === 'devis') this.refreshCurrentModalIfSafe();
+                this.cancelPrevisionnelDPS(d.id, "Faute de confirmation ferme, l'organisateur a signé avec une association concurrente pour sécuriser son dispositif");
               }
             }
           }

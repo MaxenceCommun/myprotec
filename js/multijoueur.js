@@ -394,8 +394,9 @@ window.ProtecMultiplayer = {
             </div>
             <div>
               <h3 class="text-base sm:text-lg font-black text-slate-900 leading-tight">Demande de Renfort Opérationnel Personnalisée</h3>
-              <p class="text-xs text-slate-500 font-semibold leading-relaxed">
-                ${mission.title} • Date : ${game.formatShortDate(mission.eventDate)} • ${mission.address || mission.city || 'Secteur'}
+              <p class="text-xs text-slate-500 font-semibold leading-relaxed flex items-center gap-1.5 flex-wrap">
+                ${mission.isPrevisionnel ? '<span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-100 text-amber-900 border border-amber-300 uppercase">⏳ Option Prévisionnelle</span>' : ''}
+                <span class="font-extrabold text-slate-800">${mission.title}</span> • Date : ${game.formatShortDate(mission.eventDate)} • ${mission.address || mission.city || 'Secteur'}
               </p>
             </div>
           </div>
