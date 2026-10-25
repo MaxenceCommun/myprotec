@@ -9203,11 +9203,23 @@ class ProtecGame {
 
   // =========================================================================
   // SYSTÈME OFFICIEL DE RÉARMEMENT DES VÉHICULES VIA MISSIONS LOGISTIQUE
-  // Permet aux bénévoles de s'inscrire à l'atelier de réarmement au garage.
-  // Peut devenir 100% automatique si l'antenne dispose d'un Responsable Logistique en poste.
   // =========================================================================
 
+  openCreateRearmamentModal(targetVehicleId = null) {
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+      window.ProtecCriseLogistique.openCreateRearmamentModal(this, targetVehicleId);
+    }
+  }
+
   createRearmamentLogisticsMission(vehicleId, autoCreated = false, pole = null, forcePendingDelivery = false) {
+    // Si l'action est initiée manuellement par le joueur, ouvrir la modale officielle de paramétrage
+    if (!autoCreated) {
+      if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+        window.ProtecCriseLogistique.openCreateRearmamentModal(this, vehicleId);
+        return null;
+      }
+    }
+
     const veh = (this.vehicles || []).find(v => v.id === vehicleId);
     if (!veh) return null;
 
@@ -9317,17 +9329,8 @@ class ProtecGame {
     if (!Array.isArray(this.missions)) this.missions = [];
     this.missions.unshift(mission);
 
-    // Si créé automatiquement par le responsable logistique, on tente d'y pré-inscrire un bénévole disponible du pôle
-    if (autoCreated && pole) {
-      const poleMembers = (this.volunteers || []).filter(v => 
-        (v.status === 'dispo' || !v.status) &&
-        (v.poleId === pole.id || (Array.isArray(pole.memberIds) && pole.memberIds.includes(v.id)))
-      );
-      if (poleMembers.length > 0) {
-        mission.registeredVolunteers.push(poleMembers[0].id);
-        poleMembers[0].status = 'mission';
-      }
-    }
+    // Règle officielle du bénévolat : Aucun bénévole n'est forcé d'office. L'inscription reste volontaire.
+    mission.registeredVolunteers = [];
 
     this.renderMissions();
     this.updateStatsUI();
@@ -10359,6 +10362,16 @@ class ProtecGame {
 
     if (!currentMission) {
       // VÉRIFICATION STRICTE DE DISPONIBILITÉ BÉNÉVOLE :
+      // Sur les missions logistiques / ateliers de réarmement, l'engagement est strictement volontaire
+      if (targetMission.isRearmamentWorkshop || targetMission.type === 'rearmement') {
+        this.showToast(
+          'Engagement Bénévole Requis 🤝',
+          `Principe associatif de la Protection Civile : vous ne pouvez pas forcer un secouriste sur un atelier de réarmement. Veuillez le contacter par téléphone ("Appeler") ou par SMS de mobilisation pour recueillir son accord volontaire.`,
+          'orange'
+        );
+        return;
+      }
+
       // On ne peut jamais forcer un bénévole sans son accord ou s'il est indisponible !
       const isSalarie = (vol.contractType === 'salarie' || vol.contractType === 'CDI' || vol.contractType === 'CDD' || vol.isHiredSalarie === true || vol.dispoType === 'salarie_permanent');
       const evalResult = this.evaluateVolunteerAvailability(vol, targetMission.eventDate, targetMission);
@@ -13309,15 +13322,24 @@ class ProtecGame {
       targetIds.forEach(tId => {
         const targetVeh = (this.vehicles || []).find(v => v.id === tId);
         if (targetVeh) {
-          targetVeh.armementLevel = 100;
-          targetVeh.consumables = 100;
-          targetVeh.consumablesPercent = 100;
-          targetVeh.isRearmed = true;
-          targetVeh.needsRearming = false;
-          targetVeh.a_rearme = false;
-          targetVeh.warnedLowConsumables = false;
-          targetVeh.breachedConsumables = false;
-          targetVeh.lastRearmedAt = Date.now();
+          if (!mission.tasks || mission.tasks.consumables !== false) {
+            targetVeh.armementLevel = 100;
+            targetVeh.consumables = 100;
+            targetVeh.consumablesPercent = 100;
+            targetVeh.isRearmed = true;
+            targetVeh.needsRearming = false;
+            targetVeh.a_rearme = false;
+            targetVeh.warnedLowConsumables = false;
+            targetVeh.breachedConsumables = false;
+            targetVeh.lastRearmedAt = Date.now();
+          }
+          if (!mission.tasks || mission.tasks.disinfection !== false) {
+            targetVeh.disinfectionNeeded = false;
+            targetVeh.lastDisinfectedAt = Date.now();
+          }
+          if (!mission.tasks || mission.tasks.inventory !== false) {
+            targetVeh.lastInventoryAt = Date.now();
+          }
           if (targetVeh.status === 'a_rearme' || targetVeh.status === 'transit') {
             targetVeh.status = 'dispo';
           }
@@ -19187,7 +19209,11 @@ class ProtecGame {
                               <i data-lucide="phone" class="w-3 h-3 text-pc-blue"></i>
                               <span>Appeler</span>
                             </button>
-                            ${isAvailable ? `
+                            ${(mission.isRearmamentWorkshop || mission.type === 'rearmement') ? `
+                              <span class="px-2 py-1 rounded text-[9.5px] font-bold bg-amber-50 text-amber-800 border border-amber-200" title="Engagement bénévole : passez un appel direct ou lancez une mobilisation SMS pour recueillir son accord">
+                                Accord requis
+                              </span>
+                            ` : isAvailable ? `
                               <button onclick="window.game.proposeVolunteerSwitch('${v.id}', '${mission.id}')" class="px-2 py-1 rounded text-[10px] font-extrabold bg-emerald-100 hover:bg-emerald-200 text-emerald-900 transition" title="Affecter ce bénévole confirmé disponible">
                                 + Affecter
                               </button>
@@ -20131,9 +20157,9 @@ class ProtecGame {
                       const missionStation = (this.stations || []).find(s => s.id === mission.stationId) || this.stations?.[0];
                       if (assignedVehs.length > 0 && hasLowVeh && missionStation) {
                         return `
-                          <button type="button" onclick="window.ProtecLogistique?.rearmAllVehicles(window.game, '${missionStation.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
-                            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-                            <span>Réarmer les véhicules</span>
+                          <button type="button" onclick="if (window.game?.openCreateRearmamentModal) { window.game.openCreateRearmamentModal(); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game); }" class="px-2.5 py-1 rounded-lg text-[10px] font-black bg-amber-600 hover:bg-amber-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs">
+                            <i data-lucide="wrench" class="w-3 h-3"></i>
+                            <span>Planifier Réarmement Flotte</span>
                           </button>
                         `;
                       }
@@ -20199,7 +20225,7 @@ class ProtecGame {
                                     return `<span id="cons-rearm-timer-${v.id}" class="px-2.5 py-1 rounded-lg text-[10.5px] font-black bg-amber-100 text-amber-950 border border-amber-400 animate-pulse flex items-center gap-1">⏳ Réarmement (${window.ProtecLogistique.formatArmingClock(remSec)})</span>`;
                                   }
                                   if (!isFull) {
-                                    return `<button type="button" onclick="window.ProtecLogistique?.rearmVehicleSingle(window.game, '${v.id}'); window.game.openMissionDetails('${mission.id}');" class="px-2.5 py-1 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs"><i data-lucide="refresh-cw" class="w-3 h-3"></i><span>Réarmer (2 min)</span></button>`;
+                                    return `<button type="button" onclick="if (window.game?.openCreateRearmamentModal) { window.game.openCreateRearmamentModal('${v.id}'); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game, '${v.id}'); }" class="px-2.5 py-1 rounded-lg text-xs font-black bg-amber-600 hover:bg-amber-700 text-white transition flex items-center gap-1 cursor-pointer shadow-xs"><i data-lucide="wrench" class="w-3 h-3"></i><span>Réarmer (Mission Log)</span></button>`;
                                   }
                                   return `<span class="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1"><i data-lucide="check" class="w-3 h-3"></i><span>Complet</span></span>`;
                                 })()}
@@ -28156,8 +28182,8 @@ class ProtecGame {
                         </div>
                         <span class="font-mono font-bold text-[11px] ${consumablesVal > 40 ? 'text-emerald-700' : 'text-amber-700'}">${consumablesVal}%</span>
                         ${consumablesVal < 100 ? `
-                          <button onclick="window.ProtecLogistique.rearmVehicleSingle(window.game, '${v.id}')" class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-300 font-extrabold text-[10px] hover:bg-emerald-200 transition cursor-pointer">
-                            Réarmer
+                          <button onclick="if (window.game?.openCreateRearmamentModal) { window.game.openCreateRearmamentModal('${v.id}'); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game, '${v.id}'); }" class="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 border border-amber-300 font-extrabold text-[10px] hover:bg-amber-200 transition cursor-pointer" title="Créer une Mission Logistique de réarmement au planning">
+                            Réarmer (Mission Log)
                           </button>
                         ` : ''}
                       </div>
@@ -30125,7 +30151,7 @@ class ProtecGame {
                           ? `Créer une mission logistique pour prélever du matériel sur votre commande en transit et réarmer sans attendre la livraison`
                           : `Créer un atelier logistique pour réarmer ce véhicule`;
                         return `
-                          <button type="button" onclick="window.game.createRearmamentLogisticsMission('${v.id}'); document.getElementById('${modalId}').remove();" class="text-amber-700 hover:text-amber-900 font-black underline cursor-pointer" title="${tooltip}">
+                          <button type="button" onclick="if (window.game?.openCreateRearmamentModal) { window.game.openCreateRearmamentModal('${v.id}'); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game, '${v.id}'); } document.getElementById('${modalId}').remove();" class="text-amber-700 hover:text-amber-900 font-black underline cursor-pointer" title="${tooltip}">
                             ${label}
                           </button>
                         `;

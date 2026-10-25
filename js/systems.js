@@ -1954,33 +1954,15 @@ window.ProtecSystems = {
     if (!v) return;
 
     if (actionType === 'rearm') {
-      if (window.ProtecLogistique && typeof window.ProtecLogistique.rearmVehicleSingle === 'function') {
-        window.ProtecLogistique.rearmVehicleSingle(game, vehicleId);
-        return;
-      }
-      const station = (game.stations || []).find(s => s.id === v.stationId) || game.stations?.[0];
-      const stockCaisse = station?.stock?.caisse_rearmement || 0;
-      if (stockCaisse >= 1) {
-        station.stock.caisse_rearmement -= 1;
-        v.consumables = 100;
-        v.armementLevel = 100;
-        v.needsRearming = false;
-        v.isRearmed = true;
-        game.showToast('Véhicule Réarmé ✓', `${v.name} a été réarmé à 100% avec 1 kit de réarmement du stock.`, 'green');
-      } else if (game.resources.money >= 60) {
-        game.resources.money -= 60;
-        v.consumables = 100;
-        v.armementLevel = 100;
-        v.needsRearming = false;
-        v.isRearmed = true;
-        game.showToast('Véhicule Réarmé ✓', `1 Kit de réarmement acheté (60 €) : ${v.name} est réarmé à 100%.`, 'green');
+      // Règle officielle Protection Civile : Le réarmement passe obligatoirement par une Mission Logistique planifiée
+      if (typeof game.openCreateRearmamentModal === 'function') {
+        game.openCreateRearmamentModal(vehicleId);
+      } else if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+        window.ProtecCriseLogistique.openCreateRearmamentModal(game, vehicleId);
       } else {
-        game.showToast('Stock Épuisé', 'Aucun kit de réarmement en stock à l\'antenne et trésorerie insuffisante (60 €).', 'orange');
-        return;
+        game.showToast('Mission Logistique Requise 📦', `Le réarmement de ${v.name} doit faire l'objet d'une Mission Logistique planifiée avec vos secouristes.`, 'orange');
       }
-      if (window.ProtecAdvanced && typeof window.ProtecAdvanced.recordVehicleRearmed === 'function') {
-        window.ProtecAdvanced.recordVehicleRearmed(game, v);
-      }
+      return;
     } else if (actionType === 'fuel') {
       const cost = 75;
       if (game.resources.money < cost) {

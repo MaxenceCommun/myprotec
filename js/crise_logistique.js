@@ -1468,23 +1468,10 @@ window.ProtecCriseLogistique = {
         check.logVehicle.armementLevel = Math.max(0, (check.logVehicle.armementLevel || 100) - missing);
       }
       game.showToast('Réarmé sur Zone ✓', `${veh.name} a été réarmé sur mission grâce au ${check.logVehicle.name} LOG présent sur place (-${missing}% matériels).`, 'green');
-    } else if (window.ProtecLogistique && typeof window.ProtecLogistique.rearmVehicleSingle === 'function') {
-      // Déléguer au système temporisé de garage (2 min de réarmement & bionettoyage)
-      window.ProtecLogistique.rearmVehicleSingle(game, vehicleId);
-      if (mission && typeof game.refreshMissionDetailsIfOpen === 'function') {
-        game.refreshMissionDetailsIfOpen(mission.id);
-      }
-      return;
     } else {
-      // Fallback réarmé à la base via le stock du local
-      const consumed = Math.min(missing, check.currentStockPS);
-      this.adjustStationStockPS(game, -consumed, veh.stationId);
-      veh.armementLevel = Math.min(100, (veh.armementLevel || 70) + consumed);
-      veh.isRearmed = (veh.armementLevel >= 100);
-      veh.needsRearming = !veh.isRearmed;
-
-      const remainingStock = this.getStationStockPS(game, veh.stationId);
-      game.showToast('Véhicule Réarmé au Local ✓', `${veh.name} a été réarmé à la base (-${consumed}% au stock Matériels PS. Reste en réserve : ${remainingStock}%).`, 'green');
+      // Au local : Tout réarmement passe obligatoirement par une Mission Logistique planifiée avec effectifs
+      this.openCreateRearmamentModal(game, vehicleId);
+      return;
     }
 
     if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
@@ -1661,106 +1648,225 @@ window.ProtecCriseLogistique = {
     return null;
   },
 
-  // Modale pour créer un Atelier de Réarmement Flotte
-  openCreateRearmamentModal(game) {
-    const primaryStation = game.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
-    const stockPS = this.getStationStockPS(game, primaryStation.id);
+  // Modale pour créer une Mission Logistique de Réarmement Flotte (Quand, Véhicules, Tâches, Matériel en réserve, Bénévolat)
+  openCreateRearmamentModal(game, targetVehicleId = null) {
+    if (!game) game = window.game;
+    if (!game) return;
 
-    // Règle métier : Seuls les engins contenant directement du "Matériel PS" (VPSP / Ambulances PS)
-    // sont réarmables en atelier PS au local. Un VTU ne possède pas directement de matériel PS (on réarme ses réassorts séparément).
-    // Tous les engins contenant du Matériel PS sont affichés, même à 100%.
+    const primaryStation = (game.stations && game.stations[0]) || { id: 'station-1', name: 'Antenne Locale', city: 'Local Antenne' };
+    const stockPS = this.getStationStockPS(game, primaryStation.id);
+    const caisseCount = primaryStation?.stock?.caisse_rearmement || 0;
+    const caisseCharges = primaryStation?.stock?.caisse_rearmement_charges !== undefined 
+      ? primaryStation.stock.caisse_rearmement_charges 
+      : (caisseCount * 3);
+
+    // Véhicules sanitaires et opérationnels réarmables / bionettoyables
     const allCandidateVehs = (game.vehicles || []).filter(v => {
       const t = (v.type || '').toUpperCase();
       const n = (v.name || '').toUpperCase();
-      if (t === 'VTU' || t === 'VTP' || t === 'VL' || t === 'VLC' || t === 'LOG' || t === 'FOURGON') return false;
-      return t === 'VPSP' || t === 'AMBULANCE' || n.includes('VPSP') || v.hasPsEquipment === true;
+      return t === 'VPSP' || t === 'AMBULANCE' || n.includes('VPSP') || v.hasPsEquipment === true || t === 'VTU' || t === 'VL' || t === 'VTP' || t === 'LOG';
     });
+
+    // Date et heure actuelles du jeu (horloge ProtecLive)
+    const curYear = game.clock?.year || 2026;
+    const curMonth = (game.clock?.month !== undefined) ? game.clock.month : 9; // 0-indexed
+    const curDay = game.clock?.day || 25;
+    const curHour = (game.clock?.hour !== undefined) ? game.clock.hour : 14;
+    const curMin = (game.clock?.minute !== undefined) ? game.clock.minute : 0;
+    const pad = (n) => String(n).padStart(2, '0');
+    const defaultDateStr = `${curYear}-${pad(curMonth + 1)}-${pad(curDay)}`;
+    const defaultTimeStr = `${pad((curHour + 1) % 24)}:00`;
 
     const modalId = 'rearm-workshop-modal';
     let modal = document.getElementById(modalId);
     if (!modal) {
       modal = document.createElement('div');
       modal.id = modalId;
-      modal.className = 'fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4';
+      modal.className = 'fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4';
       document.body.appendChild(modal);
     }
 
     modal.innerHTML = `
-      <div class="w-full max-w-lg rounded-3xl glass-panel-heavy border border-white/80 p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="w-full max-w-xl rounded-3xl glass-panel-heavy border border-white/80 p-5 sm:p-6 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+        <!-- En-tête -->
         <div class="flex items-center justify-between pb-3 border-b border-slate-200">
           <div class="flex items-center gap-2.5">
             <div class="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-black">
               <i data-lucide="wrench" class="w-5 h-5"></i>
             </div>
             <div>
-              <h3 class="text-sm sm:text-base font-black text-slate-900">Mission Logistique - Réarmement Flotte</h3>
-              <p class="text-[11px] text-slate-500 font-semibold">Reconditionnement, désinfection et réarmement en équipe</p>
+              <h3 class="text-sm sm:text-base font-black text-slate-900">Planifier une Mission Logistique de Réarmement</h3>
+              <p class="text-[11px] text-slate-500 font-semibold">Réarmement consommables, bionettoyage ARS et inventaire flotte</p>
             </div>
           </div>
-          <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition">
+          <button onclick="document.getElementById('${modalId}').remove()" class="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center transition cursor-pointer">
             ✕
           </button>
         </div>
 
-        <!-- Jauge Stock PS disponible -->
-        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2">
-            <span class="text-base">📦</span>
+        <!-- 1. QUAND : Planification temporelle -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-2xs">
+          <label class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-pc-blue"></i>
+            <span>1. Quand programmer l'atelier logistique ?</span>
+          </label>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <label class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center gap-2 cursor-pointer hover:border-slate-300 transition">
+              <input type="radio" name="rearm_when_mode" value="now" checked onchange="window.ProtecCriseLogistique.toggleRearmScheduleInputs()" class="text-pc-blue focus:ring-pc-blue">
+              <div>
+                <div class="font-black text-slate-800">Dès que possible / Aujourd'hui</div>
+                <div class="text-[10px] text-slate-500">Créneau immédiat à l'antenne</div>
+              </div>
+            </label>
+            <label class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-center gap-2 cursor-pointer hover:border-slate-300 transition">
+              <input type="radio" name="rearm_when_mode" value="schedule" onchange="window.ProtecCriseLogistique.toggleRearmScheduleInputs()" class="text-pc-blue focus:ring-pc-blue">
+              <div>
+                <div class="font-black text-slate-800">Date et heure précises</div>
+                <div class="text-[10px] text-slate-500">Planifier dans l'agenda</div>
+              </div>
+            </label>
+          </div>
+
+          <div id="rearm-schedule-inputs" class="hidden pt-1 grid grid-cols-2 gap-2">
             <div>
-              <span class="font-extrabold text-slate-800">Stock "Matériels PS" au local :</span>
-              <p class="text-[10px] text-slate-500">Consommables nécessaires pour restaurer l'armement</p>
+              <span class="text-[10px] font-bold text-slate-500">Date de l'atelier :</span>
+              <input type="date" id="rearm_input_date" value="${defaultDateStr}" class="w-full text-xs p-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
+            </div>
+            <div>
+              <span class="text-[10px] font-bold text-slate-500">Heure de début :</span>
+              <input type="time" id="rearm_input_time" value="${defaultTimeStr}" class="w-full text-xs p-2 rounded-xl border border-slate-300 bg-white font-bold text-slate-800">
             </div>
           </div>
-          <span class="px-2.5 py-1 rounded-xl text-xs font-black ${stockPS > 40 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'}">
-            ${stockPS}% disponible
-          </span>
         </div>
 
-        <p class="text-xs text-slate-600 leading-snug">
-          Sélectionnez les véhicules contenant du matériel PS à reconditionner lors de cette Mission Logistique au local.
-          <br><strong>Barème horaire :</strong> ~1h par VPSP à charge complète (désinfection et réarmement consommables PS).
-        </p>
+        <!-- 2. TÂCHES : Opérations à réaliser -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2 shadow-2xs">
+          <label class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+            <i data-lucide="check-square" class="w-3.5 h-3.5 text-pc-blue"></i>
+            <span>2. Tâches à réaliser durant la mission</span>
+          </label>
+          <div class="space-y-1.5 text-xs">
+            <label class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-2.5 cursor-pointer hover:border-slate-300 transition">
+              <input type="checkbox" id="rearm_task_consumables" checked onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="mt-0.5 w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
+              <div class="flex-1 min-w-0">
+                <div class="font-black text-slate-900 flex items-center justify-between">
+                  <span>Réarmement des consommables sanitaires</span>
+                  <span class="text-[10px] text-pc-blue font-bold">+30 min / vhc</span>
+                </div>
+                <div class="text-[10.5px] text-slate-500 font-medium">Pansements, compresses, colliers cervicaux, réassort O2, sets d'urgence. Nécessite du stock en réserve.</div>
+              </div>
+            </label>
 
-        <!-- Liste des véhicules à cocher (contenants Matériel PS) -->
-        <div class="space-y-2 max-h-56 overflow-y-auto pr-1">
-          ${allCandidateVehs.length === 0 ? `
-            <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
-              Aucun véhicule sanitaire (VPSP) dans votre antenne. Les VTU sont réarmés via leurs réassorts de lots.
+            <label class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-2.5 cursor-pointer hover:border-slate-300 transition">
+              <input type="checkbox" id="rearm_task_disinfection" checked onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="mt-0.5 w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
+              <div class="flex-1 min-w-0">
+                <div class="font-black text-slate-900 flex items-center justify-between">
+                  <span>Bionettoyage & Désinfection ARS</span>
+                  <span class="text-[10px] text-teal-700 font-bold">+25 min / vhc</span>
+                </div>
+                <div class="text-[10.5px] text-slate-500 font-medium">Décontamination intégrale cellule, brancard, plan dur, portoir et surfaces tactiles.</div>
+              </div>
+            </label>
+
+            <label class="p-2.5 rounded-xl border border-slate-200 bg-slate-50 flex items-start gap-2.5 cursor-pointer hover:border-slate-300 transition">
+              <input type="checkbox" id="rearm_task_inventory" checked onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="mt-0.5 w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
+              <div class="flex-1 min-w-0">
+                <div class="font-black text-slate-900 flex items-center justify-between">
+                  <span>Contrôle inventaire & péremptions</span>
+                  <span class="text-[10px] text-indigo-700 font-bold">+15 min / vhc</span>
+                </div>
+                <div class="text-[10.5px] text-slate-500 font-medium">Vérification des dates limites, test fonctionnel électrodes / DAE et check-list officielle.</div>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- 3. QUELS VÉHICULES : Sélection de la flotte -->
+        <div class="p-3.5 rounded-2xl bg-white border border-slate-200 space-y-2.5 shadow-2xs">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-black text-slate-800 uppercase tracking-wide flex items-center gap-1.5">
+              <i data-lucide="truck" class="w-3.5 h-3.5 text-pc-blue"></i>
+              <span>3. Quels véhicules réarmer / entretenir ?</span>
+            </label>
+            <div class="flex items-center gap-1.5 text-[10.5px]">
+              <button type="button" onclick="window.ProtecCriseLogistique.selectRearmVehiclesFilter('needs')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition cursor-pointer">Ceux à réarmer</button>
+              <button type="button" onclick="window.ProtecCriseLogistique.selectRearmVehiclesFilter('all')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition cursor-pointer">Tous</button>
+              <button type="button" onclick="window.ProtecCriseLogistique.selectRearmVehiclesFilter('none')" class="px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 font-bold text-slate-700 transition cursor-pointer">Aucun</button>
             </div>
-          ` : allCandidateVehs.map(v => {
-            const duration = 60;
-            const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
-            const needs = armement < 100 || v.needsRearming || v.isRearmed === false;
+          </div>
 
-            return `
-              <label class="p-3 rounded-2xl border ${needs ? 'bg-amber-50/60 border-amber-200 ring-1 ring-amber-100' : 'bg-white border-slate-200'} flex items-center justify-between gap-3 cursor-pointer hover:border-slate-300 transition">
-                <div class="flex items-center gap-3 min-w-0">
-                  <input type="checkbox" name="rearm_veh_cb" value="${v.id}" ${needs ? 'checked' : ''} onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
-                  <div>
-                    <div class="font-black text-slate-900 text-xs">
-                      ${v.name}
-                    </div>
-                    <div class="text-[10px] text-slate-500 font-semibold">
-                      Armement actuel : <strong class="${armement < 100 ? 'text-amber-700' : 'text-emerald-700'}">${armement}%</strong> • Durée estimée : ${duration} min
+          <div class="space-y-2 max-h-52 overflow-y-auto pr-1">
+            ${allCandidateVehs.length === 0 ? `
+              <div class="p-4 rounded-2xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+                Aucun véhicule opérationnel trouvé dans votre antenne.
+              </div>
+            ` : allCandidateVehs.map(v => {
+              const armement = v.consumables !== undefined ? v.consumables : (v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100));
+              const needsRearm = armement < 100 || v.needsRearming || v.isRearmed === false || v.a_rearme;
+              const needsDisinfect = Boolean(v.disinfectionNeeded);
+              const shouldCheck = targetVehicleId ? (v.id === targetVehicleId) : (needsRearm || needsDisinfect);
+
+              return `
+                <label class="p-2.5 rounded-2xl border ${shouldCheck ? 'bg-amber-50/50 border-amber-200 ring-1 ring-amber-100' : 'bg-slate-50 border-slate-200'} flex items-center justify-between gap-3 cursor-pointer hover:border-slate-300 transition">
+                  <div class="flex items-center gap-3 min-w-0">
+                    <input type="checkbox" name="rearm_veh_cb" value="${v.id}" data-type="${v.type || 'VPSP'}" ${shouldCheck ? 'checked' : ''} onchange="window.ProtecCriseLogistique.recalcRearmModalTotals()" class="w-4 h-4 rounded text-pc-blue focus:ring-pc-blue border-slate-300">
+                    <div class="min-w-0">
+                      <div class="font-black text-slate-900 text-xs flex items-center gap-2">
+                        <span class="truncate">${v.name}</span>
+                        <span class="px-1.5 py-0.2 rounded text-[9px] font-black bg-slate-200 text-slate-700">${v.type || 'VPSP'}</span>
+                      </div>
+                      <div class="text-[10px] text-slate-500 font-semibold flex items-center gap-2 flex-wrap">
+                        <span>Consommables : <strong class="${armement < 100 ? 'text-amber-700' : 'text-emerald-700'}">${armement}%</strong></span>
+                        <span>•</span>
+                        <span>Désinfection : <strong class="${needsDisinfect ? 'text-amber-700' : 'text-slate-600'}">${needsDisinfect ? 'Requise' : 'À jour'}</strong></span>
+                      </div>
                     </div>
                   </div>
-                </div>
-                <span class="text-[11px] font-bold text-slate-600 shrink-0">+${100 - armement}% PS</span>
-              </label>
-            `;
-          }).join('')}
+                  <span class="text-[10.5px] font-bold ${armement < 100 ? 'text-amber-700' : 'text-slate-500'} shrink-0">${armement < 100 ? `Manque ${100 - armement}%` : 'Plein'}</span>
+                </label>
+              `;
+            }).join('')}
+          </div>
         </div>
 
-        <!-- Récapitulatif temps et stock -->
-        <div id="rearm-modal-summary" class="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs space-y-1">
+        <!-- 4. RÉSERVE EN STOCK & CONSOMMABLES -->
+        <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-extrabold text-slate-800 flex items-center gap-1.5">
+              <span>📦</span>
+              <span>Stock en réserve à l'antenne :</span>
+            </span>
+            <div class="flex items-center gap-2 font-mono font-bold">
+              <span class="px-2 py-0.5 rounded-lg ${caisseCount > 0 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-slate-200 text-slate-600'}">
+                ${caisseCount} Kit(s) (${caisseCharges} charges)
+              </span>
+              <span class="px-2 py-0.5 rounded-lg ${stockPS > 30 ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'}">
+                ${stockPS}% Matériels PS
+              </span>
+            </div>
+          </div>
+          <div id="rearm-stock-alert" class="hidden p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-[11px] font-bold">
+            <!-- Alert stock si vide -->
+          </div>
+        </div>
+
+        <!-- Récapitulatif temps et bénévolat -->
+        <div id="rearm-modal-summary" class="p-3.5 rounded-2xl bg-indigo-50/70 border border-indigo-200 text-xs space-y-1.5">
           <!-- Calculé dynamiquement -->
         </div>
 
+        <!-- Règle de bénévolat -->
+        <div class="p-2.5 rounded-xl bg-blue-50 border border-blue-200 text-[11px] text-blue-900 flex items-center gap-2">
+          <i data-lucide="info" class="w-4 h-4 text-blue-700 shrink-0"></i>
+          <span><strong>Règle du bénévolat :</strong> Aucun secouriste n'est assigné de force. Une fois la mission créée au planning, mobilisez vos bénévoles volontaires par SMS ou appel individuel !</span>
+        </div>
+
+        <!-- Boutons d'action -->
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
-          <button type="button" onclick="document.getElementById('${modalId}').remove()" class="px-3.5 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
+          <button type="button" onclick="document.getElementById('${modalId}').remove()" class="px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer">
             Annuler
           </button>
-          <button type="button" onclick="window.ProtecCriseLogistique.submitRearmWorkshopMission()" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer">
+          <button id="rearm-submit-btn" type="button" onclick="window.ProtecCriseLogistique.submitRearmWorkshopMission()" class="px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-indigo-600 hover:brightness-110 text-white shadow-md transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
             <i data-lucide="calendar-plus" class="w-4 h-4"></i>
             <span>Créer la Mission Logistique</span>
           </button>
@@ -1772,96 +1878,251 @@ window.ProtecCriseLogistique = {
     this.recalcRearmModalTotals();
   },
 
+  toggleRearmScheduleInputs() {
+    const radio = document.querySelector('input[name="rearm_when_mode"]:checked');
+    const inputsEl = document.getElementById('rearm-schedule-inputs');
+    if (!inputsEl) return;
+    if (radio && radio.value === 'schedule') {
+      inputsEl.classList.remove('hidden');
+    } else {
+      inputsEl.classList.add('hidden');
+    }
+  },
+
+  selectRearmVehiclesFilter(filterType) {
+    const cbs = document.querySelectorAll('input[name="rearm_veh_cb"]');
+    const game = window.game;
+    const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+
+    cbs.forEach(cb => {
+      if (filterType === 'all') {
+        cb.checked = true;
+      } else if (filterType === 'none') {
+        cb.checked = false;
+      } else if (filterType === 'needs') {
+        const v = allVehs.find(x => x.id === cb.value);
+        if (v) {
+          const arm = v.consumables !== undefined ? v.consumables : (v.armementLevel !== undefined ? v.armementLevel : 100);
+          cb.checked = arm < 100 || v.needsRearming || v.disinfectionNeeded || v.a_rearme;
+        }
+      }
+    });
+    this.recalcRearmModalTotals();
+  },
+
   recalcRearmModalTotals() {
     const cbs = document.querySelectorAll('input[name="rearm_veh_cb"]:checked');
     const vehIds = Array.from(cbs).map(c => c.value);
     const game = window.game;
+    if (!game) return;
     const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
+
+    const taskConsumables = document.getElementById('rearm_task_consumables')?.checked || false;
+    const taskDisinfection = document.getElementById('rearm_task_disinfection')?.checked || false;
+    const taskInventory = document.getElementById('rearm_task_inventory')?.checked || false;
+
     let totalMinutes = 0;
-    let totalMissingPS = 0;
+    let missingConsumablesCount = 0;
 
     vehIds.forEach(id => {
       const v = allVehs.find(x => x.id === id);
       if (v) {
-        totalMinutes += 60;
-        const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
-        totalMissingPS += Math.max(0, 100 - armement);
+        let vMinutes = 0;
+        if (taskConsumables) {
+          vMinutes += 30;
+          const arm = v.consumables !== undefined ? v.consumables : (v.armementLevel !== undefined ? v.armementLevel : 100);
+          if (arm < 100 || v.needsRearming || v.a_rearme) missingConsumablesCount += 1;
+        }
+        if (taskDisinfection) vMinutes += 25;
+        if (taskInventory) vMinutes += 15;
+        totalMinutes += Math.max(15, vMinutes);
       }
     });
+
+    const primaryStation = (game.stations && game.stations[0]) || { id: 'station-1' };
+    const stockPS = this.getStationStockPS(game, primaryStation.id);
+    const caisseCount = primaryStation?.stock?.caisse_rearmement || 0;
+    const caisseCharges = primaryStation?.stock?.caisse_rearmement_charges !== undefined 
+      ? primaryStation.stock.caisse_rearmement_charges 
+      : (caisseCount * 3);
+
+    const hasAnyStockForConsumables = (caisseCharges > 0 || caisseCount > 0 || stockPS > 0);
+    const stockAlertEl = document.getElementById('rearm-stock-alert');
+    const submitBtn = document.getElementById('rearm-submit-btn');
+
+    if (taskConsumables && vehIds.length > 0 && !hasAnyStockForConsumables) {
+      if (stockAlertEl) {
+        stockAlertEl.classList.remove('hidden');
+        stockAlertEl.innerHTML = `⚠️ <strong>Réserve épuisée au local !</strong> Aucun kit de réarmement ni matériel PS en stock. Commandez à la Centrale d'Achats, ou décochez la tâche "Réarmement consommables" pour ne réaliser que le bionettoyage et l'inventaire.`;
+      }
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.title = "Stock insuffisant au local pour réarmer les consommables";
+      }
+    } else {
+      if (stockAlertEl) stockAlertEl.classList.add('hidden');
+      if (submitBtn) {
+        submitBtn.disabled = vehIds.length === 0 || (!taskConsumables && !taskDisinfection && !taskInventory);
+        submitBtn.title = "";
+      }
+    }
 
     const sumEl = document.getElementById('rearm-modal-summary');
     if (sumEl) {
       const hours = Math.floor(totalMinutes / 60);
       const mins = totalMinutes % 60;
-      const durationStr = hours > 0 ? `${hours}h${mins > 0 ? mins : ''}` : `${mins} min`;
+      const durationStr = hours > 0 ? `${hours}h${mins > 0 ? padNumber(mins) : ''}` : `${mins} min`;
+      const neededVols = Math.min(4, Math.max(1, Math.ceil(vehIds.length / 2)));
 
       sumEl.innerHTML = `
         <div class="flex items-center justify-between font-bold text-indigo-950">
-          <span>Véhicules engagés : <strong>${vehIds.length}</strong></span>
+          <span>Véhicule(s) sélectionné(s) : <strong>${vehIds.length}</strong></span>
           <span>Charge totale : <strong>${durationStr} de travail</strong></span>
         </div>
-        <p class="text-[10.5px] text-indigo-800 leading-snug">
-          Consommables requis : <strong>${totalMissingPS}%</strong> au stock Matériels PS.
-          <br><em>Le temps se réduira proportionnellement au nombre de bénévoles inscrits !</em>
+        <div class="flex items-center justify-between text-[11px] text-indigo-800">
+          <span>Effectif requis recommandé : <strong>${neededVols} bénévole(s)</strong></span>
+          <span>Consommation estimée : <strong>${taskConsumables ? `${vehIds.length} réarmement(s)` : '0 (Entretien seul)'}</strong></span>
+        </div>
+        <p class="text-[10.5px] text-indigo-700 italic">
+          💡 La durée s'adaptera automatiquement en fonction du nombre de bénévoles qui répondront présents lors de l'atelier !
         </p>
       `;
     }
+    function padNumber(n) { return String(n).padStart(2, '0'); }
   },
 
   submitRearmWorkshopMission() {
     const cbs = document.querySelectorAll('input[name="rearm_veh_cb"]:checked');
     const vehIds = Array.from(cbs).map(c => c.value);
     const game = window.game;
+    if (!game) return;
 
     if (vehIds.length === 0) {
-      game.showToast('Aucun véhicule', 'Veuillez cocher au moins un véhicule à réarmer.', 'orange');
+      game.showToast('Aucun véhicule', 'Veuillez sélectionner au moins un véhicule pour l\'atelier logistique.', 'orange');
+      return;
+    }
+
+    const taskConsumables = document.getElementById('rearm_task_consumables')?.checked || false;
+    const taskDisinfection = document.getElementById('rearm_task_disinfection')?.checked || false;
+    const taskInventory = document.getElementById('rearm_task_inventory')?.checked || false;
+
+    if (!taskConsumables && !taskDisinfection && !taskInventory) {
+      game.showToast('Aucune tâche', 'Veuillez cocher au moins une tâche à réaliser.', 'orange');
       return;
     }
 
     const allVehs = (game.vehicles || []).concat(game.allVehicles || []);
     let totalMinutes = 0;
-    let totalMissingPS = 0;
-
     vehIds.forEach(id => {
       const v = allVehs.find(x => x.id === id);
       if (v) {
-        totalMinutes += 60;
-        const armement = v.armementLevel !== undefined ? v.armementLevel : (v.isRearmed === false ? 70 : 100);
-        totalMissingPS += Math.max(0, 100 - armement);
+        let vMinutes = 0;
+        if (taskConsumables) vMinutes += 30;
+        if (taskDisinfection) vMinutes += 25;
+        if (taskInventory) vMinutes += 15;
+        totalMinutes += Math.max(15, vMinutes);
       }
     });
 
-    const primaryStation = game.stations[0] || { id: 'station-1', name: 'Antenne Locale' };
+    const primaryStation = (game.stations && game.stations[0]) || { id: 'station-1', name: 'Antenne Locale', city: 'Local Antenne' };
     const stockPS = this.getStationStockPS(game, primaryStation.id);
+    let caisseCount = primaryStation?.stock?.caisse_rearmement || 0;
+    let caisseCharges = primaryStation?.stock?.caisse_rearmement_charges !== undefined 
+      ? primaryStation.stock.caisse_rearmement_charges 
+      : (caisseCount * 3);
 
-    if (stockPS < totalMissingPS && stockPS <= 0) {
-      game.showToast('Stock Matériels PS Épuisé ⚠️', 'Impossible de lancer l\'atelier : le stock Matériels PS au local est vide (0%). Achetez du stock à la Centrale d\'Achats.', 'orange');
-      return;
+    // Prélèvement sur le stock local si tâche consommables activée
+    if (taskConsumables) {
+      if (caisseCharges <= 0 && caisseCount <= 0 && stockPS <= 0) {
+        game.showToast('Stock Épuisé ⚠️', 'Impossible de lancer le réarmement : la réserve locale est vide. Achetez du matériel à la Centrale d\'Achats.', 'orange');
+        return;
+      }
+
+      // Déduction concrète des charges de kit ou du stock PS
+      const chargesToDeduct = vehIds.length;
+      if (caisseCharges >= chargesToDeduct) {
+        caisseCharges -= chargesToDeduct;
+        primaryStation.stock.caisse_rearmement_charges = caisseCharges;
+        primaryStation.stock.caisse_rearmement = Math.ceil(caisseCharges / 3);
+      } else if (caisseCount > 0) {
+        primaryStation.stock.caisse_rearmement = Math.max(0, caisseCount - 1);
+        primaryStation.stock.caisse_rearmement_charges = Math.max(0, (caisseCount - 1) * 3);
+      } else if (stockPS > 0) {
+        const consumedPS = Math.min(stockPS, chargesToDeduct * 25);
+        this.adjustStationStockPS(game, -consumedPS, primaryStation.id);
+      }
     }
 
+    // Gestion de la date et de l'heure
+    const whenMode = document.querySelector('input[name="rearm_when_mode"]:checked')?.value || 'now';
+    let chosenEventDate = null;
     const now = Date.now();
+
+    if (whenMode === 'schedule') {
+      const dateVal = document.getElementById('rearm_input_date')?.value;
+      const timeVal = document.getElementById('rearm_input_time')?.value || '14:00';
+      if (dateVal) {
+        const [y, m, d] = dateVal.split('-').map(Number);
+        const [h, min] = timeVal.split(':').map(Number);
+        chosenEventDate = {
+          year: y || (game.clock?.year || 2026),
+          month: (m ? m - 1 : (game.clock?.month || 9)),
+          day: d || (game.clock?.day || 25),
+          hour: h || 14,
+          minute: min || 0
+        };
+      }
+    }
+
+    if (!chosenEventDate) {
+      chosenEventDate = {
+        year: game.clock?.year || 2026,
+        month: (game.clock?.month !== undefined) ? game.clock.month : 9,
+        day: game.clock?.day || 25,
+        hour: (game.clock?.hour !== undefined) ? game.clock.hour : 14,
+        minute: (game.clock?.minute !== undefined) ? game.clock.minute : 0
+      };
+    }
+
+    const taskLabels = [];
+    if (taskConsumables) taskLabels.push('Réarmement consommables');
+    if (taskDisinfection) taskLabels.push('Désinfection ARS');
+    if (taskInventory) taskLabels.push('Contrôle inventaire');
+
+    const reqVols = Math.min(4, Math.max(1, Math.ceil(vehIds.length / 2)));
+    const missionId = `rearm_workshop_${now}`;
+
     const mission = {
-      id: `rearm_workshop_${now}`,
+      id: missionId,
       type: 'rearmement',
-      title: `Mission Logistique - Réarmement Flotte (${vehIds.length} vhc)`,
-      scale: 'LOGISTIQUE',
-      subtitle: 'Nettoyage, désinfection, réarmement des consommables et reconditionnement',
-      description: `Mission Logistique au local pour réarmer et désinfecter ${vehIds.length} véhicule(s). Les bénévoles inscrits travaillent en équipe pour réduire la durée.`,
       category: 'logistique',
+      categoryLabel: '📦 Mission Logistique - Réarmement',
+      title: `Mission Logistique - Réarmement Flotte (${vehIds.length} vhc)`,
+      subtitle: taskLabels.join(' • '),
+      desc: `Atelier logistique au garage de l'antenne pour le reconditionnement de ${vehIds.length} véhicule(s) : ${taskLabels.join(', ')}. Matériel prélevé sur la réserve locale. Inscription des bénévoles ouverte.`,
+      targetVehicleIds: vehIds,
+      tasks: {
+        consumables: taskConsumables,
+        disinfection: taskDisinfection,
+        inventory: taskInventory
+      },
       status: 'planifie',
       isRearmamentWorkshop: true,
-      targetVehicleIds: vehIds,
-      baseWorkMinutes: totalMinutes,
+      requiredVolunteers: reqVols,
+      maxVolunteers: Math.max(reqVols + 1, 4),
+      registeredVolunteers: [], // STRICTEMENT VIDE : aucun bénévole forcé !
+      eventDate: chosenEventDate,
       durationMinutes: totalMinutes,
-      duration: totalMinutes,
-      requiredVolunteers: Math.min(4, Math.max(1, Math.ceil(vehIds.length / 2))),
-      registeredVolunteers: [],
-      neededStockPS: totalMissingPS,
-      city: primaryStation.city || 'Local Antenne',
-      locationAddress: 'Atelier Logistique de l\'Antenne',
+      durationSeconds: totalMinutes * 60,
+      duration: Math.max(1, Math.round(totalMinutes / 10)),
       scale: 'LOGISTIQUE',
+      address: `${primaryStation.name || 'Antenne'} (Atelier Garage)`,
+      city: primaryStation.city || 'Local Antenne',
+      lat: Number(primaryStation.lat || 48.6921),
+      lng: Number(primaryStation.lng || 6.1844),
       rewardMoney: 0,
-      rewardReputation: 12
+      rewardReputation: 12 + (vehIds.length * 3),
+      createdAt: now
     };
 
     if (!Array.isArray(game.missions)) game.missions = [];
@@ -1870,12 +2131,20 @@ window.ProtecCriseLogistique = {
     const modal = document.getElementById('rearm-workshop-modal');
     if (modal) modal.remove();
 
-    game.showToast('Mission Logistique Créée ! 📦', `La Mission Logistique de réarmement pour ${vehIds.length} véhicule(s) est planifiée. Ouvrez-la pour y inscrire vos bénévoles !`, 'green');
+    game.showToast(
+      'Mission Logistique Planifiée ! 📦',
+      `Atelier de réarmement créé pour ${vehIds.length} véhicule(s). Mobilisez vos bénévoles par SMS ou appel individuel pour démarrer l'intervention.`,
+      'green'
+    );
+
     if (window.ProtecAdvanced && typeof window.ProtecAdvanced.markStarterStepCompleted === 'function') {
       window.ProtecAdvanced.markStarterStepCompleted(game, 'step_rearm');
     }
     if (window.ProtecAudio) window.ProtecAudio.playSuccessChime();
     game.saveGame();
+    if (typeof game.renderMissions === 'function') game.renderMissions();
+    if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+
     if (typeof game.openMissionDetails === 'function') {
       game.openMissionDetails(mission.id);
     }
@@ -1970,7 +2239,7 @@ window.ProtecCriseLogistique = {
     // 2. Gestion des missions d'atelier de réarmement
     if (Array.isArray(game.missions)) {
       game.missions.forEach(m => {
-        if ((m.isRearmentWorkshop || m.isRearmamentWorkshop) && !m.logV2) {
+        if (m.isRearmentWorkshop || m.isRearmamentWorkshop) {
           if (m.status === 'ongoing' || m.status === 'en_cours') {
             const regCount = Math.max(1, (m.registeredVolunteers || []).length);
             // La durée effective est réduite par le nombre de bénévoles inscrits

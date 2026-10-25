@@ -261,9 +261,9 @@ window.ProtecModals = {
 
                   <!-- Actions garage complètes -->
                   <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100/80">
-                    <!-- Réarmement consommables avec Kit de réarmement -->
-                    <button onclick="if (window.ProtecLogistique?.rearmVehicleSingle) { window.ProtecLogistique.rearmVehicleSingle(window.game, '${v.id}'); window.game.openModal('vehicles'); } else { window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'rearm'); window.game.openModal('vehicles'); }" class="py-1.5 rounded-xl text-[11px] font-bold ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs' : 'glass-button text-slate-700'} transition" title="Réarmer la jauge de consommables à 100% avec 1 Kit de réarmement du stock">
-                      ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? 'Réarmer avec 1 Kit' : 'Consommables (100%)'}
+                    <!-- Réarmement consommables via Mission Logistique officielle -->
+                    <button onclick="window.game.closeModal(); if (window.game.openCreateRearmamentModal) { window.game.openCreateRearmamentModal('${v.id}'); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game, '${v.id}'); }" class="py-1.5 rounded-xl text-[11px] font-bold ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? 'bg-amber-600 hover:bg-amber-700 text-white shadow-xs' : 'glass-button text-slate-700'} transition cursor-pointer" title="Créer une Mission Logistique au planning pour réarmer ce véhicule en équipe">
+                      ${(v.consumables !== undefined ? v.consumables < 100 : v.needsRearming) ? '📦 Réarmer (Mission Log)' : 'Consommables (100%)'}
                     </button>
                     <!-- Carburant -->
                     <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[11px] font-bold glass-button text-slate-700 transition">

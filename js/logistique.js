@@ -2210,10 +2210,18 @@ window.ProtecLogistique = {
   // 8. ONGLET FLOTTE & GARAGE (MAINTENANCE, CARBURANT, DÉSINFECTION)
   // =========================================================================
 
-  // Actions de logistique post-mission, réarmement, désinfection et maintenance flotte (temporisé via armingQueue)
+  // Actions de logistique post-mission, réarmement, désinfection et maintenance flotte
   rearmAndDisinfectVehicle(game, vehicleId) {
     if (!game) game = window.game;
-    const v = (game.vehicles || []).concat(game.allVehicles || []).find(veh => veh.id === vehicleId);
+    // Règle absolue ProtecLive : Tout réarmement et désinfection passe obligatoirement par une Mission Logistique
+    if (typeof game?.openCreateRearmamentModal === 'function') {
+      game.openCreateRearmamentModal(vehicleId);
+      return;
+    }
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+      window.ProtecCriseLogistique.openCreateRearmamentModal(game, vehicleId);
+      return;
+    }
     if (!v) return;
     this.normalizeVehicle(v);
 
@@ -2494,8 +2502,8 @@ window.ProtecLogistique = {
 
                 <!-- Actions directes de garage et logistique post-mission -->
                 <div class="grid ${isLog ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'} gap-2 pt-1 border-t border-slate-100">
-                  <button onclick="window.ProtecLogistique.rearmAndDisinfectVehicle(window.game, '${v.id}')" class="py-1.5 rounded-xl text-[10px] font-extrabold ${isRearmNeeded ? 'bg-red-600 text-white hover:bg-red-700 shadow-md animate-pulse' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'} transition cursor-pointer" title="Consomme O2, compresses, gants et désinfectant ou 45 € (3 min ou 1m30 avec SAS)">
-                    ${isRearmNeeded ? 'Réarmer (O2/SAS)' : 'Réarmé ✓'}
+                  <button onclick="if (window.game?.openCreateRearmamentModal) { window.game.openCreateRearmamentModal('${v.id}'); } else if (window.ProtecCriseLogistique?.openCreateRearmamentModal) { window.ProtecCriseLogistique.openCreateRearmamentModal(window.game, '${v.id}'); }" class="py-1.5 rounded-xl text-[10px] font-extrabold ${isRearmNeeded ? 'bg-amber-600 text-white hover:bg-amber-700 shadow-md' : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100'} transition cursor-pointer" title="Créer une Mission Logistique officielle pour réarmer ce véhicule en équipe">
+                    ${isRearmNeeded ? '📦 Réarmer (Mission)' : 'Réarmé ✓'}
                   </button>
                   <button onclick="window.ProtecSystems.serviceVehicle(window.game, '${v.id}', 'fuel')" class="py-1.5 rounded-xl text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">
                     Plein (75 €)
@@ -3788,6 +3796,15 @@ window.ProtecLogistique = {
 
   rearmVehicleSingle(game, vehicleId) {
     if (!game) game = window.game;
+    // Règle officielle ProtecLive : Tout réarmement passe obligatoirement par une Mission Logistique planifiée
+    if (typeof game?.openCreateRearmamentModal === 'function') {
+      game.openCreateRearmamentModal(vehicleId);
+      return;
+    }
+    if (window.ProtecCriseLogistique && typeof window.ProtecCriseLogistique.openCreateRearmamentModal === 'function') {
+      window.ProtecCriseLogistique.openCreateRearmamentModal(game, vehicleId);
+      return;
+    }
     const veh = (game.vehicles || []).concat(game.allVehicles || []).find(v => v.id === vehicleId);
     if (!veh) return;
     this.normalizeVehicle(veh);
