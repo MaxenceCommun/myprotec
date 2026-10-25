@@ -5744,6 +5744,9 @@ class ProtecGame {
         const curPending = (this.devis || []).filter(item => item.status === 'pending').length;
         if (curPending >= this.getSimultaneousDevisLimit()) return;
 
+        const curHours = (this.clock.year * 8760) + (this.clock.month * 720) + (this.clock.day * 24) + (this.clock.hour || 0);
+        this._lastDevisReceivedTotalHours = curHours;
+
         this.devis.push(d);
         this.updateStatsUI();
         this.saveGame();
@@ -5773,6 +5776,8 @@ class ProtecGame {
         this.ensureFutureDevisDate(pickedReal);
         pickedReal.status = 'pending';
         pickedReal.secondsLeft = pickedReal.isLastMinute ? (3 * 3600) : (6 * 3600);
+        const curHours = (this.clock.year * 8760) + (this.clock.month * 720) + (this.clock.day * 24) + (this.clock.hour || 0);
+        this._lastDevisReceivedTotalHours = curHours;
         this.devis.push(pickedReal);
         this.updateStatsUI();
         this.saveGame();
@@ -19431,6 +19436,58 @@ class ProtecGame {
                       </div>
                     `;
                   })()}
+
+                  <!-- Configuration des Types & Quantités de Matériels requis sur la mission (Liste déroulante + compteurs) -->
+                  ${(() => {
+                    const lotCatalog = this.getAvailableLotsCatalog();
+                    const lotCounts = this.ensureMissionLotCounts(mission);
+                    const selectedLots = Object.entries(lotCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
+                    const totalKits = selectedLots.reduce((acc, [, c]) => acc + (parseInt(c, 10) || 0), 0);
+                    return `
+                      <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2 mt-2.5">
+                        <div class="flex items-center justify-between gap-2 flex-wrap">
+                          <label class="text-[11px] font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
+                            <i data-lucide="package" class="w-3.5 h-3.5 text-amber-700"></i>
+                            <span>Types & Quantités de Matériels Requis sur la Mission :</span>
+                          </label>
+                          <span class="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300">
+                            Total : <strong>${totalKits} lot(s)</strong>
+                          </span>
+                        </div>
+                        <select onchange="if(this.value){ window.game.addMissionRequiredLotType('${mission.id}', this.value); this.value=''; }" class="w-full px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 cursor-pointer">
+                          <option value="">+ Ajouter un lot ou matériel requis au dispositif...</option>
+                          ${lotCatalog.map(l => `<option value="${l.id}">${l.emoji} ${l.name}</option>`).join('')}
+                        </select>
+                        ${selectedLots.length === 0 ? `
+                          <div class="text-[11px] text-amber-800/80 italic">Aucun lot matériel spécifique imposé (dotation standard des engins).</div>
+                        ` : `
+                          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-0.5">
+                            ${selectedLots.map(([lotId, count]) => {
+                              const meta = lotCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, emoji: '📦' };
+                              const owned = (this.workplaceEquipment && this.workplaceEquipment[lotId]) || 0;
+                              return `
+                                <div class="p-2 rounded-xl border bg-white border-amber-300 flex items-center justify-between gap-1.5 shadow-2xs">
+                                  <div class="flex items-center gap-1.5 min-w-0">
+                                    <span>${meta.emoji}</span>
+                                    <div class="min-w-0">
+                                      <span class="text-xs font-extrabold text-slate-900 block truncate" title="${meta.name}">${meta.name}</span>
+                                      <span class="text-[9.5px] font-bold text-amber-800">Requis : x${count} ${owned > 0 ? `(Stock: ${owned})` : ''}</span>
+                                    </div>
+                                  </div>
+                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-amber-200">
+                                    <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+                                    <input type="number" min="0" max="30" value="${count}" onchange="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', this.value)" class="w-8 text-center font-mono font-black text-xs text-amber-800 bg-amber-50/50 border border-slate-200 rounded py-0.5" />
+                                    <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+                                    <button type="button" onclick="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+                                  </div>
+                                </div>
+                              `;
+                            }).join('')}
+                          </div>
+                        `}
+                      </div>
+                    `;
+                  })()}
                 </div>
 
                 <!-- Alertes Logistique / Réarmement (si kit manquant ou réarmement requis) -->
@@ -21277,9 +21334,18 @@ class ProtecGame {
 
     // Calcul du volume LOG embarqué
     let totalLogEmbarked = 0;
-    document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
-      totalLogEmbarked += parseInt(cb.dataset.size || 2);
-    });
+    const allLotsCatalog = window.ProtecEquipements?.LOTS_CATALOG || [];
+    if (this._crisisRenfortDraftLots && Object.keys(this._crisisRenfortDraftLots).length > 0) {
+      Object.entries(this._crisisRenfortDraftLots).forEach(([lotId, qty]) => {
+        const lotMeta = allLotsCatalog.find(l => l.id === lotId);
+        const sz = lotMeta ? (lotMeta.storageSize || 2) : 2;
+        totalLogEmbarked += sz * qty;
+      });
+    } else {
+      document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
+        totalLogEmbarked += parseInt(cb.dataset.size || 2);
+      });
+    }
     const vehLogCapacity = veh ? (veh.capacity_log || 0) : 0;
     const isLogOverloaded = totalLogEmbarked > vehLogCapacity;
 
@@ -21313,13 +21379,83 @@ class ProtecGame {
         if (!hasVeh) {
           notice.textContent = '⚠️ Sélectionnez un véhicule disponible.';
         } else if (isLogOverloaded) {
-          notice.textContent = '⚠️ Capacité LOG dépassée (' + totalLogEmbarked + ' places requises pour ' + vehLogCapacity + ' places du véhicule). Décochez des lots ou choisissez un VTU/VLHR.';
+          notice.textContent = '⚠️ Capacité LOG dépassée (' + totalLogEmbarked + ' places requises pour ' + vehLogCapacity + ' places du véhicule). Retirez des lots ou choisissez un VTU/VLHR.';
         } else {
           notice.textContent = '⚠️ Cochez au moins 1 secouriste ayant confirmé sa disponibilité par SMS.';
         }
       }
     }
     if (window.lucide) window.lucide.createIcons();
+  }
+
+  addCrisisRenfortDraftLot(lotId) {
+    if (!this._crisisRenfortDraftLots) this._crisisRenfortDraftLots = {};
+    const current = this._crisisRenfortDraftLots[lotId] || 0;
+    const available = this.workplaceEquipment?.[lotId] || 0;
+    if (current < available) {
+      this._crisisRenfortDraftLots[lotId] = current + 1;
+    } else {
+      this.showToast('Stock maximal atteint', 'Tous les lots de ce type en stock sont déjà sélectionnés.', 'orange');
+    }
+    this.renderCrisisRenfortDraftLots();
+    this.updateCrisisRenfortSubmitButtonState();
+  }
+
+  adjustCrisisRenfortDraftLot(lotId, delta) {
+    if (!this._crisisRenfortDraftLots) this._crisisRenfortDraftLots = {};
+    const current = this._crisisRenfortDraftLots[lotId] || 0;
+    const available = this.workplaceEquipment?.[lotId] || 0;
+    const next = Math.max(0, Math.min(available, current + delta));
+    if (next === 0) {
+      delete this._crisisRenfortDraftLots[lotId];
+    } else {
+      this._crisisRenfortDraftLots[lotId] = next;
+    }
+    this.renderCrisisRenfortDraftLots();
+    this.updateCrisisRenfortSubmitButtonState();
+  }
+
+  setCrisisRenfortDraftLot(lotId, qty) {
+    if (!this._crisisRenfortDraftLots) this._crisisRenfortDraftLots = {};
+    const val = parseInt(qty) || 0;
+    const available = this.workplaceEquipment?.[lotId] || 0;
+    const finalVal = Math.max(0, Math.min(available, val));
+    if (finalVal === 0) {
+      delete this._crisisRenfortDraftLots[lotId];
+    } else {
+      this._crisisRenfortDraftLots[lotId] = finalVal;
+    }
+    this.renderCrisisRenfortDraftLots();
+    this.updateCrisisRenfortSubmitButtonState();
+  }
+
+  renderCrisisRenfortDraftLots() {
+    const container = document.getElementById('prop-renfort-lots-list-container');
+    if (!container) return;
+    const allLots = window.ProtecEquipements?.LOTS_CATALOG || [];
+    const entries = Object.entries(this._crisisRenfortDraftLots || {}).filter(([_, q]) => q > 0);
+    if (entries.length === 0) {
+      container.innerHTML = '<div class="text-[11px] text-slate-400 italic py-1">Aucun lot de matériel embarqué supplémentaire.</div>';
+      return;
+    }
+    container.innerHTML = entries.map(([lotId, qty]) => {
+      const lotMeta = allLots.find(l => l.id === lotId) || { id: lotId, name: lotId, storageSize: 2 };
+      const maxStock = this.workplaceEquipment?.[lotId] || 0;
+      return `
+        <div class="p-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-between gap-2 shadow-2xs">
+          <div class="min-w-0">
+            <span class="font-bold text-slate-800 dark:text-slate-100 text-xs block truncate">${lotMeta.name}</span>
+            <span class="text-[10px] text-slate-500 font-medium">${lotMeta.storageSize || 2} place(s) LOG / unité • Stock : ${maxStock}</span>
+          </div>
+          <div class="flex items-center gap-1 shrink-0">
+            <button type="button" onclick="window.game.adjustCrisisRenfortDraftLot('${lotId}', -1)" class="w-6 h-6 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
+            <input type="number" min="0" max="${maxStock}" value="${qty}" onchange="window.game.setCrisisRenfortDraftLot('${lotId}', this.value)" class="w-9 text-center font-mono font-black text-xs text-indigo-700 dark:text-indigo-300 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded py-0.5">
+            <button type="button" onclick="window.game.adjustCrisisRenfortDraftLot('${lotId}', 1)" class="w-6 h-6 rounded bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
+            <button type="button" onclick="window.game.setCrisisRenfortDraftLot('${lotId}', 0)" class="w-6 h-6 rounded bg-rose-50 dark:bg-rose-950/60 hover:bg-rose-100 text-rose-600 dark:text-rose-300 font-black text-xs flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
   updateCrisisRenfortEmbarkedLotsCalculation() {
@@ -21329,6 +21465,8 @@ class ProtecGame {
   openProposeCrisisRenfortModal(missionId) {
     const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
+
+    this._crisisRenfortDraftLots = {};
 
     const dispoVehicles = (this.vehicles || []).filter(v => v.status === 'dispo');
     const dispoVolunteers = (this.volunteers || []).filter(v => v.status === 'dispo' && !v.isBurnout);
@@ -21436,21 +21574,12 @@ class ProtecGame {
                 Aucun lot de matériel lourd en stock à l'antenne. L'équipe partira avec l'armement standard du véhicule.
               </div>
             ` : `
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs max-h-40 overflow-y-auto pr-1">
-                ${ownedLots.map(l => `
-                  <label class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 flex items-center justify-between gap-2 cursor-pointer hover:border-indigo-400">
-                    <div class="flex items-center gap-2 min-w-0">
-                      <input type="checkbox" name="prop-embarked-lot" value="${l.id}" data-name="${l.name}" data-size="${l.storageSize || 2}" onchange="window.game.updateCrisisRenfortEmbarkedLotsCalculation()" class="rounded text-indigo-600 focus:ring-0 cursor-pointer">
-                      <div class="min-w-0">
-                        <span class="font-bold text-slate-800 dark:text-slate-200 block truncate">${l.name}</span>
-                        <span class="text-[10px] text-slate-500">${this.workplaceEquipment[l.id]} en stock</span>
-                      </div>
-                    </div>
-                    <span class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-bold shrink-0">
-                      ${l.storageSize || 2} LOG
-                    </span>
-                  </label>
-                `).join('')}
+              <select onchange="if(this.value){ window.game.addCrisisRenfortDraftLot(this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
+                <option value="">+ Ajouter un lot de matériel en renfort...</option>
+                ${ownedLots.map(l => `<option value="${l.id}">${l.name} (${this.workplaceEquipment[l.id]} dispo • ${l.storageSize || 2} places LOG)</option>`).join('')}
+              </select>
+              <div id="prop-renfort-lots-list-container" class="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                <div class="text-[11px] text-slate-400 italic py-1">Aucun lot de matériel embarqué supplémentaire.</div>
               </div>
             `}
           </div>
@@ -21650,13 +21779,29 @@ class ProtecGame {
 
     // Récupération des lots embarqués
     const embarkedLots = [];
-    document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
-      embarkedLots.push({
-        id: cb.value,
-        name: cb.dataset.name,
-        storageSize: parseInt(cb.dataset.size || 2)
+    const allLotsCatalog = window.ProtecEquipements?.LOTS_CATALOG || [];
+    if (this._crisisRenfortDraftLots && Object.keys(this._crisisRenfortDraftLots).length > 0) {
+      Object.entries(this._crisisRenfortDraftLots).forEach(([lotId, qty]) => {
+        if (qty > 0) {
+          const lotMeta = allLotsCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, storageSize: 2 };
+          for (let i = 0; i < qty; i++) {
+            embarkedLots.push({
+              id: lotId,
+              name: lotMeta.name,
+              storageSize: parseInt(lotMeta.storageSize || 2)
+            });
+          }
+        }
       });
-    });
+    } else {
+      document.querySelectorAll('input[name="prop-embarked-lot"]:checked').forEach(cb => {
+        embarkedLots.push({
+          id: cb.value,
+          name: cb.dataset.name,
+          storageSize: parseInt(cb.dataset.size || 2)
+        });
+      });
+    }
 
     const lotRadio = document.querySelector('input[name="prop-special-lot"]:checked');
     const specialLot = lotRadio ? lotRadio.value : '';
@@ -31914,70 +32059,92 @@ class ProtecGame {
       }
 
       // 4. Sollicitations spontanées des organisateurs locaux (24/24)
-      // RÈGLE MÉTIER : Ce qui augmente le plus les chances d'avoir des demandes de DPS,
-      // c'est en 1er le Site Internet (qui doit être mis à jour régulièrement),
-      // puis la présence sur DPS (bonne présence et avis organisateurs),
-      // mais aussi le nombre de bénévoles et le nombre de missions effectuées.
-      if (this.clock.second === 0 && this.clock.minute % 5 === 0) {
+      // RÈGLE MÉTIER CALIBRÉE :
+      // - Une antenne peu connue / naissante (réputation < 50, < 10 DPS) ne doit JAMAIS recevoir 4 demandes en 10 min.
+      // - Même avec de la publicité / campagne active, elle reçoit 1 ou 2 demandes réparties sur plusieurs heures de jeu.
+      // - Cooldown obligatoire entre 2 arrivées de devis : 2 à 4 heures pour petite antenne, 1 à 2 heures pour grande antenne.
+      if (this.clock.second === 0 && (this.clock.minute === 0 || this.clock.minute === 30)) {
         if (this.stations.length > 0) {
           const completedDpsCount = (this.missions || []).filter(m => m.type === 'dps' && m.status === 'completed').length;
           const volsCount = (this.volunteers || []).length;
           const repScore = this.resources.reputationScore || 0;
 
-          // 1. FACTEUR N°1 : SITE INTERNET DE L'ANTENNE (Mises à jour régulières)
-          const siteFreshness = this.antenneWebsite?.freshness ?? 85;
-          let devisChance = 0.05; // Base de départ
+          // Mesure du temps écoulé depuis la dernière opportunité de devis
+          const curHours = (this.clock.year * 8760) + (this.clock.month * 720) + (this.clock.day * 24) + (this.clock.hour || 0);
+          const hoursSinceLastDevis = curHours - (this._lastDevisReceivedTotalHours || 0);
 
-          if (siteFreshness >= 80) {
-            devisChance += 0.30; // Site à jour : boost massif n°1 !
-          } else if (siteFreshness >= 50) {
-            devisChance += 0.15;
-          } else if (siteFreshness < 30) {
-            devisChance = Math.max(0.02, devisChance - 0.08); // Site à l'abandon : chute des demandes
+          // Facteur de notoriété réelle de l'antenne sur son territoire
+          let notorietyFactor = 0.20;
+          let minCooldownHours = 3; // Délai minimum entre 2 demandes pour petite antenne (3 heures de jeu)
+
+          if (completedDpsCount >= 30 && repScore >= 150) {
+            notorietyFactor = 1.0; // Antenne historique très réputée
+            minCooldownHours = 1;
+          } else if (completedDpsCount >= 12 && repScore >= 70) {
+            notorietyFactor = 0.60; // Antenne bien établie
+            minCooldownHours = 2;
+          } else if (completedDpsCount >= 4 && repScore >= 35) {
+            notorietyFactor = 0.35; // Antenne naissante qui commence à être repérée
+            minCooldownHours = 2.5;
+          } else {
+            notorietyFactor = 0.18; // Antenne débutante / peu connue
+            minCooldownHours = 3.5;
           }
 
-          // 2. FACTEUR N°2 : PRÉSENCE SUR DPS & QUALITÉ DES PRESTATIONS (Avis organisateurs)
-          const reviewsStats = (window.ProtecCommunication && typeof window.ProtecCommunication.getReviewsStats === 'function')
-            ? window.ProtecCommunication.getReviewsStats(this)
-            : { average: 4.8 };
-          if (reviewsStats.average >= 4.7) {
-            devisChance += 0.12; // Excellente présence et recommandation
-          } else if (reviewsStats.average >= 4.2) {
-            devisChance += 0.06;
-          }
+          // Respect strict du cooldown réaliste : pas d'avalanche de devis en peu de temps
+          if (hoursSinceLastDevis >= minCooldownHours) {
+            // Chance de base par créneau de 30 min (pondérée par la notoriété)
+            let devisChance = 0.04 * notorietyFactor;
 
-          // 3. FACTEUR N°3 : NOMBRE DE BÉNÉVOLES DE L'ANTENNE (Capacité opérationnelle)
-          if (volsCount >= 30) devisChance += 0.10;
-          else if (volsCount >= 15) devisChance += 0.06;
-          else if (volsCount >= 8) devisChance += 0.03;
+            // 1. FACTEUR N°1 : SITE INTERNET DE L'ANTENNE
+            const siteFreshness = this.antenneWebsite?.freshness ?? 85;
+            if (siteFreshness >= 80) {
+              devisChance += 0.08 * notorietyFactor;
+            } else if (siteFreshness >= 50) {
+              devisChance += 0.04 * notorietyFactor;
+            } else if (siteFreshness < 30) {
+              devisChance *= 0.5;
+            }
 
-          // 4. FACTEUR N°4 : NOMBRE DE MISSIONS EFFECTUÉES (Expérience démontrée)
-          if (completedDpsCount >= 15) devisChance += 0.12;
-          else if (completedDpsCount >= 5) devisChance += 0.08;
-          else if (completedDpsCount >= 1) devisChance += 0.04;
+            // 2. FACTEUR N°2 : AVIS ORGANISATEURS
+            const reviewsStats = (window.ProtecCommunication && typeof window.ProtecCommunication.getReviewsStats === 'function')
+              ? window.ProtecCommunication.getReviewsStats(this)
+              : { average: 4.8 };
+            if (reviewsStats.average >= 4.7) {
+              devisChance += 0.04 * notorietyFactor;
+            }
 
-          // 5. CAMPAGNES PAYANTES CIBLÉES & RÉSEAUX SOCIAUX (Impact concentré)
-          const hasDpsTargetedCampaign = !!(
-            this.commData?.activeCampaign?.subjectId === 'dps' ||
-            this.resources.campaigns?.social ||
-            this.resources.campaigns?.posters
-          );
-          if (hasDpsTargetedCampaign) {
-            devisChance += 0.22; // Impact ciblé concentré
-          }
+            // 3. FACTEUR N°3 : CAPACITÉ OPÉRATIONNELLE BÉNÉVOLES
+            if (volsCount >= 30) devisChance += 0.05 * notorietyFactor;
+            else if (volsCount >= 15) devisChance += 0.03 * notorietyFactor;
 
-          const socialVis = this.socialMedia?.visibilityScore ?? 75;
-          if (socialVis >= 75) devisChance += 0.08;
-          else if (socialVis >= 50) devisChance += 0.04;
+            // 4. FACTEUR N°4 : EXPÉRIENCE DÉMONTRÉE
+            if (completedDpsCount >= 15) devisChance += 0.05 * notorietyFactor;
+            else if (completedDpsCount >= 5) devisChance += 0.03 * notorietyFactor;
 
-          const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
-          devisChance *= dpsMult;
+            // 5. CAMPAGNES PAYANTES CIBLÉES & RÉSEAUX SOCIAUX (Impact proportionné à la notoriété)
+            const hasDpsTargetedCampaign = !!(
+              this.commData?.activeCampaign?.subjectId === 'dps' ||
+              this.resources.campaigns?.social ||
+              this.resources.campaigns?.posters
+            );
+            if (hasDpsTargetedCampaign) {
+              // Même avec de la pub, pour une petite antenne débutante, l'effet produit 1 à 2 demandes en plusieurs heures
+              devisChance += 0.18 * Math.max(0.40, notorietyFactor);
+            }
 
-          const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
-          const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
-          const maxSimultaneous = cfgMaxDevis !== null ? cfgMaxDevis : this.getSimultaneousDevisLimit();
-          if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
-            this.generateRandomDevisOpportunity();
+            const socialVis = this.socialMedia?.visibilityScore ?? 75;
+            if (socialVis >= 75) devisChance += 0.04 * notorietyFactor;
+
+            const dpsMult = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('dpsRequestBaseChanceMultiplier', 1.0) : 1.0;
+            devisChance *= dpsMult;
+
+            const pendingDevisCount = (this.devis || []).filter(d => d.status === 'pending').length;
+            const cfgMaxDevis = window.ProtecGameplayConfig ? window.ProtecGameplayConfig.get('maxSimultaneousPendingDevis', 6) : null;
+            const maxSimultaneous = cfgMaxDevis !== null ? cfgMaxDevis : this.getSimultaneousDevisLimit();
+            if (pendingDevisCount < maxSimultaneous && Math.random() < devisChance) {
+              this.generateRandomDevisOpportunity();
+            }
           }
         }
       }
