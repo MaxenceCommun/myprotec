@@ -564,13 +564,20 @@
     // Helper pour générer une date pour un événement calé sur son mois réel de calendrier
     createEventDateForSpecificMonth(targetMonth, currentYear, currentMonth, currentDay, startHour, dur, daysNames, monthsNames, preferWeekend = true) {
       let year = currentYear;
-      if (targetMonth < currentMonth || (targetMonth === currentMonth && currentDay >= 20)) {
+      // Si le mois cible est déjà passé dans l'année en cours, ou si on est dans le mois cible mais qu'il reste moins de 3 jours dans le mois
+      if (targetMonth < currentMonth || (targetMonth === currentMonth && currentDay >= 28)) {
         year = currentYear + 1;
       }
 
       let day = 10 + Math.floor(Math.random() * 12);
       if (targetMonth === currentMonth) {
-        day = Math.min(28, currentDay + 3 + Math.floor(Math.random() * 5));
+        if (year === currentYear) {
+          // Événement d'ici la fin du mois en cours (garanti dans 2 à 5 jours)
+          day = Math.min(28, currentDay + 2 + Math.floor(Math.random() * 4));
+        } else {
+          // Si le mois courant est dépassé et reporté à l'an prochain, caler sur une date normale du mois
+          day = 10 + Math.floor(Math.random() * 12);
+        }
       }
 
       let dObj = new Date(year, targetMonth, day);
@@ -659,12 +666,14 @@
       }
     },
 
-    // Recale ou nettoie tous les devis actifs dont la date serait passée
+    // Recale ou nettoie tous les devis actifs dont la date serait passée ou incohérente
     cleanPastDevis(game) {
       if (!game || !Array.isArray(game.devis)) return;
       const curYear = game.clock?.year || new Date().getFullYear();
       const curMonth = (game.clock?.month !== undefined) ? game.clock.month : new Date().getMonth();
       const curDay = game.clock?.day || new Date().getDate();
+      const daysNames = game.clock?.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+      const monthsNames = game.clock?.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
       const isPast = (evtDate) => {
         if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) return true;
@@ -676,19 +685,60 @@
 
       let modified = false;
 
-      game.devis.forEach(d => {
-        if (['pending', 'previsionnel', 'sent'].includes(d.status) && isPast(d.eventDate)) {
+      const sanitizeDevisOrEvt = (d) => {
+        if (!d) return;
+
+        // 1. Correction du saut d'année erroné (ex: événement repoussé à l'année suivante alors qu'il a lieu cette année)
+        if (d.eventDate && d.eventDate.year > curYear) {
+          // Si le mois de l'événement est le mois courant ou si c'est une urgence de reprise de dernière minute
+          if (d.eventDate.month === curMonth || d.isLastMinute) {
+            d.eventDate.year = curYear;
+            // Si le jour dans le mois est dépassé, on recale à J+2 à J+4 dans le futur
+            if (d.eventDate.day < curDay) {
+              const newOffset = d.isLastMinute ? (2 + Math.floor(Math.random() * 3)) : (4 + Math.floor(Math.random() * 7));
+              const targetD = new Date(curYear, curMonth, curDay + newOffset);
+              d.eventDate.year = targetD.getFullYear();
+              d.eventDate.month = targetD.getMonth();
+              d.eventDate.day = targetD.getDate();
+              d.eventDate.dayName = daysNames[targetD.getDay()];
+              d.eventDate.monthName = monthsNames[targetD.getMonth()];
+            }
+            modified = true;
+          }
+        }
+
+        // 2. Calcul dynamique et fiable du délai réel restant
+        const daysUntil = (typeof game.getDaysUntilEvent === 'function')
+          ? game.getDaysUntilEvent(d)
+          : (d.eventDate && d.eventDate.year != null
+              ? Math.max(0, Math.round((new Date(d.eventDate.year, d.eventDate.month, d.eventDate.day) - new Date(curYear, curMonth, curDay)) / (1000 * 3600 * 24)))
+              : (d.daysAhead || 3));
+
+        d.daysAhead = daysUntil;
+
+        // 3. Règle opérationnelle d'urgence : Une annulation de dernière minute (autre AASC) ne peut exister que sous 7 jours
+        if (d.daysAhead > 7 && d.isLastMinute) {
+          d.isLastMinute = false;
+          d.urgencyReason = "Planification anticipée d'événement";
+          modified = true;
+        }
+
+        // 4. Si la date est passée, recaler proprement dans le futur
+        if (isPast(d.eventDate)) {
           this.ensureFutureEventDate(d, game);
           modified = true;
+        }
+      };
+
+      game.devis.forEach(d => {
+        if (['pending', 'previsionnel', 'sent'].includes(d.status)) {
+          sanitizeDevisOrEvt(d);
         }
       });
 
       if (Array.isArray(game.territoryEventsPool)) {
         game.territoryEventsPool.forEach(evt => {
-          if (isPast(evt.eventDate)) {
-            this.ensureFutureEventDate(evt, game);
-            modified = true;
-          }
+          sanitizeDevisOrEvt(evt);
         });
       }
 
@@ -780,7 +830,7 @@
             hiddenRequiredSkills: ris.requiredRanks,
             consumableCost: ris.scaleKey === 'PAPS' ? 20 : 45,
             status: 'pending',
-            isLastMinute: Math.random() < 0.20,
+            isLastMinute: (daysAhead <= 5) ? (Math.random() < 0.25) : false,
             daysAhead: daysAhead,
             secondsLeft: 3600 * 24 * 7,
             budgetMax: fin.budgetMax,
@@ -861,7 +911,7 @@
             hiddenRequiredSkills: ris.requiredRanks,
             consumableCost: 50,
             status: 'pending',
-            isLastMinute: Math.random() < 0.15,
+            isLastMinute: (daysAhead <= 5) ? (Math.random() < 0.20) : false,
             daysAhead: daysAhead,
             secondsLeft: 3600 * 24 * 7,
             budgetMax: fin.budgetMax,

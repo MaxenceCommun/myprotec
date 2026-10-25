@@ -434,6 +434,23 @@ class ProtecGame {
     };
   }
 
+  // Calcul universel, dynamique et fiable du délai en jours jusqu'à la date d'un événement par rapport à l'horloge du jeu
+  getDaysUntilEvent(devisOrDate) {
+    if (!devisOrDate) return 3;
+    const evt = devisOrDate.eventDate || devisOrDate;
+    if (!evt || evt.year == null || evt.month == null || evt.day == null) {
+      return devisOrDate.daysAhead || 3;
+    }
+    const curYear = this.clock?.year || new Date().getFullYear();
+    const curMonth = (this.clock?.month !== undefined) ? this.clock.month : new Date().getMonth();
+    const curDay = this.clock?.day || new Date().getDate();
+
+    const nowMs = new Date(curYear, curMonth, curDay).getTime();
+    const targetMs = new Date(evt.year, evt.month, evt.day).getTime();
+    const diffDays = Math.round((targetMs - nowMs) / (1000 * 3600 * 24));
+    return Math.max(0, diffDays);
+  }
+
   // Formatage propre du créneau de mission avec heures rondes (multiple de 5 min) : "Du Mardi 13 Octobre à 00:30 au Mardi 13 Octobre à 02:00"
   formatMissionScheduleRange(mission) {
     if (!mission) return 'Créneau non défini';
@@ -5921,7 +5938,7 @@ class ProtecGame {
     }
   }
 
-  // Recale ou régularise les devis dont la date est passée
+  // Recale ou régularise les devis dont la date est passée ou incohérente
   cleanPastDevis() {
     if (window.ProtecEvenementsReels && typeof window.ProtecEvenementsReels.cleanPastDevis === 'function') {
       window.ProtecEvenementsReels.cleanPastDevis(this);
@@ -5931,6 +5948,8 @@ class ProtecGame {
     const curYear = this.clock?.year || new Date().getFullYear();
     const curMonth = (this.clock?.month !== undefined) ? this.clock.month : new Date().getMonth();
     const curDay = this.clock?.day || new Date().getDate();
+    const daysNames = this.clock?.daysNames || ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+    const monthsNames = this.clock?.monthsNames || ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
     const isPast = (evtDate) => {
       if (!evtDate || evtDate.year == null || evtDate.month == null || evtDate.day == null) return true;
@@ -5941,20 +5960,43 @@ class ProtecGame {
     };
 
     let modified = false;
-    this.devis.forEach(d => {
+
+    const sanitizeDevis = (d) => {
+      if (!d) return;
+      if (d.eventDate && d.eventDate.year > curYear) {
+        if (d.eventDate.month === curMonth || d.isLastMinute) {
+          d.eventDate.year = curYear;
+          if (d.eventDate.day < curDay) {
+            const newOffset = d.isLastMinute ? (2 + Math.floor(Math.random() * 3)) : (4 + Math.floor(Math.random() * 7));
+            const targetD = new Date(curYear, curMonth, curDay + newOffset);
+            d.eventDate.year = targetD.getFullYear();
+            d.eventDate.month = targetD.getMonth();
+            d.eventDate.day = targetD.getDate();
+            d.eventDate.dayName = daysNames[targetD.getDay()];
+            d.eventDate.monthName = monthsNames[targetD.getMonth()];
+          }
+          modified = true;
+        }
+      }
+
+      const daysUntil = this.getDaysUntilEvent(d);
+      d.daysAhead = daysUntil;
+      if (d.daysAhead > 7 && d.isLastMinute) {
+        d.isLastMinute = false;
+        d.urgencyReason = "Planification anticipée d'événement";
+        modified = true;
+      }
+
       if (['pending', 'previsionnel', 'sent'].includes(d.status) && isPast(d.eventDate)) {
         this.ensureFutureDevisDate(d);
         modified = true;
       }
-    });
+    };
+
+    this.devis.forEach(d => sanitizeDevis(d));
 
     if (Array.isArray(this.territoryEventsPool)) {
-      this.territoryEventsPool.forEach(evt => {
-        if (isPast(evt.eventDate)) {
-          this.ensureFutureDevisDate(evt);
-          modified = true;
-        }
-      });
+      this.territoryEventsPool.forEach(evt => sanitizeDevis(evt));
     }
 
     if (modified && typeof this.updateStatsUI === 'function') {
@@ -9010,10 +9052,7 @@ class ProtecGame {
     if (!devis) return;
 
     // Calcul du délai en jours jusqu'à l'événement pour estimer l'urgence de l'organisateur
-    const todayDate = new Date(this.clock.year, this.clock.month, this.clock.day);
-    const eventDateObj = new Date(devis.eventDate?.year || this.clock.year, devis.eventDate?.month ?? this.clock.month, devis.eventDate?.day || this.clock.day);
-    const diffDays = Math.max(1, Math.round((eventDateObj - todayDate) / (1000 * 3600 * 24)));
-    const daysAhead = devis.daysAhead || diffDays;
+    const daysAhead = this.getDaysUntilEvent(devis);
 
     // RISQUE INITIAL QUE L'ORGANISATEUR PRENNE UNE AUTRE OPTION CONCURRENTE
     // Plus la date de l'événement est proche, plus l'organisateur est sous tension et démarche en parallèle !
@@ -9267,7 +9306,8 @@ class ProtecGame {
     const dynamicBareme = this.calculateDynamicBareme(devis);
     const bareme = dynamicBareme.totalBareme;
     const ratio = bareme > 0 ? (price / bareme) : 1;
-    const isUrgent = devis.isLastMinute || (devis.daysAhead !== undefined && devis.daysAhead <= 5);
+    const daysUntil = this.getDaysUntilEvent(devis);
+    const isUrgent = (devis.isLastMinute && daysUntil <= 7) || (daysUntil <= 5);
 
     const previewEl = document.getElementById(`devis-feedback-${devisId}`);
     if (!previewEl) return;
@@ -9474,7 +9514,8 @@ class ProtecGame {
     const dynamicBareme = this.calculateDynamicBareme(devis);
     const bareme = dynamicBareme.totalBareme;
     const ratio = bareme > 0 ? (price / bareme) : 1;
-    const isUrgent = devis.isLastMinute || (devis.daysAhead !== undefined && devis.daysAhead <= 5);
+    const daysUntil = this.getDaysUntilEvent(devis);
+    const isUrgent = (devis.isLastMinute && daysUntil <= 7) || (daysUntil <= 5);
 
     // 1. CONTRÔLE DE SÉCURITÉ ET CONFORMITÉ RÉELLE (RNMSC & PRÉFECTURE)
     if (devis.complianceAudit && !devis.complianceAudit.isConforme) {
@@ -25047,6 +25088,8 @@ class ProtecGame {
                   const isFull = confirmedVols.length >= reqVols;
                   const dateStr = this.formatFullDate(d.eventDate);
                   const dynamicBareme = this.calculateDynamicBareme(d);
+                  const daysUntil = this.getDaysUntilEvent(d);
+                  const isUrgent = !!(d.isLastMinute && daysUntil <= 7);
                   const responses = d.previsionnelResponses || {};
                   const responsesList = Object.values(responses);
                   const dispoCount = responsesList.filter(r => r.status === 'dispo').length;
@@ -25067,7 +25110,7 @@ class ProtecGame {
                             ` : `
                               <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">Statut : Non sollicité</span>
                             `}
-                            ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                            ${isUrgent ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${daysUntil}</span>` : ''}
                           </div>
                           <h4 class="text-sm font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
                           <p class="text-xs text-slate-600">
@@ -25181,6 +25224,8 @@ class ProtecGame {
 
               const dateStr = this.formatFullDate(d.eventDate);
               const opSalarie = this.getQualifiedOpSalarie();
+              const daysUntil = this.getDaysUntilEvent(d);
+              const isUrgent = !!(d.isLastMinute && daysUntil <= 7);
 
               return `
                 <div class="p-5 rounded-2xl glass-card space-y-4 border border-slate-200/80 shadow-sm" id="devis-card-${d.id}">
@@ -25189,7 +25234,7 @@ class ProtecGame {
                     <div>
                       <div class="flex items-center gap-2 flex-wrap">
                         <span class="px-2 py-0.5 rounded text-[10px] font-extrabold bg-pc-blue text-white">${d.eventName}</span>
-                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${d.daysAhead || 30}</span>`}
+                        ${isUrgent ? `<span class="px-2 py-0.5 rounded text-[10px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${daysUntil} (Annulation autre AASC)</span>` : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-sky-100 text-sky-800 border border-sky-200">📅 Planification J-${daysUntil}</span>`}
                       </div>
                       <h4 class="text-base font-extrabold text-slate-900 mt-1">${d.eventName}</h4>
                       <p class="text-xs text-slate-500">
@@ -26816,6 +26861,8 @@ class ProtecGame {
                                 const dynBareme = this.calculateDynamicBareme(d);
                                 const reqVols = d.configuredVolunteers || d.requiredVolunteers || 4;
                                 const prevVolsCount = d.previsionnelVolunteers?.length || 0;
+                                const daysUntil = this.getDaysUntilEvent(d);
+                                const isUrgent = !!(d.isLastMinute && daysUntil <= 7);
 
                                 return `
                                   <div class="p-3.5 rounded-2xl border-2 border-amber-400 dark:border-amber-600/60 bg-amber-50/50 dark:bg-amber-950/30 flex flex-col justify-between space-y-3">
@@ -26824,7 +26871,7 @@ class ProtecGame {
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white uppercase">
                                           ⏳ En Prévisionnel
                                         </span>
-                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        ${isUrgent ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${daysUntil}</span>` : ''}
                                         <div class="flex items-center gap-1.5">
                                           <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
                                           ${this.renderPinButtonHTML(d.id)}
@@ -26893,6 +26940,8 @@ class ProtecGame {
                                 const d = e.raw;
                                 const isSent = d.status === 'sent';
                                 const dynBareme = this.calculateDynamicBareme(d);
+                                const daysUntil = this.getDaysUntilEvent(d);
+                                const isUrgent = !!(d.isLastMinute && daysUntil <= 7);
 
                                 return `
                                   <div class="p-3.5 rounded-2xl border-2 ${isSent ? 'border-indigo-300 dark:border-indigo-700/60 bg-indigo-50/40 dark:bg-indigo-950/30' : 'border-dashed border-sky-300 dark:border-sky-700/60 bg-sky-50/40 dark:bg-sky-950/30'} flex flex-col justify-between space-y-3">
@@ -26901,7 +26950,7 @@ class ProtecGame {
                                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${isSent ? 'bg-indigo-600 text-white' : 'bg-sky-600 text-white'} uppercase">
                                           ${isSent ? '⚖️ En Délibération' : '📋 Devis Reçu'}
                                         </span>
-                                        ${d.isLastMinute ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${d.daysAhead || 3}</span>` : ''}
+                                        ${isUrgent ? `<span class="px-2 py-0.5 rounded text-[9px] font-black bg-rose-100 text-rose-800 border border-rose-300">🚨 Urgence J-${daysUntil}</span>` : ''}
                                         <span class="text-xs font-mono font-bold text-slate-700 dark:text-slate-300">${d.proposedPrice || dynBareme.totalBareme} €</span>
                                       </div>
                                       <h5 class="text-xs font-black text-slate-900 dark:text-white mt-1.5">${d.eventName}</h5>
