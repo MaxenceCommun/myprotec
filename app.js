@@ -1507,11 +1507,37 @@ class ProtecGame {
     const footer = document.getElementById('drawer-footer');
 
     this._activeAllianceDrawerStation = st;
+    const getCandidateEvents = () => {
+      const active = (this.missions || []).filter(m => m && m.status !== 'completed' && m.status !== 'failed' && m.status !== 'cancelled').map(m => ({
+        id: m.id,
+        title: m.title,
+        statusLabel: m.status === 'ongoing' ? 'EN COURS' : (m.isCrisis || m.type === 'crise' ? 'URGENCE / CRISE' : 'PLANIFIÉ'),
+        regCount: (m.registeredVolunteers || []).length,
+        reqCount: m.requiredVolunteers || 4,
+        assignedVehCount: (m.assignedVehicleIds || []).length,
+        requiredVehicles: m.requiredVehicles || [],
+        isPrevi: false,
+        raw: m
+      }));
+      const previ = (this.devis || []).filter(d => d && d.status === 'previsionnel').map(d => ({
+        id: d.id,
+        title: d.eventName || 'Dispositif en Option',
+        statusLabel: 'PRÉVISIONNEL',
+        regCount: (d.previsionnelVolunteers || []).length,
+        reqCount: d.configuredVolunteers || d.requiredVolunteers || 4,
+        assignedVehCount: 0,
+        requiredVehicles: d.configuredVehicles || d.requiredVehicles || ['VPSP'],
+        isPrevi: true,
+        raw: d
+      }));
+      return [...active, ...previ];
+    };
+
     if (!this._allianceDrawerDraft || this._allianceDrawerDraft.stationId !== st.id) {
-      const candidateMissions = (this.missions || []).filter(m => m && m.status !== 'completed' && m.status !== 'failed' && m.status !== 'cancelled');
+      const candidateMissions = getCandidateEvents();
       const defaultMission = candidateMissions.find(m => m.id === selectedMissionId) || candidateMissions[0] || null;
       const defaultNeeded = defaultMission
-        ? Math.max(1, (defaultMission.requiredVolunteers || 4) - (defaultMission.registeredVolunteers?.length || 0))
+        ? Math.max(1, defaultMission.reqCount - defaultMission.regCount)
         : 2;
       this._allianceDrawerDraft = {
         stationId: st.id,
@@ -1526,7 +1552,7 @@ class ProtecGame {
     }
 
     const draft = this._allianceDrawerDraft;
-    const candidateMissions = (this.missions || []).filter(m => m && m.status !== 'completed' && m.status !== 'failed' && m.status !== 'cancelled');
+    const candidateMissions = getCandidateEvents();
     const targetMission = candidateMissions.find(m => String(m.id) === String(draft.missionId)) || null;
     const vehCatalog = this.getAvailableVehicleTypesCatalog();
     const lotCatalog = this.getAvailableLotsCatalog();
@@ -1567,21 +1593,18 @@ class ProtecGame {
           </label>
           ${candidateMissions.length === 0 ? `
             <div class="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 font-semibold">
-              ⚠️ Vous n'avez aucune mission active ou planifiée au calendrier pour le moment. Signez un devis DPS ou attendez un déclenchement avant de demander un renfort.
+              ⚠️ Vous n'avez aucune mission active, planifiée ou en prévisionnel pour le moment.
             </div>
           ` : `
             <select onchange="window.game.setAllianceDrawerMission(this.value)" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-slate-50 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer">
               ${candidateMissions.map(m => {
-                const statusLbl = m.status === 'ongoing' ? 'EN COURS' : (m.isCrisis || m.type === 'crise' ? 'URGENCE / CRISE' : 'PLANIFIÉ');
-                const reg = (m.registeredVolunteers || []).length;
-                const req = m.requiredVolunteers || 4;
-                return `<option value="${m.id}" ${String(m.id) === String(draft.missionId) ? 'selected' : ''}>[${statusLbl}] ${m.title} (${reg}/${req} sec.)</option>`;
+                return `<option value="${m.id}" ${String(m.id) === String(draft.missionId) ? 'selected' : ''}>[${m.statusLabel}] ${m.title} (${m.regCount}/${m.reqCount} sec.)</option>`;
               }).join('')}
             </select>
             ${targetMission ? `
               <div class="text-[10.5px] text-slate-500 flex items-center justify-between pt-0.5">
-                <span>Effectif inscrit : <strong>${(targetMission.registeredVolunteers || []).length}/${targetMission.requiredVolunteers || 4}</strong></span>
-                <span>Véhicules affectés : <strong>${(targetMission.assignedVehicleIds || []).length}</strong></span>
+                <span>Effectif ${targetMission.isPrevi ? 'sondé disponible' : 'inscrit'} : <strong>${targetMission.regCount}/${targetMission.reqCount}</strong></span>
+                <span>Véhicules ${targetMission.isPrevi ? 'requis devis' : 'affectés'} : <strong>${targetMission.isPrevi ? (targetMission.requiredVehicles.join(', ') || '1 VPSP') : targetMission.assignedVehCount}</strong></span>
               </div>
             ` : ''}
           `}
@@ -1782,7 +1805,15 @@ class ProtecGame {
 
   requestDirectRenfort(targetStationId, targetStationName) {
     const draft = this._allianceDrawerDraft || {};
-    const mission = (this.missions || []).find(m => String(m.id) === String(draft.missionId));
+    const devisPrevi = (this.devis || []).find(d => String(d.id) === String(draft.missionId) && d.status === 'previsionnel');
+    const mission = (this.missions || []).find(m => String(m.id) === String(draft.missionId)) || (devisPrevi ? {
+      id: devisPrevi.id,
+      title: devisPrevi.eventName || devisPrevi.title || 'Dispositif en Option',
+      lat: devisPrevi.lat,
+      lng: devisPrevi.lng,
+      isPrevi: true,
+      rawDevis: devisPrevi
+    } : null);
     if (!mission) {
       this.showToast('Événement Requis ⚠️', 'Veuillez sélectionner une mission ou un événement pour votre demande de renfort.', 'orange');
       return;
@@ -9436,6 +9467,16 @@ class ProtecGame {
       address: devis.address || devis.locationAddress || this.generateRealisticStreetAddress(devis.commune || 'Ville', devis.lat, devis.lng),
       isSector: false
     };
+
+    newMission.sourceDevisId = devis.id;
+    if (Array.isArray(this.renforts)) {
+      this.renforts.forEach(r => {
+        if (String(r.missionId) === String(devis.id)) {
+          r.missionId = newMission.id;
+          r.missionTitle = newMission.title;
+        }
+      });
+    }
 
     // Information diffusée au planning : les bénévoles s'inscriront au fil de l'eau
     this.showToast(
@@ -21092,7 +21133,27 @@ class ProtecGame {
   }
 
   requestAllianceRenfortForMission(missionId, preset = {}) {
-    const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
+    let mission = (this.missions || []).find(m => String(m.id) === String(missionId)) || (this.activeCrises || []).find(c => String(c.id) === String(missionId));
+    if (!mission) {
+      const devisPrevi = (this.devis || []).find(d => String(d.id) === String(missionId));
+      if (devisPrevi) {
+        const reqVols = devisPrevi.configuredVolunteers || devisPrevi.requiredVolunteers || 4;
+        mission = {
+          id: devisPrevi.id,
+          title: devisPrevi.eventName || devisPrevi.title || 'Dispositif en Option',
+          type: 'dps',
+          isPrevisionnel: true,
+          eventDate: devisPrevi.eventDate,
+          requiredVolunteers: reqVols,
+          registeredVolunteers: devisPrevi.previsionnelVolunteers || [],
+          requiredVehicles: devisPrevi.configuredVehicles || devisPrevi.requiredVehicles || ['VPSP'],
+          configuredLots: devisPrevi.configuredLots || [],
+          lat: devisPrevi.lat,
+          lng: devisPrevi.lng,
+          departmentCode: String(devisPrevi.departmentCode || this.stations?.[0]?.departmentCode || '54')
+        };
+      }
+    }
     if (!mission) return;
 
     const myId = this.player?.id || 'usr_local';
@@ -21146,6 +21207,19 @@ class ProtecGame {
       this.renforts.unshift(renfortData);
       this.sanitizeRenforts();
       this.showToast('Appel à Renfort Diffusé', `Alerte transmise sur la fréquence fédérale !`, 'green');
+    });
+  }
+
+  requestAllianceRenfortForDevisPrevisionnel(devisId) {
+    const devis = (this.devis || []).find(d => String(d.id) === String(devisId));
+    if (!devis) {
+      this.showToast('Devis Introuvable', 'Impossible de localiser ce dossier de devis.', 'orange');
+      return;
+    }
+    const needed = Math.max(1, (devis.configuredVolunteers || devis.requiredVolunteers || 4) - ((devis.previsionnelVolunteers || []).length));
+    this.requestAllianceRenfortForMission(devis.id, {
+      volunteersCount: needed,
+      requiredVehicles: devis.configuredVehicles || devis.requiredVehicles || ['VPSP']
     });
   }
 
@@ -24775,6 +24849,10 @@ class ProtecGame {
                           <button onclick="window.game.manualRelancePrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Envoyer une relance aux bénévoles">
                             <i data-lucide="bell" class="w-3.5 h-3.5"></i>
                             <span>Relancer (${d.relancesCount || 0})</span>
+                          </button>
+                          <button onclick="window.game.requestAllianceRenfortForDevisPrevisionnel('${d.id}')" class="px-3.5 py-2 rounded-xl text-xs font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 shadow-xs flex items-center gap-1.5 transition cursor-pointer" title="Demander des renforts (secouristes, véhicules, lots) au réseau pour ce dispositif prévisionnel">
+                            <i data-lucide="users" class="w-3.5 h-3.5 text-indigo-600"></i>
+                            <span>Renfort Réseau</span>
                           </button>
                           <button onclick="window.ProtecMessaging ? window.ProtecMessaging.openForMission('${d.id}', window.game) : null" class="px-3 py-2 rounded-xl text-xs font-bold text-slate-700 hover:bg-slate-100 border border-slate-200 transition flex items-center gap-1 cursor-pointer">
                             <i data-lucide="message-square" class="w-3.5 h-3.5 text-pc-blue"></i>

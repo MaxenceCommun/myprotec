@@ -284,7 +284,31 @@ window.ProtecMultiplayer = {
   },
 
   openRenfortZoneModal(game, missionId, preset = {}) {
-    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
+    let mission = (game.missions || []).find(m => String(m.id) === String(missionId)) || (game.activeCrises || []).find(c => String(c.id) === String(missionId));
+    if (!mission) {
+      const devisPrevi = (game.devis || []).find(d => String(d.id) === String(missionId));
+      if (devisPrevi) {
+        const reqVols = devisPrevi.configuredVolunteers || devisPrevi.requiredVolunteers || 4;
+        mission = {
+          id: devisPrevi.id,
+          title: devisPrevi.eventName || devisPrevi.title || 'Dispositif en Option',
+          desc: devisPrevi.desc || `Dispositif prévisionnel pour ${devisPrevi.eventName || 'DPS'}.`,
+          type: 'dps',
+          scale: devisPrevi.configuredScale || devisPrevi.scale || 'DPS-PE',
+          publicCount: devisPrevi.publicCount || 0,
+          isPrevisionnel: true,
+          eventDate: devisPrevi.eventDate,
+          requiredVolunteers: reqVols,
+          registeredVolunteers: devisPrevi.previsionnelVolunteers || [],
+          requiredVehicles: devisPrevi.configuredVehicles || devisPrevi.requiredVehicles || ['VPSP'],
+          configuredLots: devisPrevi.configuredLots || [],
+          lat: devisPrevi.lat,
+          lng: devisPrevi.lng,
+          address: devisPrevi.address || devisPrevi.locationAddress || 'Secteur Opérationnel',
+          departmentCode: String(devisPrevi.departmentCode || game.stations?.[0]?.departmentCode || '54')
+        };
+      }
+    }
     if (!mission) return;
 
     this.injectState(game);
@@ -744,7 +768,31 @@ window.ProtecMultiplayer = {
   },
 
   submitRenfortRequest(game, missionId, zone) {
-    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
+    let mission = (game.missions || []).find(m => String(m.id) === String(missionId)) || (game.activeCrises || []).find(c => String(c.id) === String(missionId));
+    if (!mission) {
+      const devisPrevi = (game.devis || []).find(d => String(d.id) === String(missionId));
+      if (devisPrevi) {
+        const reqVols = devisPrevi.configuredVolunteers || devisPrevi.requiredVolunteers || 4;
+        mission = {
+          id: devisPrevi.id,
+          title: devisPrevi.eventName || devisPrevi.title || 'Dispositif en Option',
+          desc: devisPrevi.desc || `Dispositif prévisionnel pour ${devisPrevi.eventName || 'DPS'}.`,
+          type: 'dps',
+          scale: devisPrevi.configuredScale || devisPrevi.scale || 'DPS-PE',
+          publicCount: devisPrevi.publicCount || 0,
+          isPrevisionnel: true,
+          eventDate: devisPrevi.eventDate,
+          requiredVolunteers: reqVols,
+          registeredVolunteers: devisPrevi.previsionnelVolunteers || [],
+          requiredVehicles: devisPrevi.configuredVehicles || devisPrevi.requiredVehicles || ['VPSP'],
+          configuredLots: devisPrevi.configuredLots || [],
+          lat: devisPrevi.lat,
+          lng: devisPrevi.lng,
+          address: devisPrevi.address || devisPrevi.locationAddress || 'Secteur Opérationnel',
+          departmentCode: String(devisPrevi.departmentCode || game.stations?.[0]?.departmentCode || '54')
+        };
+      }
+    }
     if (!mission) return;
 
     this.injectState(game);
