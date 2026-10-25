@@ -1995,11 +1995,12 @@
 
 
   // Sprites générés à l'angle exact de la caméra (images/vehicles/iso, 4 caps par modèle)
+  const SPRITE_REV = '3'; // à incrémenter quand les PNG véhicules changent
   const SPRITES = { manifest: null, loading: false, imgs: new Map() };
   function loadSpriteManifest(onReady) {
     if (SPRITES.manifest || SPRITES.loading || typeof fetch !== 'function') return;
     SPRITES.loading = true;
-    fetch('images/vehicles/iso/manifest.json').then(r => (r.ok ? r.json() : null)).then(m => {
+    fetch('images/vehicles/iso/manifest.json?v=' + SPRITE_REV).then(r => (r.ok ? r.json() : null)).then(m => {
       if (m && m.models) { SPRITES.manifest = m; if (onReady) onReady(); }
     }).catch(() => { /* pas de sprites : repli sur les illustrations */ });
   }
@@ -2030,7 +2031,7 @@
     if (!e) {
       e = { img: new Image(), ready: false };
       e.img.onload = () => { e.ready = true; };
-      e.img.src = 'images/vehicles/iso/' + file;
+      e.img.src = 'images/vehicles/iso/' + file + '?v=' + SPRITE_REV;
       SPRITES.imgs.set(file, e);
     }
     return e.ready ? e.img : null;
