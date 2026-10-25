@@ -1460,21 +1460,93 @@ window.ProtecNotifications = {
     try {
       const supaSave = await window.ProtecSupabase.loadGameState(uid, uname);
       if (supaSave?.save_data?.missions && Array.isArray(supaSave.save_data.missions)) {
-        const currentIds = new Set((window.game.missions || []).map(m => m.id));
-        let hasNew = false;
+        const game = window.game;
+        const currentIds = new Set((game.missions || []).map(m => m.id));
+        const newValidMissions = [];
+
+        // Helper pour valider si une mission cloud est réellement active et non terminée/périmée
+        const isMissionValidAndActive = (m) => {
+          if (!m || !m.id) return false;
+          // Vérifier si elle est déjà terminée/clôturée/annulée
+          if (typeof game.isMissionTerminated === 'function' && game.isMissionTerminated(m)) return false;
+          const s = String(m.status || '').toLowerCase().trim();
+          if (['completed', 'termine', 'terminee', 'finished', 'cloture', 'cloturee', 'archive', 'archivee', 'cancelled', 'annule', 'annulee', 'carence'].includes(s)) return false;
+          if (m.isFinished || m.isCompleted || m.isTerminated || m.closed) return false;
+
+          // Gardes (SAMU/SDIS) : gérées à part dans les modules de garde, jamais de toast d'intervention d'urgence sur la carte
+          if (m.isGarde || m.type === 'garde_samu' || m.isGuard || m.category === 'garde') return false;
+
+          // Vérifier si la date de la mission est déjà expirée / passée
+          if (game.clock) {
+            const curY = game.clock.year;
+            const curM = game.clock.month;
+            const curD = game.clock.day;
+            const curH = game.clock.hour || 0;
+            const curMin = game.clock.minute || 0;
+            const curMs = new Date(curY, curM, curD, curH, curMin).getTime();
+
+            const checkDatePassed = (dObj, dur = 4) => {
+              if (!dObj) return false;
+              if (typeof dObj === 'object') {
+                const y = Number(dObj.year) || curY;
+                let mo = dObj.month !== undefined ? Number(dObj.month) : curM;
+                if (mo > 11) mo = mo - 1;
+                const d = Number(dObj.day) || 1;
+                const h = (dObj.hour !== undefined) ? Number(dObj.hour) : 8;
+                const mi = (dObj.minute !== undefined) ? Number(dObj.minute) : 0;
+                if (y < curY) return true;
+                if (y === curY && mo < curM) return true;
+                if (y === curY && mo === curM && d < curD) return true;
+                const endMs = new Date(y, mo, d, h + dur, mi).getTime();
+                return curMs >= endMs;
+              }
+              if (typeof dObj === 'string' || typeof dObj === 'number') {
+                const p = new Date(dObj).getTime();
+                if (!isNaN(p)) return curMs >= (p + dur * 3600 * 1000);
+              }
+              return false;
+            };
+
+            if (checkDatePassed(m.eventDate, m.durationHours || 4)) return false;
+            if (checkDatePassed(m.scheduled_date, m.durationHours || 4)) return false;
+            if (checkDatePassed(m.date, m.durationHours || 4)) return false;
+          }
+
+          // Missions SAMU : requiert convention et VPSP
+          const hasSamuConv = Boolean(game.samuConvention && game.samuConvention.signed);
+          const hasVpsp = Array.isArray(game.vehicles) && game.vehicles.some(v => v.type === 'VPSP');
+          if (m.type === 'samu' && (!hasSamuConv || !hasVpsp)) return false;
+
+          return true;
+        };
+
         supaSave.save_data.missions.forEach(m => {
-          if (!currentIds.has(m.id)) {
-            if (!Array.isArray(window.game.missions)) window.game.missions = [];
-            window.game.missions.unshift(m);
+          if (!currentIds.has(m.id) && isMissionValidAndActive(m)) {
+            if (!Array.isArray(game.missions)) game.missions = [];
+            game.missions.unshift(m);
             currentIds.add(m.id);
-            hasNew = true;
+            newValidMissions.push(m);
           }
         });
-        if (hasNew) {
-          if (typeof window.game.renderMissions === 'function') window.game.renderMissions();
-          if (typeof window.game.updateStatsUI === 'function') window.game.updateStatsUI();
-          if (typeof window.game.showToast === 'function') {
-            window.game.showToast('🚨 Nouvelle Mission Disponible !', 'Une intervention d’urgence attend vos effectifs sur la carte.', 'orange');
+
+        if (newValidMissions.length > 0) {
+          if (typeof game.renderMissions === 'function') game.renderMissions();
+          if (typeof game.updateStatsUI === 'function') game.updateStatsUI();
+          if (typeof game.showToast === 'function') {
+            const first = newValidMissions[0];
+            const missionTitle = first.title || first.name || 'Intervention Opérationnelle';
+            const locationStr = first.city || first.commune || first.location || '';
+            const countExtra = newValidMissions.length > 1 ? ` (+${newValidMissions.length - 1} autre${newValidMissions.length > 2 ? 's' : ''})` : '';
+            const bodyMsg = locationStr 
+              ? `${locationStr} — ${missionTitle}${countExtra} attend vos effectifs.`
+              : `${missionTitle}${countExtra} attend vos effectifs sur la carte.`;
+
+            game.showToast(
+              `🚨 Nouvelle Mission : ${missionTitle}`,
+              bodyMsg,
+              'orange',
+              { type: 'mission', id: first.id, label: 'Localiser ➜' }
+            );
           }
         }
       }
