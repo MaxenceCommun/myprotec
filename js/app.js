@@ -20844,8 +20844,6 @@ class ProtecGame {
                   `;
                 })()}
 
-                  <!-- 2-bis. ARMEMENT & CHARGEMENT LOGISTIQUE (LOTS, CAISSES, VÉLOS) -->
-                  ${window.ProtecLogistique && typeof window.ProtecLogistique.renderLogisticsArmamentSection === 'function' ? window.ProtecLogistique.renderLogisticsArmamentSection(this, mission) : ''}
 
                   <!-- 3. EN BAS : GESTION DES DEMANDES DE RENFORTS (AUTRES ANTENNES = AUTRES JOUEURS) - MASQUÉ PAR DÉFAUT -->
                   ${this._showRenfortSection ? `
@@ -21159,6 +21157,9 @@ class ProtecGame {
                     </div>
                   `;
                 })()}
+
+                <!-- ARMEMENT & CHARGEMENT DES VÉHICULES (LOTS, CAISSES, VÉLOS) -->
+                ${window.ProtecLogistique && typeof window.ProtecLogistique.renderLogisticsArmamentSection === 'function' ? window.ProtecLogistique.renderLogisticsArmamentSection(this, mission) : ''}
 
                 <!-- Dotation réglementaire des lots opérationnels -->
                 <div class="p-3.5 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-2.5">
