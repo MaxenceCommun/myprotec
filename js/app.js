@@ -20616,57 +20616,7 @@ class ProtecGame {
                     `;
                   })()}
 
-                  <!-- Configuration des Types & Quantités de Matériels requis sur la mission (Liste déroulante + compteurs) -->
-                  ${(() => {
-                    const lotCatalog = this.getAvailableLotsCatalog();
-                    const lotCounts = this.ensureMissionLotCounts(mission);
-                    const selectedLots = Object.entries(lotCounts).filter(([, c]) => (parseInt(c, 10) || 0) > 0);
-                    const totalKits = selectedLots.reduce((acc, [, c]) => acc + (parseInt(c, 10) || 0), 0);
-                    return `
-                      <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-2 mt-2.5">
-                        <div class="flex items-center justify-between gap-2 flex-wrap">
-                          <label class="text-[11px] font-black text-amber-950 uppercase tracking-wide flex items-center gap-1.5">
-                            <i data-lucide="package" class="w-3.5 h-3.5 text-amber-700"></i>
-                            <span>Types & Quantités de Matériels Requis sur la Mission :</span>
-                          </label>
-                          <span class="text-[10px] font-black bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300">
-                            Total : <strong>${totalKits} lot(s)</strong>
-                          </span>
-                        </div>
-                        <select onchange="if(this.value){ window.game.addMissionRequiredLotType('${mission.id}', this.value); this.value=''; }" class="w-full px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-bold text-slate-800 focus:ring-2 focus:ring-amber-500 cursor-pointer">
-                          <option value="">+ Ajouter un lot ou matériel requis au dispositif...</option>
-                          ${lotCatalog.map(l => `<option value="${l.id}">${l.emoji} ${l.name}</option>`).join('')}
-                        </select>
-                        ${selectedLots.length === 0 ? `
-                          <div class="text-[11px] text-amber-800/80 italic">Aucun lot matériel spécifique imposé (dotation standard des engins).</div>
-                        ` : `
-                          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-0.5">
-                            ${selectedLots.map(([lotId, count]) => {
-                              const meta = lotCatalog.find(l => l.id === lotId) || { id: lotId, name: lotId, emoji: '📦' };
-                              const owned = (this.workplaceEquipment && this.workplaceEquipment[lotId]) || 0;
-                              return `
-                                <div class="p-2 rounded-xl border bg-white border-amber-300 flex items-center justify-between gap-1.5 shadow-2xs">
-                                  <div class="flex items-center gap-1.5 min-w-0">
-                                    <span>${meta.emoji}</span>
-                                    <div class="min-w-0">
-                                      <span class="text-xs font-extrabold text-slate-900 block truncate" title="${meta.name}">${meta.name}</span>
-                                      <span class="text-[9.5px] font-bold text-amber-800">Requis : x${count} ${owned > 0 ? `(Stock: ${owned})` : ''}</span>
-                                    </div>
-                                  </div>
-                                  <div class="flex items-center gap-1 shrink-0 bg-white px-1 py-0.5 rounded-lg border border-amber-200">
-                                    <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', -1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">-</button>
-                                    <input type="number" min="0" max="30" value="${count}" onchange="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', this.value)" class="w-8 text-center font-mono font-black text-xs text-amber-800 bg-amber-50/50 border border-slate-200 rounded py-0.5" />
-                                    <button type="button" onclick="window.game.adjustMissionRequiredLotCount('${mission.id}', '${lotId}', 1)" class="w-5 h-5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs flex items-center justify-center cursor-pointer">+</button>
-                                    <button type="button" onclick="window.game.setMissionRequiredLotCount('${mission.id}', '${lotId}', 0)" class="w-5 h-5 rounded bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] flex items-center justify-center cursor-pointer ml-0.5" title="Retirer">✕</button>
-                                  </div>
-                                </div>
-                              `;
-                            }).join('')}
-                          </div>
-                        `}
-                      </div>
-                    `;
-                  })()}
+                  <!-- (Matériels requis : gérés dans le sous-onglet Matériel) -->
                 </div>
 
                 <!-- Alertes Logistique / Réarmement (si kit manquant ou réarmement requis) -->

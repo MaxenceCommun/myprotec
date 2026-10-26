@@ -2689,11 +2689,37 @@ window.ProtecLogistique = {
     return this.getArmingOperatorsCount(veh, game) > 0;
   },
 
+  // Crise : moyens réquisitionnés dans l'urgence (stock uniquement, personnel ayant répondu présent)
+  // Stock local d'un lot : réserve logistique de l'antenne + équipements achetés en boutique
+  getLocalLotStock(game, station, lotId) {
+    return (Number(station && station.stock && station.stock[lotId]) || 0) + (Number(game && game.workplaceEquipment && game.workplaceEquipment[lotId]) || 0);
+  },
+
+  // Rapatrie dans la réserve de l'antenne un lot acheté en boutique (même stock physique)
+  pullBoutiqueLotIntoStation(game, station, lotId) {
+    if (!station || !game || !game.workplaceEquipment) return;
+    if ((station.stock[lotId] || 0) <= 0 && (game.workplaceEquipment[lotId] || 0) > 0) {
+      game.workplaceEquipment[lotId] -= 1;
+      station.stock[lotId] = (station.stock[lotId] || 0) + 1;
+    }
+  },
+
+  isCrisisMission(mission) {
+    return Boolean(mission && (mission.type === 'crise' || mission.isCrisis || mission.isEmergencyPlan || mission.category === 'crise'));
+  },
+
   getAvailableGarageVolunteers(game, mission = null, veh = null) {
     if (!game) game = window.game;
     if (!game || !Array.isArray(game.volunteers)) return [];
     const assignedIds = (veh && Array.isArray(veh.assignedArmingVolunteerIds)) ? veh.assignedArmingVolunteerIds : [];
     const missionVolIds = (mission && Array.isArray(mission.registeredVolunteers)) ? mission.registeredVolunteers : [];
+
+    // Crise : seuls les bénévoles ayant répondu présent (inscrits) et pas encore partis peuvent charger les véhicules
+    if (this.isCrisisMission(mission)) {
+      const gone = new Set(mission.engagedVolunteers || []);
+      return game.volunteers.filter(v => v && missionVolIds.includes(v.id) && !assignedIds.includes(v.id) && !gone.has(v.id)
+        && v.status !== 'indispo' && (!v.armingVehicleId || v.armingVehicleId === veh?.id));
+    }
 
     // Trier : d'abord les bénévoles inscrits sur la mission, puis les bénévoles disponibles à l'antenne
     const list = game.volunteers.filter(v => {
@@ -2902,12 +2928,19 @@ window.ProtecLogistique = {
     const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
     this.ensureStationStock(station, game);
 
-    // Vérifier disponibilité en stock
+    // Vérifier disponibilité en stock (réserve + équipements achetés en boutique)
+    this.pullBoutiqueLotIntoStation(game, station, itemId);
     const availableInStock = station.stock[itemId] || 0;
     const catItem = this.CATALOG.find(i => i.id === itemId);
     const comp = this.getLotComposition(itemId);
     const itemSlots = comp?.slots || catItem?.slots || 1;
 
+    if (availableInStock <= 0 && this.isCrisisMission(mission)) {
+      if (!this._silentStockCheck) {
+        game.showToast('Rupture de stock 📦', `Aucun « ${comp?.title || catItem?.name || itemId} » au local. En crise, le matériel doit avoir été acheté à l'avance : pas d'achat d'urgence.`, 'orange');
+      }
+      return false;
+    }
     if (availableInStock <= 0) {
       const cost = catItem ? catItem.price : (itemId === 'caisse_rearmement' ? 370 : 250);
       if (game.resources.money < cost) {
@@ -3159,15 +3192,28 @@ window.ProtecLogistique = {
     const cap = this.getVehicleCapacityLog(veh);
     const listToTry = (cap < 6 && preset.fallbackLots) ? preset.fallbackLots : preset.lots;
     let loadedAny = false;
+    const mission = missionId ? (game.missions || []).find(m => m.id === missionId) : null;
+    const crisis = this.isCrisisMission(mission);
+    const station = (game.stations || []).find(s => s.id === veh.stationId) || game.stations[0];
+    this.ensureStationStock(station, game);
+    const missing = [];
 
     listToTry.forEach(lotId => {
       const comp = this.getLotComposition(lotId);
       const needed = comp?.slots || 1;
+      if (crisis && this.getLocalLotStock(game, station, lotId) <= 0) { missing.push(comp?.shortName || comp?.title || lotId); return; }
       if (this.getFreeLogSlots(veh) >= needed) {
-        this.loadItemToVehicle(missionId, vehicleId, lotId);
-        loadedAny = true;
+        this._silentStockCheck = true;
+        const res = this.loadItemToVehicle(missionId, vehicleId, lotId);
+        this._silentStockCheck = false;
+        if (res !== false) loadedAny = true;
       }
     });
+
+    if (crisis && missing.length) {
+      game.showToast(loadedAny ? 'Dotation partielle 📦' : 'Rupture de stock 📦', `Hors stock (achat à anticiper) : ${missing.join(', ')}.`, 'orange');
+      if (!loadedAny) return;
+    }
 
     if (!loadedAny) {
       game.showToast('Espace insuffisant ⚠️', `Aucun lot du « ${preset.label} » ne rentre dans l'espace libre restant de ${veh.name}.`, 'orange');
@@ -4852,6 +4898,7 @@ window.ProtecLogistique = {
 
     // Évaluation du transport des vélos
     const bikeTransportCheck = this.checkBicycleTransport(mission, game);
+    const crisisMode = this.isCrisisMission(mission);
 
     return `
       <div class="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xs space-y-4">
@@ -5168,7 +5215,7 @@ window.ProtecLogistique = {
                               </div>
 
                               <!-- Visuel détaillé des quantités de chaque élément embarqué -->
-                              <div class="space-y-1">
+                              <div class="space-y-1 ${crisisMode ? 'hidden' : ''}">
                                 <span class="text-[9px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-400 block">
                                   Inventaire Embarqué à Bord :
                                 </span>
@@ -5215,13 +5262,17 @@ window.ProtecLogistique = {
                         <span>Matériels & Lots Opérationnels Disponibles au Local d'Antenne :</span>
                       </span>
                       <span class="text-[10px] text-slate-500 dark:text-slate-400">
-                        ⏱️ +3 min d'armement par lot ajouté à la file
+                        ⏱️ +3 min d'armement par lot ajouté à la file${crisisMode ? ' • stock du local uniquement' : ''}
                       </span>
                     </div>
 
+                    ${crisisMode ? (() => {
+                      const out = Object.entries(this.LOT_COMPOSITIONS).filter(([k]) => this.getLocalLotStock(game, station, k) <= 0).map(([, l]) => l.shortName);
+                      return out.length ? `<div class="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800/60 border border-dashed border-slate-300 dark:border-slate-700 rounded-xl px-3 py-2">Hors stock (non disponibles en crise, achats à anticiper) : ${out.join(', ')}.</div>` : '';
+                    })() : ''}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      ${Object.entries(this.LOT_COMPOSITIONS).map(([lotKey, lot]) => {
-                        const inStock = station.stock[lotKey] || 0;
+                      ${Object.entries(this.LOT_COMPOSITIONS).filter(([lotKey]) => !crisisMode || this.getLocalLotStock(game, station, lotKey) > 0).map(([lotKey, lot]) => {
+                        const inStock = this.getLocalLotStock(game, station, lotKey);
                         const canFit = freeSlots >= lot.slots;
 
                         return `
@@ -5257,7 +5308,7 @@ window.ProtecLogistique = {
                             </div>
 
                             <!-- VISUEL SUR LA QUANTITÉ DE CHAQUE ÉLÉMENT COMPOSANT LE LOT -->
-                            <div class="space-y-1 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                            <div class="${crisisMode ? 'hidden ' : ''}space-y-1 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800">
                               <span class="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
                                 Composition & Quantités Unitaires :
                               </span>
