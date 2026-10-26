@@ -6794,7 +6794,8 @@ class ProtecGame {
     personnelCost = vols * (dur + 0.25 * (vacCount - 1)) * ratePerHour;
 
     let dailyVehiclesCost = 0;
-    const counts = this.ensureDevisVehicleCounts(devis);
+    if (devis.isMultiDays) this.ensureDevisVehicleCounts(devis);
+    const counts = devis.isMultiDays ? (devis.vehicleCountsByPeriod.Weekend || {}) : this.ensureDevisVehicleCounts(devis);
     Object.entries(counts).forEach(([vType, count]) => {
       const c = Number(count) || 0;
       if (vType === 'VPSP') dailyVehiclesCost += 110 * c;
@@ -6818,7 +6819,8 @@ class ProtecGame {
     if (scale.includes('DPS-ME') || scale.includes('DPS-GE')) matCost = 120;
 
     // Surcoût de valorisation par lot/matériel engagé (selon la quantité)
-    const lotCounts = this.ensureDevisLotCounts ? this.ensureDevisLotCounts(devis) : {};
+    if (devis.isMultiDays && this.ensureDevisLotCounts) this.ensureDevisLotCounts(devis);
+    const lotCounts = devis.isMultiDays ? ((devis.lotCountsByPeriod && devis.lotCountsByPeriod.Weekend) || {}) : (this.ensureDevisLotCounts ? this.ensureDevisLotCounts(devis) : {});
     const lotCatalog = this.getAvailableLotsCatalog ? this.getAvailableLotsCatalog() : [];
     Object.entries(lotCounts).forEach(([lotId, cnt]) => {
       const c = Number(cnt) || 0;
@@ -7381,9 +7383,9 @@ class ProtecGame {
     return `
       <div class="mt-2 pt-2 border-t border-indigo-100 dark:border-slate-700">
         <div class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">Détail des postes</div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-7 gap-1.5">
+        <div class="flex flex-wrap gap-1.5">
           ${list.map(([k, label, col]) => `
-            <div class="flex items-center justify-between gap-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1.5">
+            <div class="flex-1 min-w-[132px] flex items-center justify-between gap-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1.5">
               <span class="text-[11px] font-black ${col} w-9 shrink-0">${label}</span>
               <div class="flex items-center gap-1">
                 <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', -1)" class="w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-black leading-none cursor-pointer transition">-</button>
@@ -7546,6 +7548,22 @@ class ProtecGame {
   // Initialisation et normalisation des compteurs de véhicules d'un devis
   ensureDevisVehicleCounts(devis) {
     if (!devis) return {};
+    // Poste étalé : véhicules distincts en semaine et le week-end (période en cours d'édition)
+    if (devis.isMultiDays) {
+      if (!devis.vehicleCountsByPeriod || typeof devis.vehicleCountsByPeriod !== 'object') {
+        const base = {};
+        const src = (devis.configuredVehicleCounts && typeof devis.configuredVehicleCounts === 'object' && Object.keys(devis.configuredVehicleCounts).length)
+          ? Object.entries(devis.configuredVehicleCounts).flatMap(([t, c]) => Array(Math.max(0, parseInt(c, 10) || 0)).fill(t))
+          : ((Array.isArray(devis.configuredVehicles) && devis.configuredVehicles.length) ? devis.configuredVehicles : (devis.requiredVehicles || []));
+        src.forEach(t => { base[t] = (base[t] || 0) + 1; });
+        devis.vehicleCountsByPeriod = { Weekday: { ...base }, Weekend: { ...base } };
+      }
+      const k = devis.editPeriod === 'Weekday' ? 'Weekday' : 'Weekend';
+      const c = devis.vehicleCountsByPeriod[k] || (devis.vehicleCountsByPeriod[k] = {});
+      const tot = Object.values(c).reduce((sum, n) => sum + (parseInt(n, 10) || 0), 0);
+      if (tot === 0) c[(Array.isArray(devis.requiredVehicles) && devis.requiredVehicles[0]) || 'VPSP'] = 1;
+      return c;
+    }
     if (!devis.configuredVehicleCounts || typeof devis.configuredVehicleCounts !== 'object') {
       devis.configuredVehicleCounts = {};
       if (Array.isArray(devis.configuredVehicles) && devis.configuredVehicles.length > 0) {
@@ -7572,6 +7590,15 @@ class ProtecGame {
 
   // Synchronisation de la liste à plat de configuredVehicles avec les compteurs
   syncDevisConfiguredVehicles(devis) {
+    if (devis && devis.isMultiDays) {
+      // Mission : le maximum de chaque type entre semaine et week-end (véhicules à prévoir au planning)
+      this.ensureDevisVehicleCounts(devis);
+      const merged = {};
+      ['Weekday', 'Weekend'].forEach(k => Object.entries(devis.vehicleCountsByPeriod[k] || {}).forEach(([t, n]) => { merged[t] = Math.max(merged[t] || 0, parseInt(n, 10) || 0); }));
+      devis.configuredVehicleCounts = merged;
+      devis.configuredVehicles = Object.entries(merged).flatMap(([t, n]) => Array(n).fill(t));
+      return devis.configuredVehicles;
+    }
     const counts = this.ensureDevisVehicleCounts(devis);
     const list = [];
     Object.entries(counts).forEach(([t, count]) => {
@@ -7604,6 +7631,21 @@ class ProtecGame {
       return '1 VPSP (acheminement requis)';
     }
     return parts.join(', ');
+  }
+
+  // Poste étalé : choix de la période dont on édite les véhicules et le matériel
+  setDevisEditPeriod(devisId, period) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis) return;
+    devis.editPeriod = period === 'Weekday' ? 'Weekday' : 'Weekend';
+    this.openModule('devis', true);
+  }
+
+  renderDevisPeriodTabsHTML(d, what) {
+    if (!d.isMultiDays) return '';
+    const cur = d.editPeriod === 'Weekday' ? 'Weekday' : 'Weekend';
+    const b = (k, label) => `<button type="button" onclick="window.game.setDevisEditPeriod('${d.id}', '${k}')" class="px-3 py-1 rounded-lg text-[11px] font-black border cursor-pointer transition ${cur === k ? (k === 'Weekend' ? 'bg-amber-500 text-white border-amber-500' : 'bg-pc-blue text-white border-pc-blue') : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50'}">${label}</button>`;
+    return `<div class="flex flex-wrap items-center gap-2"><span class="text-[10px] font-black uppercase tracking-wide text-slate-500">${what} pour :</span>${b('Weekday', `Semaine (${d.weekdayDaysCount || 20} j)`)}${b('Weekend', `Week-end (${d.weekendDaysCount || 8} j)`)}</div>`;
   }
 
   // Ajout d'un type de véhicule depuis la liste déroulante du devis
@@ -7696,6 +7738,16 @@ class ProtecGame {
   // Initialisation et normalisation des compteurs de lots matériels d'un devis
   ensureDevisLotCounts(devis) {
     if (!devis) return {};
+    if (devis.isMultiDays) {
+      if (!devis.lotCountsByPeriod || typeof devis.lotCountsByPeriod !== 'object') {
+        const base = {};
+        if (devis.configuredLotCounts && typeof devis.configuredLotCounts === 'object') Object.assign(base, devis.configuredLotCounts);
+        else if (Array.isArray(devis.configuredLots)) devis.configuredLots.forEach(l => { base[l] = (base[l] || 0) + 1; });
+        devis.lotCountsByPeriod = { Weekday: { ...base }, Weekend: { ...base } };
+      }
+      const k = devis.editPeriod === 'Weekday' ? 'Weekday' : 'Weekend';
+      return devis.lotCountsByPeriod[k] || (devis.lotCountsByPeriod[k] = {});
+    }
     if (!devis.configuredLotCounts || typeof devis.configuredLotCounts !== 'object') {
       devis.configuredLotCounts = {};
       if (Array.isArray(devis.configuredLots)) {
@@ -7709,6 +7761,14 @@ class ProtecGame {
 
   // Synchronisation de la liste à plat configuredLots avec les compteurs
   syncDevisConfiguredLots(devis) {
+    if (devis && devis.isMultiDays) {
+      this.ensureDevisLotCounts(devis);
+      const merged = {};
+      ['Weekday', 'Weekend'].forEach(k => Object.entries(devis.lotCountsByPeriod[k] || {}).forEach(([l, n]) => { merged[l] = Math.max(merged[l] || 0, parseInt(n, 10) || 0); }));
+      devis.configuredLotCounts = merged;
+      devis.configuredLots = Object.entries(merged).flatMap(([l, n]) => Array(n).fill(l));
+      return devis.configuredLots;
+    }
     const counts = this.ensureDevisLotCounts(devis);
     const list = [];
     Object.entries(counts).forEach(([lotId, count]) => {
@@ -9947,6 +10007,12 @@ class ProtecGame {
   }
 
   convertDevisToScheduledMission(devis) {
+    // Poste étalé : moyens consolidés (maximum semaine / week-end) avant création de la mission
+    if (devis && devis.isMultiDays) {
+      this.syncMultiDayPersonnel(devis);
+      this.syncDevisConfiguredVehicles(devis);
+      this.syncDevisConfiguredLots(devis);
+    }
     const volsCount = devis.configuredVolunteers || devis.requiredVolunteers || 4;
     const scaleChosen = devis.configuredScale || devis.scale || 'DPS-PE';
     const vehsChosen = (devis.configuredVehicles !== undefined) ? devis.configuredVehicles : (devis.requiredVehicles || []);
@@ -10040,6 +10106,21 @@ class ProtecGame {
       address: devis.address || devis.locationAddress || this.generateRealisticStreetAddress(devis.commune || 'Ville', devis.lat, devis.lng),
       isSector: false
     };
+
+    // Poste étalé : on conserve le détail semaine / week-end (effectifs, rôles, véhicules, matériel, public)
+    if (devis.isMultiDays) {
+      Object.assign(newMission, {
+        isMultiDays: true,
+        durationDays: devis.durationDays,
+        weekdayDaysCount: devis.weekdayDaysCount, weekendDaysCount: devis.weekendDaysCount,
+        weekdayHours: devis.weekdayHours, weekendHours: devis.weekendHours,
+        publicWeekday: this.getDevisPeriodPublic(devis, 'Weekday'), publicWeekend: this.getDevisPeriodPublic(devis, 'Weekend'),
+        configuredVolunteersWeekday: this.getDevisPeriodCount(devis, 'Weekday'), configuredVolunteersWeekend: this.getDevisPeriodCount(devis, 'Weekend'),
+        configuredRolesWeekday: { ...(devis.configuredRolesWeekday || {}) }, configuredRolesWeekend: { ...(devis.configuredRolesWeekend || {}) },
+        vehicleCountsByPeriod: JSON.parse(JSON.stringify(devis.vehicleCountsByPeriod || {})),
+        lotCountsByPeriod: JSON.parse(JSON.stringify(devis.lotCountsByPeriod || {}))
+      });
+    }
 
     // Poste divisé en vacations : une mission par vacation (équipe propre), reliées par posteGroupId
     let missionsToAdd = [newMission];
@@ -25892,6 +25973,7 @@ class ProtecGame {
                         <p class="text-[10px] text-slate-500 dark:text-slate-400">
                           Tout dispositif de secours exige au minimum un véhicule pour acheminer les secouristes et le matériel sur le poste. Ajustez les quantités avec <strong>-</strong> et <strong>+</strong>.
                         </p>
+                        ${this.renderDevisPeriodTabsHTML(d, 'Véhicules')}
                         ${(() => {
                           const vehCatalog = this.getAvailableVehicleTypesCatalog();
                           const counts = this.ensureDevisVehicleCounts(d);
@@ -25946,6 +26028,7 @@ class ProtecGame {
                         <p class="text-[10px] text-slate-500 dark:text-slate-400">
                           Choisissez les lots et matériels requis dans la liste déroulante puis réglez la quantité engagée en dessous.
                         </p>
+                        ${this.renderDevisPeriodTabsHTML(d, 'Matériel')}
                         ${(() => {
                           const lotCatalog = this.getAvailableLotsCatalog();
                           const lotCounts = this.ensureDevisLotCounts(d);
