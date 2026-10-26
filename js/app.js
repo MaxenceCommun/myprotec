@@ -7381,14 +7381,14 @@ class ProtecGame {
     return `
       <div class="mt-2 pt-2 border-t border-indigo-100 dark:border-slate-700">
         <div class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">Détail des postes</div>
-        <div class="grid grid-cols-4 sm:grid-cols-7 gap-1">
+        <div class="grid grid-cols-2 sm:grid-cols-4 2xl:grid-cols-7 gap-1.5">
           ${list.map(([k, label, col]) => `
-            <div class="flex flex-col items-center rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 py-1">
-              <span class="text-[9px] font-black ${col}">${label}</span>
-              <div class="flex items-center gap-0.5">
-                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', -1)" class="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-black leading-none cursor-pointer">-</button>
-                <input type="number" min="0" max="999" value="${roles[k] || 0}" onchange="window.game.setDevisPeriodRole('${d.id}', '${period}', '${k}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-7 text-center text-[11px] font-black ${col} bg-transparent border-0 focus:outline-none" />
-                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', 1)" class="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-black leading-none cursor-pointer">+</button>
+            <div class="flex items-center justify-between gap-1 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2 py-1.5">
+              <span class="text-[11px] font-black ${col} w-9 shrink-0">${label}</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', -1)" class="w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-black leading-none cursor-pointer transition">-</button>
+                <input type="number" min="0" max="999" value="${roles[k] || 0}" onchange="window.game.setDevisPeriodRole('${d.id}', '${period}', '${k}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-9 text-center text-xs font-black ${col} bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded py-0.5 focus:outline-none" />
+                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', 1)" class="w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-xs font-black leading-none cursor-pointer transition">+</button>
               </div>
             </div>`).join('')}
         </div>
@@ -25794,7 +25794,7 @@ class ProtecGame {
                               <p class="text-[11px] text-indigo-800 leading-tight">
                                 L'affluence varie entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser la rentabilité.
                               </p>
-                              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                              <div class="grid grid-cols-1 gap-2 pt-1">
                                 <!-- Semaine : Lundi au Vendredi -->
                                 <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
                                   <div class="flex items-center justify-between mb-1">
