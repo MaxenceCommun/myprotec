@@ -13460,7 +13460,12 @@ class ProtecGame {
     } else if (payload.status === 'crisis_renfort_accepted') {
       mission.proposedRenforts = payload.proposedRenforts || mission.proposedRenforts || [];
       const myId = this.player?.id || 'usr_local';
-      if (payload.proposition?.sourcePlayerId === myId) {
+      if (payload.proposition?.sourcePlayerId === myId && payload.proposition?.version === 2 && window.ProtecCriseMoyens) {
+        if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
+          window.ProtecAudio.playRadioBeep();
+        }
+        window.ProtecCriseMoyens.applySenderAcceptance(this, mission, payload.proposition);
+      } else if (payload.proposition?.sourcePlayerId === myId) {
         if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') {
           window.ProtecAudio.playRadioBeep();
         }
@@ -13475,6 +13480,7 @@ class ProtecGame {
       mission.proposedRenforts = payload.proposedRenforts || mission.proposedRenforts || [];
       const myId = this.player?.id || 'usr_local';
       if (payload.proposition?.sourcePlayerId === myId) {
+        if (window.ProtecCriseMoyens) window.ProtecCriseMoyens.releaseProposal(this, payload.proposition, null);
         const veh = (this.vehicles || []).find(v => v.id === payload.proposition?.vehicleId);
         if (veh) veh.status = 'dispo';
         (payload.proposition?.volunteerIds || []).forEach(vId => {
@@ -14378,6 +14384,10 @@ class ProtecGame {
     this.completeMission(mission);
   }
   completeMission(mission) {
+    // Crise sur réquisition : indemnisation selon la couverture des moyens demandés par l'autorité
+    if (window.ProtecCriseMoyens && typeof window.ProtecCriseMoyens.applyCoverageToReward === 'function') {
+      window.ProtecCriseMoyens.applyCoverageToReward(this, mission);
+    }
     if (mission.type === 'travaux' && window.ProtecLocaux && typeof window.ProtecLocaux.onTravauxMissionCompleted === 'function') {
       window.ProtecLocaux.onTravauxMissionCompleted(this, mission);
     }
@@ -20331,7 +20341,7 @@ class ProtecGame {
               </details>
             `}
           </div>
-        `) : (activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel') ? `
+        `) : (activeTab === 'logistique' || activeTab === 'vehicules' || activeTab === 'materiel') ? ((window.ProtecCriseMoyens && window.ProtecCriseMoyens.appliesTo(mission)) ? window.ProtecCriseMoyens.render(this, mission) : `
           <!-- ONGLET 3 : LOGISTIQUE (SOUS-ONGLETS : VÉHICULE / MATÉRIEL / CONSOMMABLE) -->
           <div class="space-y-3 animate-in fade-in duration-150">
             <!-- SOUS-ONGLETS LOGISTIQUE eProtec -->
@@ -21388,7 +21398,7 @@ class ProtecGame {
               </div>
             `}
           </div>
-        ` : (isDPS && activeTab === 'dps') ? `
+        `) : (isDPS && activeTab === 'dps') ? `
           <!-- ONGLET 4 : DPS • GRILLE RNMSC OFFICIELLE (eProtec) -->
           <div class="space-y-3 animate-in fade-in duration-150">
             <div class="p-3 rounded-2xl bg-white border border-slate-200 shadow-2xs flex items-center justify-between">
@@ -22278,6 +22288,10 @@ class ProtecGame {
   }
 
   renderCrisisDirectorRenfortsArbitrageHTML(mission) {
+    // Arbitrage entité par entité avec contrôle du transport et consigne d'acheminement
+    if (window.ProtecCriseMoyens && typeof window.ProtecCriseMoyens.renderArbitrage === 'function') {
+      return window.ProtecCriseMoyens.renderArbitrage(this, mission);
+    }
     const proposals = (mission.proposedRenforts || []).filter(p => p.status === 'proposed');
     if (proposals.length === 0) return '';
 
@@ -22651,6 +22665,11 @@ class ProtecGame {
   }
 
   openProposeCrisisRenfortModal(missionId) {
+    // Nouvelle proposition multi-moyens (véhicules, matériel, bénévoles DISPO)
+    if (window.ProtecCriseMoyens && typeof window.ProtecCriseMoyens.openRenfortOffer === 'function') {
+      window.ProtecCriseMoyens.openRenfortOffer(missionId);
+      return;
+    }
     const mission = (this.missions || []).find(m => m.id === missionId) || (this.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
@@ -23149,6 +23168,7 @@ class ProtecGame {
 
     // Si la proposition venait du joueur local (ex: en multi-local ou test)
     if (prop.sourcePlayerId === (this.player?.id || 'usr_local')) {
+      if (window.ProtecCriseMoyens) window.ProtecCriseMoyens.releaseProposal(this, prop, null);
       const veh = (this.vehicles || []).find(v => v.id === prop.vehicleId);
       if (veh) veh.status = 'dispo';
       (prop.volunteerIds || []).forEach(vId => {

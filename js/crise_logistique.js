@@ -3057,6 +3057,9 @@ window.ProtecCriseLogistique = {
     mission.status = 'termine';
     mission.crisisCanClose = false;
     mission.endedAt = Date.now();
+    if (window.ProtecCriseMoyens && typeof window.ProtecCriseMoyens.applyCoverageToReward === 'function') {
+      window.ProtecCriseMoyens.applyCoverageToReward(game, mission);
+    }
     const rewardMoney = mission.rewardMoney || 1200;
     const rewardReputation = mission.rewardReputation || 45;
 

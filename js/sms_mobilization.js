@@ -91,6 +91,219 @@ window.ProtecSmsMobilization = {
     cadre: { id: 'cadre', label: 'Cadres & Commandement (Officiers / Logistique)' }
   },
 
+  // =========================================================================
+  // COMPÉTENCES REQUISES (SMS DE DÉCLENCHEMENT DE CRISE)
+  // Quotas : « Demandé » = prioritaire (d'autres profils peuvent compléter)
+  //          « Verrouillé » = places réservées à ce profil uniquement
+  // =========================================================================
+  SKILL_QUOTA_CATALOG: [
+    { group: 'Grades opérationnels', items: [
+      { key: 'pse1', label: 'PSE1', short: 'PSE1' },
+      { key: 'pse2', label: 'PSE2', short: 'PSE2' },
+      { key: 'ce', label: 'Chef d\'équipe (CE)', short: 'CE' },
+      { key: 'cp', label: 'Chef de poste (CP)', short: 'CP' },
+      { key: 'cs', label: 'Chef de secteur (CS)', short: 'CS' },
+      { key: 'cd', label: 'Chef de dispositif (CD)', short: 'CD' },
+      { key: 'log', label: 'Logisticien', short: 'Logisticien' }
+    ] },
+    { group: 'Conduite', items: [
+      { key: 'cond_vpsp', label: 'Conducteur VPSP', short: 'Conducteur VPSP' },
+      { key: 'permis_c', label: 'Permis PL (C)', short: 'Permis PL' },
+      { key: 'conduite_4x4', label: 'Pilote 4x4 tout-terrain', short: 'Pilote 4x4' },
+      { key: 'permis_moto', label: 'Pilote moto / quad', short: 'Pilote moto' },
+      { key: 'permis_bateau', label: 'Pilote embarcation (permis bateau)', short: 'Pilote bateau' }
+    ] },
+    { group: 'Spécialités', items: [
+      { key: 'telepilote', label: 'Télépilote drone', short: 'Télépilote drone' },
+      { key: 'cyno', label: 'Conducteur cynotechnique', short: 'Cynotechnie' },
+      { key: 'aquatique', label: 'Sauveteur aquatique', short: 'Sauveteur aquatique' },
+      { key: 'soutien_psy', label: 'Soutien psychologique / CAI', short: 'Soutien psy / CAI' },
+      { key: 'transmissions', label: 'Opérateur transmissions', short: 'Transmissions' },
+      { key: 'tronconnage', label: 'Opérateur tronçonnage', short: 'Tronçonnage' }
+    ] }
+  ],
+
+  getQuotaDef(key) {
+    for (const g of this.SKILL_QUOTA_CATALOG) {
+      const it = g.items.find(i => i.key === key);
+      if (it) return it;
+    }
+    return { key, label: key, short: key };
+  },
+
+  // Les SMS de déclenchement de crise (y compris en préalerte) portent les compétences requises
+  isCrisisMission(mission) {
+    if (!mission) return false;
+    return Boolean(mission.type === 'crise' || mission.isCrisis || mission.isEmergencyPlan || mission.category === 'crise' || mission.status === 'declenche');
+  },
+
+  // Le bénévole possède-t-il la compétence ? (les grades supérieurs couvrent les inférieurs)
+  volunteerHasQuotaSkill(vol, key) {
+    if (!vol) return false;
+    const rank = String(vol.rank || '').toUpperCase().trim();
+    const skills = (vol.skills || []).map(x => String(x).toLowerCase().trim());
+    const has = (...list) => skills.some(x => list.includes(x));
+    const LV = { PSC1: 0, PSE1: 1, PSE2: 2, CE: 3, CP: 4, CS: 5, CD: 6 };
+    let level = LV[rank] !== undefined ? LV[rank] : -1;
+    ['pse1', 'pse2', 'ce', 'cp', 'cs', 'cd'].forEach(k => { if (skills.includes(k)) level = Math.max(level, LV[k.toUpperCase()]); });
+    switch (key) {
+      case 'pse1': return level >= 1;
+      case 'pse2': return level >= 2;
+      case 'ce': return level >= 3;
+      case 'cp': return level >= 4;
+      case 'cs': return level >= 5;
+      case 'cd': return level >= 6;
+      case 'log': return rank === 'LOGISTICIEN' || has('logistique', 'log', 'logisticien', 'resp_log') || skills.some(x => x.startsWith('log_'));
+      case 'cond_vpsp': return Boolean(vol.isDriverVpsp) || has('permis_vpsp', 'pilotage', 'chauffeur', 'conducteur_vpsp');
+      case 'permis_c': return Boolean(vol.permis_c) || has('permis_c', 'c', 'poids_lourd', 'pl');
+      case 'conduite_4x4': return has('conduite_4x4', '4x4', 'hors_route');
+      case 'permis_moto': return Boolean(vol.permis_moto) || has('permis_moto', 'moto', 'permis_a', 'permis_a2');
+      case 'permis_bateau': return has('permis_bateau', 'bateau');
+      case 'telepilote': return has('telepilote', 'telepilote_drone', 'drone');
+      case 'cyno': return has('cyno', 'cyno_recherche');
+      case 'aquatique': return has('bnssa', 'ssa', 'sauvetage_aquatique', 'sauveteur_aquatique', 'nautique');
+      case 'soutien_psy': return has('cai', 'soutien_psy', 'psy', 'cump');
+      case 'transmissions': return has('transmissions', 'radio', 'operateur_radio');
+      case 'tronconnage': return skills.some(x => x.includes('tronc'));
+      default: return false;
+    }
+  },
+
+  // Quotas actifs du SMS de crise d'une mission
+  getMissionQuotas(mission) {
+    if (!this.isCrisisMission(mission)) return [];
+    return ((mission.smsConsigne && mission.smsConsigne.skillQuotas) || []).filter(q => q && q.key && (Number(q.count) || 0) > 0);
+  },
+
+  // Bénévoles inscrits occupant chaque quota (recalculé à partir des inscrits encore présents)
+  getQuotaFill(mission, quotas) {
+    const reg = new Set(mission.registeredVolunteers || []);
+    if (!mission.skillQuotaFill || typeof mission.skillQuotaFill !== 'object') mission.skillQuotaFill = {};
+    const fill = mission.skillQuotaFill;
+    Object.keys(fill).forEach(k => { fill[k] = (fill[k] || []).filter(id => reg.has(id)); });
+    quotas.forEach(q => { if (!Array.isArray(fill[q.key])) fill[q.key] = []; });
+    return fill;
+  },
+
+  // Rattache les inscrits déjà présents aux quotas (ex. après une préalerte ou un nouveau SMS)
+  syncQuotaFillFromRegistered(game, mission) {
+    const quotas = this.getMissionQuotas(mission);
+    if (!quotas.length) return;
+    const fill = this.getQuotaFill(mission, quotas);
+    const placed = new Set(Object.values(fill).flat());
+    (mission.registeredVolunteers || []).forEach(id => {
+      if (placed.has(id)) return;
+      const vol = (game.volunteers || []).find(v => v.id === id);
+      const key = this.findQuotaSlot(mission, quotas, vol);
+      if (key) { fill[key].push(id); placed.add(id); }
+    });
+  },
+
+  // Quota libre que ce bénévole peut occuper (verrouillés en priorité, puis demandés)
+  findQuotaSlot(mission, quotas, vol) {
+    if (!vol) return null;
+    const fill = this.getQuotaFill(mission, quotas);
+    const ordered = [...quotas].sort((a, b) => (a.mode === 'verrouille' ? 0 : 1) - (b.mode === 'verrouille' ? 0 : 1));
+    const q = ordered.find(x => (fill[x.key] || []).length < x.count && this.volunteerHasQuotaSkill(vol, x.key));
+    return q ? q.key : null;
+  },
+
+  // Places encore réservées aux profils verrouillés non pourvus
+  getReservedRemaining(mission, quotas) {
+    const fill = this.getQuotaFill(mission, quotas);
+    return quotas.filter(q => q.mode === 'verrouille').reduce((acc, q) => acc + Math.max(0, q.count - (fill[q.key] || []).length), 0);
+  },
+
+  formatQuotasLine(quotas) {
+    return (quotas || []).filter(q => q && (Number(q.count) || 0) > 0)
+      .map(q => `${q.count} ${this.getQuotaDef(q.key).short}${q.mode === 'verrouille' ? ' [VERROUILLÉ]' : ' [demandé]'}`).join(' • ');
+  },
+
+  // ----- Éditeur des quotas dans la fenêtre de composition -----
+  renderQuotaEditorHTML(missionId) {
+    const quotas = this._currentQuotas || [];
+    const used = new Set(quotas.map(q => q.key));
+    return `
+      <select onchange="if(this.value){ window.ProtecSmsMobilization.addQuota('${missionId}', this.value); this.value=''; }" class="w-full px-2.5 py-2 rounded-xl text-xs font-bold bg-white dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-600 cursor-pointer">
+        <option value="">+ Ajouter une compétence requise…</option>
+        ${this.SKILL_QUOTA_CATALOG.map(g => `<optgroup label="${g.group}">${g.items.filter(i => !used.has(i.key)).map(i => `<option value="${i.key}">${i.label}</option>`).join('')}</optgroup>`).join('')}
+      </select>
+      ${quotas.length === 0 ? `
+        <p class="text-[10px] text-slate-500 dark:text-slate-400 italic">Aucune compétence imposée : tous les profils peuvent répondre.</p>
+      ` : `
+        <div class="space-y-1.5">
+          ${quotas.map(q => {
+            const def = this.getQuotaDef(q.key);
+            const locked = q.mode === 'verrouille';
+            return `
+              <div class="flex flex-wrap items-center gap-2 p-2 rounded-xl border ${locked ? 'bg-rose-50/80 dark:bg-rose-950/30 border-rose-300 dark:border-rose-600/50' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700'}">
+                <span class="text-xs font-black text-slate-800 dark:text-slate-100 flex-1 min-w-[120px]">${def.label}</span>
+                <div class="flex items-center gap-1">
+                  <button type="button" onclick="window.ProtecSmsMobilization.adjustQuota('${missionId}', '${q.key}', -1)" class="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs cursor-pointer">-</button>
+                  <span class="w-6 text-center text-xs font-black text-slate-900 dark:text-white">${q.count}</span>
+                  <button type="button" onclick="window.ProtecSmsMobilization.adjustQuota('${missionId}', '${q.key}', 1)" class="w-6 h-6 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-white font-black text-xs cursor-pointer">+</button>
+                </div>
+                <div class="flex rounded-lg overflow-hidden border border-slate-300 dark:border-slate-600 text-[10px] font-black">
+                  <button type="button" onclick="window.ProtecSmsMobilization.setQuotaMode('${missionId}', '${q.key}', 'demande')" class="px-2 py-1 cursor-pointer ${!locked ? 'bg-pc-blue text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}" title="Prioritaire : d'autres profils peuvent compléter">⭐ Demandé</button>
+                  <button type="button" onclick="window.ProtecSmsMobilization.setQuotaMode('${missionId}', '${q.key}', 'verrouille')" class="px-2 py-1 cursor-pointer ${locked ? 'bg-rose-600 text-white' : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300'}" title="Places réservées : seuls ces profils peuvent les prendre">🔒 Verrouillé</button>
+                </div>
+                <button type="button" onclick="window.ProtecSmsMobilization.removeQuota('${missionId}', '${q.key}')" class="w-6 h-6 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-600 font-black text-[10px] cursor-pointer" title="Retirer">✕</button>
+              </div>`;
+          }).join('')}
+        </div>
+      `}
+      <div id="sms-quota-warning">${this.renderQuotaWarningHTML()}</div>
+    `;
+  },
+
+  renderQuotaWarningHTML() {
+    const quotas = this._currentQuotas || [];
+    const game = window.game;
+    const lockedTotal = quotas.filter(q => q.mode === 'verrouille').reduce((a, q) => a + q.count, 0);
+    const target = parseInt(document.getElementById('sms-target-count')?.value || '0', 10) || 0;
+    const parts = [];
+    if (target && lockedTotal > target) parts.push(`⚠️ ${lockedTotal} places verrouillées pour ${target} recherché(s) : augmentez le nombre recherché.`);
+    if (game && Array.isArray(game.volunteers)) {
+      quotas.forEach(q => {
+        const n = game.volunteers.filter(v => !v.isBurnout && this.volunteerHasQuotaSkill(v, q.key)).length;
+        if (n < q.count) parts.push(`⚠️ ${this.getQuotaDef(q.key).label} : seulement ${n} bénévole(s) qualifié(s) dans l'antenne pour ${q.count} demandé(s).`);
+      });
+    }
+    return parts.length ? `<div class="text-[10px] font-bold text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-600/40 rounded-lg px-2.5 py-1.5 space-y-0.5">${parts.map(p => `<div>${p}</div>`).join('')}</div>` : '';
+  },
+
+  refreshQuotaEditor(missionId) {
+    const box = document.getElementById('sms-quota-editor');
+    if (box) box.innerHTML = this.renderQuotaEditorHTML(missionId);
+    this.updateSmsPreview(missionId);
+  },
+
+  addQuota(missionId, key) {
+    if (!Array.isArray(this._currentQuotas)) this._currentQuotas = [];
+    if (this._currentQuotas.some(q => q.key === key)) return;
+    this._currentQuotas.push({ key, count: 1, mode: 'demande' });
+    this.refreshQuotaEditor(missionId);
+  },
+
+  adjustQuota(missionId, key, delta) {
+    const q = (this._currentQuotas || []).find(x => x.key === key);
+    if (!q) return;
+    q.count = Math.max(1, Math.min(40, q.count + delta));
+    this.refreshQuotaEditor(missionId);
+  },
+
+  setQuotaMode(missionId, key, mode) {
+    const q = (this._currentQuotas || []).find(x => x.key === key);
+    if (!q) return;
+    q.mode = mode === 'verrouille' ? 'verrouille' : 'demande';
+    this.refreshQuotaEditor(missionId);
+  },
+
+  removeQuota(missionId, key) {
+    this._currentQuotas = (this._currentQuotas || []).filter(q => q.key !== key);
+    this.refreshQuotaEditor(missionId);
+  },
+
   // Calcule les valeurs par défaut recommandées selon la mission
   getDefaults(mission, game) {
     if (!mission) return {};
@@ -179,23 +392,29 @@ window.ProtecSmsMobilization = {
       ? `DÉLAI DÉPART MAX : Présentation sous ${maxDelay} min max (trajet domicile ➔ base)\n`
       : '';
 
+    const quotasLine = this.formatQuotasLine(config.skillQuotas);
+    const effectifsLine = quotasLine
+      ? `EFFECTIFS : ${config.targetCount} secouriste(s)\nCOMPÉTENCES : ${quotasLine}\n`
+      : `EFFECTIFS : ${config.targetCount} secouriste(s) [Profil : ${skillLabel}]\n`;
     return `[PROTECTION CIVILE - ALERTE MISSION]\n` +
       `SITUATION : ${config.whatHappened}\n` +
       `MISSIONS PC : ${config.pcMissions}\n` +
-      `EFFECTIFS : ${config.targetCount} secouriste(s) [Profil : ${skillLabel}]\n` +
+      effectifsLine +
       delayLine +
       `CONSIGNES : ${consigneDetail}\n` +
       `\nRépondez "1" (DISPO) ou "2" (INDISPO).`;
   },
 
   // Ouvre la modale complète de composition SMS
-  openSmsModal(game, missionId, isUpdate = false) {
-    const mission = game.missions.find(m => m.id === missionId);
+  openSmsModal(game, missionId, isUpdate = false, opts = {}) {
+    // Mode renfort : antenne alliée qui recueille les disponibilités de SES bénévoles pour une crise qu'elle ne dirige pas
+    const renfortMode = Boolean(opts && opts.renfortMode);
+    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     const isCrisis = (mission.type === 'crise' || mission.isCrisis);
     const myId = game.player?.id || 'usr_local';
-    if (isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId) {
+    if (!renfortMode && isCrisis && mission.managerPlayerId && mission.managerPlayerId !== myId) {
       game.showToast('Commandement Exclusif', `Seul le directeur de crise (${mission.managerPlayerName}) peut composer ou modifier les alertes SMS.`, 'orange');
       return;
     }
@@ -208,7 +427,8 @@ window.ProtecSmsMobilization = {
     if (!modal || !body) return;
 
     const defaults = this.getDefaults(mission, game);
-    const existing = mission.smsConsigne || {};
+    const renfortState = (game.crisisRenfortSmsDispos && game.crisisRenfortSmsDispos[missionId]) || null;
+    const existing = renfortMode ? ((renfortState && renfortState.config) || {}) : (mission.smsConsigne || {});
     const config = {
       whatHappened: existing.whatHappened || defaults.whatHappened,
       pcMissions: existing.pcMissions || defaults.pcMissions,
@@ -219,6 +439,23 @@ window.ProtecSmsMobilization = {
       maxDepartureDelayMinutes: existing.maxDepartureDelayMinutes !== undefined ? existing.maxDepartureDelayMinutes : defaults.maxDepartureDelayMinutes
     };
 
+    // Compétences requises (SMS de crise uniquement)
+    const isCrisisSms = renfortMode || this.isCrisisMission(mission);
+    this._currentQuotas = isCrisisSms ? (existing.skillQuotas || []).map(q => ({ ...q })) : [];
+    // Première alerte d'une crise : compétences et effectif demandés par l'autorité pré-remplis
+    if (isCrisisSms && !existing.skillQuotas && window.ProtecCriseMoyens && window.ProtecCriseMoyens.appliesTo(mission)) {
+      this._currentQuotas = window.ProtecCriseMoyens.getSuggestedQuotas(game, mission);
+      const regNow = (mission.registeredVolunteers || []).length;
+      config.targetCount = Math.max(1, window.ProtecCriseMoyens.getSuggestedTarget(game, mission) - regNow);
+    }
+    if (renfortMode) {
+      // Les consignes d'acheminement relèvent du directeur de crise : les bénévoles attendent ses ordres
+      config.consigne = 'attente_consignes';
+      config.targetCount = existing.targetCount || 4;
+      if (!existing.whatHappened) config.whatHappened = `Demande de renfort : ${mission.title}`;
+    }
+    config.skillQuotas = this._currentQuotas;
+
     // Objectifs sélectionnés actuels
     this._currentObjectives = existing.selectedObjectives 
       ? [...existing.selectedObjectives] 
@@ -226,7 +463,7 @@ window.ProtecSmsMobilization = {
 
     const registeredCount = (mission.registeredVolunteers || []).length;
     const availableVols = game.volunteers.filter(v => 
-      !mission.registeredVolunteers.includes(v.id) &&
+      (renfortMode || !(mission.registeredVolunteers || []).includes(v.id)) &&
       v.status !== 'mission' &&
       !v.isBurnout &&
       v.hasUniform !== false
@@ -241,6 +478,10 @@ window.ProtecSmsMobilization = {
       : (isPrealert 
           ? `Transmettez vos consignes de pré-mobilisation et vérifiez la disponibilité de vos ${availableVols.length} secouristes`
           : `Définissez les consignes opérationnelles transmises aux ${availableVols.length} secouriste(s) disponible(s)`);
+    if (renfortMode) {
+      title.textContent = 'Renfort de crise : demande de disponibilités';
+      subtitle.textContent = `SMS à vos ${availableVols.length} secouriste(s) disponible(s). Les consignes d'acheminement seront données par le directeur de crise.`;
+    }
     if (icon) icon.setAttribute('data-lucide', 'send');
 
     // Situations prédéfinies pour choix en 1 clic
@@ -344,7 +585,12 @@ window.ProtecSmsMobilization = {
             </div>
 
             <!-- 3. QUOI FAIRE EN TANT QUE BÉNÉVOLE ? (CONSIGNE CLÉ D'AUTONOMIE) -->
-            <div class="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+            ${renfortMode ? `
+              <div class="p-3 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-700/50 text-[11px] text-indigo-900 dark:text-indigo-200">
+                <strong>Consignes d'acheminement :</strong> elles seront données par le directeur de la gestion de crise lorsqu'il acceptera votre renfort. Vos bénévoles indiquent seulement leur disponibilité et attendent ses ordres.
+              </div>
+            ` : ''}
+            <div class="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 ${renfortMode ? 'hidden' : ''}">
               <label class="block text-xs font-black uppercase text-slate-800 dark:text-slate-200 flex items-center justify-between">
                 <span class="flex items-center gap-1.5">
                   <span class="w-4 h-4 rounded-full bg-pc-orange text-white text-[9px] flex items-center justify-center font-mono">3</span>
@@ -419,8 +665,23 @@ window.ProtecSmsMobilization = {
             </div>
 
             <!-- 4. COMPÉTENCES & EFFECTIFS REQUIS -->
+            ${isCrisisSms ? `
+              <div class="space-y-2 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
+                <label class="block text-xs font-black uppercase text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                  <span class="flex items-center gap-1.5">
+                    <span class="w-4 h-4 rounded-full bg-rose-600 text-white text-[9px] flex items-center justify-center font-mono">🎯</span>
+                    <span>Compétences requises</span>
+                  </span>
+                  <span class="text-[10px] text-rose-600 dark:text-rose-400 font-bold">⭐ Demandé · 🔒 Verrouillé</span>
+                </label>
+                <p class="text-[10px] text-slate-500 dark:text-slate-400 leading-tight">
+                  <strong>Demandé</strong> : ces profils sont sollicités en priorité, d'autres peuvent compléter. <strong>Verrouillé</strong> : les places sont réservées à ce profil ; les autres bénévoles reçoivent le SMS mais ne peuvent pas les prendre.
+                </p>
+                <div id="sms-quota-editor" class="space-y-2">${this.renderQuotaEditorHTML(mission.id)}</div>
+              </div>
+            ` : ''}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div class="space-y-1.5">
+              <div class="space-y-1.5 ${isCrisisSms ? 'hidden' : ''}">
                 <label class="block text-xs font-black uppercase text-slate-700 dark:text-slate-300 flex items-center gap-1">
                   <span class="w-4 h-4 rounded-full bg-pc-blue text-white text-[9px] flex items-center justify-center font-mono">4</span>
                   <span>Profil prioritaire</span>
@@ -540,9 +801,9 @@ window.ProtecSmsMobilization = {
           <button type="button" onclick="window.game.closeModal()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition cursor-pointer">
             Annuler
           </button>
-          <button type="button" onclick="window.ProtecSmsMobilization.submitSms('${mission.id}', ${isUpdate})" class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white shadow-lg shadow-pc-blue/30 active:scale-95 transition flex items-center gap-2 cursor-pointer">
+          <button type="button" onclick="window.ProtecSmsMobilization.submitSms('${mission.id}', ${isUpdate}, ${renfortMode})" class="px-5 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-pc-blue to-pc-blue-light hover:brightness-110 text-white shadow-lg shadow-pc-blue/30 active:scale-95 transition flex items-center gap-2 cursor-pointer">
             <i data-lucide="send" class="w-4 h-4"></i>
-            <span>${isUpdate ? 'Transmettre les Nouvelles Consignes' : (isPrealert ? 'Diffuser le Message de Préalerte' : 'Diffuser le SMS d\'Alerte')}</span>
+            <span>${renfortMode ? 'Envoyer la demande de disponibilités' : (isUpdate ? 'Transmettre les Nouvelles Consignes' : (isPrealert ? 'Diffuser le Message de Préalerte' : 'Diffuser le SMS d\'Alerte'))}</span>
           </button>
         </div>
 
@@ -797,6 +1058,13 @@ window.ProtecSmsMobilization = {
       }
     }
 
+    // Rattachement à une compétence requise si le profil correspond
+    const quotasOv = this.getMissionQuotas(mission);
+    if (quotasOv.length) {
+      const k = this.findQuotaSlot(mission, quotasOv, vol);
+      if (k) { const f = this.getQuotaFill(mission, quotasOv); if (!f[k].includes(vol.id)) f[k].push(vol.id); }
+    }
+
     // Mettre à jour la réponse SMS dans la liste
     if (Array.isArray(mission.smsResponses)) {
       const resp = mission.smsResponses.find(r => r.volunteerId === vol.id);
@@ -895,8 +1163,12 @@ window.ProtecSmsMobilization = {
       rdvTime: rdvTime,
       requiredSkill: skill,
       targetCount: count,
-      maxDepartureDelayMinutes: maxDelay
+      maxDepartureDelayMinutes: maxDelay,
+      skillQuotas: this._currentQuotas || []
     };
+
+    const warnEl = document.getElementById('sms-quota-warning');
+    if (warnEl) warnEl.innerHTML = this.renderQuotaWarningHTML();
 
     const previewEl = document.getElementById('sms-preview-text');
     if (previewEl) {
@@ -911,10 +1183,10 @@ window.ProtecSmsMobilization = {
   },
 
   // Soumission et déclenchement de la campagne SMS
-  submitSms(missionId, isUpdate = false) {
+  submitSms(missionId, isUpdate = false, renfortMode = false) {
     const game = window.game;
     if (!game) return;
-    const mission = game.missions.find(m => m.id === missionId);
+    const mission = (game.missions || []).find(m => m.id === missionId) || (game.activeCrises || []).find(c => c.id === missionId);
     if (!mission) return;
 
     const what = document.getElementById('sms-what')?.value || mission.title;
@@ -935,11 +1207,19 @@ window.ProtecSmsMobilization = {
       requiredSkill: skill,
       targetCount: targetCount,
       recipientMode: recipientMode,
-      maxDepartureDelayMinutes: maxDepartureDelayMinutes
+      maxDepartureDelayMinutes: maxDepartureDelayMinutes,
+      skillQuotas: (renfortMode || this.isCrisisMission(mission)) ? (this._currentQuotas || []).filter(q => q.count > 0).map(q => ({ ...q })) : []
     };
+    if (config.skillQuotas.length) config.requiredSkill = 'tous';
 
     // Fermer la modale
     game.closeModal();
+
+    if (renfortMode) {
+      config.consigne = 'attente_consignes';
+      this.launchRenfortDispatch(game, mission, config);
+      return;
+    }
 
     // Enregistrer la consigne active sur la mission
     mission.smsConsigne = config;
@@ -961,8 +1241,10 @@ window.ProtecSmsMobilization = {
       consigne: consigne,
       consigneLabel: (this.CONSIGNES[consigne] || {}).label || consigne,
       targetCount: targetCount,
+      skillQuotas: config.skillQuotas,
       text: fullSmsBody
     });
+    this.syncQuotaFillFromRegistered(game, mission);
 
     // 1. Si c'est une mise à jour d'évolution pour les secouristes DÉJÀ inscrits
     if (isUpdate && (recipientMode === 'registered_only' || recipientMode === 'both')) {
@@ -1021,6 +1303,69 @@ window.ProtecSmsMobilization = {
     this.launchSmsDispatch(game, mission, config);
   },
 
+  // Diffusion SMS d'une antenne de RENFORT : les réponses servent à constituer la proposition au directeur
+  launchRenfortDispatch(game, mission, config) {
+    if (!game.crisisRenfortSmsDispos) game.crisisRenfortSmsDispos = {};
+    const state = { sent: true, sentAt: Date.now(), config, responses: {}, text: this.generateSmsBody(config) };
+    game.crisisRenfortSmsDispos[mission.id] = state;
+    const pool = (game.volunteers || []).filter(v => !v.isBurnout && v.hasUniform !== false && ['dispo', 'disponible', 'base', undefined, null, ''].includes(v.status));
+    if (pool.length === 0) {
+      game.showToast('Aucun bénévole disponible', 'Tous vos personnels sont engagés ou indisponibles.', 'orange');
+      if (window.ProtecCriseMoyens) window.ProtecCriseMoyens.openRenfortOffer(mission.id);
+      return;
+    }
+    const quotas = (config.skillQuotas || []).filter(q => q && q.count > 0);
+    const target = Math.max(1, parseInt(config.targetCount, 10) || 1);
+    const fillOf = () => {
+      const f = {};
+      quotas.forEach(q => { f[q.key] = 0; });
+      Object.values(state.responses).forEach(r => { if (r.status === 'available' && r.quotaKey) f[r.quotaKey] = (f[r.quotaKey] || 0) + 1; });
+      return f;
+    };
+    const boost = (v) => quotas.reduce((b, q) => (this.volunteerHasQuotaSkill(v, q.key) ? Math.max(b, q.mode === 'verrouille' ? 60 : 40) : b), 0);
+    const sorted = [...pool].sort((a, b) => ((b.motivation || 70) + (b.energy || 70) * 0.4 + boost(b) + Math.random() * 15) - ((a.motivation || 70) + (a.energy || 70) * 0.4 + boost(a) + Math.random() * 15));
+    game.showToast('📱 Demande de disponibilités envoyée', `SMS de renfort envoyé à ${pool.length} secouriste(s). Les réponses arrivent…`, 'blue');
+    if (window.ProtecAudio && typeof window.ProtecAudio.playRadioBeep === 'function') window.ProtecAudio.playRadioBeep();
+    if (window.ProtecCriseMoyens) window.ProtecCriseMoyens.openRenfortOffer(mission.id);
+
+    let delay = 0;
+    sorted.forEach((vol, idx) => {
+      const stepMs = Math.round((2800 + Math.random() * 3800) * Math.max(0.5, 1.3 - ((vol.motivation || 70) / 100)));
+      delay = idx === 0 ? Math.round(15000 + Math.random() * 2500) : delay + stepMs;
+      setTimeout(() => {
+        const live = game.crisisRenfortSmsDispos && game.crisisRenfortSmsDispos[mission.id];
+        if (live !== state) return; // un nouveau SMS a remplacé celui-ci
+        const evalResult = game.evaluateVolunteerAvailability(vol, mission.eventDate || { dayName: 'Samedi' }, mission);
+        if (window.ProtecPersonnel && typeof window.ProtecPersonnel.ensureVolunteerResidence === 'function') window.ProtecPersonnel.ensureVolunteerResidence(vol, game);
+        const rally = vol.temps_ralliement_minutes !== undefined ? vol.temps_ralliement_minutes : (vol.temps_trajet_base_minutes !== undefined ? vol.temps_trajet_base_minutes : 12);
+        const maxDelay = parseInt(config.maxDepartureDelayMinutes, 10) || 0;
+        const delayOk = maxDelay <= 0 || rally <= maxDelay;
+        const availCount = Object.values(state.responses).filter(r => r.status === 'available').length;
+        const now = new Date();
+        const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        let resp;
+        if (!evalResult.isAvailable || !delayOk) {
+          resp = { status: 'unavailable', reason: !delayOk ? `Trajet ${rally} min > ${maxDelay} min` : (evalResult.rejectReason || 'Contrainte personnelle'), time };
+        } else if (availCount >= target) {
+          resp = { status: 'unavailable', reason: 'Effectif recherché déjà atteint', time };
+        } else {
+          const fill = fillOf();
+          const ordered = [...quotas].sort((a, b) => (a.mode === 'verrouille' ? 0 : 1) - (b.mode === 'verrouille' ? 0 : 1));
+          const slot = ordered.find(q => (fill[q.key] || 0) < q.count && this.volunteerHasQuotaSkill(vol, q.key));
+          const reserved = quotas.filter(q => q.mode === 'verrouille').reduce((a, q) => a + Math.max(0, q.count - (fill[q.key] || 0)), 0);
+          if (!slot && reserved > 0 && availCount + reserved >= target) {
+            resp = { status: 'profile', reason: 'Places restantes réservées aux profils verrouillés', time };
+          } else {
+            resp = { status: 'available', quotaKey: slot ? slot.key : null, time, message: 'Disponible pour le renfort, j\'attends les ordres du directeur.' };
+          }
+        }
+        state.responses[vol.id] = resp;
+        if (resp.status === 'available') game.showToast('📱 SMS reçu : DISPO', `${vol.name} (${vol.rank || 'Secouriste'}) : « Disponible pour le renfort ! »`, 'green');
+        if (window.ProtecCriseMoyens) window.ProtecCriseMoyens.refreshRenfortOffer(mission.id);
+      }, delay);
+    });
+  },
+
   // Diffusion aux bénévoles avec simulation réaliste et autonomie selon la consigne
   launchSmsDispatch(game, mission, config) {
     const unassignedVols = game.volunteers.filter(v => 
@@ -1052,10 +1397,23 @@ window.ProtecSmsMobilization = {
 
     let pendingResponses = unassignedVols.length;
 
+    // Compétences requises du SMS de crise
+    const quotas = this.isCrisisMission(mission) ? ((config.skillQuotas || []).filter(q => q && q.count > 0)) : [];
+    if (quotas.length) this.syncQuotaFillFromRegistered(game, mission);
+    const quotaBoost = (v) => {
+      if (!quotas.length) return 0;
+      const fill = this.getQuotaFill(mission, quotas);
+      let b = 0;
+      quotas.forEach(q => {
+        if ((fill[q.key] || []).length < q.count && this.volunteerHasQuotaSkill(v, q.key)) b = Math.max(b, q.mode === 'verrouille' ? 60 : 40);
+      });
+      return b;
+    };
+
     // Priorisation selon la compétence demandée
     const sortedVols = [...unassignedVols].sort((a, b) => {
-      let boostA = 0;
-      let boostB = 0;
+      let boostA = quotaBoost(a);
+      let boostB = quotaBoost(b);
       if (config.requiredSkill === 'chauffeur') {
         if ((a.skills || []).includes('permis_vpsp') || (a.skills || []).includes('pilotage')) boostA += 40;
         if ((b.skills || []).includes('permis_vpsp') || (b.skills || []).includes('pilotage')) boostB += 40;
@@ -1113,7 +1471,20 @@ window.ProtecSmsMobilization = {
         const delayRespected = (maxDelay <= 0) || (rallyMinutes <= maxDelay);
 
         const isFull = (currentMission.registeredVolunteers || []).length >= (currentMission.requiredVolunteers || 1);
-        const willAccept = !isFull && evalResult.isAvailable && delayRespected;
+
+        // Compétences verrouillées : places réservées aux profils requis
+        let quotaSlot = null;
+        let profileRejected = false;
+        if (quotas.length && !isFull && evalResult.isAvailable && delayRespected) {
+          quotaSlot = this.findQuotaSlot(currentMission, quotas, vol);
+          if (!quotaSlot) {
+            const reserved = this.getReservedRemaining(currentMission, quotas);
+            const regCount = (currentMission.registeredVolunteers || []).length;
+            const cap = Math.max(currentMission.requiredVolunteers || 1, parseInt(config.targetCount, 10) || 0);
+            if (reserved > 0 && regCount + reserved >= cap) profileRejected = true;
+          }
+        }
+        const willAccept = !isFull && evalResult.isAvailable && delayRespected && !profileRejected;
         const now = new Date();
         const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
         if (!Array.isArray(currentMission.smsResponses)) currentMission.smsResponses = [];
@@ -1125,6 +1496,10 @@ window.ProtecSmsMobilization = {
             if (!currentMission.registeredVolunteers.includes(vol.id)) {
               currentMission.registeredVolunteers.push(vol.id);
             }
+          }
+          if (quotaSlot && (currentMission.registeredVolunteers || []).includes(vol.id)) {
+            const fillNow = this.getQuotaFill(currentMission, quotas);
+            if (!fillNow[quotaSlot].includes(vol.id)) fillNow[quotaSlot].push(vol.id);
           }
 
           let replyMsg = consigneObj.volunteerReply;
@@ -1175,6 +1550,21 @@ window.ProtecSmsMobilization = {
           setTimeout(() => {
             game.checkEnginProgressNotification(currentMission);
           }, 900);
+        } else if (profileRejected) {
+          // Disponible mais sans la compétence des places verrouillées restantes
+          const missing = quotas.filter(q => q.mode === 'verrouille' && (this.getQuotaFill(currentMission, quotas)[q.key] || []).length < q.count)
+            .map(q => this.getQuotaDef(q.key).short).join(', ');
+          currentMission.smsResponses.unshift({
+            volunteerId: vol.id,
+            volunteerName: vol.name,
+            rank: vol.rank || 'Secouriste',
+            isAvailable: false,
+            profileMismatch: true,
+            rallyMinutes: rallyMinutes,
+            message: `Disponible, mais je n'ai pas le profil requis : places restantes réservées (${missing}). Je reste joignable si besoin.`,
+            time: timeStr
+          });
+          game.showToast('SMS : Profil non requis', `${vol.name} (${vol.rank || 'Secouriste'}) est dispo mais n'a pas la compétence verrouillée (${missing}).`, 'slate');
         } else if (!isFull) {
           // Si le bénévole est disponible mais que son trajet dépasse le délai maximum imposé
           if (evalResult.isAvailable && !delayRespected) {
@@ -1371,6 +1761,26 @@ window.ProtecSmsMobilization = {
           </div>
         ` : ''}
 
+        <!-- SUIVI DES COMPÉTENCES REQUISES (SMS DE CRISE) -->
+        ${(() => {
+          const qs = this.getMissionQuotas(mission);
+          if (!qs.length) return '';
+          this.syncQuotaFillFromRegistered(game, mission);
+          const fill = this.getQuotaFill(mission, qs);
+          return `
+            <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-700 space-y-1.5">
+              <span class="text-[10px] font-black uppercase text-slate-600 dark:text-slate-300">🎯 Compétences requises</span>
+              <div class="flex flex-wrap gap-1.5">
+                ${qs.map(q => {
+                  const n = (fill[q.key] || []).length;
+                  const ok = n >= q.count;
+                  const locked = q.mode === 'verrouille';
+                  return `<span class="px-2 py-0.5 rounded-lg text-[10px] font-black border ${ok ? 'bg-emerald-50 text-emerald-800 border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300 dark:border-emerald-700' : (locked ? 'bg-rose-50 text-rose-800 border-rose-300 dark:bg-rose-950/50 dark:text-rose-300 dark:border-rose-700' : 'bg-amber-50 text-amber-800 border-amber-300 dark:bg-amber-950/50 dark:text-amber-300 dark:border-amber-700')}">${locked ? '🔒' : '⭐'} ${this.getQuotaDef(q.key).short} : ${n}/${q.count}</span>`;
+                }).join('')}
+              </div>
+            </div>`;
+        })()}
+
         <!-- HISTORIQUE DES MESSAGES ENVOYÉS (ACCORDÉON) -->
         ${history.length > 0 ? `
           <details class="group bg-slate-50 dark:bg-black/20 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-700">
@@ -1441,6 +1851,13 @@ window.ProtecSmsMobilization = {
                     <span class="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/40">
                       ${isOverridden ? 'Déclenché ✓' : 'Dispo'}
                     </span>
+                  `;
+                } else if (r.profileMismatch) {
+                  containerClass = 'bg-slate-50 dark:bg-slate-800/50 border-rose-200 dark:border-rose-700/40 text-slate-700 dark:text-slate-300';
+                  iconClass = 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300';
+                  iconName = 'lock';
+                  badgeHtml = `
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-300 dark:border-rose-600">🔒 Hors profil</span>
                   `;
                 } else {
                   containerClass = 'bg-slate-100/60 dark:bg-slate-800/40 border-slate-200 dark:border-slate-700 text-slate-500';
