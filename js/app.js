@@ -9086,7 +9086,8 @@ class ProtecGame {
       time: timeStr,
       source: `Logisticien (${logistician.name})`,
       text: message,
-      type: type === 'fatigue' || type === 'materiel' ? 'alert' : 'info'
+      type: type === 'fatigue' || type === 'materiel' ? 'alert' : 'info',
+      spoken: true // déjà transmis à la radio ci-dessous
     });
 
     // Transmission Radio si le module radio est actif
@@ -13348,6 +13349,15 @@ class ProtecGame {
 
     // GESTION SUPPRESSION / CLÔTURE DÉPARTEMENTALE DE LA CRISE
     if (['deleted', 'resolved', 'cancelled'].includes(payload.status)) {
+      // 0. Annonce de la fin du dispositif si la crise était encore active ici
+      const endedMission = (this.missions || []).find(m => m.id === targetId);
+      if (endedMission && ['prealerte', 'declenche', 'ongoing', 'en_cours'].includes(endedMission.status)) {
+        this.showToast(
+          payload.status === 'deleted' ? '🗑️ Crise supprimée' : '🏁 Fin du dispositif',
+          `« ${endedMission.title} » : ${payload.status === 'deleted' ? 'crise supprimée par l\'administration' : 'dispositif levé par la direction de crise'}. Les moyens engagés rentrent à leur base.`,
+          'blue'
+        );
+      }
       // 1. Retrait de this.missions
       const mIdx = (this.missions || []).findIndex(m => m.id === targetId);
       if (mIdx !== -1) {
@@ -13530,9 +13540,29 @@ class ProtecGame {
       const activeIds = new Set((activeCrises || []).map(c => String(c.id)));
       let hadDeletedDeptCrisis = false;
 
+      const fetchReliable = Boolean(window.ProtecSupabase._lastCrisisFetchOk);
+      const myIdSync = this.player?.id || 'usr_local';
+      const isActiveLocally = (m) => ['prealerte', 'declenche', 'ongoing', 'en_cours'].includes(m.status) && !m.crisisCanClose;
+      const isMineOrEngaged = (m) => m.managerPlayerId === myIdSync
+        || (!m.managerPlayerId && (m.registeredVolunteers || []).length > 0)
+        || (m.deployedTeams || []).length > 0
+        || (m.proposedRenforts || []).some(p => p.sourcePlayerId === myIdSync && ['proposed', 'accepted', 'on_site'].includes(p.status));
+      const removedTitles = [];
+
       this.missions = (this.missions || []).filter(m => {
         const isDeptCrisis = (m.isCrisis || m.type === 'crise') && String(m.departmentCode || myDept) === String(myDept);
         if (isDeptCrisis && !activeIds.has(String(m.id))) {
+          // Liste départementale incertaine (réseau / Supabase indisponible) : on ne retire rien
+          if (!fetchReliable) return true;
+          // Crise que je dirige ou sur laquelle j'ai des moyens, toujours active chez moi : elle n'est pas
+          // terminée, c'est sa fiche départementale qui a expiré → on la republie au lieu de l'arrêter
+          if (isActiveLocally(m) && (!m.managerPlayerId || isMineOrEngaged(m))) {
+            if (typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+              window.ProtecSupabase.saveDepartmentCrisis(m, m.departmentCode || myDept, { silent: true });
+            }
+            return true;
+          }
+          if (isActiveLocally(m)) removedTitles.push(m.title);
           hadDeletedDeptCrisis = true;
           if (this.selectedMissionId === m.id) {
             this.closeDrawer();
@@ -13555,6 +13585,19 @@ class ProtecGame {
       if (hadDeletedDeptCrisis) {
         this.renderMissions();
         this.updateStatsUI();
+      }
+      removedTitles.forEach(t => this.showToast('🏁 Fin du dispositif', `« ${t} » a été levé par la direction de crise départementale.`, 'blue'));
+
+      // Les crises que je dirige restent publiées tant qu'elles sont actives (échéance glissante)
+      if (fetchReliable && typeof window.ProtecSupabase.saveDepartmentCrisis === 'function') {
+        const nowRefresh = Date.now();
+        (this.missions || []).forEach(m => {
+          if ((m.isCrisis || m.type === 'crise') && m.managerPlayerId === myIdSync && isActiveLocally(m)
+            && (!m._deptRefreshAt || nowRefresh - m._deptRefreshAt > 10 * 60 * 1000)) {
+            m._deptRefreshAt = nowRefresh;
+            window.ProtecSupabase.saveDepartmentCrisis(m, m.departmentCode || myDept, { silent: true });
+          }
+        });
       }
 
       if (Array.isArray(activeCrises) && activeCrises.length > 0) {

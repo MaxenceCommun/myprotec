@@ -2005,16 +2005,21 @@ window.ProtecSupabase = {
   },
 
   // Sauvegarde d'une crise départementale partagée dans Supabase (visible par tous les directeurs du département)
-  async saveDepartmentCrisis(crisisData, departmentCode) {
+  async saveDepartmentCrisis(crisisData, departmentCode, opts = {}) {
     if (!this.client || !crisisData) return;
     try {
       const dept = departmentCode || crisisData.departmentCode || '54';
       const now = new Date();
       const startsAt = crisisData.spawnedAt ? new Date(crisisData.spawnedAt).toISOString() : (crisisData.startedAt ? new Date(crisisData.startedAt).toISOString() : now.toISOString());
       const durationSec = crisisData.durationSeconds || (crisisData.durationHours ? Math.round(crisisData.durationHours * 3600) : 7200);
-      const endsAt = crisisData.targetTime && crisisData.targetTime > Date.now() + 600000
-        ? new Date(crisisData.targetTime).toISOString()
-        : new Date(new Date(startsAt).getTime() + durationSec * 1000).toISOString();
+      let endsAtMs = crisisData.targetTime && crisisData.targetTime > Date.now() + 600000
+        ? crisisData.targetTime
+        : new Date(startsAt).getTime() + durationSec * 1000;
+      // Une crise encore active ne doit jamais « expirer » en base tant que le scénario n'est pas terminé :
+      // l'échéance est repoussée à chaque sauvegarde (fenêtre glissante de 3 h)
+      const closedStatuses = ['resolved', 'deleted', 'cancelled', 'terminee', 'completed', 'canceled_favorable', 'prealerte_levee'];
+      if (!closedStatuses.includes(crisisData.status)) endsAtMs = Math.max(endsAtMs, Date.now() + 3 * 3600 * 1000);
+      const endsAt = new Date(endsAtMs).toISOString();
 
       await this.client
         .from('active_missions')
@@ -2039,8 +2044,8 @@ window.ProtecSupabase = {
           created_at: startsAt
         }, { onConflict: 'id' });
 
-      // Inscription automatique dans le journal opérationnel départemental
-      this.logOperationalEvent({
+      // Inscription automatique dans le journal opérationnel départemental (pas lors d'un simple rafraîchissement)
+      if (!(opts && opts.silent)) this.logOperationalEvent({
         playerId: `DEPT_${dept}`,
         stationName: `Centre Opérationnel ${dept}`,
         city: crisisData.city || crisisData.commune || `Département ${dept}`,
@@ -2058,6 +2063,8 @@ window.ProtecSupabase = {
 
   // Récupération des crises actives d'un département (pour les joueurs en ligne et ceux qui se reconnectent)
   async fetchActiveDepartmentCrises(departmentCode) {
+    // Indique si la liste renvoyée est fiable (requête réussie) : sans cela, aucune crise locale ne doit être retirée
+    this._lastCrisisFetchOk = false;
     if (!departmentCode) return [];
     // 1. Si Supabase est actif
     if (this.client) {
@@ -2074,6 +2081,7 @@ window.ProtecSupabase = {
           .neq('status', 'cancelled')
           .neq('status', 'terminee');
 
+        if (!error && Array.isArray(data)) this._lastCrisisFetchOk = true;
         if (!error && Array.isArray(data) && data.length > 0) {
           return data.map(row => {
             const details = row.details || {};

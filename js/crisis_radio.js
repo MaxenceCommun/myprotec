@@ -1186,3 +1186,65 @@ window.ProtecCrisisRadio = {
 
 // Auto-démarrage dès chargement du script
 window.ProtecCrisisRadio.init();
+// =============================================================================
+// LECTURE AUTOMATIQUE DE LA MAIN COURANTE DES MISSIONS
+// Chaque nouveau message ajouté à mission.operationalLog (crises, interventions)
+// est lu à la radio quand la « Lecture auto » est active. Les anciens messages ne
+// sont pas relus (au chargement ou à la première ouverture d'une mission).
+// =============================================================================
+Object.assign(window.ProtecCrisisRadio, {
+  _mcSeen: new Set(),
+  _mcKnownMissions: new Set(),
+
+  _mcKey(missionId, e) {
+    return `${missionId}|${e.timestamp || e.time || ''}|${String(e.text || '').slice(0, 80)}`;
+  },
+
+  _mcIsRelevant(game, m) {
+    if (!m || !Array.isArray(m.operationalLog) || !m.operationalLog.length) return false;
+    if (['completed', 'canceled', 'cancelled', 'canceled_favorable', 'failed', 'termine', 'terminee'].includes(m.status)) return false;
+    if (game.selectedMissionId === m.id) return true;
+    const myId = game.player?.id || 'usr_local';
+    const isCrisis = m.type === 'crise' || m.isCrisis || m.isEmergencyPlan;
+    if (isCrisis) {
+      // Crise : je la dirige, personne ne la dirige encore, ou j'y ai des moyens
+      if (!m.managerPlayerId || m.managerPlayerId === myId) return true;
+      return (m.proposedRenforts || []).some(p => p.sourcePlayerId === myId && ['accepted', 'on_site'].includes(p.status));
+    }
+    // Autres missions : uniquement si mes équipes y sont engagées
+    return (m.registeredVolunteers || []).length > 0 && ['ongoing', 'en_cours', 'declenche'].includes(m.status);
+  },
+
+  scanMainCourante() {
+    const game = window.game;
+    if (!game || !Array.isArray(game.missions)) return;
+    const now = Date.now();
+    game.missions.forEach(m => {
+      if (!this._mcIsRelevant(game, m)) return;
+      const firstSight = !this._mcKnownMissions.has(m.id);
+      this._mcKnownMissions.add(m.id);
+      // Du plus ancien au plus récent (la main courante est triée du plus récent au plus ancien)
+      const entries = [...m.operationalLog].reverse();
+      entries.forEach(e => {
+        if (!e || !e.text) return;
+        const key = this._mcKey(m.id, e);
+        if (this._mcSeen.has(key)) return;
+        this._mcSeen.add(key);
+        if (e.spoken) return;
+        // Première vue : seuls les messages de la dernière minute sont lus (pas de relecture de l'historique)
+        if (firstSight && !(e.timestamp && now - e.timestamp < 60000)) { e.spoken = true; return; }
+        e.spoken = true;
+        if (!this.enabled) return;
+        this.transmit({
+          text: e.text,
+          source: e.source || e.author || 'PC Opérationnel',
+          priority: e.type === 'alert' || Boolean(e.isCritical),
+          channel: (m.type === 'crise' || m.isCrisis) ? 'CANAL CRISE' : 'CANAL OPÉRATIONNEL'
+        });
+      });
+    });
+    if (this._mcSeen.size > 5000) this._mcSeen = new Set([...this._mcSeen].slice(-2500));
+  }
+});
+
+setInterval(() => { try { window.ProtecCrisisRadio.scanMainCourante(); } catch (e) { /* ignoré */ } }, 1500);
