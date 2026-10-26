@@ -6863,22 +6863,55 @@ class ProtecGame {
     ];
   }
 
-  // Catalogue unifié des lots matériels (Devis, Missions, Renforts)
+  // Catalogue des lots & matériels affectables aux missions = le matériel vendu en boutique et géré par la
+  // logistique (ProtecEquipements.LOTS_CATALOG), tel que configuré dynamiquement par les admins.
   getAvailableLotsCatalog() {
+    const ICONS = { tent: '⛺', briefcase: '🎒', 'stretch-horizontal': '🛏️', axe: '🪚', waves: '💧', lightbulb: '💡', zap: '⚡', 'bed-double': '🛌', 'bed': '🛌', utensils: '☕', coffee: '☕', 'heart-handshake': '🤝', 'heart-pulse': '💓', radio: '📻', satellite: '🛰️', camera: '🛸', eye: '🛸', wrench: '🔧', activity: '💓', home: '🏠', laptop: '💻', tablet: '📱', phone: '📱', smartphone: '📱', armchair: '🪑', shirt: '👕' };
+    const src = (window.ProtecEquipements && Array.isArray(window.ProtecEquipements.LOTS_CATALOG)) ? window.ProtecEquipements.LOTS_CATALOG : [];
+    const list = src.filter(it => it && it.id && it.disabled !== true && it.hidden !== true).map(it => {
+      const price = Number(it.price) || 0;
+      return {
+        id: it.id,
+        name: it.name || it.id,
+        emoji: it.emoji || ICONS[it.lucideIcon] || '📦',
+        image: it.image || null,
+        dailyRate: Number(it.dailyRate) || Math.max(15, Math.round(price * 0.02)),
+        logSlots: Number(it.storageSize || it.slots) || 1,
+        desc: it.desc || ''
+      };
+    });
+    if (list.length) return list;
+    // Repli si le module boutique n'est pas chargé
     return [
-      { id: 'lot_a', name: 'Lot A', emoji: '🎒', dailyRate: 35, logSlots: 1, desc: 'Sac de prompt secours, DAE automatisé, oxygénothérapie B2, colliers cervicaux, aspirateur de mucosités.' },
-      { id: 'lot_b', name: 'Lot B', emoji: '🛏️', dailyRate: 45, logSlots: 2, desc: 'Matelas immobilisateur à dépression, attelles, plan dur, brancards pliants et matériel de soins PMA.' },
-      { id: 'tente', name: 'Lot C - Tente Gonflable', emoji: '⛺', dailyRate: 60, logSlots: 3, desc: 'Tente de poste de secours gonflable/pliante 25m², éclairage interne, chauffage soufflant et mobilier.' },
-      { id: 'lot_log', name: 'Lot LOG', emoji: '💡', dailyRate: 35, logSlots: 2, desc: 'Mât d’éclairage autonome LED, groupe électrogène portatif, enrouleurs IP67 et balisage.' },
-      { id: 'dae_supp', name: 'DAE Automatisé Supplémentaire', emoji: '💓', dailyRate: 20, logSlots: 1, desc: 'Défibrillateur automatisé externe supplémentaire avec électrodes adultes/pédiatriques pour binôme.' },
-      { id: 'radio_portatifs', name: 'Valise 6 Radios Portatives VHF/UHF', emoji: '📻', dailyRate: 25, logSlots: 1, desc: 'Valise de 6 portatifs radio numériques cryptés avec oreillettes et chargeur multiple.' },
-      { id: 'lot_hebergement', name: 'Kit CHU', emoji: '🛌', dailyRate: 50, logSlots: 4, desc: 'Centre d’Hébergement d’Urgence : 25 lits picots pliants, couvertures bactériostatiques et kits hygiène.' },
-      { id: 'lot_ravitaillement', name: 'Lot Ravitaillement & Boissons Chaudes', emoji: '☕', dailyRate: 30, logSlots: 2, desc: 'Percolateurs grands volumes, barnum pliables, gobelets, barres énergétiques et réserves d’eau.' },
-      { id: 'lot_pompage', name: 'Lot Pompage & Épuisement Inondation', emoji: '💧', dailyRate: 45, logSlots: 2, desc: 'Vide-caves électriques, pompe thermique, aspirateur à eau, raclettes et tuyaux de refoulement.' },
-      { id: 'lot_tronconnage', name: 'Lot Dégagement & Tronçonnage', emoji: '🪚', dailyRate: 40, logSlots: 2, desc: 'Tronçonneuse thermique, EPI forestiers complets, cordages et outils de dégagement.' },
-      { id: 'lot_bachage', name: 'Lot Bâchage & Mise Hors d’Eau', emoji: '🛡️', dailyRate: 35, logSlots: 2, desc: 'Bâches armées lourdes, liteaux, sangles à cliquet et outillage de protection de toiture.' },
-      { id: 'lot_soutien_psy', name: 'Lot CAI', emoji: '🤝', dailyRate: 25, logSlots: 1, desc: 'Fiches de traçabilité SINUS/CAI, chasubles d’identification, paravents d’intimité et accueil.' }
+      { id: 'lot_secours_a', name: 'Lot A - Poste de secours', emoji: '⛺', dailyRate: 57, logSlots: 3, desc: 'Tente gonflable et mobilier de poste fixe.' },
+      { id: 'lot_secours_b', name: 'Lot B - Premiers secours', emoji: '🎒', dailyRate: 15, logSlots: 1, desc: 'Sac de premiers secours, oxygénothérapie, bilan.' },
+      { id: 'lot_secours_c', name: 'Lot C - Brancardage & Immobilisation', emoji: '🛏️', dailyRate: 39, logSlots: 2, desc: 'Matelas à dépression, brancard, attelles.' }
     ];
+  }
+
+  // Anciens identifiants de lots (avant l'alignement sur la boutique) → identifiants du catalogue
+  normalizeLotId(id) {
+    const map = { lot_a: 'lot_secours_b', lot_b: 'lot_secours_c', lot_c: 'lot_secours_a', tente: 'lot_secours_a', lot_log: 'lot_eclairage', drone_reco: 'lot_drone_reco', drone_thermique: 'lot_drone_thermique' };
+    return map[id] || id;
+  }
+
+  hasLotInList(list, lotId) {
+    const target = this.normalizeLotId(lotId);
+    return (Array.isArray(list) ? list : []).some(l => this.normalizeLotId(l) === target);
+  }
+
+  // Quantité de ce matériel en stock dans toutes les antennes du joueur
+  getOwnedLotStock(lotId) {
+    return (this.stations || []).reduce((sum, st) => sum + (Number(st && st.stock && st.stock[lotId]) || 0), 0);
+  }
+
+  migrateLotCounts(counts) {
+    if (!counts || typeof counts !== 'object') return counts;
+    Object.keys(counts).forEach(k => {
+      const n = this.normalizeLotId(k);
+      if (n !== k) { counts[n] = (Number(counts[n]) || 0) + (Number(counts[k]) || 0); delete counts[k]; }
+    });
+    return counts;
   }
 
   // Détection d'un salarié qualifié assigné au pôle opérationnel
@@ -7026,12 +7059,12 @@ class ProtecGame {
       requiredScale = 'DPS-ME';
       minVolunteers = Math.max(8, Math.min(18, Math.round(ris * 2.2)));
       requiredVehicles = ['VPSP', 'VTU'];
-      requiredLots = ['lot_a'];
+      requiredLots = ['lot_secours_b'];
     } else {
       requiredScale = 'DPS-GE';
       minVolunteers = Math.max(12, Math.min(36, Math.round(ris * 2.0)));
       requiredVehicles = ['VPSP', 'VPSP', 'VTU'];
-      requiredLots = ['lot_a', 'lot_b'];
+      requiredLots = ['lot_secours_b', 'lot_secours_c'];
     }
 
     const stReq = this.computeDpsStaffing(minVolunteers, requiredScale);
@@ -7047,8 +7080,8 @@ class ProtecGame {
       else if (v === 'VL') vehCost += 35;
     });
     let matCost = 35;
-    if (requiredLots.includes('lot_a')) matCost += 40;
-    if (requiredLots.includes('lot_b')) matCost += 30;
+    if (requiredLots.includes('lot_secours_b')) matCost += 40;
+    if (requiredLots.includes('lot_secours_c')) matCost += 30;
     const recommendedPrice = persCost + vehCost + matCost + 40;
 
     return {
@@ -7059,7 +7092,7 @@ class ProtecGame {
       requiredCP,
       requiredCE,
       needsVPSP: requiredVehicles.includes('VPSP'),
-      needsLotA: requiredLots.includes('lot_a'),
+      needsLotA: requiredLots.includes('lot_secours_b'),
       requiredVehicles,
       requiredLots,
       recommendedPrice
@@ -7746,6 +7779,7 @@ class ProtecGame {
         devis.lotCountsByPeriod = { Weekday: { ...base }, Weekend: { ...base } };
       }
       const k = devis.editPeriod === 'Weekday' ? 'Weekday' : 'Weekend';
+      ['Weekday', 'Weekend'].forEach(pk => this.migrateLotCounts(devis.lotCountsByPeriod[pk]));
       return devis.lotCountsByPeriod[k] || (devis.lotCountsByPeriod[k] = {});
     }
     if (!devis.configuredLotCounts || typeof devis.configuredLotCounts !== 'object') {
@@ -7756,6 +7790,7 @@ class ProtecGame {
         });
       }
     }
+    this.migrateLotCounts(devis.configuredLotCounts);
     return devis.configuredLotCounts;
   }
 
@@ -7945,13 +7980,14 @@ class ProtecGame {
       } else {
         const scale = (mission.scale || '').toUpperCase();
         if (scale.includes('GE')) {
-          mission.configuredLotCounts['lot_a'] = 1;
-          mission.configuredLotCounts['lot_b'] = 1;
+          mission.configuredLotCounts['lot_secours_b'] = 1;
+          mission.configuredLotCounts['lot_secours_c'] = 1;
         } else if (scale.includes('ME')) {
-          mission.configuredLotCounts['lot_a'] = 1;
+          mission.configuredLotCounts['lot_secours_b'] = 1;
         }
       }
     }
+    this.migrateLotCounts(mission.configuredLotCounts);
     return mission.configuredLotCounts;
   }
 
@@ -9818,7 +9854,7 @@ class ProtecGame {
     if (hiddenAudit.needsVPSP && !(devis.configuredVehicles || []).includes('VPSP')) {
       complianceErrors.push(`VPSP requis non intégré au dispositif`);
     }
-    if (hiddenAudit.needsLotA && !(devis.configuredLots || []).includes('lot_a')) {
+    if (hiddenAudit.needsLotA && !this.hasLotInList(devis.configuredLots, 'lot_secours_b')) {
       complianceErrors.push(`Lot A de prompt secours obligatoire non engagé`);
     }
 
@@ -19455,13 +19491,13 @@ class ProtecGame {
                         lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">Lot A - Secours (1 lot)</span>');
 
                         // Lot B : si configuré ou si échelle ME / GE
-                        const needsLotB = configured.includes('lot_b') || scale.includes('ME') || scale.includes('GE') || (cov.needs.reqLogKits >= 2);
+                        const needsLotB = this.hasLotInList(configured, 'lot_secours_c') || scale.includes('ME') || scale.includes('GE') || (cov.needs.reqLogKits >= 2);
                         if (needsLotB) {
                           lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">Lot B - Brancardage (1 lot)</span>');
                         }
 
                         // Lot C / Tente PMA si configuré
-                        if (configured.includes('tente') || configured.includes('lot_c') || scale.includes('GE')) {
+                        if (this.hasLotInList(configured, 'lot_secours_a') || scale.includes('GE')) {
                           lotsBadges.push('<span class="px-2 py-0.5 rounded text-[10px] font-black bg-indigo-100 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">Tente PMA (1 structure)</span>');
                         }
                       }
@@ -21105,11 +21141,11 @@ class ProtecGame {
                   <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
                     <div class="flex items-center justify-between">
                       <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_a') ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                        <span class="w-2 h-2 rounded-full ${this.hasLotInList(mission.configuredLots, 'lot_secours_b') ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
                         <span>Lot A — Prompt Secours (Poste Fixe / PAP / Équipe Pédestre)</span>
                       </span>
-                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_a') ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
-                        ${(mission.configuredLots || []).includes('lot_a') ? 'Dotation Poste Fixe' : 'Non requis'}
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${this.hasLotInList(mission.configuredLots, 'lot_secours_b') ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                        ${this.hasLotInList(mission.configuredLots, 'lot_secours_b') ? 'Dotation Poste Fixe' : 'Non requis'}
                       </span>
                     </div>
                     <p class="text-[11px] text-slate-600 leading-relaxed">
@@ -21121,11 +21157,11 @@ class ProtecGame {
                   <div class="p-3 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
                     <div class="flex items-center justify-between">
                       <span class="font-extrabold text-xs text-slate-800 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
+                        <span class="w-2 h-2 rounded-full ${this.hasLotInList(mission.configuredLots, 'lot_secours_c') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-500' : 'bg-slate-400'}"></span>
                         <span>Lot B — Poste Médical Avancé & Soins</span>
                       </span>
-                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
-                        ${(mission.configuredLots || []).includes('lot_b') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'Dotation Active' : 'Non requis'}
+                      <span class="text-[9px] font-black px-2 py-0.5 rounded ${this.hasLotInList(mission.configuredLots, 'lot_secours_c') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'}">
+                        ${this.hasLotInList(mission.configuredLots, 'lot_secours_c') || (mission.scale && (mission.scale.includes('ME') || mission.scale.includes('GE'))) ? 'Dotation Active' : 'Non requis'}
                       </span>
                     </div>
                     <p class="text-[11px] text-slate-600 leading-relaxed">
@@ -25875,8 +25911,10 @@ class ProtecGame {
                               <p class="text-[11px] text-indigo-800 leading-tight">
                                 L'affluence varie entre semaine et week-end. Ajustez les effectifs par vacation pour optimiser la rentabilité.
                               </p>
+                              ${this.renderDevisPeriodTabsHTML(d, 'Personnels')}
                               <div class="grid grid-cols-1 gap-2 pt-1">
                                 <!-- Semaine : Lundi au Vendredi -->
+                                ${d.editPeriod === 'Weekday' ? `
                                 <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
                                   <div class="flex items-center justify-between mb-1">
                                     <label class="text-[11px] font-bold text-slate-700">Semaine :</label>
@@ -25892,7 +25930,7 @@ class ProtecGame {
                                   </div>
                                   ${this.renderDevisPeriodRolesHTML(d, 'Weekday')}
                                 </div>
-
+                                ` : `
                                 <!-- Week-end : Samedi et Dimanche -->
                                 <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
                                   <div class="flex items-center justify-between mb-1">
@@ -25909,6 +25947,7 @@ class ProtecGame {
                                   </div>
                                   ${this.renderDevisPeriodRolesHTML(d, 'Weekend')}
                                 </div>
+                                `}
                               </div>
                             </div>
                           ` : ''}
@@ -26036,13 +26075,13 @@ class ProtecGame {
                           return `
                             <select onchange="if(this.value){ window.game.addDevisLotType('${d.id}', this.value); this.value=''; }" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-xs font-bold text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 cursor-pointer">
                               <option value="">+ Ajouter un lot ou matériel au dispositif...</option>
-                              ${lotCatalog.map(lItem => `<option value="${lItem.id}">${lItem.emoji} ${lItem.name}</option>`).join('')}
+                              ${lotCatalog.map(lItem => { const st = this.getOwnedLotStock(lItem.id); return `<option value="${lItem.id}">${lItem.emoji} ${lItem.name} — ${st > 0 ? `${st} en stock` : 'non possédé'}</option>`; }).join('')}
                             </select>
 
                             ${selectedLots.length === 0 ? `
                               <div class="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-dashed border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-2">
                                 <span>📦</span>
-                                <span>Aucun lot spécifique ajouté. Sélectionnez un lot ci-dessus (Lot A, Lot B, Tente PMA, Lot LOG...).</span>
+                                <span>Aucun matériel ajouté. Sélectionnez un lot ci-dessus : la liste reprend le matériel de la boutique et votre stock.</span>
                               </div>
                             ` : `
                               <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 text-xs pt-0.5">
