@@ -865,6 +865,8 @@
           const pub = this.roundExpectedPublic(regEvt.pub * (0.90 + Math.random() * 0.20));
           const ris = this.calculateRis(pub, regEvt.env, 'élevé', 12);
           const fin = this.calculateFinancials(ris.minVolunteers, dur, ris.requiredVehicles, ris.scaleKey, regEvt);
+          const pubWeekday = regEvt.isMultiDays ? this.roundExpectedPublic(pub * (0.40 + Math.random() * 0.20)) : pub;
+          const risWeekday = regEvt.isMultiDays ? this.calculateRis(pubWeekday, regEvt.env, 'élevé', 12) : ris;
 
           const regCommuneObj = cityInDept;
           const lat = parseFloat(((regCommuneObj?.lat || station.lat) + (Math.random() - 0.5) * 0.02).toFixed(4));
@@ -902,7 +904,10 @@
             weekendDaysCount: regEvt.weekendDaysCount || (regEvt.isMultiDays ? 8 : 0),
             weekdayHours: regEvt.weekdayHours || (regEvt.isMultiDays ? 6 : dur),
             weekendHours: regEvt.weekendHours || (regEvt.isMultiDays ? 10 : dur),
-            configuredVolunteersWeekday: regEvt.isMultiDays ? Math.max(2, Math.round(ris.minVolunteers * 0.5)) : null,
+            // Poste étalé : affluence différente en semaine et le week-end (effectifs calculés sur chaque public)
+            publicWeekend: regEvt.isMultiDays ? pub : undefined,
+            publicWeekday: regEvt.isMultiDays ? pubWeekday : undefined,
+            configuredVolunteersWeekday: regEvt.isMultiDays ? Math.max(2, risWeekday.minVolunteers) : null,
             configuredVolunteersWeekend: regEvt.isMultiDays ? ris.minVolunteers : null,
             eventDate: eventDateObj,
             durationHours: dur,

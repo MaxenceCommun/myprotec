@@ -6788,7 +6788,10 @@ class ProtecGame {
       ? (devis.weekendHours || Math.max(8, devis.durationHours || 8))
       : (devis.durationHours || 4);
 
-    personnelCost = vols * dur * ratePerHour;
+    // Poste divisé en vacations : une équipe par vacation, relève de 15 min comptée à chaque prise de poste
+    const vacCount = (!devis.isMultiDays && typeof this.canSplitDevisIntoVacations === 'function' && this.canSplitDevisIntoVacations(devis))
+      ? Math.max(1, Math.min(3, Number(devis.vacationCount) || 1)) : 1;
+    personnelCost = vols * (dur + 0.25 * (vacCount - 1)) * ratePerHour;
 
     let dailyVehiclesCost = 0;
     const counts = this.ensureDevisVehicleCounts(devis);
@@ -7254,14 +7257,209 @@ class ProtecGame {
     return this.setDevisTotalPersonnels(devisId, value);
   }
 
+  // ---------------------------------------------------------------------------
+  // POSTE ÉTALÉ (plusieurs jours) : détail des rôles distinct en semaine et le week-end
+  // ---------------------------------------------------------------------------
+  // Public attendu par jour selon la période (données de l'organisateur)
+  getDevisPeriodPublic(devis, period) {
+    const parsed = parseInt(String(devis.publicCount || '').replace(/\D/g, ''), 10);
+    const base = Number(devis.rawPublicCount) || (isNaN(parsed) ? 0 : parsed) || 1000;
+    const weekend = Number(devis.publicWeekend) || base;
+    if (period === 'Weekend') return weekend;
+    if (Number(devis.publicWeekday)) return Number(devis.publicWeekday);
+    const r = Math.round(weekend * 0.5);
+    return typeof window.roundExpectedPublic === 'function' ? window.roundExpectedPublic(r) : r;
+  }
+
+  // Effectif minimal conseillé pour un public donné (même calcul RIS que l'audit)
+  estimateVolunteersForPublic(devis, pub) {
+    try {
+      const req = this.evaluateHiddenRnmscRequirements({ ...devis, publicCount: String(Math.round(pub)), rawPublicCount: Math.round(pub) });
+      return Math.max(2, Number(req.minVolunteers) || 2);
+    } catch (e) { return Math.max(2, devis.requiredVolunteers || 4); }
+  }
+
+  getDevisPeriodCount(devis, period) {
+    const key = `configuredVolunteers${period}`;
+    if (devis[key] !== undefined && devis[key] !== null) return Number(devis[key]) || 0;
+    return this.estimateVolunteersForPublic(devis, this.getDevisPeriodPublic(devis, period));
+  }
+
+  // Rôles d'une période ; recalculés selon la règle réglementaire si absents ou incohérents avec l'effectif
+  getDevisPeriodRoles(devis, period) {
+    const key = `configuredRoles${period}`;
+    const count = this.getDevisPeriodCount(devis, period);
+    const keys = ['log', 'pse1', 'pse2', 'ce', 'cp', 'cs', 'cd'];
+    const cur = devis[key];
+    const sum = cur ? keys.reduce((a, k) => a + (Number(cur[k]) || 0), 0) : -1;
+    if (!cur || sum !== count) {
+      const st = count > 0 ? this.computeDpsStaffing(count, devis.configuredScale || devis.scaleKey || null) : {};
+      devis[key] = {};
+      keys.forEach(k => { devis[key][k] = count > 0 ? (st[k] || 0) : 0; });
+    }
+    return devis[key];
+  }
+
+  // Le total du dispositif = le jour le plus chargé (pic) ; ses rôles servent de référence pour la mission
+  syncMultiDayPersonnel(devis) {
+    if (!devis || !devis.isMultiDays) return;
+    const wd = this.getDevisPeriodCount(devis, 'Weekday');
+    const we = this.getDevisPeriodCount(devis, 'Weekend');
+    const rWd = this.getDevisPeriodRoles(devis, 'Weekday');
+    const rWe = this.getDevisPeriodRoles(devis, 'Weekend');
+    const peak = we >= wd ? rWe : rWd;
+    devis.configuredRoles = { ...peak };
+    devis.configuredVolunteers = Math.max(wd, we);
+    this.ensureDevisPersonnelCounts(devis);
+  }
+
+  adjustDevisPeriodRole(devisId, period, roleKey, delta) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis || !['Weekday', 'Weekend'].includes(period)) return;
+    const roles = this.getDevisPeriodRoles(devis, period);
+    roles[roleKey] = Math.max(0, Math.min(999, (Number(roles[roleKey]) || 0) + delta));
+    devis[`configuredVolunteers${period}`] = Object.values(roles).reduce((a, v) => a + (Number(v) || 0), 0);
+    this.syncMultiDayPersonnel(devis);
+    devis.proposedPrice = this.calculateDynamicBareme(devis).totalBareme;
+    this.openModule('devis', true);
+  }
+
+  setDevisPeriodRole(devisId, period, roleKey, value) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis || !['Weekday', 'Weekend'].includes(period)) return;
+    const roles = this.getDevisPeriodRoles(devis, period);
+    const parsed = parseInt(value, 10);
+    roles[roleKey] = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
+    devis[`configuredVolunteers${period}`] = Object.values(roles).reduce((a, v) => a + (Number(v) || 0), 0);
+    this.syncMultiDayPersonnel(devis);
+    devis.proposedPrice = this.calculateDynamicBareme(devis).totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // ---------------------------------------------------------------------------
+  // DIVISION D'UN POSTE LONG EN VACATIONS AVEC RELÈVE (proposée au-delà de 8 h)
+  // ---------------------------------------------------------------------------
+  canSplitDevisIntoVacations(devis) {
+    return !!devis && !devis.isMultiDays && (Number(devis.durationHours) || 0) > 8;
+  }
+
+  // Créneaux des vacations : découpage en parts égales (au quart d'heure), relève 15 min avant chaque prise de poste
+  getDevisVacationSlots(devis) {
+    const n = this.canSplitDevisIntoVacations(devis) ? Math.max(1, Math.min(3, Number(devis.vacationCount) || 1)) : 1;
+    const ed = devis.eventDate || {};
+    const startH = Number(ed.startHour !== undefined ? ed.startHour : (ed.hour !== undefined ? ed.hour : 14)) + (Number(ed.minute) || 0) / 60;
+    const dur = Number(devis.durationHours) || 4;
+    const slots = [];
+    let cursor = startH;
+    for (let i = 0; i < n; i++) {
+      const remaining = startH + dur - cursor;
+      const len = i === n - 1 ? remaining : Math.round((dur / n) * 4) / 4;
+      slots.push({ index: i + 1, start: cursor, end: cursor + len, hours: len, handoverMin: i > 0 ? 15 : 0 });
+      cursor += len;
+    }
+    return slots;
+  }
+
+  formatVacationHour(h) {
+    const t = ((h % 24) + 24) % 24;
+    const hh = Math.floor(t), mm = Math.round((t - hh) * 60);
+    return `${String(hh).padStart(2, '0')}h${String(mm === 60 ? 0 : mm).padStart(2, '0')}`;
+  }
+
+  setDevisVacations(devisId, count) {
+    const devis = this.devis.find(d => d.id === devisId);
+    if (!devis || !this.canSplitDevisIntoVacations(devis)) return;
+    devis.vacationCount = Math.max(1, Math.min(3, Number(count) || 1));
+    devis.proposedPrice = this.calculateDynamicBareme(devis).totalBareme;
+    this.openModule('devis', true);
+  }
+
+  // Grille compacte des rôles d'une période (Semaine / Week-end) d'un poste étalé
+  renderDevisPeriodRolesHTML(d, period) {
+    const roles = this.getDevisPeriodRoles(d, period);
+    const list = [['cd', 'CD', 'text-rose-700 dark:text-rose-300'], ['cs', 'CS', 'text-purple-700 dark:text-purple-300'], ['cp', 'CP', 'text-indigo-600 dark:text-indigo-300'], ['ce', 'CE', 'text-amber-600 dark:text-amber-300'], ['pse2', 'PSE2', 'text-pc-blue dark:text-blue-300'], ['pse1', 'PSE1', 'text-sky-700 dark:text-sky-300'], ['log', 'Log', 'text-slate-700 dark:text-slate-200']];
+    return `
+      <div class="mt-2 pt-2 border-t border-indigo-100 dark:border-slate-700">
+        <div class="text-[10px] font-black uppercase tracking-wide text-slate-500 mb-1">Détail des postes</div>
+        <div class="grid grid-cols-4 sm:grid-cols-7 gap-1">
+          ${list.map(([k, label, col]) => `
+            <div class="flex flex-col items-center rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 py-1">
+              <span class="text-[9px] font-black ${col}">${label}</span>
+              <div class="flex items-center gap-0.5">
+                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', -1)" class="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-black leading-none cursor-pointer">-</button>
+                <input type="number" min="0" max="999" value="${roles[k] || 0}" onchange="window.game.setDevisPeriodRole('${d.id}', '${period}', '${k}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-7 text-center text-[11px] font-black ${col} bg-transparent border-0 focus:outline-none" />
+                <button type="button" onclick="window.game.adjustDevisPeriodRole('${d.id}', '${period}', '${k}', 1)" class="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 text-[10px] font-black leading-none cursor-pointer">+</button>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+  }
+
+  // Total d'un poste étalé : pic journalier + volume de vacations-personnes sur toute la période
+  renderMultiDayTotalHTML(d) {
+    this.syncMultiDayPersonnel(d);
+    const wd = this.getDevisPeriodCount(d, 'Weekday'), we = this.getDevisPeriodCount(d, 'Weekend');
+    const wdDays = Number(d.weekdayDaysCount) || 0, weDays = Number(d.weekendDaysCount) || 0;
+    const personDays = wd * wdDays + we * weDays;
+    const peakLabel = we >= wd ? 'week-end' : 'semaine';
+    return `
+      <div class="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-blue-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+        <div class="flex items-center gap-2">
+          <span class="text-xl">👥</span>
+          <div>
+            <label class="block text-xs font-black text-slate-800 dark:text-slate-100 uppercase tracking-wide">Total Personnels :</label>
+            <span class="text-[10px] text-slate-500 dark:text-slate-400 font-semibold">Pic journalier (${peakLabel}) · ${personDays.toLocaleString('fr-FR')} vacations-personnes sur ${wdDays + weDays} jours</span>
+          </div>
+        </div>
+        <div class="flex items-center gap-3 self-start sm:self-auto text-center">
+          <div><div class="text-[10px] font-bold text-slate-500">Semaine</div><div class="text-sm font-black text-pc-blue dark:text-sky-300">${wd} / j</div></div>
+          <div><div class="text-[10px] font-bold text-slate-500">Week-end</div><div class="text-sm font-black text-amber-600">${we} / j</div></div>
+          <div class="px-3 py-1 rounded-xl bg-white dark:bg-slate-900 border border-blue-300 dark:border-slate-600"><div class="text-[10px] font-bold text-slate-500">Pic</div><div class="text-base font-black text-pc-blue dark:text-sky-300">${Math.max(wd, we)}</div></div>
+        </div>
+      </div>`;
+  }
+
+  // Division d'un poste long (> 8 h) en vacations avec relève
+  renderDevisVacationsHTML(d) {
+    if (!this.canSplitDevisIntoVacations(d)) return '';
+    const n = Math.max(1, Math.min(3, Number(d.vacationCount) || 1));
+    const slots = this.getDevisVacationSlots(d);
+    const team = d.configuredVolunteers || d.requiredVolunteers || 0;
+    const tooLong = (Number(d.durationHours) || 0) > 12 && n === 1;
+    const btn = (k, label) => `<button type="button" onclick="window.game.setDevisVacations('${d.id}', ${k})" class="px-2.5 py-1 rounded-lg text-[11px] font-black border cursor-pointer transition ${n === k ? 'bg-pc-blue text-white border-pc-blue' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:bg-slate-50'}">${label}</button>`;
+    return `
+      <div class="p-3 rounded-2xl bg-white dark:bg-slate-800/90 border ${tooLong ? 'border-rose-300 dark:border-rose-500/50' : 'border-slate-200 dark:border-slate-700'} space-y-2">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div class="text-[11px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wide">✂️ Diviser le poste (${this.formatHoursAndMinutes ? this.formatHoursAndMinutes(Math.round((Number(d.durationHours) || 0) * 3600), true) : d.durationHours + ' h'})</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400">Une équipe complète par vacation, relève 15 min avant chaque prise de poste.</div>
+          </div>
+          <div class="flex gap-1.5">${btn(1, 'Poste unique')}${btn(2, '2 vacations')}${btn(3, '3 vacations')}</div>
+        </div>
+        ${tooLong ? `<div class="text-[11px] font-bold text-rose-700 dark:text-rose-300 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-500/40 rounded-lg px-2.5 py-1.5">⚠️ Plus de 12 h sans relève : fatigue des équipes et risque de non-conformité. Divisez le poste en vacations.</div>` : ''}
+        ${n > 1 ? `
+          <div class="grid grid-cols-1 sm:grid-cols-${n} gap-1.5">
+            ${slots.map(sl => `
+              <div class="rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-2.5 py-1.5">
+                <div class="text-[11px] font-black text-slate-800 dark:text-slate-100">Vacation ${sl.index} : ${this.formatVacationHour(sl.start)} – ${this.formatVacationHour(sl.end)}</div>
+                <div class="text-[10px] text-slate-500">${team} personnels${sl.handoverMin ? ` · relève à ${this.formatVacationHour(sl.start - 0.25)}` : ''}</div>
+              </div>`).join('')}
+          </div>
+          <div class="text-[10px] font-bold text-slate-600 dark:text-slate-300">Total mobilisé : <strong>${team * n}</strong> personnels différents (${n} équipes de ${team}).</div>
+        ` : ''}
+      </div>`;
+  }
+
   // Ajustement des secouristes en Semaine pour poste multi-jours (recalcul automatique)
   adjustDevisWeekdayVolunteers(devisId, delta) {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     if (devis.configuredVolunteersWeekday === undefined || devis.configuredVolunteersWeekday === null) {
-      devis.configuredVolunteersWeekday = Math.max(2, Math.round((devis.requiredVolunteers || 4) * 0.5));
+      devis.configuredVolunteersWeekday = this.getDevisPeriodCount(devis, 'Weekday');
     }
     devis.configuredVolunteersWeekday = Math.max(0, Math.min(999, devis.configuredVolunteersWeekday + delta));
+    devis.configuredRolesWeekday = null;
+    this.syncMultiDayPersonnel(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -7274,6 +7472,8 @@ class ProtecGame {
     const parsed = parseInt(value, 10);
     const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
     devis.configuredVolunteersWeekday = count;
+    devis.configuredRolesWeekday = null;
+    this.syncMultiDayPersonnel(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -7284,9 +7484,11 @@ class ProtecGame {
     const devis = this.devis.find(d => d.id === devisId);
     if (!devis) return;
     if (devis.configuredVolunteersWeekend === undefined || devis.configuredVolunteersWeekend === null) {
-      devis.configuredVolunteersWeekend = devis.requiredVolunteers || 4;
+      devis.configuredVolunteersWeekend = this.getDevisPeriodCount(devis, 'Weekend');
     }
     devis.configuredVolunteersWeekend = Math.max(0, Math.min(999, devis.configuredVolunteersWeekend + delta));
+    devis.configuredRolesWeekend = null;
+    this.syncMultiDayPersonnel(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -7299,6 +7501,8 @@ class ProtecGame {
     const parsed = parseInt(value, 10);
     const count = isNaN(parsed) ? 0 : Math.max(0, Math.min(999, parsed));
     devis.configuredVolunteersWeekend = count;
+    devis.configuredRolesWeekend = null;
+    this.syncMultiDayPersonnel(devis);
     const bareme = this.calculateDynamicBareme(devis);
     devis.proposedPrice = bareme.totalBareme;
     this.openModule('devis', true);
@@ -9783,7 +9987,7 @@ class ProtecGame {
       });
     }
 
-    const newMission = {
+    let newMission = {
       id: `m-plan-${Date.now()}`,
       type: 'dps',
       categoryLabel: 'DPS - Dispositif Prévu au Calendrier',
@@ -9837,6 +10041,51 @@ class ProtecGame {
       isSector: false
     };
 
+    // Poste divisé en vacations : une mission par vacation (équipe propre), reliées par posteGroupId
+    let missionsToAdd = [newMission];
+    const vacSlots = (typeof this.getDevisVacationSlots === 'function') ? this.getDevisVacationSlots(devis) : [];
+    if (vacSlots.length > 1) {
+      const n = vacSlots.length;
+      const groupId = `poste-${Date.now()}`;
+      const ed0 = devis.eventDate || {};
+      const dayStart = new Date(Number(ed0.year), Number(ed0.month) || 0, Number(ed0.day) || 1, 0, 0).getTime();
+      const totalPaidHours = vacSlots.reduce((acc, sl) => acc + sl.hours + (sl.handoverMin ? 0.25 : 0), 0);
+      const totalPrice = Number(devis.proposedPrice) || Number(newMission.rewardMoney) || 0;
+      missionsToAdd = vacSlots.map((sl, i) => {
+        const sd = new Date(dayStart + sl.start * 3600 * 1000);
+        const hour = sd.getHours(), minute = sd.getMinutes();
+        const endHour = Math.floor(((sl.end % 24) + 24) % 24);
+        const share = (sl.hours + (sl.handoverMin ? 0.25 : 0)) / (totalPaidHours || 1);
+        return {
+          ...newMission,
+          id: `${newMission.id}-v${i + 1}`,
+          title: `${devis.eventName} – Vacation ${i + 1}/${n} (${this.formatVacationHour(sl.start)}-${this.formatVacationHour(sl.end)})`,
+          eventDate: {
+            ...ed0,
+            year: sd.getFullYear(), month: sd.getMonth(), day: sd.getDate(),
+            hour, minute, startHour: hour, endHour,
+            dayName: (this.clock && this.clock.daysNames) ? this.clock.daysNames[sd.getDay()] : ed0.dayName
+          },
+          durationHours: sl.hours,
+          startHour: hour,
+          endHour,
+          duration: sl.hours * 10,
+          durationSeconds: Math.round(sl.hours * 3600),
+          rewardMoney: Math.round(totalPrice * share),
+          configuredRoles: { ...(newMission.configuredRoles || {}) },
+          assignedVehicleIds: [...preAssignedVehIds],
+          registeredVolunteers: [],
+          servedMeals: {},
+          assignedCrew: { volunteers: [], vehicles: [] },
+          posteGroupId: groupId,
+          vacationIndex: i + 1,
+          vacationCount: n,
+          handoverMinutes: sl.handoverMin || 0
+        };
+      });
+      newMission = missionsToAdd[0];
+    }
+
     // Retrait de l'ancienne version prévisionnelle dans this.missions
     this.missions = (this.missions || []).filter(m => !(m && (m.id === devis.id || m.devisId === devis.id) && (m.isPrevisionnel || m.status === 'previsionnel')));
 
@@ -9873,11 +10122,11 @@ class ProtecGame {
       );
     }
 
-    this.enrichMissionLocationWithCity(newMission);
-    const curDay = (this.clock && this.clock.year) ? `${this.clock.year}-${this.clock.month}-${this.clock.day}` : new Date().toISOString().slice(0, 10);
-    this.lastCrisisCalendarDay = curDay;
-    this.lastCrisisTimestamp = Date.now();
-    this.missions.push(newMission);
+    missionsToAdd.forEach(m => this.enrichMissionLocationWithCity(m));
+    missionsToAdd.forEach(m => { m.sourceDevisId = devis.id; this.missions.push(m); });
+    if (missionsToAdd.length > 1) {
+      this.showToast('✂️ Poste divisé en vacations', `« ${devis.eventName} » : ${missionsToAdd.length} vacations planifiées, chacune avec sa propre équipe.`, 'blue');
+    }
     this.renderMissions();
     this.updateStatsUI();
     this.saveGame();
@@ -25421,7 +25670,10 @@ class ProtecGame {
                           <!-- 1. Public attendu (P1) -->
                           <div class="p-2.5 bg-white dark:bg-slate-800 rounded-xl border border-sky-100 dark:border-slate-700 shadow-2xs space-y-0.5">
                             <span class="text-slate-400 dark:text-slate-400 block text-[9.5px] uppercase font-extrabold">Public attendu (P₁)</span>
-                            <strong class="text-slate-900 dark:text-white text-xs block truncate">${this.formatRoundedPublic(d.publicCount)}</strong>
+                            ${d.isMultiDays ? `
+                              <strong class="text-slate-900 dark:text-white text-xs block">Semaine : ${this.getDevisPeriodPublic(d, 'Weekday').toLocaleString('fr-FR')} / jour</strong>
+                              <strong class="text-amber-600 dark:text-amber-300 text-xs block">Week-end : ${this.getDevisPeriodPublic(d, 'Weekend').toLocaleString('fr-FR')} / jour</strong>
+                            ` : `<strong class="text-slate-900 dark:text-white text-xs block truncate">${this.formatRoundedPublic(d.publicCount)}</strong>`}
                           </div>
 
                           <!-- 2. Activité du rassemblement (P2) -->
@@ -25547,37 +25799,40 @@ class ProtecGame {
                                 <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
                                   <div class="flex items-center justify-between mb-1">
                                     <label class="text-[11px] font-bold text-slate-700">Semaine :</label>
-                                    <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j</span>
+                                    <span class="text-[10px] font-extrabold text-slate-500">${d.weekdayDaysCount || 20} j • ${d.weekdayHours || 6}h/j • 👥 ${this.getDevisPeriodPublic(d, 'Weekday').toLocaleString('fr-FR')} pers./j</span>
                                   </div>
                                   <div class="flex items-center gap-1.5">
                                     <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
                                     <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                      <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekday !== undefined && d.configuredVolunteersWeekday !== null) ? d.configuredVolunteersWeekday : Math.max(2, Math.round((d.requiredVolunteers || 4) * 0.5))}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
+                                      <input type="number" min="0" max="999" value="${this.getDevisPeriodCount(d, 'Weekday')}" onchange="window.game.setDevisWeekdayVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-pc-blue bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-pc-blue focus:outline-none" />
                                       <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                                     </div>
                                     <button type="button" onclick="window.game.adjustDevisWeekdayVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                                   </div>
+                                  ${this.renderDevisPeriodRolesHTML(d, 'Weekday')}
                                 </div>
 
                                 <!-- Week-end : Samedi et Dimanche -->
                                 <div class="p-2.5 bg-white rounded-xl border border-indigo-200 shadow-2xs">
                                   <div class="flex items-center justify-between mb-1">
                                     <label class="text-[11px] font-bold text-slate-700">Week-end :</label>
-                                    <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j</span>
+                                    <span class="text-[10px] font-extrabold text-amber-600 font-bold">${d.weekendDaysCount || 8} j • ${d.weekendHours || 10}h/j • 👥 ${this.getDevisPeriodPublic(d, 'Weekend').toLocaleString('fr-FR')} pers./j</span>
                                   </div>
                                   <div class="flex items-center gap-1.5">
                                     <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', -1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">-</button>
                                     <div class="flex-1 flex flex-col items-center justify-center py-0.5 rounded-lg bg-slate-50 border border-slate-200">
-                                      <input type="number" min="0" max="999" value="${(d.configuredVolunteersWeekend !== undefined && d.configuredVolunteersWeekend !== null) ? d.configuredVolunteersWeekend : (d.requiredVolunteers || 4)}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
+                                      <input type="number" min="0" max="999" value="${this.getDevisPeriodCount(d, 'Weekend')}" onchange="window.game.setDevisWeekendVolunteers('${d.id}', this.value)" onkeydown="if(event.key==='Enter')this.blur()" class="w-16 text-center text-sm font-black text-amber-600 bg-white border border-slate-300 rounded px-1 py-0.5 focus:ring-1 focus:ring-amber-500 focus:outline-none" />
                                       <span class="text-[10px] text-slate-500 font-semibold block">secouristes / jour</span>
                                     </div>
                                     <button type="button" onclick="window.game.adjustDevisWeekendVolunteers('${d.id}', 1)" class="w-7 h-7 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-black cursor-pointer transition shrink-0">+</button>
                                   </div>
+                                  ${this.renderDevisPeriodRolesHTML(d, 'Weekend')}
                                 </div>
                               </div>
                             </div>
                           ` : ''}
 
+                          ${d.isMultiDays ? this.renderMultiDayTotalHTML(d) : `
                           <!-- Ligne Total Personnels -->
                           <div class="p-3 bg-gradient-to-r from-blue-50/90 to-indigo-50/90 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl border border-blue-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
                             <div class="flex items-center gap-2">
@@ -25616,6 +25871,8 @@ class ProtecGame {
                               </div>
                             `).join('')}
                           </div>
+                          `}
+                          ${this.renderDevisVacationsHTML(d)}
                         </div>
                       `;
                     })()}
